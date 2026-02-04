@@ -3,10 +3,10 @@
 import React, { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Edit, Trash2 } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
-import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
@@ -15,7 +15,10 @@ import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/conf
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
+import { ItemEditorModal, type ItemFormData, type ItemEditorContext } from '@/components/shared/catalogo/ItemEditorModal';
+import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
 
 interface CotizacionFormProps {
   studioSlug: string;
@@ -110,6 +113,7 @@ export function CotizacionForm({
   const [precioPersonalizado, setPrecioPersonalizado] = useState<string | number>('');
   const [visibleToClient, setVisibleToClient] = useState(false);
   const [items, setItems] = useState<{ [servicioId: string]: number }>({});
+  const [customItems, setCustomItems] = useState<CustomItemData[]>([]);
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
   const [configuracionPrecios, setConfiguracionPrecios] = useState<ConfiguracionPrecios | null>(null);
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
@@ -119,6 +123,11 @@ export function CotizacionForm({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
   const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
+  
+  // Estados para ItemEditorModal
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<ItemFormData | null>(null);
+  const [selectedCategoriaForItem, setSelectedCategoriaForItem] = useState<string | null>(null);
 
   // Cargar catálogo, configuración, vínculos y datos iniciales
   useEffect(() => {
@@ -242,15 +251,41 @@ export function CotizacionForm({
             }
           }
 
-          // Cargar items de la cotización (filtrar items sin item_id válido)
+          // Cargar items de la cotización (separar items del catálogo y personalizados)
           const cotizacionItems: { [id: string]: number } = {};
+          const customItemsFromDB: CustomItemData[] = [];
+          
           if (cotizacionData.items && Array.isArray(cotizacionData.items)) {
-            cotizacionData.items.forEach((item: { item_id: string | null; quantity: number }) => {
+            cotizacionData.items.forEach((item: { 
+              item_id: string | null; 
+              quantity: number;
+              name?: string | null;
+              description?: string | null;
+              unit_price?: number;
+              cost?: number | null;
+              expense?: number | null;
+              billing_type?: string | null;
+            }) => {
               if (item.item_id && item.quantity > 0) {
+                // Item del catálogo
                 cotizacionItems[item.item_id] = item.quantity;
+              } else if (!item.item_id && item.name && item.unit_price) {
+                // Item personalizado
+                customItemsFromDB.push({
+                  name: item.name,
+                  description: item.description || null,
+                  unit_price: item.unit_price,
+                  cost: item.cost || 0,
+                  expense: item.expense || 0,
+                  quantity: item.quantity,
+                  billing_type: (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                  tipoUtilidad: 'servicio', // Default, se puede inferir de otros campos si es necesario
+                });
               }
             });
           }
+          
+          setCustomItems(customItemsFromDB);
 
           // Combinar con initialItems para asegurar que todos los servicios estén inicializados
           const combinedItems = { ...initialItems, ...cotizacionItems };
@@ -531,9 +566,14 @@ export function CotizacionForm({
           tipoUtilidad
         };
       })
-      .filter(Boolean);
+      .filter(Boolean) as Array<NonNullable<ReturnType<typeof servicioMap.get>> & {
+        precioUnitario: number;
+        cantidad: number;
+        resultadoPrecio: ReturnType<typeof calcularPrecio>;
+        tipoUtilidad: string;
+      }>;
 
-    if (serviciosSeleccionados.length === 0) {
+    if (serviciosSeleccionados.length === 0 && customItems.length === 0) {
       setCalculoPrecio({
         subtotal: 0,
         totalCosto: 0,
@@ -569,6 +609,19 @@ export function CotizacionForm({
       totalGasto += (s.gasto || 0) * cantidadEfectiva;
     });
 
+    // Agregar items personalizados al cálculo
+    const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
+    customItems.forEach(customItem => {
+      const cantidadEfectiva = calcularCantidadEfectiva(
+        customItem.billing_type,
+        customItem.quantity,
+        safeDurationHours
+      );
+      subtotal += customItem.unit_price * cantidadEfectiva;
+      totalCosto += (customItem.cost || 0) * cantidadEfectiva;
+      totalGasto += (customItem.expense || 0) * cantidadEfectiva;
+    });
+
     const precioPersonalizadoNum = precioPersonalizado === '' ? 0 : Number(precioPersonalizado) || 0;
     const utilidadNetaCalculada = subtotal - (totalCosto + totalGasto);
     const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotal : 0;
@@ -585,20 +638,31 @@ export function CotizacionForm({
       diferenciaPrecio: Number(diferenciaPrecio.toFixed(2)) || 0
     });
 
-    // Preparar items para el desglose de la cotización
-    const itemsDesglose = serviciosSeleccionados
-      .filter((s): s is NonNullable<typeof s> => s !== null)
-      .map(s => {
-        const tipoUtilidad: 'service' | 'product' = s.tipo_utilidad === 'service' ? 'service' : 'product';
-        return {
-          id: s.id,
-          nombre: s.nombre,
-          costo: s.costo || 0,
-          gasto: s.gasto || 0,
-          tipo_utilidad: tipoUtilidad,
-          cantidad: s.cantidad,
-        };
-      });
+    // Preparar items para el desglose de la cotización (incluyendo personalizados)
+    const itemsDesglose = [
+      ...serviciosSeleccionados
+        .filter((s): s is NonNullable<typeof s> => s !== null)
+        .map(s => {
+          const tipoUtilidad: 'service' | 'product' = s.tipo_utilidad === 'service' ? 'service' : 'product';
+          return {
+            id: s.id,
+            nombre: s.nombre,
+            costo: s.costo || 0,
+            gasto: s.gasto || 0,
+            tipo_utilidad: tipoUtilidad,
+            cantidad: s.cantidad,
+          };
+        }),
+      // Agregar items personalizados al desglose
+      ...customItems.map(customItem => ({
+        id: `custom-${customItem.name}`,
+        nombre: customItem.name,
+        costo: customItem.cost || 0,
+        gasto: customItem.expense || 0,
+        tipo_utilidad: customItem.tipoUtilidad === 'servicio' ? 'service' : 'product',
+        cantidad: customItem.quantity,
+      })),
+    ];
 
     setItemsParaDesglose(itemsDesglose as Array<{
       id: string;
@@ -695,8 +759,168 @@ export function CotizacionForm({
 
   // Verificar si hay items seleccionados
   const hasSelectedItems = useMemo(() => {
-    return Object.values(items).some(cantidad => cantidad > 0);
-  }, [items]);
+    const hasCatalogItems = Object.values(items).some(cantidad => cantidad > 0);
+    const hasCustomItems = customItems.length > 0;
+    return hasCatalogItems || hasCustomItems;
+  }, [items, customItems]);
+
+  // Manejar guardado de item personalizado desde ItemEditorModal
+  const handleSaveCustomItem = async (
+    data: ItemFormData,
+    options?: { saveToCatalog?: boolean; customPrice?: number | null }
+  ) => {
+    try {
+      // Si saveToCatalog es true, guardar/actualizar en catálogo primero
+      if (options?.saveToCatalog && selectedCategoriaForItem) {
+        if (data.id) {
+          // Actualizar item existente en catálogo
+          const updateResult = await actualizarItem({
+            id: data.id,
+            name: data.name,
+            cost: data.cost,
+            tipoUtilidad: data.tipoUtilidad,
+            billing_type: data.billing_type,
+            gastos: data.gastos || [],
+            status: data.status,
+          });
+          if (!updateResult.success) {
+            toast.error(updateResult.error || 'Error al actualizar en catálogo');
+            return;
+          }
+        } else {
+          // Crear nuevo item en catálogo
+          const createResult = await crearItem({
+            categoriaeId: selectedCategoriaForItem,
+            name: data.name,
+            cost: data.cost,
+            tipoUtilidad: data.tipoUtilidad,
+            billing_type: data.billing_type || (data.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
+            gastos: data.gastos || [],
+            status: data.status || 'active',
+          });
+          if (!createResult.success) {
+            toast.error(createResult.error || 'Error al crear en catálogo');
+            return;
+          }
+          // Si se creó en catálogo, agregarlo también a items del catálogo en la cotización
+          if (createResult.data?.id) {
+            setItems(prev => ({ ...prev, [createResult.data!.id]: 1 }));
+            setIsItemModalOpen(false);
+            setItemToEdit(null);
+            setSelectedCategoriaForItem(null);
+            toast.success('Item creado en catálogo y agregado a la cotización');
+            return;
+          }
+        }
+      }
+
+      // Calcular precio final (usar customPrice si existe, sino calcular desde costo)
+      let finalPrice: number;
+      if (options?.customPrice !== null && options?.customPrice !== undefined) {
+        finalPrice = options.customPrice;
+      } else {
+        // Calcular desde costo y gastos
+        const totalGastos = (data.gastos || []).reduce((acc, g) => acc + g.costo, 0);
+        if (!configuracionPrecios) {
+          toast.error('No hay configuración de precios disponible');
+          return;
+        }
+        const tipoUtilidad = data.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+        const precios = calcularPrecio(
+          data.cost || 0,
+          totalGastos,
+          tipoUtilidad,
+          configuracionPrecios
+        );
+        finalPrice = precios.precio_final;
+      }
+
+      // Crear o actualizar item personalizado en la lista
+      const customItemData: CustomItemData = {
+        name: data.name,
+        description: data.description || null,
+        unit_price: finalPrice,
+        cost: data.cost || 0,
+        expense: (data.gastos || []).reduce((acc, g) => acc + g.costo, 0),
+        quantity: 1, // Cantidad inicial, se puede editar después
+        billing_type: (data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+        tipoUtilidad: (data.tipoUtilidad || 'servicio') as 'servicio' | 'producto',
+      };
+
+      if (itemToEdit && itemToEdit.id && itemToEdit.id.startsWith('custom-')) {
+        // Actualizar item existente usando el índice guardado en el id
+        const index = parseInt(itemToEdit.id.replace('custom-', ''), 10);
+        if (!isNaN(index) && index >= 0 && index < customItems.length) {
+          setCustomItems(prev => {
+            const updated = [...prev];
+            updated[index] = customItemData;
+            return updated;
+          });
+          toast.success('Item personalizado actualizado');
+        } else {
+          toast.error('Error: Índice de item inválido');
+        }
+      } else {
+        // Agregar nuevo item
+        setCustomItems(prev => [...prev, customItemData]);
+        toast.success('Item personalizado agregado');
+      }
+
+      setIsItemModalOpen(false);
+      setItemToEdit(null);
+      setSelectedCategoriaForItem(null);
+    } catch (error) {
+      console.error('Error guardando item personalizado:', error);
+      toast.error('Error al guardar item personalizado');
+    }
+  };
+
+  // Manejar creación de item personalizado
+  const handleCreateCustomItem = () => {
+    // Usar la primera categoría disponible si no hay una seleccionada
+    let categoriaId: string | null = selectedCategoriaForItem;
+    
+    if (!categoriaId && catalogo.length > 0) {
+      const primeraSeccion = catalogo[0];
+      if (primeraSeccion.categorias.length > 0) {
+        categoriaId = primeraSeccion.categorias[0].id;
+      }
+    }
+
+    if (!categoriaId) {
+      toast.error('No hay categorías disponibles. Crea una categoría primero en el catálogo.');
+      return;
+    }
+
+    setSelectedCategoriaForItem(categoriaId);
+    setItemToEdit(null);
+    setIsItemModalOpen(true);
+  };
+
+  // Manejar edición de item personalizado
+  const handleEditCustomItem = (index: number) => {
+    const customItem = customItems[index];
+    // Convertir CustomItemData a ItemFormData para el modal
+    const gastos = customItem.expense > 0 ? [{ nombre: 'Gastos', costo: customItem.expense }] : [];
+    setItemToEdit({
+      name: customItem.name,
+      cost: customItem.cost,
+      description: customItem.description || undefined,
+      tipoUtilidad: customItem.tipoUtilidad,
+      billing_type: customItem.billing_type,
+      gastos: gastos,
+    });
+    // Guardar el índice para actualizar el item correcto
+    setItemToEdit((prev) => prev ? { ...prev, id: `custom-${index}` } : null);
+    setSelectedCategoriaForItem(null); // No necesitamos categoría para editar
+    setIsItemModalOpen(true);
+  };
+
+  // Manejar eliminación de item personalizado
+  const handleDeleteCustomItem = (index: number) => {
+    setCustomItems(prev => prev.filter((_, i) => i !== index));
+    toast.success('Item personalizado eliminado');
+  };
 
   // Manejar intento de cierre
   const handleCancelClick = () => {
@@ -732,8 +956,11 @@ export function CotizacionForm({
     }
 
     const itemsSeleccionados = Object.entries(items).filter(([, cantidad]) => cantidad > 0);
-    if (itemsSeleccionados.length === 0) {
-      toast.error('Agrega al menos un servicio');
+    const hasCatalogItems = itemsSeleccionados.length > 0;
+    const hasCustomItems = customItems.length > 0;
+    
+    if (!hasCatalogItems && !hasCustomItems) {
+      toast.error('Agrega al menos un servicio o item personalizado');
       return;
     }
 
@@ -762,6 +989,7 @@ export function CotizacionForm({
           items: Object.fromEntries(
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
           ),
+          customItems: customItems,
           event_duration: durationHours && durationHours > 0 ? durationHours : null,
         });
 
@@ -844,6 +1072,7 @@ export function CotizacionForm({
         items: Object.fromEntries(
           itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
         ),
+        customItems: customItems,
         event_duration: durationHours && durationHours > 0 ? durationHours : null,
       });
 
@@ -1084,6 +1313,71 @@ export function CotizacionForm({
           configuracionPrecios={configuracionPrecios}
           baseHours={durationHours}
         />
+
+        {/* Botón para agregar item personalizado */}
+        <div className="mt-4 pt-4 border-t border-zinc-800">
+          <ZenButton
+            type="button"
+            variant="outline"
+            onClick={handleCreateCustomItem}
+            className="w-full gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar ítem personalizado
+          </ZenButton>
+        </div>
+
+        {/* Lista de items personalizados */}
+        {customItems.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-zinc-800">
+            <h4 className="text-sm font-medium text-zinc-300 mb-3">Items Personalizados</h4>
+            <div className="space-y-2">
+              {customItems.map((customItem, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg border border-zinc-700"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{customItem.name}</p>
+                    {customItem.description && (
+                      <p className="text-xs text-zinc-400 mt-1 line-clamp-1">{customItem.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs text-zinc-400">
+                        Cantidad: {customItem.quantity}
+                      </span>
+                      <span className="text-xs text-emerald-400 font-medium">
+                        {formatearMoneda(customItem.unit_price)} c/u
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    <ZenButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditCustomItem(index)}
+                      className="h-8 w-8 p-0"
+                      title="Editar item"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </ZenButton>
+                    <ZenButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteCustomItem(index)}
+                      className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                      title="Eliminar item"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </ZenButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Columna 2: Configuración de la Cotización */}
@@ -1392,6 +1686,24 @@ export function CotizacionForm({
         </DialogContent>
       </Dialog>
 
+      {/* Modal de edición/creación de item personalizado */}
+      {isItemModalOpen && (
+        <ItemEditorModal
+          isOpen={isItemModalOpen}
+          onClose={() => {
+            setIsItemModalOpen(false);
+            setItemToEdit(null);
+            setSelectedCategoriaForItem(null);
+          }}
+          onSave={handleSaveCustomItem}
+          item={itemToEdit || undefined}
+          studioSlug={studioSlug}
+          categoriaId={selectedCategoriaForItem || undefined}
+          preciosConfig={configuracionPrecios || undefined}
+          showOverlay={true}
+          context="cotizaciones"
+        />
+      )}
     </div>
   );
 }

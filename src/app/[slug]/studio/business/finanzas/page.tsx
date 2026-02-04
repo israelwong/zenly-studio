@@ -16,7 +16,10 @@ import {
     obtenerPorCobrar,
     obtenerPorPagar,
     obtenerGastosRecurrentes,
+    obtenerRentabilidadPorEvento,
+    verificarRolOwnerOAdmin,
     type PorPagarPersonal,
+    type RentabilidadPorEvento,
 } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
 export default function FinanzasPage() {
@@ -33,7 +36,12 @@ export default function FinanzasPage() {
         utilidad: 0,
         porCobrar: 0,
         porPagar: 0,
+        totalProductionCosts: undefined as number | undefined,
+        totalOperatingExpenses: undefined as number | undefined,
+        netProfitability: undefined as number | undefined,
     });
+    const [isOwner, setIsOwner] = useState(false);
+    const [rentabilidadPorEvento, setRentabilidadPorEvento] = useState<RentabilidadPorEvento[]>([]);
     const [transactions, setTransactions] = useState<Array<{
         id: string;
         fecha: Date;
@@ -86,6 +94,12 @@ export default function FinanzasPage() {
         const loadData = async () => {
             try {
                 setLoading(true);
+                
+                // Verificar rol de owner/admin primero
+                const roleResult = await verificarRolOwnerOAdmin(studioSlug);
+                setIsOwner(roleResult.success && roleResult.isOwner);
+                
+                // Cargar datos básicos
                 const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
                     await Promise.all([
                         obtenerKPIsFinancieros(studioSlug, currentMonth),
@@ -94,6 +108,14 @@ export default function FinanzasPage() {
                         obtenerPorPagar(studioSlug),
                         obtenerGastosRecurrentes(studioSlug, currentMonth),
                     ]);
+                
+                // Cargar rentabilidad por evento solo si es owner
+                if (roleResult.success && roleResult.isOwner) {
+                    const rentabilidadResult = await obtenerRentabilidadPorEvento(studioSlug, currentMonth);
+                    if (rentabilidadResult.success && rentabilidadResult.data) {
+                        setRentabilidadPorEvento(rentabilidadResult.data);
+                    }
+                }
 
                 if (kpisResult.success) {
                     setKpis(kpisResult.data);
@@ -361,6 +383,11 @@ export default function FinanzasPage() {
                                     utilidad={kpis.utilidad}
                                     porCobrar={kpis.porCobrar}
                                     porPagar={kpis.porPagar}
+                                    totalProductionCosts={kpis.totalProductionCosts}
+                                    totalOperatingExpenses={kpis.totalOperatingExpenses}
+                                    netProfitability={kpis.netProfitability}
+                                    isOwner={isOwner}
+                                    rentabilidadPorEvento={isOwner ? rentabilidadPorEvento : []}
                                 />
                             </div>
 

@@ -38,7 +38,13 @@ export type ItemEditorContext = 'catalogo' | 'paquetes' | 'cotizaciones';
 interface ItemEditorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave?: (data: ItemFormData) => Promise<void>;
+    onSave?: (
+        data: ItemFormData,
+        options?: {
+            saveToCatalog?: boolean;
+            customPrice?: number | null;
+        }
+    ) => Promise<void>;
     onMediaChange?: (itemId: string, hasPhotos: boolean, hasVideos: boolean) => void;
     onStatusChange?: (itemId: string, status: string) => void;
     item?: ItemFormData;
@@ -86,11 +92,16 @@ export function ItemEditorModal({
     // Estados iniciales para detectar cambios
     const [initialFormData, setInitialFormData] = useState<ItemFormData | null>(null);
     const [initialGastos, setInitialGastos] = useState<Gasto[]>([]);
+    const [initialCustomPrice, setInitialCustomPrice] = useState<number | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [localIsOpen, setLocalIsOpen] = useState(isOpen);
 
     // Estados de UI
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Estados para contexto de cotizaciones
+    const [customPrice, setCustomPrice] = useState<number | null>(null);
+    const [saveToCatalog, setSaveToCatalog] = useState(false);
 
     // Cargar configuración de precios del estudio
     useEffect(() => {
@@ -233,6 +244,13 @@ export function ItemEditorModal({
         if (isOpen) {
             // Resetear desglose de precios al abrir
             setShowDesglosePrecios(false);
+            
+            // Resetear estados de cotización cuando se abre
+            if (context === 'cotizaciones') {
+                setCustomPrice(null);
+                setSaveToCatalog(false);
+                setInitialCustomPrice(null);
+            }
 
             if (item) {
                 // Asegurar que los gastos se carguen correctamente
@@ -382,7 +400,16 @@ export function ItemEditorModal({
 
             if (onSave) {
                 // Usar callback del padre para mantener sincronización
-                await onSave(formDataConGastos);
+                if (context === 'cotizaciones') {
+                    // Pasar opciones adicionales cuando es contexto de cotización
+                    await onSave(formDataConGastos, {
+                        saveToCatalog: saveToCatalog,
+                        customPrice: customPrice,
+                    });
+                } else {
+                    // Comportamiento estándar para otros contextos
+                    await onSave(formDataConGastos);
+                }
             } else {
                 // Fallback: llamar directamente a las acciones (comportamiento anterior)
                 if (formDataConGastos.id) {
@@ -426,6 +453,9 @@ export function ItemEditorModal({
             // Actualizar estado inicial después de guardar
             setInitialFormData({ ...formDataConGastos });
             setInitialGastos([...gastos]);
+            if (context === 'cotizaciones') {
+                setInitialCustomPrice(customPrice);
+            }
 
             setLocalIsOpen(false);
             onClose();
@@ -457,7 +487,10 @@ export function ItemEditorModal({
                 return !initial || g.nombre !== initial.nombre || g.costo !== initial.costo;
             });
 
-        return formChanged || gastosChanged;
+        // Comparar precio personalizado (solo en contexto de cotización)
+        const customPriceChanged = context === 'cotizaciones' && customPrice !== initialCustomPrice;
+
+        return formChanged || gastosChanged || customPriceChanged;
     };
 
     const handleClose = () => {
@@ -555,9 +588,14 @@ export function ItemEditorModal({
                         </SheetDescription>
                     </SheetHeader>
 
-                    {(context === 'paquetes' || context === 'cotizaciones') && item && (
+                    {context === 'paquetes' && item && (
                         <div className="mx-6 mb-0 rounded-lg border border-amber-600/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/90">
-                            Editar con cuidado: se modificará el ítem en el catálogo. Cotizaciones no se afectan (snapshot). En paquetes, el cálculo dinámico usará los nuevos datos; el precio personalizado guardado no cambia.
+                            Editar con cuidado: se modificará el ítem en el catálogo. En paquetes, el cálculo dinámico usará los nuevos datos; el precio personalizado guardado no cambia.
+                        </div>
+                    )}
+                    {context === 'cotizaciones' && item && (
+                        <div className="mx-6 mb-0 rounded-lg border border-blue-600/50 bg-blue-500/10 px-4 py-3 text-sm text-blue-200/90">
+                            <strong>Modo Edición de Cotización:</strong> Puedes elegir si los cambios son solo para este cliente o si afectan a todo el catálogo.
                         </div>
                     )}
 
@@ -747,12 +785,45 @@ export function ItemEditorModal({
                                     />
                                 </ZenCard>
 
+                                {/* Precio Personalizado (solo en contexto de cotización) */}
+                                {context === 'cotizaciones' && configuracion && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                            Precio Unitario Personalizado (MXN)
+                                            <span className="text-xs text-zinc-400 ml-2 font-normal">
+                                                (Opcional: deja vacío para usar el precio calculado)
+                                            </span>
+                                        </label>
+                                        <ZenInput
+                                            type="number"
+                                            value={customPrice ?? ''}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                setCustomPrice(value === '' ? null : parseFloat(value) || null);
+                                            }}
+                                            placeholder={formatearMoneda(resultadoPrecio.precio_final)}
+                                            disabled={isSaving}
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                        {customPrice !== null && (
+                                            <p className="text-xs text-zinc-400 mt-1">
+                                                Precio calculado: {formatearMoneda(resultadoPrecio.precio_final)}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Precio del Sistema */}
                                 {configuracion && (
                                     <div>
                                         <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-sm font-medium text-zinc-200">Precio del Sistema</span>
+                                                <span className="text-sm font-medium text-zinc-200">
+                                                    {context === 'cotizaciones' && customPrice !== null 
+                                                        ? 'Precio Calculado (Referencia)' 
+                                                        : 'Precio del Sistema'}
+                                                </span>
                                                 <span className="text-2xl font-bold text-emerald-400">
                                                     {formatearMoneda(resultadoPrecio.precio_final)}
                                                 </span>
@@ -791,7 +862,7 @@ export function ItemEditorModal({
                                 {/* Botones de acción */}
                                 <div className="space-y-4 pt-4 border-t border-zinc-800">
                                     {/* Switch Activo */}
-                                    {formData.id && (
+                                    {formData.id && context !== 'cotizaciones' && (
                                         <div className="flex items-center justify-between">
                                             <ZenSwitch
                                                 checked={formData.status === "active"}
@@ -801,6 +872,22 @@ export function ItemEditorModal({
                                             />
                                         </div>
                                     )}
+                                    
+                                    {/* Checkbox para guardar en catálogo (solo en contexto de cotización) */}
+                                    {context === 'cotizaciones' && item?.id && (
+                                        <div className="flex items-start gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700">
+                                            <ZenSwitch
+                                                checked={saveToCatalog}
+                                                onCheckedChange={setSaveToCatalog}
+                                                disabled={isSaving}
+                                                label="¿Actualizar también en el catálogo global?"
+                                            />
+                                            <p className="text-xs text-zinc-400 mt-0.5 flex-1">
+                                                Si se desactiva, los cambios solo afectarán a esta cotización (Snapshot).
+                                            </p>
+                                        </div>
+                                    )}
+                                    
                                     {/* Botones */}
                                     <div className="flex items-center gap-3 w-full">
                                         <SheetClose asChild>

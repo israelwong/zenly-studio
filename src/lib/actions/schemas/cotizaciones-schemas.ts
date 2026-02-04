@@ -19,6 +19,20 @@ import { z } from 'zod';
  * - Studio puede autorizar directamente sin pasar por flujo de contrato
  */
 
+// Schema para items personalizados (sin item_id del catálogo)
+export const customItemSchema = z.object({
+  name: z.string().min(1, 'El nombre es requerido'),
+  description: z.string().optional().nullable(),
+  unit_price: z.number().min(0, 'El precio unitario debe ser mayor o igual a 0'),
+  cost: z.number().min(0).optional().default(0),
+  expense: z.number().min(0).optional().default(0),
+  quantity: z.number().int().min(1, 'La cantidad debe ser mayor a 0'),
+  billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional().default('SERVICE'),
+  tipoUtilidad: z.enum(['servicio', 'producto']).optional().default('servicio'),
+});
+
+export type CustomItemData = z.infer<typeof customItemSchema>;
+
 export const createCotizacionSchema = z.object({
   studio_slug: z.string().min(1, 'Studio slug requerido'),
   promise_id: z.string().cuid().optional().nullable(),
@@ -26,13 +40,16 @@ export const createCotizacionSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional(),
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
-  items: z.record(z.string(), z.number().int().min(1)).refine(
-    (items) => Object.values(items).some((qty) => qty > 0),
-    'Debe incluir al menos un item con cantidad mayor a 0'
-  ),
-  visible_to_client: z.boolean().optional().default(false),
-  event_duration: z.number().positive().optional().nullable(),
-});
+  items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
+  customItems: z.array(customItemSchema).optional().default([]),
+}).refine(
+  (data) => {
+    const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
+    const hasCustomItems = (data.customItems || []).length > 0;
+    return hasCatalogItems || hasCustomItems;
+  },
+  'Debe incluir al menos un item del catálogo o un item personalizado'
+);
 
 export type CreateCotizacionData = z.infer<typeof createCotizacionSchema>;
 
@@ -42,13 +59,18 @@ export const updateCotizacionSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional(),
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
-  items: z.record(z.string(), z.number().int().min(1)).refine(
-    (items) => Object.values(items).some((qty) => qty > 0),
-    'Debe incluir al menos un item con cantidad mayor a 0'
-  ),
+  items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
+  customItems: z.array(customItemSchema).optional().default([]),
   visible_to_client: z.boolean().optional(),
   event_duration: z.number().positive().optional().nullable(),
-});
+}).refine(
+  (data) => {
+    const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
+    const hasCustomItems = (data.customItems || []).length > 0;
+    return hasCatalogItems || hasCustomItems;
+  },
+  'Debe incluir al menos un item del catálogo o un item personalizado'
+);
 
 export type UpdateCotizacionData = z.infer<typeof updateCotizacionSchema>;
 

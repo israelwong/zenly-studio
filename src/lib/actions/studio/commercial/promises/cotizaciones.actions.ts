@@ -18,6 +18,7 @@ import {
 } from '@/lib/actions/schemas/cotizaciones-schemas';
 import { guardarEstructuraCotizacionAutorizada, calcularYGuardarPreciosCotizacion } from './cotizacion-pricing';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 
 export interface CotizacionListItem {
@@ -152,8 +153,8 @@ export async function createCotizacion(
       });
     }
 
-    // Crear items de la cotizaciรณn
-    const itemsToCreate = Object.entries(validatedData.items)
+    // Crear items de la cotizaciรณn (del catálogo)
+    const catalogItemsToCreate = Object.entries(validatedData.items || {})
       .filter(([, quantity]) => quantity > 0)
       .map(([itemId, quantity], index) => ({
         cotizacion_id: cotizacion.id,
@@ -163,16 +164,55 @@ export async function createCotizacion(
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
       }));
 
-    if (itemsToCreate.length > 0) {
+    // Crear items personalizados (custom items)
+    const customItemsToCreate = (validatedData.customItems || []).map((customItem, index) => {
+      const totalGastos = (customItem.expense || 0);
+      const cantidadEfectiva = calcularCantidadEfectiva(
+        customItem.billing_type || 'SERVICE',
+        customItem.quantity,
+        durationHours
+      );
+      
+      return {
+        cotizacion_id: cotizacion.id,
+        item_id: null, // ⚠️ NULL para items personalizados
+        quantity: customItem.quantity,
+        order: catalogItemsToCreate.length + index,
+        billing_type: (customItem.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+        // Datos del item personalizado
+        name: customItem.name,
+        description: customItem.description || null,
+        unit_price: customItem.unit_price,
+        cost: customItem.cost || 0,
+        expense: totalGastos,
+        subtotal: customItem.unit_price * cantidadEfectiva,
+        is_custom: true,
+        // Snapshots iguales a campos operacionales para items custom
+        name_snapshot: customItem.name,
+        description_snapshot: customItem.description || null,
+        unit_price_snapshot: customItem.unit_price,
+        cost_snapshot: customItem.cost || 0,
+        expense_snapshot: totalGastos,
+        profit_snapshot: customItem.unit_price - (customItem.cost || 0) - totalGastos,
+        public_price_snapshot: customItem.unit_price,
+        profit_type_snapshot: customItem.tipoUtilidad || 'servicio',
+      };
+    });
+
+    const allItemsToCreate = [...catalogItemsToCreate, ...customItemsToCreate];
+
+    if (allItemsToCreate.length > 0) {
       await prisma.studio_cotizacion_items.createMany({
-        data: itemsToCreate,
+        data: allItemsToCreate,
       });
 
-      // Calcular y guardar precios de los items (despuรฉs de crear los items)
-      await calcularYGuardarPreciosCotizacion(cotizacion.id, validatedData.studio_slug).catch((error) => {
-        console.error('[COTIZACIONES] Error calculando precios en creaciรณn:', error);
-        // No fallar la creaciรณn si el cรกlculo de precios falla
-      });
+      // Calcular y guardar precios de los items del catálogo (los custom ya tienen precios)
+      if (catalogItemsToCreate.length > 0) {
+        await calcularYGuardarPreciosCotizacion(cotizacion.id, validatedData.studio_slug).catch((error) => {
+          console.error('[COTIZACIONES] Error calculando precios en creaciรณn:', error);
+          // No fallar la creaciรณn si el cรกlculo de precios falla
+        });
+      }
     }
 
     // Registrar log si hay promise_id
@@ -1499,8 +1539,11 @@ export async function updateCotizacion(
       });
     }
 
-    // Preparar items antes de la transacciรณn
-    const itemsToCreate = Object.entries(validatedData.items)
+    // Obtener duration_hours para calcular cantidad efectiva de custom items
+    const durationHours = cotizacion.event_duration ?? null;
+
+    // Preparar items del catálogo antes de la transacciรณn
+    const catalogItemsToCreate = Object.entries(validatedData.items || {})
       .filter(([, quantity]) => quantity > 0)
       .map(([itemId, quantity], index) => ({
         cotizacion_id: validatedData.cotizacion_id,
@@ -1509,6 +1552,43 @@ export async function updateCotizacion(
         order: index,
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
       }));
+
+    // Preparar items personalizados
+    const customItemsToCreate = (validatedData.customItems || []).map((customItem, index) => {
+      const totalGastos = (customItem.expense || 0);
+      const cantidadEfectiva = calcularCantidadEfectiva(
+        customItem.billing_type || 'SERVICE',
+        customItem.quantity,
+        durationHours
+      );
+      
+      return {
+        cotizacion_id: validatedData.cotizacion_id,
+        item_id: null, // ⚠️ NULL para items personalizados
+        quantity: customItem.quantity,
+        order: catalogItemsToCreate.length + index,
+        billing_type: (customItem.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+        // Datos del item personalizado
+        name: customItem.name,
+        description: customItem.description || null,
+        unit_price: customItem.unit_price,
+        cost: customItem.cost || 0,
+        expense: totalGastos,
+        subtotal: customItem.unit_price * cantidadEfectiva,
+        is_custom: true,
+        // Snapshots iguales a campos operacionales para items custom
+        name_snapshot: customItem.name,
+        description_snapshot: customItem.description || null,
+        unit_price_snapshot: customItem.unit_price,
+        cost_snapshot: customItem.cost || 0,
+        expense_snapshot: totalGastos,
+        profit_snapshot: customItem.unit_price - (customItem.cost || 0) - totalGastos,
+        public_price_snapshot: customItem.unit_price,
+        profit_type_snapshot: customItem.tipoUtilidad || 'servicio',
+      };
+    });
+
+    const allItemsToCreate = [...catalogItemsToCreate, ...customItemsToCreate];
 
     // Transacciรณn para garantizar consistencia
     await prisma.$transaction(async (tx) => {
@@ -1532,10 +1612,10 @@ export async function updateCotizacion(
         },
       });
 
-      // 3. Crear nuevos items
-      if (itemsToCreate.length > 0) {
+      // 3. Crear nuevos items (catálogo + custom)
+      if (allItemsToCreate.length > 0) {
         await tx.studio_cotizacion_items.createMany({
-          data: itemsToCreate,
+          data: allItemsToCreate,
         });
       }
 
@@ -1543,8 +1623,8 @@ export async function updateCotizacion(
       // El archivado solo ocurre cuando se autoriza una cotizaciรณn (en autorizarCotizacion)
     });
 
-    // Calcular y guardar precios de los items (despuรฉs de la transacciรณn)
-    if (itemsToCreate.length > 0) {
+    // Calcular y guardar precios de los items del catálogo (los custom ya tienen precios)
+    if (catalogItemsToCreate.length > 0) {
       await calcularYGuardarPreciosCotizacion(validatedData.cotizacion_id, validatedData.studio_slug).catch((error) => {
         console.error('[COTIZACIONES] Error calculando precios:', error);
         // No fallar la actualizaciรณn si el cรกlculo de precios falla

@@ -88,3 +88,33 @@ export async function getUserActiveStudios(): Promise<string[]> {
   }
 }
 
+/**
+ * Verifica si un usuario es Owner o Admin de un studio
+ * 
+ * @param userId ID del usuario
+ * @param studioId ID del studio
+ * @returns true si el usuario es OWNER o ADMIN, false en caso contrario
+ */
+export async function isStudioOwnerOrAdmin(
+  userId: string,
+  studioId: string
+): Promise<boolean> {
+  try {
+    const role = await prisma.user_studio_roles.findFirst({
+      where: {
+        user_id: userId,
+        studio_id: studioId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        is_active: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+    return !!role;
+  } catch (error) {
+    console.error('[isStudioOwnerOrAdmin] Error:', error);
+    return false;
+  }
+}
+

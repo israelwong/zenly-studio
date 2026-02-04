@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
 interface FinanceKPIs {
     ingresos: number;
@@ -9,6 +10,10 @@ interface FinanceKPIs {
     utilidad: number;
     porCobrar: number;
     porPagar: number;
+    // ✅ Nuevos campos para owners
+    totalProductionCosts?: number;
+    totalOperatingExpenses?: number;
+    netProfitability?: number;
 }
 
 export interface FinanceKPIsDebug {
@@ -94,6 +99,51 @@ async function getStudioId(slug: string): Promise<string | null> {
         select: { id: true },
     });
     return studio?.id ?? null;
+}
+
+/**
+ * Verificar si el usuario actual es Owner o Admin del studio
+ */
+export async function verificarRolOwnerOAdmin(
+    studioSlug: string
+): Promise<{ success: boolean; isOwner: boolean; error?: string }> {
+    try {
+        const { getCurrentUserId } = await import('@/lib/actions/studio/notifications/notifications.actions');
+        const userIdResult = await getCurrentUserId(studioSlug);
+        
+        if (!userIdResult.success || !userIdResult.data) {
+            return { success: false, isOwner: false, error: 'Usuario no encontrado' };
+        }
+        
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, isOwner: false, error: 'Studio no encontrado' };
+        }
+        
+        const role = await prisma.user_studio_roles.findFirst({
+            where: {
+                user_id: userIdResult.data,
+                studio_id: studioId,
+                role: { in: ['OWNER', 'ADMIN'] },
+                is_active: true,
+            },
+            select: {
+                id: true,
+            },
+        });
+        
+        return {
+            success: true,
+            isOwner: !!role,
+        };
+    } catch (error) {
+        console.error('Error verificando rol de owner:', error);
+        return {
+            success: false,
+            isOwner: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
 }
 
 /**
@@ -378,6 +428,67 @@ export async function obtenerKPIsFinancieros(
         const porCobrarTotal = totalPorCobrar;
         const porPagarTotal = porPagar._sum.net_amount ?? 0;
 
+        // ✅ Calcular costos y gastos de producción de cotizaciones autorizadas del mes
+        // Buscar eventos autorizados que se celebraron en el mes
+        const eventosAutorizados = await prisma.studio_events.findMany({
+            where: {
+                studio_id: studioId,
+                event_date: {
+                    gte: start,
+                    lte: end,
+                },
+                status: { in: ['autorizado', 'aprobado', 'completed'] },
+            },
+            select: {
+                id: true,
+                duration_hours: true,
+                cotizaciones: {
+                    where: {
+                        status: { in: ['autorizada', 'aprobada', 'approved'] },
+                    },
+                    select: {
+                        id: true,
+                        cotizacion_items: {
+                            select: {
+                                cost: true,
+                                expense: true,
+                                quantity: true,
+                                billing_type: true,
+                                cost_snapshot: true,
+                                expense_snapshot: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        let totalProductionCosts = 0;
+        let totalOperatingExpenses = 0;
+
+        for (const evento of eventosAutorizados) {
+            for (const cotizacion of evento.cotizaciones) {
+                for (const item of cotizacion.cotizacion_items) {
+                    // Usar snapshots para garantizar inmutabilidad histórica
+                    const costo = item.cost_snapshot ?? item.cost ?? 0;
+                    const gasto = item.expense_snapshot ?? item.expense ?? 0;
+                    
+                    // Calcular cantidad efectiva según billing_type
+                    const cantidadEfectiva = calcularCantidadEfectiva(
+                        (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        item.quantity,
+                        evento.duration_hours
+                    );
+                    
+                    totalProductionCosts += costo * cantidadEfectiva;
+                    totalOperatingExpenses += gasto * cantidadEfectiva;
+                }
+            }
+        }
+
+        // Calcular utilidad neta: ingresos - costos de producción - gastos operativos
+        const netProfitability = ingresosTotal - totalProductionCosts - totalOperatingExpenses;
+
         return {
             success: true,
             data: {
@@ -386,10 +497,156 @@ export async function obtenerKPIsFinancieros(
                 utilidad,
                 porCobrar: porCobrarTotal,
                 porPagar: porPagarTotal,
+                // ✅ Nuevos campos para owners
+                totalProductionCosts,
+                totalOperatingExpenses,
+                netProfitability,
             },
         };
     } catch (error) {
         console.error('Error obteniendo KPIs financieros:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+/**
+ * Interface para rentabilidad por evento
+ */
+export interface RentabilidadPorEvento {
+    eventId: string;
+    eventName: string;
+    eventDate: Date | null;
+    totalSold: number; // Total vendido (precio de cotización autorizada)
+    totalCost: number; // Suma de costos de items
+    totalExpense: number; // Suma de gastos de items
+    estimatedProfit: number; // totalSold - totalCost - totalExpense
+    profitMargin: number; // Porcentaje de margen (estimatedProfit / totalSold * 100)
+}
+
+type RentabilidadPorEventoResult =
+    | { success: true; data: RentabilidadPorEvento[] }
+    | { success: false; error: string };
+
+/**
+ * Obtener rentabilidad desglosada por evento autorizado
+ * Solo para owners/admins - muestra costos y utilidades reales
+ */
+export async function obtenerRentabilidadPorEvento(
+    studioSlug: string,
+    month: Date
+): Promise<RentabilidadPorEventoResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const { start, end } = getMonthRange(month);
+
+        // Obtener eventos autorizados del mes con sus cotizaciones
+        const eventos = await prisma.studio_events.findMany({
+            where: {
+                studio_id: studioId,
+                event_date: {
+                    gte: start,
+                    lte: end,
+                },
+                status: { in: ['autorizado', 'aprobado', 'completed'] },
+            },
+            select: {
+                id: true,
+                name: true,
+                event_date: true,
+                duration_hours: true,
+                cotizaciones: {
+                    where: {
+                        status: { in: ['autorizada', 'aprobada', 'approved'] },
+                    },
+                    select: {
+                        id: true,
+                        name: true,
+                        price: true,
+                        discount: true,
+                        cotizacion_items: {
+                            select: {
+                                cost: true,
+                                expense: true,
+                                quantity: true,
+                                billing_type: true,
+                                cost_snapshot: true,
+                                expense_snapshot: true,
+                            },
+                        },
+                    },
+                },
+                promise: {
+                    select: {
+                        contact_name: true,
+                    },
+                },
+            },
+            orderBy: {
+                event_date: 'desc',
+            },
+        });
+
+        const rentabilidad: RentabilidadPorEvento[] = [];
+
+        for (const evento of eventos) {
+            // Calcular totales por evento (puede tener múltiples cotizaciones autorizadas)
+            let totalSold = 0;
+            let totalCost = 0;
+            let totalExpense = 0;
+
+            for (const cotizacion of evento.cotizaciones) {
+                const precioCotizacion = cotizacion.price - (cotizacion.discount || 0);
+                totalSold += precioCotizacion;
+
+                for (const item of cotizacion.cotizacion_items) {
+                    // Usar snapshots para garantizar inmutabilidad
+                    const costo = item.cost_snapshot ?? item.cost ?? 0;
+                    const gasto = item.expense_snapshot ?? item.expense ?? 0;
+
+                    const cantidadEfectiva = calcularCantidadEfectiva(
+                        (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        item.quantity,
+                        evento.duration_hours
+                    );
+
+                    totalCost += costo * cantidadEfectiva;
+                    totalExpense += gasto * cantidadEfectiva;
+                }
+            }
+
+            const estimatedProfit = totalSold - totalCost - totalExpense;
+            const profitMargin = totalSold > 0 ? (estimatedProfit / totalSold) * 100 : 0;
+
+            // Nombre del evento: usar nombre de la promesa o del evento
+            const eventName = evento.promise?.contact_name
+                ? `${evento.promise.contact_name} - ${evento.name || 'Evento'}`
+                : evento.name || 'Evento sin nombre';
+
+            rentabilidad.push({
+                eventId: evento.id,
+                eventName,
+                eventDate: evento.event_date,
+                totalSold,
+                totalCost,
+                totalExpense,
+                estimatedProfit,
+                profitMargin,
+            });
+        }
+
+        return {
+            success: true,
+            data: rentabilidad,
+        };
+    } catch (error) {
+        console.error('Error obteniendo rentabilidad por evento:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error desconocido',

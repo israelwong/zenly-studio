@@ -289,8 +289,32 @@ export async function calcularYGuardarPreciosCotizacion(
 
     // 5️⃣ Calcular y guardar precios para cada item
     for (const item of items) {
-      if (!item.item_id) continue;
+      // Si es item personalizado (sin item_id), usar datos ya guardados y solo recalcular subtotal
+      if (!item.item_id) {
+        if (!item.unit_price || item.unit_price === 0) {
+          console.warn(`[PRICING] Item personalizado ${item.id} sin precio unitario`);
+          continue;
+        }
 
+        // Recalcular subtotal basado en cantidad efectiva
+        const billingType = (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+        const cantidadEfectiva = calcularCantidadEfectiva(
+          billingType,
+          item.quantity,
+          durationHours
+        );
+
+        await prisma.studio_cotizacion_items.update({
+          where: { id: item.id },
+          data: {
+            subtotal: item.unit_price * cantidadEfectiva,
+            // Mantener todos los demás campos como están
+          },
+        });
+        continue;
+      }
+
+      // Item del catálogo: calcular desde catálogo
       const datosCatalogo = catalogoMap.get(item.item_id);
       if (!datosCatalogo) {
         console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
