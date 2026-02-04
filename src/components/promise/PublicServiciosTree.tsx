@@ -15,19 +15,42 @@ interface PublicServiciosTreeProps {
 }
 
 export function PublicServiciosTree({ servicios, showPrices = false, showSubtotals = false }: PublicServiciosTreeProps) {
+  // ⚠️ SAFETY: Validar que servicios sea un array válido
+  if (!Array.isArray(servicios) || servicios.length === 0) {
+    return (
+      <div className="p-4 text-center text-zinc-400 text-sm">
+        No hay servicios disponibles
+      </div>
+    );
+  }
+
   // Inicializar todas las secciones y categorías expandidas por defecto
   const initialExpandedSections = useMemo(() => {
-    return new Set(servicios.map(seccion => seccion.id));
+    try {
+      return new Set(servicios.filter(s => s?.id).map(seccion => seccion.id));
+    } catch (error) {
+      console.error('[PublicServiciosTree] Error inicializando secciones:', error);
+      return new Set<string>();
+    }
   }, [servicios]);
 
   const initialExpandedCategories = useMemo(() => {
-    const categories = new Set<string>();
-    servicios.forEach(seccion => {
-      seccion.categorias.forEach(categoria => {
-        categories.add(categoria.id);
+    try {
+      const categories = new Set<string>();
+      servicios.forEach(seccion => {
+        if (seccion?.categorias && Array.isArray(seccion.categorias)) {
+          seccion.categorias.forEach(categoria => {
+            if (categoria?.id) {
+              categories.add(categoria.id);
+            }
+          });
+        }
       });
-    });
-    return categories;
+      return categories;
+    } catch (error) {
+      console.error('[PublicServiciosTree] Error inicializando categorías:', error);
+      return new Set<string>();
+    }
   }, [servicios]);
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(initialExpandedSections);
@@ -162,6 +185,14 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
   return (
     <div className="space-y-2">
       {servicios.map((seccion) => {
+          // ⚠️ SAFETY: Validar que seccion tenga datos necesarios
+          if (!seccion || !seccion.id) {
+            console.warn('[PublicServiciosTree] Sección inválida:', seccion);
+            return null;
+          }
+
+          const seccionNombre = seccion.nombre || 'Sin sección';
+          const seccionCategorias = Array.isArray(seccion.categorias) ? seccion.categorias : [];
           const isSectionExpanded = expandedSections.has(seccion.id);
 
           return (
@@ -180,18 +211,26 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                   ) : (
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
                   )}
-                  <h4 className="font-semibold text-white">{seccion.nombre}</h4>
+                  <h4 className="font-semibold text-white">{seccionNombre}</h4>
                 </div>
               </button>
 
               {isSectionExpanded && (
                 <div className="bg-zinc-900/50">
-                  {seccion.categorias.map((categoria, categoriaIndex) => {
+                  {seccionCategorias.map((categoria, categoriaIndex) => {
+                      // ⚠️ SAFETY: Validar que categoria tenga datos necesarios
+                      if (!categoria || !categoria.id) {
+                        console.warn('[PublicServiciosTree] Categoría inválida:', categoria);
+                        return null;
+                      }
+
+                      const categoriaNombre = categoria.nombre || 'Sin categoría';
+                      const categoriaServicios = Array.isArray(categoria.servicios) ? categoria.servicios : [];
                       const isCategoryExpanded = expandedCategories.has(categoria.id);
                       // Calcular subtotal por categoría: suma de (precio × cantidad) de todos los items
-                      const totalPriceCategoria = categoria.servicios.reduce((sum, s) => {
-                        const precio = s.price ?? 0;
-                        const cantidad = s.quantity ?? 1;
+                      const totalPriceCategoria = categoriaServicios.reduce((sum, s) => {
+                        const precio = s?.price ?? 0;
+                        const cantidad = s?.quantity ?? 1;
                         return sum + (precio * cantidad);
                       }, 0);
 
@@ -211,7 +250,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                               ) : (
                                 <ChevronRight className="w-3 h-3 text-zinc-400" />
                               )}
-                              <h5 className="text-sm font-medium text-zinc-300 text-left">{categoria.nombre}</h5>
+                              <h5 className="text-sm font-medium text-zinc-300 text-left">{categoriaNombre}</h5>
                             </div>
 
                             {/* Mostrar subtotal por categoría solo si showSubtotals está activo */}
@@ -226,7 +265,15 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                           {isCategoryExpanded && (
                             <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
                               <div className="divide-y divide-zinc-800/50">
-                                {categoria.servicios.map((servicio, servicioIndex) => {
+                                {categoriaServicios.map((servicio, servicioIndex) => {
+                                  // ⚠️ SAFETY: Validar que servicio tenga datos necesarios
+                                  if (!servicio || !servicio.id) {
+                                    console.warn('[PublicServiciosTree] Servicio inválido:', servicio);
+                                    return null;
+                                  }
+
+                                  const servicioNombre = servicio.name_snapshot || servicio.name || 'Servicio personalizado';
+                                  const servicioDescripcion = servicio.description_snapshot || servicio.description;
                                   const esCotizacion = isCotizacionServicio(servicio);
                                   const cantidad = esCotizacion ? (servicio.quantity || 1) : 1;
                                   const subtotal = esCotizacion
@@ -244,15 +291,15 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <h6 className="text-sm text-zinc-300 leading-tight">
-                                              {servicio.name_snapshot || servicio.name}
+                                              {servicioNombre}
                                               <span className="ml-2 text-xs text-zinc-500">
                                                 x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
                                               </span>
                                             </h6>
                                           </div>
-                                          {(servicio.description_snapshot || servicio.description) && (
+                                          {servicioDescripcion && (
                                             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                              {servicio.description_snapshot || servicio.description}
+                                              {servicioDescripcion}
                                             </p>
                                           )}
                                           {/* Botones de media condicionales */}

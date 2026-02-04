@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Info, CheckCircle2, FileText, CreditCard, XCircle, Bell } from 'lucide-react';
+import { Info, CheckCircle2, FileText, CreditCard, Bell } from 'lucide-react';
 import { ZenDialog, ZenBadge, ZenCheckbox } from '@/components/ui/zen';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
@@ -166,24 +166,6 @@ export function ClosingProcessInfoModal({
             </div>
           </div>
         )}
-
-        {/* Información sobre cancelación */}
-        <div className="bg-zinc-800/30 border border-zinc-700/30 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-              <XCircle className="h-4 w-4 text-emerald-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-zinc-200 mb-1">
-                ¿Necesitas cancelar el cierre?
-              </p>
-              <p className="text-xs text-zinc-400">
-                Puedes cancelar el proceso de cierre en cualquier momento desde el panel de cierre. 
-                La cotización regresará a su estado anterior automáticamente.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </ZenDialog>
   );

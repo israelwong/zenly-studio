@@ -1223,6 +1223,7 @@ export function CotizacionForm({
           nombre: nombre.trim(),
           descripcion: descripcion.trim() || undefined,
           precio: precioFinal,
+          visible_to_client: visibleToClient,
           items: Object.fromEntries(
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
           ),
@@ -1250,7 +1251,9 @@ export function CotizacionForm({
         redirectingRef.current = true;
         router.refresh();
         startTransition(() => {
-          if (redirectOnSuccess) {
+          // Priorizar redirectOnSuccess solo si no hay promise_id en el resultado
+          // Si hay promise_id, usar lógica de estado para redirección
+          if (redirectOnSuccess && !result.data?.promise_id) {
             router.push(redirectOnSuccess);
           } else if (result.data?.promise_id) {
             // Redirigir según el estado de la cotización
@@ -1338,7 +1341,9 @@ export function CotizacionForm({
       redirectingRef.current = true;
       router.refresh();
       startTransition(() => {
-        if (redirectOnSuccess) {
+        // Priorizar redirectOnSuccess solo si no hay promise_id en el resultado
+        // Si hay promise_id, usar lógica de estado para redirección
+        if (redirectOnSuccess && !result.data?.promise_id) {
           router.push(redirectOnSuccess);
         } else if (result.data?.promise_id) {
           // Redirigir según el estado de la cotización

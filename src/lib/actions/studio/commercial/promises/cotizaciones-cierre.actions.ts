@@ -612,7 +612,8 @@ export async function actualizarContratoCierre(
   studioSlug: string,
   cotizacionId: string,
   templateId: string,
-  customContent?: string | null
+  customContent?: string | null,
+  promiseId?: string
 ): Promise<CierreResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -630,11 +631,18 @@ export async function actualizarContratoCierre(
         id: cotizacionId,
         studio_id: studio.id,
       },
+      select: {
+        id: true,
+        promise_id: true,
+      },
     });
 
     if (!cotizacion) {
       return { success: false, error: 'Cotizaci?n no encontrada' };
     }
+
+    // Obtener promiseId desde cotización si no se proporcionó
+    const finalPromiseId = promiseId || cotizacion.promise_id;
 
     // Si templateId est? vac?o, limpiar el contrato
     const isClearing = !templateId || templateId.trim() === '';
@@ -733,14 +741,101 @@ export async function actualizarContratoCierre(
         },
       };
     } else if (isFirstTimeAssociating) {
-      // Primera vez asociando plantilla: empezar en versi?n 1
+      // Primera vez asociando plantilla: renderizar automáticamente si no hay contenido personalizado
+      let finalContentToSave = contentToSave;
+
+      // Si no hay contenido personalizado y hay promiseId, renderizar automáticamente
+      if (!contentToSave && finalPromiseId) {
+        try {
+          // Obtener plantilla del contrato
+          const templateResult = await getContractTemplate(studioSlug, templateId);
+          if (templateResult.success && templateResult.data) {
+            const template = templateResult.data;
+
+            // Obtener registro de cierre para condiciones comerciales
+            const registroCierre = await prisma.studio_cotizaciones_cierre.findUnique({
+              where: { cotizacion_id: cotizacionId },
+              include: {
+                condiciones_comerciales: true,
+              },
+            });
+
+            // Preparar información de condiciones comerciales si existen
+            const condicionComercialInfo = registroCierre?.condiciones_comerciales
+              ? {
+                  id: registroCierre.condiciones_comerciales.id,
+                  name: registroCierre.condiciones_comerciales.name,
+                  description: registroCierre.condiciones_comerciales.description || null,
+                  discount_percentage: registroCierre.condiciones_comerciales.discount_percentage || null,
+                  advance_percentage: registroCierre.condiciones_comerciales.advance_percentage || null,
+                  advance_type: registroCierre.condiciones_comerciales.advance_type || null,
+                  advance_amount: registroCierre.condiciones_comerciales.advance_amount || null,
+                }
+              : undefined;
+
+            // Obtener datos actualizados de la promesa para renderizar el contrato
+            const contractDataResult = await getPromiseContractData(
+              studioSlug,
+              finalPromiseId,
+              cotizacionId,
+              condicionComercialInfo
+            );
+
+            if (contractDataResult.success && contractDataResult.data) {
+              // Renderizar contenido del contrato con datos actualizados
+              const renderResult = await renderContractContent(
+                template.content,
+                contractDataResult.data,
+                contractDataResult.data.condicionesData
+              );
+
+              if (renderResult.success && renderResult.data) {
+                finalContentToSave = renderResult.data;
+              } else {
+                // Si falla el renderizado, loguear pero continuar con null
+                console.error(
+                  '[actualizarContratoCierre] ❌ ERROR CRÍTICO: Renderizado falló:',
+                  renderResult.error,
+                  'cotizacionId:', cotizacionId,
+                  'templateId:', templateId
+                );
+              }
+            } else {
+              // Si falla obtener datos, loguear pero continuar con null
+              console.error(
+                '[actualizarContratoCierre] ❌ ERROR CRÍTICO: No se pudieron obtener datos del contrato:',
+                contractDataResult.error,
+                'cotizacionId:', cotizacionId,
+                'promiseId:', finalPromiseId
+              );
+            }
+          } else {
+            // Si falla obtener plantilla, loguear pero continuar con null
+            console.error(
+              '[actualizarContratoCierre] ❌ ERROR CRÍTICO: No se encontró la plantilla:',
+              templateResult.error,
+              'templateId:', templateId
+            );
+          }
+        } catch (error) {
+          // Si hay error en el proceso de renderizado, loguear pero continuar
+          console.error('[actualizarContratoCierre] ❌ ERROR CRÍTICO en renderizado automático:', error);
+        }
+      }
+
+      // ⚠️ FIX: NO guardar contrato_definido=true si no hay contenido renderizado
+      // Esto evita que el contrato aparezca en la vista pública sin contenido
+      const shouldMarkAsDefinido = !!finalContentToSave || !!templateId;
+      
+      // Guardar registro con contenido renderizado
       const registro = await prisma.studio_cotizaciones_cierre.update({
         where: { cotizacion_id: cotizacionId },
         data: {
           contract_template_id: templateId,
-          contract_content: contentToSave,
+          contract_content: finalContentToSave,
           contract_version: 1,
-          contrato_definido: true,
+          // Solo marcar como definido si hay contenido O template (para que cliente pueda ver que hay algo)
+          contrato_definido: shouldMarkAsDefinido,
         },
       });
 

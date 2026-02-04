@@ -367,14 +367,14 @@ export function usePromiseCierreLogic({
   }, []);
 
   const handleCancelarContrato = useCallback(async () => {
-    const result = await actualizarContratoCierre(studioSlug, cotizacion.id, '', null);
+    const result = await actualizarContratoCierre(studioSlug, cotizacion.id, '', null, promiseId);
     if (result.success) {
       toast.success('Contrato cancelado correctamente');
       await loadRegistroCierre();
     } else {
       toast.error(result.error || 'Error al cancelar contrato');
     }
-  }, [studioSlug, cotizacion.id, loadRegistroCierre]);
+  }, [studioSlug, cotizacion.id, promiseId, loadRegistroCierre]);
 
   const handleRegenerateContract = useCallback(async () => {
     const result = await regenerateStudioContract(studioSlug, promiseId, cotizacion.id);
@@ -417,7 +417,9 @@ export function usePromiseCierreLogic({
     const result = await actualizarContratoCierre(
       studioSlug,
       cotizacion.id,
-      selectedTemplate.id
+      selectedTemplate.id,
+      undefined, // customContent
+      promiseId  // promiseId para renderizado automático
     );
 
     if (result.success) {
@@ -428,7 +430,7 @@ export function usePromiseCierreLogic({
     } else {
       toast.error(result.error || 'Error al guardar plantilla');
     }
-  }, [selectedTemplate, studioSlug, cotizacion.id, handleContratoSuccess]);
+  }, [selectedTemplate, studioSlug, cotizacion.id, promiseId, handleContratoSuccess]);
 
   const handleEditFromPreview = useCallback(() => {
     setShowContratoPreview(false);
@@ -445,7 +447,8 @@ export function usePromiseCierreLogic({
         studioSlug,
         cotizacion.id,
         selectedTemplate.id,
-        content
+        content,
+        promiseId  // promiseId (aunque no se use cuando hay customContent)
       );
 
       if (result.success) {
@@ -465,7 +468,7 @@ export function usePromiseCierreLogic({
         toast.error(result.error || 'Error al guardar contrato personalizado');
       }
     },
-    [selectedTemplate, studioSlug, cotizacion.id]
+    [selectedTemplate, studioSlug, cotizacion.id, promiseId]
   );
 
   const handleRegistrarPagoClick = useCallback(() => {

@@ -239,7 +239,7 @@ export function EditarCotizacionClient({
             cotizacionId={cotizacionId}
             promiseId={promiseId}
             contactId={contactId || null}
-            redirectOnSuccess={fromCierre ? undefined : `/${studioSlug}/studio/commercial/promises/${promiseId}`}
+            redirectOnSuccess={fromCierre ? undefined : undefined} // Dejar que la lógica de estado maneje la redirección
             onAfterSave={fromCierre ? () => router.back() : undefined}
             onLoadingChange={setIsFormLoading}
             condicionComercialPreAutorizada={condicionComercial}

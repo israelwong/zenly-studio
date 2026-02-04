@@ -2,13 +2,12 @@
 
 import { useState, useCallback, useEffect, useRef, startTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle2, Building2, Copy, Check } from 'lucide-react';
+import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
 import { ContractStepCardSkeleton } from '@/app/[slug]/promise/[promiseId]/cierre/CierrePageSkeleton';
-import { PublicQuoteFinancialCard } from './PublicQuoteFinancialCard';
 import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
@@ -90,6 +89,7 @@ export function PublicQuoteAuthorizedView({
   } | null>(null);
 
   // Estado separado para el contrato (se actualiza independientemente)
+  // ⚠️ FIX: Inicializar con contrato de initialCotizacion si existe (incluso si solo tiene template_id)
   const [contractData, setContractData] = useState<{
     template_id: string | null;
     content: string | null;
@@ -104,13 +104,39 @@ export function PublicQuoteAuthorizedView({
       advance_amount: number | null;
       discount_percentage: number | null;
     } | null;
-  } | null>(initialCotizacion.contract ? {
-    template_id: initialCotizacion.contract.template_id,
-    content: initialCotizacion.contract.content,
-    version: initialCotizacion.contract.version,
-    signed_at: initialCotizacion.contract.signed_at,
-    condiciones_comerciales: initialCotizacion.contract.condiciones_comerciales,
-  } : null);
+  } | null>(() => {
+    // Inicializar con contrato si existe (incluso si solo tiene template_id sin content)
+    if (initialCotizacion.contract) {
+      return {
+        template_id: initialCotizacion.contract.template_id,
+        content: initialCotizacion.contract.content,
+        version: initialCotizacion.contract.version,
+        signed_at: initialCotizacion.contract.signed_at,
+        condiciones_comerciales: initialCotizacion.contract.condiciones_comerciales,
+      };
+    }
+    return null;
+  });
+
+  // ⚠️ FIX: Sincronizar contractData cuando cotizacion.contract cambia (desde Realtime o actualizaciones)
+  useEffect(() => {
+    const cotizacionContract = (cotizacion as any).contract;
+    if (cotizacionContract) {
+      // Actualizar si no hay contractData o si el contenido cambió
+      const contentChanged = contractData?.content !== cotizacionContract.content;
+      const templateChanged = contractData?.template_id !== cotizacionContract.template_id;
+      
+      if (!contractData || contentChanged || templateChanged) {
+        setContractData({
+          template_id: cotizacionContract.template_id,
+          content: cotizacionContract.content,
+          version: cotizacionContract.version,
+          signed_at: cotizacionContract.signed_at,
+          condiciones_comerciales: cotizacionContract.condiciones_comerciales,
+        });
+      }
+    }
+  }, [cotizacion, contractData]);
 
   // Usar contractData si existe, sino usar el de cotizacion (para compatibilidad inicial)
   const currentContract = contractData || (cotizacion as any).contract;
@@ -125,6 +151,17 @@ export function PublicQuoteAuthorizedView({
   // ⚠️ Usar useMemo para asegurar estabilidad de valores entre renders
   const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
   const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
+
+  // ⚠️ DEBUG LOG: Verificar qué datos del contrato llegan desde el servidor
+  console.log('[PublicQuoteAuthorizedView] 🔍 DEBUG Contract Data:', {
+    hasContract,
+    hasContractTemplate,
+    hasContent: !!currentContract?.content,
+    templateId: currentContract?.template_id,
+    version: currentContract?.version,
+    status: cotizacion.status,
+    isEnCierre,
+  });
 
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
@@ -144,6 +181,29 @@ export function PublicQuoteAuthorizedView({
       }
       : null);
 
+  // Actualizar solo el contrato localmente (sin recargar toda la cotización)
+  const updateContractLocally = useCallback(async () => {
+    try {
+      const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
+      if (result.success && result.data) {
+        // Actualizar solo el estado del contrato, sin tocar cotizacion
+        const contractUpdate = {
+          template_id: result.data.template_id,
+          content: result.data.content,
+          version: result.data.version || 1,
+          signed_at: result.data.signed_at,
+          condiciones_comerciales: result.data.condiciones_comerciales,
+        };
+        // Solo actualizar si hay contenido o template_id (evitar sobrescribir con null)
+        if (contractUpdate.content || contractUpdate.template_id) {
+          setContractData(contractUpdate);
+        }
+      }
+    } catch (error) {
+      console.error('[PublicQuoteAuthorizedView] Error updating contract locally:', error);
+    }
+  }, [studioSlug, cotizacion.id]);
+
   // Cargar contrato inicialmente si no está disponible
   useEffect(() => {
     // Si no hay contractData pero hay template_id o el estado indica que debería haber contrato
@@ -159,6 +219,28 @@ export function PublicQuoteAuthorizedView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo al montar
+
+  // ⚠️ FIX: Recargar contrato cuando está en cierre pero no hay contrato disponible
+  // Esto asegura que cuando el contrato se genere, se actualice automáticamente
+  useEffect(() => {
+    if (isEnCierre && !hasContract && !isContractSigned) {
+      // Intentar cargar el contrato cada 3 segundos si está en cierre sin contrato
+      // Limitar a máximo 20 intentos (1 minuto) para evitar polling infinito
+      let attempts = 0;
+      const maxAttempts = 20;
+      
+      const intervalId = setInterval(() => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(intervalId);
+          return;
+        }
+        updateContractLocally();
+      }, 3000);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [isEnCierre, hasContract, isContractSigned, updateContractLocally]);
 
   // Cargar información bancaria automáticamente cuando el contrato esté firmado
   useEffect(() => {
@@ -245,26 +327,6 @@ export function PublicQuoteAuthorizedView({
     }
   }, [studioSlug, promiseId, cotizacion.id]);
 
-  // Actualizar solo el contrato localmente (sin recargar toda la cotización)
-  const updateContractLocally = useCallback(async () => {
-    try {
-      const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
-      if (result.success && result.data) {
-        // Actualizar solo el estado del contrato, sin tocar cotizacion
-        const contractUpdate = {
-          template_id: result.data.template_id,
-          content: result.data.content,
-          version: result.data.version || 1,
-          signed_at: result.data.signed_at,
-          condiciones_comerciales: result.data.condiciones_comerciales,
-        };
-        setContractData(contractUpdate);
-      }
-    } catch (error) {
-      console.error('[PublicQuoteAuthorizedView] Error updating contract locally:', error);
-    }
-  }, [studioSlug, cotizacion.id]);
-
   // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions (debe ir antes de los callbacks que lo usan)
   const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
 
@@ -343,7 +405,6 @@ export function PublicQuoteAuthorizedView({
 
   // Handler para cuando se inserta una nueva cotización (mostrar notificación)
   const handleCotizacionInserted = useCallback((changeInfo?: CotizacionChangeInfo) => {
-    console.log('[PublicQuoteAuthorizedView] Nueva cotización insertada', { changeInfo });
     setPendingUpdate((prev) => {
       if (!prev) {
         return { count: 1, type: 'quote', changeType: 'inserted', requiresManualUpdate: true };
@@ -359,7 +420,6 @@ export function PublicQuoteAuthorizedView({
 
   // Handler para cuando se elimina una cotización (mostrar notificación)
   const handleCotizacionDeleted = useCallback((cotizacionId: string) => {
-    console.log('[PublicQuoteAuthorizedView] Cotización eliminada', { cotizacionId });
     setPendingUpdate((prev) => {
       if (!prev) {
         return { count: 1, type: 'quote', changeType: 'deleted', requiresManualUpdate: true };
@@ -432,10 +492,16 @@ export function PublicQuoteAuthorizedView({
       const camposCambiados = info?.camposCambiados || [];
       const hasContractChanges = camposCambiados.some((campo: string) =>
         campo.includes('contrato') || campo.includes('contract') ||
-        campo.includes('contrato_definido') || campo.includes('contract_content')
+        campo.includes('contrato_definido') || campo.includes('contract_content') ||
+        campo.includes('status') // También escuchar cambios de status (contract_generated)
       );
       if (hasContractChanges) {
         setTimeout(() => updateContractLocallyRef.current(), 500);
+      }
+      
+      // ⚠️ FIX: Si está en cierre sin contrato, intentar cargar siempre que haya cualquier cambio
+      if (cotizacion.status === 'en_cierre' && !contractData?.content) {
+        setTimeout(() => updateContractLocallyRef.current(), 1000);
       }
     },
   });
@@ -546,28 +612,6 @@ export function PublicQuoteAuthorizedView({
 
       <div className="max-w-4xl mx-auto px-4 py-8">
 
-        {/* Resumen financiero (totales del servidor - SSoT); respeta show_items_prices / show_categories_subtotals */}
-        <div className="mb-8">
-          <PublicQuoteFinancialCard
-            cotizacionName={cotizacion.name}
-            cotizacionDescription={cotizacion.description}
-            cotizacionPrice={cotizacion.price}
-            cotizacionDiscount={cotizacion.discount}
-            condicionesComerciales={condicionesComerciales}
-            negociacionPrecioOriginal={cotizacion.negociacion_precio_original}
-            negociacionPrecioPersonalizado={cotizacion.negociacion_precio_personalizado}
-            totalAPagar={cotizacion.totalAPagar}
-            anticipo={cotizacion.anticipo}
-            diferido={cotizacion.diferido}
-            descuentoAplicado={cotizacion.descuentoAplicado}
-            ahorroTotal={cotizacion.negociacion_precio_personalizado != null && cotizacion.negociacion_precio_original != null
-              ? cotizacion.negociacion_precio_original - cotizacion.negociacion_precio_personalizado
-              : undefined}
-            showItemsPrices={shareSettings?.show_items_prices ?? true}
-            showCategoriesSubtotals={shareSettings?.show_categories_subtotals ?? true}
-          />
-        </div>
-
         {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
           {/* PASO PRINCIPAL: Firma de Contrato - solo si el estudio tiene habilitado auto_generate_contract */}
@@ -606,6 +650,7 @@ export function PublicQuoteAuthorizedView({
                     </p>
                   </div>
                   {hasContract ? (
+                    // Sub-condition A: Contrato disponible - mostrar preview para firma
                     <PublicContractCard
                       contract={currentContract || null}
                       isContractSigned={isContractSigned}
@@ -620,7 +665,46 @@ export function PublicQuoteAuthorizedView({
                         setShowContractView(true);
                       }}
                     />
+                  ) : isEnCierre ? (
+                    // Sub-condition B: En cierre pero sin contrato - mostrar mensaje contextual según flujo
+                    (() => {
+                      const isAutoGenerate = shareSettings?.auto_generate_contract ?? true;
+                      
+                      return (
+                        <ZenCard>
+                          <div className="p-6">
+                            <div className="flex items-start gap-4">
+                              <div className="shrink-0 w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
+                                {isAutoGenerate ? (
+                                  <Clock className="h-6 w-6 text-blue-400" />
+                                ) : (
+                                  <FileSearch className="h-6 w-6 text-blue-400" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+                                  <FileText className="h-5 w-5 text-blue-400" />
+                                  Contrato en preparación
+                                </h4>
+                                {isAutoGenerate ? (
+                                  // Scenario A: Flujo automático
+                                  <p className="text-sm text-zinc-400 leading-relaxed">
+                                    Estamos preparando tu contrato. El estudio está generando el documento final con los servicios seleccionados. Te notificaremos en cuanto esté listo para tu revisión y firma.
+                                  </p>
+                                ) : (
+                                  // Scenario B: Flujo manual
+                                  <p className="text-sm text-zinc-400 leading-relaxed">
+                                    El estudio está preparando los detalles finales de tu contrato. Te notificaremos vía email o WhatsApp en cuanto esté listo para tu revisión y firma.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </ZenCard>
+                      );
+                    })()
                   ) : (
+                    // Fallback: Skeleton solo si no está en cierre
                     <ContractStepCardSkeleton />
                   )}
                 </div>

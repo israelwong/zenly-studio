@@ -2998,6 +2998,7 @@ export async function getPublicPromiseCierre(
               select: {
                 id: true,
                 item_id: true,
+                service_category_id: true,
                 name_snapshot: true,
                 description_snapshot: true,
                 category_name_snapshot: true,
@@ -3013,6 +3014,18 @@ export async function getPublicPromiseCierre(
                 order: true,
                 is_courtesy: true,
                 billing_type: true,
+                service_categories: {
+                  select: {
+                    name: true,
+                    section_categories: {
+                      select: {
+                        service_sections: {
+                          select: { name: true },
+                        },
+                      },
+                    },
+                  },
+                },
               },
               orderBy: { order: 'asc' },
             },
@@ -3059,6 +3072,42 @@ export async function getPublicPromiseCierre(
     }
 
     const cotizacion = promise.quotes[0];
+    
+    // ⚠️ FALLBACK: Si no hay cotizacion_cierre pero debería haber contrato, buscar directamente
+    if (!cotizacion.cotizacion_cierre && cotizacion.status === 'en_cierre') {
+      try {
+        const directCierre = await prisma.studio_cotizaciones_cierre.findUnique({
+          where: { cotizacion_id: cotizacion.id },
+          select: {
+            contract_template_id: true,
+            contract_content: true,
+            contract_version: true,
+            contrato_definido: true,
+            contract_signed_at: true,
+            condiciones_comerciales_id: true,
+            condiciones_comerciales_definidas: true,
+            condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
+          },
+        });
+        
+        if (directCierre) {
+          // Asignar directamente al objeto cotizacion para que se use más adelante
+          (cotizacion as any).cotizacion_cierre = directCierre;
+        }
+      } catch (error) {
+        console.error('[getPublicPromiseCierre] Error in direct contract lookup:', error);
+      }
+    }
 
     // Obtener duration_hours de la promise para cálculo dinámico
     const promiseDurationHours = promise.duration_hours ?? null;
@@ -3111,6 +3160,7 @@ export async function getPublicPromiseCierre(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -3126,6 +3176,14 @@ export async function getPublicPromiseCierre(
       order: number;
       is_courtesy: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          } | null;
+        } | null;
+      } | null;
     };
 
     const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
@@ -3264,18 +3322,26 @@ export async function getPublicPromiseCierre(
       descuentoAplicado: engineOut.descuentoAplicado,
       // Información del contrato
       contract: (() => {
-        const hasContract = (cierre?.contrato_definido && cierre?.contract_template_id) ||
-          (cierre?.condiciones_comerciales && cierre?.condiciones_comerciales_definidas) ||
-          (cierre?.contract_template_id || cierre?.contract_content);
+        // ⚠️ FIX: Detectar contrato si existe contract_content O contract_template_id
+        // Priorizar contract_content (contrato generado) sobre template_id (pendiente de generar)
+        const hasContractContent = !!cierre?.contract_content;
+        const hasContractTemplate = !!cierre?.contract_template_id;
+        const hasContractDefined = !!cierre?.contrato_definido;
+        const hasCondicionesDefinidas = !!(cierre?.condiciones_comerciales && cierre?.condiciones_comerciales_definidas);
+        
+        // Contrato existe si tiene contenido generado O template_id (incluso si no está marcado como definido)
+        const hasContract = hasContractContent || hasContractTemplate || hasContractDefined || hasCondicionesDefinidas;
 
-        if (!hasContract) return undefined;
+        if (!hasContract || !cierre) {
+          return undefined;
+        }
 
         return {
-          template_id: cierre?.contract_template_id || null,
-          content: cierre?.contract_content || null,
-          version: cierre?.contract_version ?? 1,
-          signed_at: cierre?.contract_signed_at || null,
-          condiciones_comerciales: (cierre?.condiciones_comerciales ? {
+          template_id: cierre.contract_template_id || null,
+          content: cierre.contract_content || null,
+          version: cierre.contract_version ?? 1,
+          signed_at: cierre.contract_signed_at || null,
+          condiciones_comerciales: (cierre.condiciones_comerciales ? {
             id: cierre.condiciones_comerciales.id,
             name: cierre.condiciones_comerciales.name,
             description: cierre.condiciones_comerciales.description,

@@ -127,7 +127,9 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
     const result = await actualizarContratoCierre(
       studioSlug,
       cotizacionId,
-      template.id
+      template.id,
+      undefined, // customContent
+      promiseId  // promiseId para renderizado automático
     );
 
     if (result.success) {

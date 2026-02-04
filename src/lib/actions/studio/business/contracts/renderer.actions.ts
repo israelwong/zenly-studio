@@ -164,7 +164,22 @@ export async function getPromiseContractData(
         event_duration: true,
         paquete_id: true, // ✅ Para identificar si viene de paquete y aplicar precio charm
         cotizacion_items: {
-          select: COTIZACION_ITEMS_SELECT_STANDARD,
+          select: {
+            ...COTIZACION_ITEMS_SELECT_STANDARD,
+            service_category_id: true,
+            service_categories: {
+              select: {
+                name: true,
+                section_categories: {
+                  select: {
+                    service_sections: {
+                      select: { name: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
           orderBy: {
             order: "asc",
           },
@@ -198,9 +213,30 @@ export async function getPromiseContractData(
       ? formatDisplayDateLong(toUtcDateOnly(eventDate))
       : "Fecha por definir";
 
+    // Mapear items para usar relación service_categories cuando faltan snapshots
+    const itemsMapeados = cotizacion.cotizacion_items.map((item: any) => {
+      // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+      let categoryName = item.category_name_snapshot || item.category_name;
+      let sectionName = item.seccion_name_snapshot || item.seccion_name;
+      
+      // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+      if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+        categoryName = categoryName || item.service_categories.name;
+        sectionName = sectionName || item.service_categories.section_categories?.service_sections?.name || null;
+      }
+      
+      return {
+        ...item,
+        category_name_snapshot: categoryName || item.category_name_snapshot,
+        seccion_name_snapshot: sectionName || item.seccion_name_snapshot,
+        category_name: categoryName || item.category_name,
+        seccion_name: sectionName || item.seccion_name,
+      };
+    });
+
     // Construir estructura jer?rquica usando funci?n centralizada
     const estructura = construirEstructuraJerarquicaCotizacion(
-      cotizacion.cotizacion_items,
+      itemsMapeados,
       {
         incluirDescripciones: true,
         ordenarPor: 'incremental',

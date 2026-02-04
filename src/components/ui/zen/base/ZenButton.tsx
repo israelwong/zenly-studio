@@ -16,6 +16,8 @@ const zenButtonVariants = cva(
   cn(
     // Estructura
     'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all duration-200',
+    // Cursor
+    'cursor-pointer',
     // Estados disabled
     'disabled:pointer-events-none disabled:opacity-50',
     // Focus

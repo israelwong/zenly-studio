@@ -1763,16 +1763,33 @@ export async function updateCotizacion(
     // Transacciรณn para garantizar consistencia
     await prisma.$transaction(async (tx) => {
       // 1. Actualizar cotizaciรณn
+      const updateData: {
+        name: string;
+        description: string | null;
+        price: number;
+        visible_to_client?: boolean;
+        event_duration?: number | null;
+        updated_at: Date;
+      } = {
+        name: validatedData.nombre,
+        description: validatedData.descripcion || null,
+        price: validatedData.precio,
+        updated_at: new Date(),
+      };
+
+      // Solo actualizar visible_to_client si se proporciona explícitamente
+      if (validatedData.visible_to_client !== undefined) {
+        updateData.visible_to_client = validatedData.visible_to_client;
+      }
+
+      // Solo actualizar event_duration si se proporciona explícitamente
+      if (validatedData.event_duration !== undefined) {
+        updateData.event_duration = validatedData.event_duration;
+      }
+
       await tx.studio_cotizaciones.update({
         where: { id: validatedData.cotizacion_id },
-        data: {
-          name: validatedData.nombre,
-          description: validatedData.descripcion || null,
-          price: validatedData.precio,
-          visible_to_client: validatedData.visible_to_client !== undefined ? validatedData.visible_to_client : undefined,
-          event_duration: validatedData.event_duration !== undefined ? validatedData.event_duration : undefined,
-          updated_at: new Date(),
-        },
+        data: updateData,
       });
 
       // 2. Eliminar items existentes
