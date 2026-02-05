@@ -22,7 +22,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
     obtenerPerfil(studioSlug),
   ]);
 
-  const identities = identitiesResult ?? { hasPassword: false, hasGoogle: false, googleOnly: false };
+  const identities = identitiesResult ?? { hasPassword: false, hasGoogle: false, googleOnly: false, googleEmail: null };
   const perfil = perfilResult.success ? perfilResult.data : null;
   const perfilError = !perfilResult.success ? (perfilResult.error as string) : null;
 

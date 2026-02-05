@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
-import { PasswordChangeSchema, SecuritySettingsSchema } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
+import { PasswordChangeSchema, SetPasswordSchema, SecuritySettingsSchema } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
 import { revalidatePath } from 'next/cache';
 import type { SecuritySettings, AccessLog, SecurityFormData } from '@/app/[slug]/studio/config/account/seguridad/types';
 
@@ -23,7 +23,46 @@ interface SecurityActionDetails {
 // ========================================
 
 /**
- * Cambiar contraseña del usuario
+ * Establecer contraseña para usuario que aún no tiene (ej. solo Google).
+ * No requiere contraseña actual; Supabase updateUser({ password }) con sesión válida es suficiente.
+ */
+export async function establecerPassword(studioSlug: string, data: unknown) {
+    try {
+        const validatedData = SetPasswordSchema.parse(data);
+        const supabase = await createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            return { success: false, error: 'Usuario no autenticado' };
+        }
+
+        const { error: updateError } = await supabase.auth.updateUser({
+            password: validatedData.newPassword,
+        });
+
+        if (updateError) {
+            const userMessage = updateError.message?.includes('length') || updateError.message?.includes('characters')
+                ? 'La contraseña no cumple los requisitos (mín. 8 caracteres, mayúscula, minúscula y número).'
+                : updateError.message || 'Error al establecer la contraseña';
+            return { success: false, error: userMessage };
+        }
+
+        await logSecurityAction(user.id, 'password_set', true, {});
+        revalidatePath(`/${studioSlug}/studio/config/account`);
+        return { success: true, message: 'Contraseña establecida. Ya puedes desconectar Google si lo deseas.' };
+    } catch (error) {
+        console.error('Error al establecer contraseña:', error);
+        if (error instanceof Error && error.name === 'ZodError') {
+            const zodError = error as unknown as { errors: Array<{ path: (string | number)[]; message: string }> };
+            const msg = zodError.errors?.[0]?.message;
+            return { success: false, error: msg || 'Datos inválidos' };
+        }
+        return { success: false, error: 'Error interno del servidor' };
+    }
+}
+
+/**
+ * Cambiar contraseña del usuario (requiere contraseña actual)
  */
 export async function cambiarPassword(
     studioSlug: string,
@@ -84,10 +123,10 @@ export async function cambiarPassword(
 
         if (updateError) {
             console.error('❌ Error al actualizar contraseña:', updateError.message);
-            return {
-                success: false,
-                error: 'Error al actualizar la contraseña'
-            };
+            const userMessage = updateError.message?.includes('length') || updateError.message?.includes('characters')
+                ? 'La nueva contraseña no cumple los requisitos de seguridad (mín. 8 caracteres, mayúscula, minúscula y número).'
+                : updateError.message || 'Error al actualizar la contraseña';
+            return { success: false, error: userMessage };
         }
 
         console.log('✅ Contraseña actualizada exitosamente');
@@ -98,6 +137,7 @@ export async function cambiarPassword(
             user_agent: 'N/A'
         });
 
+        revalidatePath(`/${studioSlug}/studio/config/account`);
         revalidatePath(`/${studioSlug}/studio/config/account/seguridad`);
 
         return {
@@ -107,6 +147,11 @@ export async function cambiarPassword(
 
     } catch (error) {
         console.error('Error al cambiar contraseña:', error);
+        if (error instanceof Error && error.name === 'ZodError') {
+            const zodError = error as unknown as { errors: Array<{ path: (string | number)[]; message: string }> };
+            const msg = zodError.errors?.[0]?.message;
+            return { success: false, error: msg || 'Datos de contraseña inválidos' };
+        }
         return {
             success: false,
             error: 'Error interno del servidor'

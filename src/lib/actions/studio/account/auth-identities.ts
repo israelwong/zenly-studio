@@ -9,6 +9,8 @@ export interface AuthIdentities {
   hasGoogle: boolean;
   /** true si solo tiene Google (no puede cambiar contraseña) */
   googleOnly: boolean;
+  /** Email de la cuenta de Google conectada (para mostrar en UI) */
+  googleEmail: string | null;
 }
 
 /**
@@ -28,12 +30,32 @@ export async function getAuthIdentities(): Promise<AuthIdentities | null> {
     return null;
   }
 
-  const identities = user.identities ?? [];
-  const hasPassword = identities.some((i) => i.provider === 'email');
-  const hasGoogle = identities.some((i) => i.provider === 'google');
-  const googleOnly = hasGoogle && !hasPassword;
+  // DEBUG: ver exactamente qué devuelve Supabase para diagnosticar hasPassword
+  console.log('--- DEBUG AUTH IDENTITY ---');
+  console.log('User ID:', user.id);
+  console.log('App Metadata:', JSON.stringify(user.app_metadata, null, 2));
+  console.log('Identities Array:', JSON.stringify(user.identities, null, 2));
+  console.log('---------------------------');
 
-  return { hasPassword, hasGoogle, googleOnly };
+  const identities = user.identities ?? [];
+  const appMetadata = (user.app_metadata ?? {}) as { providers?: string[] };
+  const providers = Array.isArray(appMetadata.providers) ? appMetadata.providers : [];
+  const hasPassword =
+    providers.includes('email') || identities.some((i) => i.provider === 'email');
+  const hasGoogle =
+    providers.includes('google') || identities.some((i) => i.provider === 'google');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[getAuthIdentities] User providers:', appMetadata.providers ?? 'none');
+  }
+  const googleOnly = hasGoogle && !hasPassword;
+  const googleIdentity = identities.find((i) => i.provider === 'google');
+  const googleEmail =
+    (googleIdentity?.identity_data && typeof googleIdentity.identity_data === 'object' && 'email' in googleIdentity.identity_data)
+      ? String((googleIdentity.identity_data as { email?: string }).email ?? '')
+      : user.email ?? null;
+  const googleEmailDisplay = googleEmail && googleEmail.length > 0 ? googleEmail : null;
+
+  return { hasPassword, hasGoogle, googleOnly, googleEmail: googleEmailDisplay };
 }
 
 export type UnlinkGoogleResult = { success: true } | { success: false; error: string };
@@ -60,7 +82,10 @@ export async function unlinkGoogleIdentity(studioSlug: string): Promise<UnlinkGo
     return { success: false, error: 'No tienes cuenta de Google vinculada' };
   }
 
-  const hasPassword = identities.some((i) => i.provider === 'email');
+  const appMetadata = (user.app_metadata ?? {}) as { providers?: string[] };
+  const providers = Array.isArray(appMetadata.providers) ? appMetadata.providers : [];
+  const hasPassword =
+    providers.includes('email') || identities.some((i) => i.provider === 'email');
   if (!hasPassword) {
     return { success: false, error: 'No puedes desconectar Google porque es tu único método de acceso. Crea una contraseña primero.' };
   }

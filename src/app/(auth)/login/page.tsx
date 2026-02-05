@@ -1,9 +1,25 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { getRedirectPathForUser } from '@/lib/auth/redirect-utils'
+import { resolveRedirectFromDb } from '@/lib/actions/auth/login.actions'
 import { LoginForm } from '@/components/forms/LoginForm'
 import { AuthHeader } from '@/components/auth/auth-header'
 import { AuthFooter } from '@/components/auth/auth-footer'
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (session?.user) {
+    const redirectResult = getRedirectPathForUser(session.user)
+    const redirectPath =
+      redirectResult.shouldRedirect && redirectResult.redirectPath
+        ? redirectResult.redirectPath
+        : await resolveRedirectFromDb(session.user.id)
+    redirect(redirectPath)
+  }
+
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-zinc-950">
       <div className="w-full max-w-sm">

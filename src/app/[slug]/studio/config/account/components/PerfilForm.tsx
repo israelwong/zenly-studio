@@ -35,6 +35,7 @@ export function PerfilForm({ studioSlug, perfil, onPerfilUpdate }: PerfilFormPro
     register,
     handleSubmit,
     formState: { errors },
+    reset,
   } = useForm<PerfilFormType>({
     resolver: zodResolver(PerfilSchema),
     defaultValues: {
@@ -43,6 +44,10 @@ export function PerfilForm({ studioSlug, perfil, onPerfilUpdate }: PerfilFormPro
       phone: perfil.phone,
     },
   });
+
+  useEffect(() => {
+    reset({ name: perfil.name, email: perfil.email, phone: perfil.phone });
+  }, [perfil.name, perfil.email, perfil.phone, reset]);
 
   const onSubmit = async (data: PerfilFormType) => {
     setLoading(true);

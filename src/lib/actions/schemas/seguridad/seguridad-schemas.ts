@@ -4,14 +4,25 @@ import { z } from 'zod';
 // SCHEMAS DE VALIDACIÓN - SEGURIDAD
 // ========================================
 
-// Schema para cambio de contraseña
+const passwordStrength = z
+    .string()
+    .min(8, 'La contraseña debe tener al menos 8 caracteres')
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Debe contener al menos una minúscula, una mayúscula y un número');
+
+// Schema para cambio de contraseña (usuario que ya tiene contraseña)
 export const PasswordChangeSchema = z.object({
     currentPassword: z.string().min(1, 'La contraseña actual es requerida'),
-    newPassword: z
-        .string()
-        .min(8, 'La nueva contraseña debe tener al menos 8 caracteres')
-        .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'La contraseña debe contener al menos una letra minúscula, una mayúscula y un número'),
+    newPassword: passwordStrength,
     confirmPassword: z.string().min(1, 'Confirma tu nueva contraseña')
+}).refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Las contraseñas no coinciden',
+    path: ['confirmPassword']
+});
+
+// Schema para establecer contraseña (usuario solo Google, sin contraseña previa)
+export const SetPasswordSchema = z.object({
+    newPassword: passwordStrength,
+    confirmPassword: z.string().min(1, 'Confirma tu contraseña')
 }).refine((data) => data.newPassword === data.confirmPassword, {
     message: 'Las contraseñas no coinciden',
     path: ['confirmPassword']
@@ -36,5 +47,6 @@ export const AccessLogFiltersSchema = z.object({
 
 // Tipos exportados
 export type PasswordChangeForm = z.infer<typeof PasswordChangeSchema>;
+export type SetPasswordForm = z.infer<typeof SetPasswordSchema>;
 export type SecuritySettingsForm = z.infer<typeof SecuritySettingsSchema>;
 export type AccessLogFiltersForm = z.infer<typeof AccessLogFiltersSchema>;

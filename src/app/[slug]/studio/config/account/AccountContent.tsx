@@ -9,10 +9,11 @@ import {
   PerfilForm,
   PerfilSkeleton,
   PasswordChangeForm,
+  SetPasswordForm,
   SecuritySettings,
   SessionsHistory,
 } from './components';
-import { ZenButton, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenButton, ZenConfirmModal, ZenDialog } from '@/components/ui/zen';
 import { unlinkGoogleIdentity } from '@/lib/actions/studio/account/auth-identities';
 import { Shield } from 'lucide-react';
 
@@ -55,10 +56,11 @@ export function AccountContent({
   const [perfil, setPerfil] = useState<PerfilData | null>(initialPerfil);
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleError, setGoogleError] = useState('');
-  const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
+  const [disconnectModalOpen, setDisconnectModalOpen] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
   const [unlinkError, setUnlinkError] = useState('');
-  const { googleOnly, hasGoogle, hasPassword } = authIdentities;
+  const { googleOnly, hasGoogle, hasPassword, googleEmail } = authIdentities;
+  const needsPasswordToUnlink = hasGoogle && !hasPassword;
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -83,11 +85,23 @@ export function AccountContent({
     const result = await unlinkGoogleIdentity(studioSlug);
     setUnlinkLoading(false);
     if (result.success) {
-      setUnlinkModalOpen(false);
+      setDisconnectModalOpen(false);
       router.refresh();
     } else {
-      setUnlinkError(result.error);
+      setUnlinkError(result.error ?? '');
     }
+  };
+
+  const handleDisconnectClick = () => setDisconnectModalOpen(true);
+  const handleCloseDisconnectModal = () => {
+    if (!unlinkLoading) {
+      setDisconnectModalOpen(false);
+      setUnlinkError('');
+    }
+  };
+  const handlePasswordSetSuccess = () => {
+    setDisconnectModalOpen(false);
+    router.refresh();
   };
 
   return (
@@ -115,28 +129,20 @@ export function AccountContent({
           {hasGoogle ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-emerald-400 font-medium flex items-center gap-2">
-                <span aria-hidden>✅</span> Cuenta de Google conectada
+                <span aria-hidden>✅</span>
+                {googleEmail
+                  ? `Google conectado (${googleEmail})`
+                  : 'Cuenta de Google conectada'}
               </p>
-              <div className="flex items-center gap-2">
-                {googleOnly ? (
-                  <span
-                    className="text-xs text-zinc-500"
-                    title="No puedes desconectar Google porque es tu único método de acceso. Crea una contraseña primero."
-                  >
-                    No puedes desconectar Google porque es tu único método de acceso. Crea una contraseña primero.
-                  </span>
-                ) : (
-                  <ZenButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setUnlinkModalOpen(true)}
-                    className="border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                  >
-                    Desconectar
-                  </ZenButton>
-                )}
-              </div>
+              <ZenButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnectClick}
+                className="border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              >
+                Desconectar
+              </ZenButton>
             </div>
           ) : (
             <div className="space-y-2">
@@ -165,8 +171,7 @@ export function AccountContent({
               <div>
                 <p className="text-blue-200 font-medium">Tu acceso está gestionado por Google</p>
                 <p className="text-zinc-400 text-sm mt-1">
-                  Inicias sesión con tu cuenta de Google. No tienes contraseña de plataforma; para
-                  cambiar el acceso usa la configuración de tu cuenta de Google.
+                  Si quieres desconectar Google, haz clic en Desconectar y crea una contraseña para seguir accediendo con tu correo.
                 </p>
               </div>
             </div>
@@ -190,18 +195,35 @@ export function AccountContent({
         <SessionsHistory studioSlug={studioSlug} />
       </section>
 
+      {/* Modal: crear contraseña primero (solo si no tiene contraseña) */}
+      <ZenDialog
+        isOpen={disconnectModalOpen && needsPasswordToUnlink}
+        onClose={handleCloseDisconnectModal}
+        title="Crea una contraseña primero"
+        description="Para desconectar tu cuenta de Google, necesitas definir una contraseña para seguir accediendo con tu correo."
+        maxWidth="md"
+        showCloseButton
+      >
+        <SetPasswordForm
+          studioSlug={studioSlug}
+          variant="inline"
+          onSuccess={handlePasswordSetSuccess}
+        />
+      </ZenDialog>
+
+      {/* Modal: confirmar desvincular (cuando ya tiene contraseña) */}
       <ZenConfirmModal
-        isOpen={unlinkModalOpen}
-        onClose={() => !unlinkLoading && (setUnlinkModalOpen(false), setUnlinkError(''))}
+        isOpen={disconnectModalOpen && hasPassword}
+        onClose={handleCloseDisconnectModal}
         onConfirm={handleUnlinkGoogle}
-        title="Desconectar cuenta de Google"
+        title="Desvincular cuenta"
         description={
           <>
-            Esto eliminará Google como método de acceso, pero tu estudio y suscripción seguirán vigentes. ¿Deseas continuar?
+            Estás a punto de desvincular Google. Seguirás teniendo acceso usando tu correo y contraseña.
             {unlinkError && <p className="text-sm text-red-400 mt-2">{unlinkError}</p>}
           </>
         }
-        confirmText="Desconectar"
+        confirmText="Confirmar Desconexión"
         cancelText="Cancelar"
         variant="destructive"
         loading={unlinkLoading}
