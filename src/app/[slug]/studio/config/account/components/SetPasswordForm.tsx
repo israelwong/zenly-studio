@@ -14,14 +14,26 @@ import { establecerPassword } from '@/lib/actions/studio/account/seguridad/segur
 import { toast } from 'sonner';
 import { Key, Eye, EyeOff } from 'lucide-react';
 
+export type SetPasswordResult = { success: boolean; error?: string; message?: string };
+
 interface SetPasswordFormProps {
   studioSlug: string;
   onSuccess?: () => void;
   /** Si true, no envuelve en Card (para usar dentro de modal) */
   variant?: 'card' | 'inline';
+  /**
+   * Cuando se proporciona, el formulario delega el submit al padre (ej. para encadenar
+   * establecerPassword + unlinkGoogleIdentity en secuencia y evitar race conditions).
+   */
+  onSubmitToServer?: (data: SetPasswordFormType) => Promise<SetPasswordResult>;
 }
 
-export function SetPasswordForm({ studioSlug, onSuccess, variant = 'card' }: SetPasswordFormProps) {
+export function SetPasswordForm({
+  studioSlug,
+  onSuccess,
+  variant = 'card',
+  onSubmitToServer,
+}: SetPasswordFormProps) {
   const [loading, setLoading] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -40,16 +52,18 @@ export function SetPasswordForm({ studioSlug, onSuccess, variant = 'card' }: Set
     const loadingToast = toast.loading('Estableciendo contraseña...');
 
     try {
-      const result = await establecerPassword(studioSlug, data);
+      const result = onSubmitToServer
+        ? await onSubmitToServer(data)
+        : await establecerPassword(studioSlug, data);
 
-      if (result.success) {
+      if (result?.success) {
         toast.dismiss(loadingToast);
         toast.success(result.message ?? 'Contraseña establecida');
         reset();
         onSuccess?.();
       } else {
         toast.dismiss(loadingToast);
-        toast.error(result.error ?? 'Error al establecer la contraseña');
+        toast.error(result?.error ?? 'Error al establecer la contraseña');
       }
     } catch (error) {
       console.error('Error al establecer contraseña:', error);
@@ -60,8 +74,19 @@ export function SetPasswordForm({ studioSlug, onSuccess, variant = 'card' }: Set
     }
   };
 
+  const onValidationError = (errors: Record<string, { message?: string } | undefined>) => {
+    const messages = Object.values(errors)
+      .map((e) => e?.message)
+      .filter(Boolean) as string[];
+    toast.error(messages.length ? messages.join('. ') : 'Revisa los campos e intenta de nuevo.');
+  };
+
   const formContent = (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 flex-1 flex flex-col">
+    <form
+      onSubmit={handleSubmit(onSubmit, onValidationError)}
+      className="space-y-6 flex-1 flex flex-col"
+      noValidate
+    >
           <div className="relative">
             <ZenInput
               id="newPassword"
@@ -113,6 +138,7 @@ export function SetPasswordForm({ studioSlug, onSuccess, variant = 'card' }: Set
           <div className="flex justify-end pt-4">
             <ZenButton
               type="submit"
+              disabled={loading}
               loading={loading}
               loadingText="Estableciendo..."
               icon={Key}

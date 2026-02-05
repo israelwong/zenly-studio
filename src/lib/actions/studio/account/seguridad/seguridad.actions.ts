@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
 import { PasswordChangeSchema, SetPasswordSchema, SecuritySettingsSchema } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
 import { revalidatePath } from 'next/cache';
+import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import type { SecuritySettings, AccessLog, SecurityFormData } from '@/app/[slug]/studio/config/account/seguridad/types';
 
 // ========================================
@@ -24,19 +25,20 @@ interface SecurityActionDetails {
 
 /**
  * Establecer contraseña para usuario que aún no tiene (ej. solo Google).
- * No requiere contraseña actual; Supabase updateUser({ password }) con sesión válida es suficiente.
+ * Usa la API Admin de Supabase (service role) para evitar "Password update requires reauthentication"
+ * que devuelve tanto el cliente como el servidor con el cliente anon.
  */
 export async function establecerPassword(studioSlug: string, data: unknown) {
     try {
         const validatedData = SetPasswordSchema.parse(data);
         const supabase = await createClient();
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-
         if (userError || !user) {
             return { success: false, error: 'Usuario no autenticado' };
         }
 
-        const { error: updateError } = await supabase.auth.updateUser({
+        const admin = createAdminClient();
+        const { error: updateError } = await admin.auth.admin.updateUserById(user.id, {
             password: validatedData.newPassword,
         });
 
@@ -47,7 +49,12 @@ export async function establecerPassword(studioSlug: string, data: unknown) {
             return { success: false, error: userMessage };
         }
 
-        await logSecurityAction(user.id, 'password_set', true, {});
+        try {
+            const dbUser = await getOrCreateUser(user);
+            await logSecurityAction(dbUser.id, 'password_set', true, {});
+        } catch (logErr) {
+            console.error('Error al registrar log password_set:', logErr);
+        }
         revalidatePath(`/${studioSlug}/studio/config/account`);
         return { success: true, message: 'Contraseña establecida. Ya puedes desconectar Google si lo deseas.' };
     } catch (error) {

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@/lib/supabase/admin'
 import { getRedirectPathForUser } from '@/lib/auth/redirect-utils'
 import { getDefaultRoute } from '@/types/auth'
 import { prisma } from '@/lib/prisma'
@@ -56,6 +57,87 @@ export async function resolveRedirectFromDb(supabaseId: string): Promise<string>
   if (studioSlug) return getDefaultRoute('suscriptor', studioSlug)
 
   return '/onboarding'
+}
+
+/**
+ * Fallback: obtiene studio slug desde platform_user_profiles por supabase_id.
+ * Útil cuando user_studio_roles no tiene fila pero el usuario sí está vinculado por perfil.
+ */
+export async function getStudioSlugBySupabaseId(supabaseId: string): Promise<string | null> {
+  const profile = await prisma.platform_user_profiles.findFirst({
+    where: { supabaseUserId: supabaseId, studio_id: { not: null } },
+    include: { studio: { select: { slug: true } } },
+  })
+  return profile?.studio?.slug ?? null
+}
+
+/**
+ * Fallback "owner check": obtiene el slug del estudio donde el usuario es OWNER (user_studio_roles.role = OWNER).
+ * Prueba primero con Prisma (contexto normal). Si devuelve null (p. ej. RLS oculta filas), usa Admin client para bypass RLS.
+ */
+export async function getStudioSlugByOwnerId(supabaseUserId: string): Promise<string | null> {
+  console.log('🔍 [Owner Check] Starting for Supabase ID:', supabaseUserId)
+
+  try {
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: supabaseUserId },
+      select: { id: true, email: true },
+    })
+
+    console.log('👤 [Owner Check] Prisma User found:', dbUser ?? null)
+
+    if (!dbUser) {
+      console.warn('⚠️ [Owner Check] No Prisma user found for this Supabase ID. Sync might be missing.')
+      return null
+    }
+
+    console.log('👤 [Owner Check] Internal user id (CUID):', dbUser.id)
+
+    const ownerRole = await prisma.user_studio_roles.findFirst({
+      where: { user_id: dbUser.id, role: 'OWNER', is_active: true },
+      include: { studio: { select: { slug: true } } },
+      orderBy: { accepted_at: 'desc' },
+    })
+
+    console.log('👑 [Owner Check] Owner Role found:', ownerRole ? { studio_id: ownerRole.studio_id, slug: ownerRole.studio?.slug } : null)
+
+    if (ownerRole?.studio?.slug) {
+      return ownerRole.studio.slug
+    }
+
+    console.log('🛡️ [Owner Check] Attempting Admin Fallback...')
+
+    const admin = createAdminClient()
+    const { data: roleRow, error: roleError } = await admin
+      .from('user_studio_roles')
+      .select('studio_id')
+      .eq('user_id', dbUser.id)
+      .eq('role', 'OWNER')
+      .eq('is_active', true)
+      .order('accepted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    console.log('🛡️ [Owner Check] Admin role query result:', { roleRow, roleError: roleError?.message })
+
+    if (!roleRow?.studio_id) {
+      console.log('🛡️ [Owner Check] Admin fallback: no role row or studio_id')
+      return null
+    }
+
+    const { data: studioRow, error: studioError } = await admin
+      .from('studios')
+      .select('slug')
+      .eq('id', roleRow.studio_id)
+      .maybeSingle()
+
+    console.log('🛡️ [Owner Check] Admin studio query result:', { studioRow, studioError: studioError?.message })
+
+    return studioRow?.slug ?? null
+  } catch (error) {
+    console.error('💥 [Owner Check] Crash:', error)
+    return null
+  }
 }
 
 /** Para uso en LoginForm: resuelve redirect desde DB (p. ej. cuando metadata no tiene role/studio_slug). */

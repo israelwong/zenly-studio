@@ -30,13 +30,6 @@ export async function getAuthIdentities(): Promise<AuthIdentities | null> {
     return null;
   }
 
-  // DEBUG: ver exactamente qué devuelve Supabase para diagnosticar hasPassword
-  console.log('--- DEBUG AUTH IDENTITY ---');
-  console.log('User ID:', user.id);
-  console.log('App Metadata:', JSON.stringify(user.app_metadata, null, 2));
-  console.log('Identities Array:', JSON.stringify(user.identities, null, 2));
-  console.log('---------------------------');
-
   const identities = user.identities ?? [];
   const appMetadata = (user.app_metadata ?? {}) as { providers?: string[] };
   const providers = Array.isArray(appMetadata.providers) ? appMetadata.providers : [];
@@ -44,9 +37,6 @@ export async function getAuthIdentities(): Promise<AuthIdentities | null> {
     providers.includes('email') || identities.some((i) => i.provider === 'email');
   const hasGoogle =
     providers.includes('google') || identities.some((i) => i.provider === 'google');
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[getAuthIdentities] User providers:', appMetadata.providers ?? 'none');
-  }
   const googleOnly = hasGoogle && !hasPassword;
   const googleIdentity = identities.find((i) => i.provider === 'google');
   const googleEmail =

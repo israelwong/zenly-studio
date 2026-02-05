@@ -14,6 +14,15 @@ import { getCurrentUser } from '@/lib/auth/user-utils';
 import { ProfilePageSkeleton } from './profile/public/ProfilePageSkeleton';
 import { detectDeviceType } from '@/lib/utils/analytics-helpers';
 
+/** Slugs que no son estudios: rutas de app o reservadas (evita "Studio not found") */
+const RESERVED_SLUGS = new Set([
+    's',           // short URLs
+    'auth', 'login', 'signup', 'sign-up', 'forgot-password', 'update-password', 'confirm', 'error', 'redirect',
+    'admin', 'agente', 'api', 'onboarding', 'protected', 'unauthorized',
+    'about', 'contact', 'pricing',
+    'favicon.ico', 'robots.txt', '_next', 'studio', 'config', 'cliente', 'offer', 'promise', 'profile', 'aviso-privacidad',
+]);
+
 interface PublicProfilePageProps {
     params: Promise<{ slug: string }>;
 }
@@ -25,8 +34,7 @@ interface PublicProfilePageProps {
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
     const { slug } = await params;
 
-    // Excluir rutas reservadas como /s (short URLs)
-    if (slug === 's') {
+    if (RESERVED_SLUGS.has(slug?.toLowerCase?.() ?? '')) {
         redirect('/');
     }
 

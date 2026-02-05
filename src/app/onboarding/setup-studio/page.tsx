@@ -38,6 +38,7 @@ export default function SetupStudioPage() {
             <ZenCardTitle className="text-xl">
               Configuración de Estudio
             </ZenCardTitle>
+            <p className="mt-1 text-sm font-normal text-amber-500/90">En construcción</p>
           </ZenCardHeader>
           <ZenCardContent className="text-center">
             <p className="text-zinc-400">
