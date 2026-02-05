@@ -14,10 +14,6 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
   const [isDismissed, setIsDismissed] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    console.log('[PortfolioNudge] Componente montado, hasPortfolios:', hasPortfolios);
-  }, [hasPortfolios]);
-
   const handleScroll = useCallback(() => {
     if (!isVisible) return;
     
@@ -37,7 +33,6 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
 
     // Mostrar después de 5 segundos sin condiciones adicionales
     timeoutRef.current = setTimeout(() => {
-      console.log('[PortfolioNudge] Mostrando nudge después de 5 segundos');
       setIsVisible(true);
     }, 5000);
 
