@@ -160,17 +160,6 @@ export function PublicQuoteAuthorizedView({
   const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
   const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
 
-  // ⚠️ DEBUG LOG: Verificar qué datos del contrato llegan desde el servidor
-  console.log('[PublicQuoteAuthorizedView] 🔍 DEBUG Contract Data:', {
-    hasContract,
-    hasContractTemplate,
-    hasContent: !!currentContract?.content,
-    templateId: currentContract?.template_id,
-    version: currentContract?.version,
-    status: cotizacion.status,
-    isEnCierre,
-  });
-
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
   // También considerar condiciones comerciales directamente de la cotización si tiene campos completos (ej: negociación)
@@ -281,7 +270,6 @@ export function PublicQuoteAuthorizedView({
     
     if (isAutomaticFlow && shouldAutoGenerate && isEnCierre && !hasContract && !isContractSigned) {
       const timer = setTimeout(() => {
-        console.log('[PublicQuoteAuthorizedView] ⚠️ Contrato no visible después de 5s - mostrando force refresh');
         setShowForceRefresh(true);
       }, 5000);
 
@@ -294,7 +282,6 @@ export function PublicQuoteAuthorizedView({
   // Handler para force refresh
   const handleForceRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    console.log('[PublicQuoteAuthorizedView] 🔄 Force refresh activado');
     
     // Esperar un momento para mostrar el spinner
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -312,15 +299,11 @@ export function PublicQuoteAuthorizedView({
     
     // ⚠️ CRÍTICO: Solo ejecutar si nunca se ha completado el safety check Y es flujo automático
     if (isAutomaticFlow && shouldAutoGenerate && isEnCierre && !hasContract && !isContractSigned && !hasCompletedSafetyCheck) {
-      console.log('[PublicQuoteAuthorizedView] 🔒 SAFETY CHECK ÚNICO: Flujo automático sin contrato visible');
-      console.log('[PublicQuoteAuthorizedView] ⏳ Mostrando spinner por 2s antes de refresh...');
-      
       // Marcar inmediatamente como completado para evitar re-ejecuciones
       setHasCompletedSafetyCheck(true);
       setShowInitialSpinner(true);
       
       const timer = setTimeout(() => {
-        console.log('[PublicQuoteAuthorizedView] 🔄 Ejecutando safety router.refresh()...');
         setShowInitialSpinner(false);
         router.refresh();
       }, 2000);

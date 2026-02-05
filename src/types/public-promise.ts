@@ -80,6 +80,7 @@ export interface PublicCotizacion {
     name: string;
   } | null;
   selected_by_prospect?: boolean;
+  selected_at?: Date | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
   // Multimedia agregada de todos los items
@@ -91,6 +92,7 @@ export interface PublicCotizacion {
   }>;
   // Información del contrato si está disponible
   contract?: {
+    created_at?: Date | null;
     template_id: string | null;
     content: string;
     version?: number;

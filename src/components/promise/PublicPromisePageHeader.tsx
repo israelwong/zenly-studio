@@ -9,7 +9,7 @@ interface PublicPromisePageHeaderProps {
   eventName: string | null;
   eventTypeName: string | null;
   eventDate: Date | string | null;
-  variant?: 'pendientes' | 'negociacion' | 'cierre'; // Mantenido para compatibilidad pero no se usa
+  variant?: 'pendientes' | 'negociacion' | 'cierre';
   isContractSigned?: boolean;
   minDaysToHire?: number;
   // Covers multimedia del tipo de evento
@@ -76,9 +76,10 @@ export function PublicPromisePageHeader({
       })()
     : null;
 
-  // Calcular fecha recomendada (eventDate - minDaysToHire)
-  const recommendedDate = dateObj && minDaysToHire
+  // Calcular fecha recomendada solo para pendientes/negociacion
+  const recommendedDate = variant !== 'cierre' && dateObj && minDaysToHire
     ? (() => {
+        // En pendientes/negociacion: eventDate - minDaysToHire
         const recommended = new Date(dateObj);
         recommended.setDate(recommended.getDate() - minDaysToHire);
         return recommended;
@@ -155,21 +156,58 @@ export function PublicPromisePageHeader({
               ¡Hola, {prospectName}!
             </h1>
 
-            {/* Descripción principal */}
-            <p className={`text-sm md:text-base text-zinc-300 max-w-2xl mx-auto leading-relaxed ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
-              Te compartimos las opciones para el evento de{' '}
-              <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
-              {dateObj && formattedDate && (
-                <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
-              )}
-              {!dateObj && '.'}
-            </p>
+            {/* Descripción principal - Varía según variant */}
+            {variant === 'cierre' ? (
+              // Mensaje para ruta /cierre
+              <>
+                <p className={`text-sm md:text-base text-zinc-300 max-w-2xl mx-auto leading-relaxed ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
+                  {isContractSigned ? (
+                    <>
+                      Tu contrato para el evento de{' '}
+                      <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                      {dateObj && formattedDate && (
+                        <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                      )}{' '}
+                      ha sido firmado exitosamente.
+                    </>
+                  ) : (
+                    <>
+                      Estamos preparando tu contrato para el evento de{' '}
+                      <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                      {dateObj && formattedDate && (
+                        <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                      )}
+                      .
+                    </>
+                  )}
+                </p>
+                
+                {/* Mensaje de asesoría - En cierre: urgencia sin fecha específica */}
+                {!isContractSigned && (
+                  <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
+                    Te recomendamos completar la firma y el anticipo <span className="text-white font-medium">lo antes posible</span>. Ten en cuenta que <span className="text-amber-400/90 font-semibold">tu fecha solo estará asegurada al firmar el contrato y realizar el anticipo</span>, y puede ser reservada por otro cliente sin previo aviso.
+                  </p>
+                )}
+              </>
+            ) : (
+              // Mensaje para rutas /pendientes y /negociacion
+              <>
+                <p className={`text-sm md:text-base text-zinc-300 max-w-2xl mx-auto leading-relaxed ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
+                  Te compartimos las opciones para el evento de{' '}
+                  <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                  {dateObj && formattedDate && (
+                    <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                  )}
+                  {!dateObj && '.'}
+                </p>
 
-            {/* Mensaje de asesoría secundario */}
-            {dateObj && formattedRecommendedDate && daysUntilEvent !== null && (
-              <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
-                Te recomendamos formalizar antes del <span className="text-white font-medium">{formattedRecommendedDate}</span>. Ten en cuenta que <span className="text-amber-400/90 font-semibold">la disponibilidad de la fecha no está garantizada</span> y puede ser reservada por otro cliente sin previo aviso hasta completar la firma y el anticipo.
-              </p>
+                {/* Mensaje de asesoría secundario */}
+                {dateObj && formattedRecommendedDate && daysUntilEvent !== null && (
+                  <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
+                    Te recomendamos formalizar antes del <span className="text-white font-medium">{formattedRecommendedDate}</span>. Ten en cuenta que <span className="text-amber-400/90 font-semibold">la disponibilidad de la fecha no está garantizada</span> y puede ser reservada por otro cliente sin previo aviso hasta completar la firma y el anticipo.
+                  </p>
+                )}
+              </>
             )}
 
             {/* Icono animado para invitar a hacer scroll */}

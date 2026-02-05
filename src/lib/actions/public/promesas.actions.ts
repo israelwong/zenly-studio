@@ -2987,6 +2987,7 @@ export async function getPublicPromiseCierre(
             discount: true,
             status: true,
             selected_by_prospect: true,
+            selected_at: true,
             order: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
@@ -3031,6 +3032,7 @@ export async function getPublicPromiseCierre(
             },
             cotizacion_cierre: {
               select: {
+                created_at: true,
                 contract_template_id: true,
                 contract_content: true,
                 contract_version: true,
@@ -3337,6 +3339,7 @@ export async function getPublicPromiseCierre(
         }
 
         return {
+          created_at: cierre.created_at || null,
           template_id: cierre.contract_template_id || null,
           content: cierre.contract_content || null,
           version: cierre.contract_version ?? 1,
@@ -3648,6 +3651,7 @@ export async function getPublicPromiseData(
             },
             cotizacion_cierre: {
               select: {
+                created_at: true,
                 contract_template_id: true,
                 contract_content: true,
                 contract_version: true,
