@@ -548,6 +548,7 @@ export function usePromiseCierreLogic({
   const [currentTask, setCurrentTask] = useState<string>('');
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
+  const [authorizationEventoId, setAuthorizationEventoId] = useState<string | null>(null);
 
   const handleConfirmAutorizar = useCallback(async () => {
     setIsAuthorizing(true);
@@ -594,19 +595,11 @@ export function usePromiseCierreLogic({
         setCurrentTask('');
 
         if (result.success && result.data) {
-          // Pequeña pausa para mostrar que todo se completó
           await new Promise(resolve => setTimeout(resolve, 500));
-
           toast.success('¡Cotización autorizada y evento creado!');
-          // Redirigir a la página del evento creado usando metodología ZEN
-          window.dispatchEvent(new CustomEvent('close-overlays'));
-          router.refresh();
-          const eventoId = result.data?.evento_id;
-          if (eventoId) {
-            startTransition(() => {
-              router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
-            });
-          }
+          const eventoId = result.data?.evento_id ?? null;
+          setAuthorizationEventoId(eventoId);
+          // Overlay permanece visible con estado completado y botones Ver cierre / Gestionar evento
         } else {
           setAuthorizationError(result.error || 'Error al autorizar cotización');
           toast.error(result.error || 'Error al autorizar cotización');
@@ -619,12 +612,9 @@ export function usePromiseCierreLogic({
       console.error('[handleConfirmAutorizar] Error:', error);
       toast.error('Error al autorizar cotización');
     } finally {
-      // Solo ocultar si no hay error (si hay error, el usuario puede cerrar manualmente)
-      if (!authorizationError) {
-        setIsAuthorizing(false);
-      }
+      // No cerrar overlay en éxito: se muestra estado completado con botones. Solo en error se deja abierto para que el usuario cierre.
     }
-  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, router, authorizationError]);
+  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData]);
 
   // Validar si se puede autorizar
   const puedeAutorizar = useMemo(() => {
@@ -694,6 +684,8 @@ export function usePromiseCierreLogic({
     completedTasks,
     authorizationError,
     setAuthorizationError,
+    authorizationEventoId,
+    setAuthorizationEventoId,
     // Handlers
     handleDefinirCondiciones,
     handleQuitarCondiciones,

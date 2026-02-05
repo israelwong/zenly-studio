@@ -76,13 +76,9 @@ export function ProgressOverlay({
     setIsNavigating(true);
     
     try {
-      // Paso 1: Refrescar router para invalidar caché local
       router.refresh();
-      
-      // Paso 2: Pequeña pausa para que el refresh tome efecto
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Paso 3: Navegar a cierre con timestamp único
       const timestamp = Date.now();
       const redirectUrl = `/${studioSlug}/promise/${promiseId}/cierre?t=${timestamp}`;
       

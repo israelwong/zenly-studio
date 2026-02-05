@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 interface ContractPreviewForPromiseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onEdit: () => void;
   studioSlug: string;
   promiseId: string;
@@ -46,6 +46,7 @@ export function ContractPreviewForPromiseModal({
 }: ContractPreviewForPromiseModalProps) {
   const [eventData, setEventData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -107,6 +108,15 @@ export function ContractPreviewForPromiseModal({
     return template.content;
   }, [customContent, template.content, eventData?.condicionesData, isReadOnly]);
 
+  const handleConfirm = async () => {
+    setConfirming(true);
+    try {
+      await Promise.resolve(onConfirm());
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   return (
     <ZenDialog
       isOpen={isOpen}
@@ -120,9 +130,11 @@ export function ContractPreviewForPromiseModal({
           : "Revisa el contrato antes de confirmar"
       }
       maxWidth="4xl"
-      onSave={isReadOnly ? undefined : onConfirm}
+      onSave={isReadOnly ? undefined : handleConfirm}
       onCancel={onClose}
-      saveLabel={isReadOnly ? undefined : "Confirmar plantilla"}
+      saveLabel={isReadOnly ? undefined : (confirming ? "Confirmando plantilla" : "Confirmar plantilla")}
+      isLoading={confirming}
+      saveDisabled={!isReadOnly && (loading || confirming)}
       cancelLabel={isReadOnly ? "Cerrar" : "Cancelar"}
       closeOnClickOutside={false}
       zIndex={10080}

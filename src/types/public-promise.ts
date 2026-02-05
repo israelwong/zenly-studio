@@ -62,6 +62,7 @@ export interface PublicCotizacion {
   discount: number | null;
   status?: string;
   order?: number;
+  evento_id?: string | null;
   servicios: PublicSeccionData[];
   condiciones_comerciales: {
     metodo_pago: string | null;

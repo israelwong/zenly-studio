@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { FileText, Loader2, CheckCircle2, Settings } from 'lucide-react';
+import { FileText, CheckCircle2, Settings } from 'lucide-react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
 import { getContractTemplates } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -135,6 +135,7 @@ export function ContractTemplateSimpleSelectorModal({
         onSave={handleConfirm}
         onCancel={handleClose}
         saveLabel="Confirmar"
+        saveDisabled={loading}
         cancelLabel="Cancelar"
         saveVariant="primary"
         zIndex={10070}
@@ -149,8 +150,21 @@ export function ContractTemplateSimpleSelectorModal({
         }
       >
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="w-full p-4 rounded-lg border border-zinc-700 bg-zinc-800/50"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-zinc-700/80 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : templates.length === 0 ? (
           <div className="text-center py-12">

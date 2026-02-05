@@ -685,9 +685,13 @@ export function PromiseCierreClient({
             currentTask={cierreLogic.currentTask}
             completedTasks={cierreLogic.completedTasks}
             error={cierreLogic.authorizationError}
+            eventoId={cierreLogic.authorizationEventoId}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
             onClose={() => {
               cierreLogic.setIsAuthorizing(false);
               cierreLogic.setAuthorizationError(null);
+              cierreLogic.setAuthorizationEventoId(null);
             }}
           />
         </>

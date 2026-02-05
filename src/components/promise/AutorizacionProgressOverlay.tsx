@@ -1,14 +1,20 @@
 'use client';
 
 import { createPortal } from 'react-dom';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { ZenCard } from '@/components/ui/zen';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { CheckCircle2, XCircle, Loader2, FileSignature, ArrowRight, RefreshCw } from 'lucide-react';
+import { ZenCard, ZenButton } from '@/components/ui/zen';
 
 interface AutorizacionProgressOverlayProps {
   show: boolean;
   currentTask: string;
   completedTasks: string[];
   error: string | null;
+  /** Cuando la autorización termina con éxito y se creó evento */
+  eventoId?: string | null;
+  studioSlug?: string;
+  promiseId?: string;
   onClose?: () => void;
 }
 
@@ -28,11 +34,32 @@ export function AutorizacionProgressOverlay({
   currentTask,
   completedTasks,
   error,
+  eventoId,
+  studioSlug,
+  promiseId,
   onClose,
 }: AutorizacionProgressOverlayProps) {
+  const router = useRouter();
+  const [navigatingTo, setNavigatingTo] = useState<'cierre' | 'evento' | null>(null);
+
   if (!show || typeof window === 'undefined') {
     return null;
   }
+
+  const isCompleted = completedTasks.length === TASKS.length && !error && currentTask === '';
+
+  const handleStayOnCierre = () => {
+    setNavigatingTo('cierre');
+    router.refresh();
+    onClose?.();
+  };
+
+  const handleNavigateToEvento = () => {
+    if (!studioSlug || !eventoId) return;
+    setNavigatingTo('evento');
+    router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
+    onClose?.();
+  };
 
   return createPortal(
     <div
@@ -49,15 +76,17 @@ export function AutorizacionProgressOverlay({
         e.stopPropagation();
       }}
     >
-      <ZenCard className="max-w-md w-full p-6">
+      <ZenCard className="max-w-md w-full min-w-0 p-6 overflow-hidden">
         <div className="text-center mb-6">
           <h3 className="text-xl font-semibold text-white mb-2">
-            {error ? 'Error al autorizar' : 'Autorizando cotización'}
+            {error ? 'Error al autorizar' : isCompleted ? 'Cotización autorizada' : 'Autorizando cotización'}
           </h3>
           <p className="text-sm text-zinc-400">
             {error
               ? 'Ocurrió un error durante el proceso'
-              : 'Por favor espera mientras procesamos tu solicitud'}
+              : isCompleted
+                ? 'Elige tu siguiente paso.'
+                : 'Por favor espera mientras procesamos tu solicitud'}
           </p>
         </div>
 
@@ -76,6 +105,55 @@ export function AutorizacionProgressOverlay({
                 >
                   Cerrar
                 </button>
+              )}
+            </div>
+          </div>
+        ) : isCompleted ? (
+          <div className="space-y-4 min-w-0 max-w-full">
+            <div className="flex justify-center w-14 h-14 mx-auto rounded-full bg-emerald-500/20 shrink-0">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400 m-auto" />
+            </div>
+            <p className="text-sm text-zinc-400 text-center px-1">Evento creado. Revisa el cierre o ve al evento.</p>
+            <div className="flex flex-col gap-2 min-w-0 w-full">
+              <ZenButton
+                variant="outline"
+                className="w-full min-w-0"
+                size="sm"
+                onClick={handleStayOnCierre}
+                disabled={!!navigatingTo}
+              >
+                {navigatingTo === 'cierre' ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin shrink-0" />
+                    Cargando...
+                  </>
+                ) : (
+                  <>
+                    <FileSignature className="h-4 w-4 mr-2 shrink-0" />
+                    Ver cierre / contrato
+                  </>
+                )}
+              </ZenButton>
+              {eventoId && (
+                <ZenButton
+                  className="w-full min-w-0"
+                  size="sm"
+                  style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                  onClick={handleNavigateToEvento}
+                  disabled={!!navigatingTo}
+                >
+                  {navigatingTo === 'evento' ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin shrink-0" />
+                      Cargando...
+                    </>
+                  ) : (
+                    <>
+                      Gestionar evento
+                      <ArrowRight className="h-4 w-4 ml-2 shrink-0" />
+                    </>
+                  )}
+                </ZenButton>
               )}
             </div>
           </div>

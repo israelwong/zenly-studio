@@ -914,6 +914,7 @@ export async function getPublicPromisePendientes(
               status: true,
               selected_by_prospect: true,
               order: true,
+              evento_id: true,
               cotizacion_items: {
                 select: {
                   id: true,
@@ -1263,6 +1264,7 @@ export async function getPublicPromisePendientes(
         discount: cot.discount,
         status: cot.status,
         order: cot.order ?? 0,
+        evento_id: cot.evento_id,
         servicios: servicios,
         condiciones_comerciales: condicionesComerciales
           ? {
@@ -1857,6 +1859,7 @@ export async function getPublicPromiseActiveQuote(
         discount: cot.discount,
         status: cot.status,
         order: cot.order ?? 0,
+        evento_id: cot.evento_id,
         servicios: servicios,
         condiciones_comerciales: condicionesComerciales
           ? {
@@ -2713,6 +2716,7 @@ export async function getPublicPromiseNegociacion(
       discount: cotizacion.discount,
       status: cotizacion.status,
       order: cotizacion.order ?? 0,
+      evento_id: cotizacion.evento_id,
       servicios: servicios,
       condiciones_comerciales: condicionesComerciales
         ? {
@@ -3580,6 +3584,7 @@ export async function getPublicPromiseData(
             selected_by_prospect: true,
             visible_to_client: true,
             order: true,
+            evento_id: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
             cotizacion_items: {
@@ -4857,6 +4862,7 @@ async function _getPublicPromiseRouteStateInternal(
         status: true,
         selected_by_prospect: true,
         visible_to_client: true,
+        evento_id: true,
       },
     });
 
@@ -4870,6 +4876,7 @@ async function _getPublicPromiseRouteStateInternal(
         id: cot.id,
         status: normalizedStatus,
         selected_by_prospect: cot.selected_by_prospect ?? false,
+        evento_id: cot.evento_id,
       };
     });
 
@@ -5230,6 +5237,7 @@ export async function getPublicPromiseUpdate(
         discount: cot.discount,
         status: cot.status,
         order: cot.order ?? 0,
+        evento_id: cot.evento_id,
         servicios: servicios,
         condiciones_comerciales: condicionesComerciales
           ? {
