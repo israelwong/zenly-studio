@@ -52,14 +52,14 @@ export async function willRedirectToProsocial(): Promise<boolean> {
 }
 
 /**
- * Obtiene todos los studios activos del usuario
+ * Obtiene todos los studios activos del usuario (usa sesión desde cookies).
  * 
  * @returns Array con los slugs de todos los studios activos del usuario
  */
 export async function getUserActiveStudios(): Promise<string[]> {
   try {
     const user = await getCurrentUser();
-    
+
     if (!user?.id) {
       return [];
     }
@@ -84,6 +84,37 @@ export async function getUserActiveStudios(): Promise<string[]> {
     return studioRoles.map(role => role.studio.slug).filter(Boolean);
   } catch (error) {
     console.error('[getUserActiveStudios] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene los slugs de studios activos por supabase_id (para uso en callback OAuth,
+ * donde la sesión aún no está en cookies).
+ */
+export async function getActiveStudioSlugsBySupabaseId(
+  supabaseUserId: string
+): Promise<string[]> {
+  try {
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: supabaseUserId },
+      select: { id: true },
+    });
+    if (!dbUser) return [];
+
+    const studioRoles = await prisma.user_studio_roles.findMany({
+      where: {
+        user_id: dbUser.id,
+        is_active: true,
+      },
+      include: {
+        studio: { select: { slug: true } },
+      },
+      orderBy: { accepted_at: 'desc' },
+    });
+    return studioRoles.map(r => r.studio.slug).filter(Boolean);
+  } catch (error) {
+    console.error('[getActiveStudioSlugsBySupabaseId] Error:', error);
     return [];
   }
 }

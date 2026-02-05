@@ -127,6 +127,26 @@ npx tsx scripts/validate-auth-setup.ts
 
 ---
 
+#### `audit-user-identities.ts`
+**Propósito:** Auditoría de identidades y account merging en Supabase Auth
+
+**Uso:**
+```bash
+npx tsx scripts/audit-user-identities.ts <USER_ID>
+npx tsx scripts/audit-user-identities.ts   # lista usuarios y pide USER_ID
+```
+
+**Qué hace:** Usa `auth.admin.getUserById(USER_ID)` y muestra un JSON con:
+- Identidades vinculadas (email, google, etc.)
+- Emails en cada identity (para ver si auto-link por mismo email o no)
+- Resumen: ¿mismo email en todas las identidades? ¿hay Google?
+
+**USER_ID:** UUID de Supabase Auth (`auth.users.id`), no el CUID de `public.users`.
+
+**Cuándo ejecutar:** Para diagnosticar por qué varios logins resuelven al mismo user (account linking legítimo vs configuración incorrecta).
+
+---
+
 ## 📁 Estructura
 
 ```
@@ -136,6 +156,7 @@ scripts/
 ├── execute-sql.ts          # Ejecutor SQL
 ├── delete-all-phones.ts    # Eliminar todos los teléfonos de un estudio
 ├── validate-auth-setup.ts  # Validación Auth
+├── audit-user-identities.ts # Auditoría identidades / account merging
 ├── verify-seeds.ts         # Verificación de seeds
 ├── 01-setup-complete.sh    # Setup completo (orden 1)
 ├── 02-setup-seeds-only.sh  # Solo seeds (orden 2)

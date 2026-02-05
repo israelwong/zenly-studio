@@ -45,7 +45,8 @@ export async function procesarUsuarioOAuth(
       };
     }
 
-    // Solo usuarios existentes: debe existir en users (por supabase_id o email) o en studio_user_profiles (por email)
+    // Usuarios existentes o nuevos: crear/actualizar en users y studio_user_profiles.
+    // Nuevos usuarios (sin studio) serán redirigidos a /onboarding (Coming Soon).
     const existingBySupabaseId = await prisma.users.findUnique({
       where: { supabase_id: supabaseId },
       select: { id: true },
@@ -58,15 +59,6 @@ export async function procesarUsuarioOAuth(
       where: { email },
       select: { id: true },
     });
-    const isExistingUser =
-      !!existingBySupabaseId || !!existingByEmail || !!existingLegacyByEmail;
-    if (!isExistingUser) {
-      return {
-        success: false,
-        error: RESTRICTED_MESSAGE,
-        restricted: true,
-      };
-    }
 
     // Extraer datos de Google
     const fullName =

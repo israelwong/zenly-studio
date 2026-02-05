@@ -31,14 +31,18 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
     setError(null)
 
     try {
-      // The url which will be included in the email. This URL needs to be configured in your redirect URLs in the Supabase dashboard at https://supabase.com/dashboard/project/_/auth/url-configuration
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/update-password`,
       })
-      if (error) throw error
+      if (resetError) {
+        // Nunca mostrar "User not found" ni otro error en UI (evitar enumeración de usuarios)
+        console.warn('[ForgotPassword] resetPasswordForEmail:', resetError.message)
+      }
+      // Siempre mostrar el mismo mensaje de éxito (registrado o no)
       setSuccess(true)
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred')
+    } catch (err: unknown) {
+      console.error('[ForgotPassword] Error:', err)
+      setSuccess(true)
     } finally {
       setIsLoading(false)
     }
@@ -59,7 +63,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-zinc-400 text-center">
-              Si te registraste con tu correo y contraseña, recibirás un email con instrucciones para restablecer tu contraseña.
+              Si el correo {email || 'indicado'} está registrado, recibirás las instrucciones para recuperar tu contraseña en breve.
             </p>
 
             <div className="pt-2 space-y-3">

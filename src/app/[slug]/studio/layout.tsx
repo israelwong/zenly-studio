@@ -8,6 +8,7 @@ import { StudioInitializer } from './components/init/StudioInitializer';
 import { StudioReadyProvider } from './components/init/StudioReadyContext';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { StudioLayoutWrapper } from './components/layout/StudioLayoutWrapper';
+import { assertStudioAccess } from '@/lib/studio-access';
 import { obtenerIdentidadStudio } from '@/lib/actions/studio/profile/identidad/identidad.actions';
 import { obtenerPerfil } from '@/lib/actions/studio/account/perfil.actions';
 import { calcularStorageCompleto } from '@/lib/actions/shared/calculate-storage.actions';
@@ -181,7 +182,10 @@ export default async function StudioLayout({
     params: { slug: string };
 }) {
     const { slug } = await params;
-    
+
+    // Cross-Studio gatekeeper: bloquea acceso si el usuario no es miembro del studio
+    await assertStudioAccess(slug);
+
     // ✅ OPTIMIZACIÓN CRÍTICA: Cargar identidadData y perfil de usuario (header)
     const [identidadData, userProfile] = await Promise.all([
       getCachedIdentidad(slug).catch(() => null),

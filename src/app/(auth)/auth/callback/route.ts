@@ -4,6 +4,7 @@ import {
   procesarUsuarioOAuth,
   vincularRecursoGoogle,
 } from '@/lib/actions/auth/oauth.actions';
+import { getActiveStudioSlugsBySupabaseId } from '@/lib/utils/check-user-studio';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import {
   procesarCallbackGoogleCalendar,
@@ -737,59 +738,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Jerarquía: 1) next → vuelve aquí  2) studio_slug → dashboard  3) último recurso → onboarding
+    // Decisión de redirección: next → dashboard (si tiene studios) → onboarding si no tiene studio
+    // Usar supabase_id porque la sesión aún no está en cookies en esta request
     const requestOrigin = new URL(request.url).origin;
+    const studios = await getActiveStudioSlugsBySupabaseId(data.user.id);
 
-    // Prioridad 1 (crítica): next existe y es válido (empieza con /, interno) → REDIRIGIR AHÍ INMEDIATAMENTE
+    // Prioridad 1: next existe y es válido → redirigir ahí
     const nextTrimmed = next?.trim();
     if (nextTrimmed && nextTrimmed.startsWith('/') && isValidInternalUrl(nextTrimmed, requestOrigin)) {
       const destination = getSafeRedirectUrl(nextTrimmed, '/login', request);
       const finalUrl = new URL(destination, request.url);
       finalUrl.searchParams.delete('code');
       finalUrl.searchParams.delete('state');
-      console.log('--- [Callback Debug] DECISION ---');
       console.log('[Callback Debug] DECISION: Redirecting to (next):', finalUrl.pathname + finalUrl.search);
-      console.log('---------------------------------');
       return createRedirectResponse(finalUrl);
     }
 
-    // Prioridad 2: studio_slug en metadata o resultado → dashboard (no enviar a onboarding si tiene studio)
-    const metaSlug = data.user?.user_metadata?.studio_slug ?? result.studioSlug;
-    if (metaSlug && typeof metaSlug === 'string' && metaSlug.trim()) {
-      const dashboardPath = `/${metaSlug.trim()}/studio/commercial/dashboard`;
+    // Prioridad 2: usuario tiene studios → dashboard del primero
+    if (studios.length > 0) {
+      const dashboardPath = `/${studios[0]}/studio/commercial/dashboard`;
       const url = new URL(dashboardPath, request.url);
       url.search = '';
-      console.log('--- [Callback Debug] DECISION ---');
-      console.log('[Callback Debug] DECISION: Redirecting to (studio_slug):', url.pathname + url.search);
-      console.log('---------------------------------');
+      console.log('[Callback Debug] DECISION: Redirecting to (dashboard):', url.pathname);
       return createRedirectResponse(url);
     }
 
-    if (result.redirectPath) {
-      const url = new URL(result.redirectPath, request.url);
-      url.search = '';
-      console.log('--- [Callback Debug] DECISION ---');
-      console.log('[Callback Debug] DECISION: Redirecting to (redirectPath):', url.pathname + url.search);
-      console.log('---------------------------------');
-      return createRedirectResponse(url);
-    }
-
-    // Prioridad 3 (último recurso): solo si no hay studio → onboarding
-    if (result.needsOnboarding) {
-      const url = new URL('/onboarding/setup-studio', request.url);
-      url.search = '';
-      console.log('--- [Callback Debug] DECISION ---');
-      console.log('[Callback Debug] DECISION: Redirecting to (needsOnboarding):', url.pathname + url.search);
-      console.log('---------------------------------');
-      return createRedirectResponse(url);
-    }
-
-    const fallbackRedirect = getSafeRedirectUrl(next, '/onboarding', request);
-    const url = new URL(fallbackRedirect, request.url);
+    // Prioridad 3: sin studios (usuario nuevo o sin asignar) → onboarding (Coming Soon)
+    const url = new URL('/onboarding', request.url);
     url.search = '';
-    console.log('--- [Callback Debug] DECISION ---');
-    console.log('[Callback Debug] DECISION: Redirecting to (fallback):', url.pathname + url.search);
-    console.log('---------------------------------');
+    console.log('[Callback Debug] DECISION: Redirecting to (onboarding):', url.pathname);
     return createRedirectResponse(url);
   } catch (error) {
     console.error('[OAuth Callback] Error inesperado:', error);

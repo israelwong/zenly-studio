@@ -164,7 +164,23 @@ export async function loginAction(
 
     if (error) {
       console.error('❌ Login error:', error.message)
-      
+
+      // Rate limit (429 / Too many requests): mensaje amigable sin exponer detalle
+      const msg = (error as { message?: string; status?: number }).message?.toLowerCase() ?? ''
+      const status = (error as { status?: number }).status
+      const isRateLimited =
+        status === 429 ||
+        msg.includes('too many') ||
+        msg.includes('rate limit') ||
+        msg.includes('demasiados intentos')
+      if (isRateLimited) {
+        return {
+          success: false,
+          error:
+            'Por seguridad, hemos bloqueado los intentos temporalmente. Por favor espera un minuto.',
+        }
+      }
+
       // Registrar intento fallido si tenemos el email
       if (email) {
         try {
@@ -190,7 +206,7 @@ export async function loginAction(
           console.error('Error registrando log de login fallido:', logError);
         }
       }
-      
+
       return { success: false, error: error.message }
     }
 

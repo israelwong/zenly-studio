@@ -66,6 +66,7 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | **[AUTENTICACION_MASTER.md](auth/AUTENTICACION_MASTER.md)** | Sistema completo de autenticación (login, OAuth, sesiones) |
 | **[ONBOARDING.md](auth/ONBOARDING.md)** | Registro, roles y estructura multi-usuario |
 | [README.md](auth/README.md) | Índice de documentación de auth |
+| **[admin-waitlist-strategy.md](admin-waitlist-strategy.md)** | Estrategia Admin: usuarios en waitlist (query, panel futuro, notificaciones) |
 
 **Start here:** Para todo lo relacionado con login, sesiones y permisos.
 
