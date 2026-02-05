@@ -170,6 +170,16 @@ export function ActiveQuoteSection({
           paquetes={[]} // Paquetes se cargan después
           autoGenerateContract={share_settings.auto_generate_contract}
           durationHours={promise.duration_hours ?? null}
+          promiseData={{
+            contact_name: promise.contact_name,
+            contact_phone: promise.contact_phone,
+            contact_email: promise.contact_email || '',
+            contact_address: promise.contact_address || '',
+            event_name: promise.event_name || '',
+            event_location: promise.event_location || '',
+            event_date: promise.event_date,
+            event_type_name: promise.event_type_name,
+          }}
         />
       )}
     </>

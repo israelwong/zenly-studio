@@ -77,25 +77,23 @@ export function Step1Identity({ formData, errors, onChange, isLoading = false, s
   return (
     <div className="space-y-6">
       {/* Alerta de privacidad */}
-      <Alert variant="default" className="bg-blue-500/10 border-blue-500/20">
-        <Info className="h-4 w-4 text-blue-400" />
-        <AlertDescription className="text-sm text-zinc-300 mt-1">
-          Usaremos estos datos únicamente para generar tu contrato de servicios profesionales.
+      <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+        <Info className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+        <p className="text-sm text-zinc-300">
+          Usaremos estos datos únicamente para generar tu contrato de servicios profesionales.{' '}
           {studioSlug && (
-            <span className="block mt-2">
-              <Link
-                href={`/${studioSlug}/aviso-privacidad`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
-              >
-                <span>Ver aviso de privacidad</span>
-                <ExternalLink className="h-3 w-3" />
-              </Link>
-            </span>
+            <Link
+              href={`/${studioSlug}/aviso-privacidad`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors underline whitespace-nowrap"
+            >
+              <span>Ver aviso de privacidad</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
           )}
-        </AlertDescription>
-      </Alert>
+        </p>
+      </div>
 
       {/* Campos del formulario */}
       <div className="space-y-4">

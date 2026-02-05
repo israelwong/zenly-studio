@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import confetti from 'canvas-confetti';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
-import { updatePublicPromiseData, getPublicPromiseData, invalidatePublicPromiseRouteState } from '@/lib/actions/public/promesas.actions';
+import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
-import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 
 interface ProgressOverlayWrapperProps {
   studioSlug: string;
@@ -18,8 +16,6 @@ interface ProgressOverlayWrapperProps {
  * Contiene la lógica de procesamiento de autorización
  */
 export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverlayWrapperProps) {
-  const { setNavigating } = usePromiseNavigation();
-  
   const {
     isAuthorizationInProgress,
     progressStep,
@@ -31,6 +27,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     setProgressStep,
     setAuthorizationData,
   } = usePromisePageContext();
+
+  // ⚠️ ARCHITECTURE FIX: sessionStorage workaround REMOVED
+  // Provider is now in layout, state persists across page revalidations
+  // No need for sessionStorage persistence anymore
+
+  // Debug logs desactivados (solo en producción si es necesario)
+  // useEffect(() => {
+  //   if (isAuthorizationInProgress) {
+  //     console.log('[ProgressOverlayWrapper] 👁️ Overlay VISIBLE');
+  //   }
+  // }, [isAuthorizationInProgress]);
+
 
 
   // Procesar autorización cuando se active el estado
@@ -61,15 +69,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           autoGenerateContract: shouldGenerateContract 
         } = authorizationData;
 
-        // Paso 1: Recopilando información (Ritmo ZEN: 600ms)
+        // Micro-delay para garantizar propagación del lock
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Paso 1: Recopilando información
         setProgressStep('collecting');
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 2: Validando datos (Ritmo ZEN: 600ms)
+        // Paso 2: Validando datos
         setProgressStep('validating');
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 3: Enviando solicitud a estudio (Ritmo ZEN: 800ms)
+        // Paso 3: Enviando solicitud a estudio
         setProgressStep('sending');
         await new Promise(resolve => setTimeout(resolve, 800));
         
@@ -83,7 +94,6 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
         });
 
         if (!updateResult.success) {
-          console.error('❌ [ProgressOverlayWrapper] Error al actualizar datos:', updateResult.error);
           setProgressError(updateResult.error || 'Error al actualizar datos');
           setProgressStep('error');
           setIsAuthorizationInProgress(false);
@@ -93,20 +103,29 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Paso 4: Registrando solicitud (Ritmo ZEN: 800ms antes de la llamada)
+        // Paso 4: Registrando solicitud
         setProgressStep('registering');
-        await new Promise(resolve => setTimeout(resolve, 800));
         
-        const result = await autorizarCotizacionPublica(
-          authPromiseId,
-          cotizacionId,
-          authStudioSlug,
-          condicionesComercialesId,
-          condicionesComercialesMetodoPagoId
-        );
+        let result;
+        try {
+          result = await autorizarCotizacionPublica(
+            authPromiseId,
+            cotizacionId,
+            authStudioSlug,
+            condicionesComercialesId,
+            condicionesComercialesMetodoPagoId
+          );
+        } catch (error) {
+          setProgressError(error instanceof Error ? error.message : 'Error desconocido');
+          setProgressStep('error');
+          setIsAuthorizationInProgress(false);
+          (window as any).__IS_AUTHORIZING = false;
+          setAuthorizationData(null);
+          isProcessing = false;
+          return;
+        }
 
         if (!result.success) {
-          console.error('❌ [ProgressOverlayWrapper] Error al autorizar cotización:', result.error);
           setProgressError(result.error || 'Error al enviar solicitud');
           setProgressStep('error');
           setIsAuthorizationInProgress(false);
@@ -116,72 +135,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // 🎉 CELEBRACIÓN: Disparar confeti cuando la autorización sea exitosa
-        // Limpiar cualquier localStorage/sessionStorage que pueda bloquear el confeti
-        if (typeof window !== 'undefined') {
-          // Limpiar posibles claves de confeti en sessionStorage
-          const confettiKeys = Object.keys(sessionStorage).filter(key => key.includes('confetti'));
-          confettiKeys.forEach(key => sessionStorage.removeItem(key));
-          
-          // Limpiar posibles claves de confeti en localStorage
-          const localStorageConfettiKeys = Object.keys(localStorage).filter(key => key.includes('confetti'));
-          localStorageConfettiKeys.forEach(key => localStorage.removeItem(key));
-        }
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'],
-        });
-        
-        // Disparar confeti adicional desde los lados
-        setTimeout(() => {
-          confetti({
-            particleCount: 50,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0 },
-            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
-          });
-          confetti({
-            particleCount: 50,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1 },
-            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
-          });
-        }, 250);
-
-        // Recopilar datos de cotización en paralelo
-        (async () => {
-          try {
-            const reloadResult = await getPublicPromiseData(authStudioSlug, authPromiseId);
-            if (reloadResult.success && reloadResult.data?.cotizaciones) {
-              window.dispatchEvent(new CustomEvent('reloadCotizaciones', {
-                detail: { cotizaciones: reloadResult.data.cotizaciones }
-              }));
-            }
-          } catch (error) {
-            console.error('[ProgressOverlayWrapper] Error al recargar cotizaciones:', error);
-          }
-        })();
-
-        // Esperar 600ms mientras se recopilan datos
-        await new Promise(resolve => setTimeout(resolve, 600));
-
-        // Paso 5: Generando contrato (condicional; el contrato ya se generó en autorizarCotizacionPublica)
+        // Paso 5: Generando contrato (SIEMPRE mostrar si shouldGenerateContract es true)
         if (shouldGenerateContract) {
           setProgressStep('generating_contract');
-          await new Promise(resolve => setTimeout(resolve, 1800));
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
-        // Paso 6: Completado - Listo (el overlay mostrará todos los pasos con check, incluido Generando contrato)
+        // Paso final: completed
         setProgressStep('completed');
 
         isProcessing = false;
-        // El estado isAuthorizationInProgress se reseteará en el useEffect de redirección
+        // ⚠️ isAuthorizationInProgress permanece en true hasta que el usuario navegue manualmente
       } catch (error) {
-        console.error('❌ [ProgressOverlayWrapper] Error en processAuthorization:', error);
         setProgressError('Error al enviar solicitud. Por favor, intenta de nuevo o contacta al estudio.');
         setProgressStep('error');
         setIsAuthorizationInProgress(false);
@@ -192,33 +157,15 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     };
 
     processAuthorization();
-  }, [isAuthorizationInProgress, authorizationData, setProgressStep, setProgressError, setIsAuthorizationInProgress, setAuthorizationData]);
+  }, [isAuthorizationInProgress, authorizationData, setProgressStep, setProgressError, setIsAuthorizationInProgress, setAuthorizationData, studioSlug, promiseId]);
 
-  // Redirigir a cierre cuando el proceso esté completado
-  // Pausa de Momentum: 3 segundos para disfrutar la celebración
-  useEffect(() => {
-    if (progressStep !== 'completed' || !isAuthorizationInProgress) return;
+  // ⚠️ REDIRECCIÓN MANUAL: Ya NO hay auto-redirect
+  // El usuario debe hacer clic en el botón "Revisar y Firmar Contrato"
 
-    const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
-
-    const timer = setTimeout(async () => {
-      setAuthorizationData(null);
-      setNavigating('cierre');
-      window.dispatchEvent(new CustomEvent('close-overlays'));
-      // Revalidar caché de ruta pública para que la página de cierre obtenga datos frescos
-      // (evita que getPublicPromiseRouteState devuelva caché de otra instancia/serverless)
-      await invalidatePublicPromiseRouteState(studioSlug, promiseId);
-      // Cache-bust para evitar respuesta HTML cacheada por el navegador
-      window.location.href = `${redirectPath}?t=${Date.now()}`;
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [progressStep, isAuthorizationInProgress, studioSlug, promiseId, setNavigating, setAuthorizationData]);
-
-  // Limpiar lock global solo cuando el componente se desmonte (navegación completa)
+  // ⚠️ ARCHITECTURE FIX: Provider is now in layout, so unmounting is expected behavior
+  // Only cleanup when actually navigating away (layout unmount)
   useEffect(() => {
     return () => {
-      // Cleanup: limpiar lock global cuando el componente se desmonte
       (window as any).__IS_AUTHORIZING = false;
     };
   }, []);
@@ -233,7 +180,9 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
       currentStep={progressStep}
       error={progressError}
       autoGenerateContract={autoGenerateContract}
-      // No permitir cerrar cuando está en estado completed (redirigiendo)
+      studioSlug={studioSlug}
+      promiseId={promiseId}
+      contactName={authorizationData?.formData?.contact_name}
       onClose={progressStep === 'completed' ? undefined : () => {
         setIsAuthorizationInProgress(false);
         (window as any).__IS_AUTHORIZING = false;

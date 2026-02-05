@@ -56,6 +56,17 @@ interface CotizacionDetailSheetProps {
   showPackages?: boolean;
   paquetes?: Array<{ id: string; cover_url: string | null }>;
   autoGenerateContract?: boolean;
+  /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
+  promiseData?: {
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+    event_date: Date | null;
+    event_type_name: string | null;
+  };
 }
 
 export function CotizacionDetailSheet({
@@ -73,6 +84,7 @@ export function CotizacionDetailSheet({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  promiseData,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -605,6 +617,7 @@ export function CotizacionDetailSheet({
           onClose={() => setShowAutorizarModal(false)}
           promiseId={promiseId}
           studioSlug={studioSlug}
+          promiseData={promiseData}
           condicionesComercialesId={
             // Si está en negociación, usar la condición comercial definida
             currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id

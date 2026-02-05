@@ -45,6 +45,17 @@ interface AutorizarCotizacionModalProps {
   onPreparing?: () => void;
   onCloseDetailSheet?: () => void;
   isFromNegociacion?: boolean;
+  /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados (evita fetch en cada apertura) */
+  promiseData?: {
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+    event_date: Date | null;
+    event_type_name: string | null;
+  };
 }
 
 type ProgressStep = 'validating' | 'sending' | 'registering' | 'collecting' | 'generating_contract' | 'preparing' | 'completed' | 'error';
@@ -171,6 +182,7 @@ export function AutorizarCotizacionModal({
   onPreparing: onPreparingProp,
   onCloseDetailSheet,
   isFromNegociacion = false,
+  promiseData: promiseDataProp,
 }: AutorizarCotizacionModalProps) {
   // Estado del Booking Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -193,11 +205,31 @@ export function AutorizarCotizacionModal({
   // Usar prop si está disponible, sino usar contexto
   const onPreparing = onPreparingProp || onPreparingContext;
 
-  // Cargar datos iniciales de la promesa al abrir el modal
+  // ⚡ OPTIMIZACIÓN: Usar promiseData de props si está disponible (sin fetch)
   useEffect(() => {
     if (isOpen && promiseId && studioSlug) {
+      // Si los datos vienen en props, usarlos directamente (instantáneo)
+      if (promiseDataProp) {
+        const initialData: BookingFormData = {
+          contact_name: promiseDataProp.contact_name || '',
+          contact_phone: promiseDataProp.contact_phone || '',
+          contact_email: promiseDataProp.contact_email || '',
+          contact_address: promiseDataProp.contact_address || '',
+          event_name: promiseDataProp.event_name || '',
+          event_location: promiseDataProp.event_location || '',
+          event_date: promiseDataProp.event_date,
+          event_type_name: promiseDataProp.event_type_name,
+        };
+        setInitialPromiseData(initialData);
+        setFormData(initialData);
+        setIsLoadingData(false);
+        return;
+      }
+
+      // Fallback: Si no hay props, hacer fetch (legacy behavior)
       setIsLoadingData(true);
       getPublicPromiseData(studioSlug, promiseId).then((result) => {
+        
         if (result.success && result.data?.promise) {
           const promise = result.data.promise;
           const initialData: BookingFormData = {
@@ -210,6 +242,7 @@ export function AutorizarCotizacionModal({
             event_date: promise.event_date ? new Date(promise.event_date) : null,
             event_type_name: promise.event_type_name || null,
           };
+          
           setInitialPromiseData(initialData);
           setFormData(initialData);
         }
@@ -219,7 +252,7 @@ export function AutorizarCotizacionModal({
     } else {
       setIsLoadingData(false);
     }
-  }, [isOpen, promiseId, studioSlug]);
+  }, [isOpen, promiseId, studioSlug, promiseDataProp]);
 
   // Resetear wizard cuando se cierra el modal
   useEffect(() => {
@@ -343,11 +376,6 @@ export function AutorizarCotizacionModal({
       if (setAutoGenerateContract) setAutoGenerateContract(autoGenerateContract);
     });
     
-    // Disparar evento para bloquear redirecciones automáticas (mantener por compatibilidad)
-    window.dispatchEvent(new CustomEvent('authorization-started', {
-      detail: { promiseId, cotizacionId: cotizacion.id }
-    }));
-    
     // Cerrar DetailSheet y ocultar UI inmediatamente después de establecer el estado
     flushSync(() => {
       onCloseDetailSheet?.();
@@ -460,8 +488,8 @@ export function AutorizarCotizacionModal({
       <Dialog open={isOpen} onOpenChange={handleDialogChange}>
         <DialogContent
           className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
-          overlayZIndex={120}
-          style={{ zIndex: 120 }}
+          overlayZIndex={10020}
+          style={{ zIndex: 10030 }}
         >
         {/* Header con barra de progreso */}
         <div className="pt-6 mb-0">

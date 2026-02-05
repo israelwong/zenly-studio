@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { syncPromiseRoute } from '@/lib/utils/public-promise-routing';
+import { usePromisePageContext } from './PromisePageContext';
 
 interface PromiseRouteSyncProps {
   studioSlug: string;
@@ -22,10 +23,25 @@ interface PromiseRouteSyncProps {
  */
 export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProps) {
   const hasRedirectedRef = useRef(false);
+  
+  // ⚠️ AUTHORIZATION LOCK: Prevenir redirecciones durante autorización
+  const { isAuthorizationInProgress } = usePromisePageContext();
+  const isAuthorizationInProgressRef = useRef(isAuthorizationInProgress);
+  isAuthorizationInProgressRef.current = isAuthorizationInProgress;
+  
+  // Global lock check
+  const isGlobalLockActive = () => {
+    return isAuthorizationInProgressRef.current || (window as any).__IS_AUTHORIZING === true;
+  };
 
   // Función para sincronizar ruta con el servidor (solo en Realtime; la validación inicial la hace PromiseRouteGuard)
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current) return;
+    
+    // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+    if (isGlobalLockActive()) {
+      return;
+    }
     
     try {
       const redirected = await syncPromiseRoute(promiseId, window.location.pathname, studioSlug);
@@ -33,9 +49,16 @@ export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProp
         hasRedirectedRef.current = true;
       }
     } catch (error) {
-      console.error('[PromiseRouteSync] Error en syncPromiseRoute:', error);
+      // Error silenciado
     }
   };
+
+  // Debug: Monitorear cambios en authorization lock (desactivado)
+  // useEffect(() => {
+  //   if (isAuthorizationInProgress) {
+  //     console.log('🔒 [PromiseRouteSync] AUTHORIZATION LOCK ACTIVATED');
+  //   }
+  // }, [isAuthorizationInProgress]);
 
   // No sincronizar al montar: PromiseRouteGuard (layout) ya hace la validación inicial con datos del servidor o una sola llamada a /api/.../redirect.
   // Evita llamadas duplicadas a la API de redirect.
@@ -50,8 +73,8 @@ export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProp
     promiseId,
     // Cualquier cambio (UPDATE, INSERT, DELETE) dispara sincronización
     // Esto incluye cambios en visible_to_client y status
-    onCotizacionUpdated: () => {
-      hasRedirectedRef.current = false; // Reset para permitir nueva redirección
+    onCotizacionUpdated: (cotizacionId, changeInfo) => {
+      hasRedirectedRef.current = false;
       handleSyncRouteRef.current();
     },
     onCotizacionInserted: () => {

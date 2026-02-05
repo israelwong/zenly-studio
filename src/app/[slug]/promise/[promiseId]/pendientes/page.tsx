@@ -5,7 +5,6 @@ import { unstable_cache } from 'next/cache';
 import { getPublicPromiseActiveQuote, getPublicPromiseAvailablePackages, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PendientesPageSkeleton } from '@/components/promise/PendientesPageSkeleton';
-import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { PendientesPageBasic } from './PendientesPageBasic';
 import { PendientesPageDeferred } from './PendientesPageDeferred';
 import { ProgressOverlayWrapper } from './ProgressOverlayWrapper';
@@ -83,8 +82,9 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
   const availablePackagesPromise = getPublicPromiseAvailablePackages(slug, promiseId);
 
   return (
-    <PromisePageProvider>
+    <>
       {/* Overlay de progreso - renderizado a nivel root para máxima visibilidad */}
+      {/* ⚠️ ARCHITECTURE FIX: Provider moved to layout, wrapper stays in page */}
       <ProgressOverlayWrapper studioSlug={slug} promiseId={promiseId} />
       
       {/* ⚠️ STREAMING: Parte A - Instantánea (datos básicos) */}
@@ -103,7 +103,7 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
         studioSlug={slug}
         promiseId={promiseId}
       />
-    </PromisePageProvider>
+    </>
   );
 }
 

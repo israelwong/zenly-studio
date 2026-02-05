@@ -221,6 +221,17 @@ export function PromiseCierreClient({
   const promiseId = params.promiseId as string;
   const { promiseData: contextPromiseData } = usePromiseContext();
 
+  // ⚠️ CRITICAL: Early returns MUST be before any hooks
+  // Si no hay datos del contexto, no mostrar nada (el skeleton se muestra en loading.tsx)
+  if (!contextPromiseData) {
+    return null;
+  }
+
+  // Si no hay cotización en cierre, no mostrar nada (el layout redirigirá)
+  if (!initialCotizacionEnCierre) {
+    return null;
+  }
+
   const [showEditModal, setShowEditModal] = useState(false);
   const [cotizacionEnCierre, setCotizacionEnCierre] = React.useState(initialCotizacionEnCierre);
 
@@ -326,16 +337,6 @@ export function PromiseCierreClient({
     eventTypeId: contextPromiseData?.event_type_id || null,
     acquisitionChannelId: contextPromiseData?.acquisition_channel_id || null,
   });
-
-  // Si no hay datos del contexto, no mostrar nada (el skeleton se muestra en loading.tsx)
-  if (!contextPromiseData) {
-    return null;
-  }
-
-  // Si no hay cotización en cierre, no mostrar nada (el layout redirigirá)
-  if (!cotizacionEnCierre) {
-    return null;
-  }
 
   // Skeletons por columna: contrato sigue en skeleton hasta tener content o saber que no hay contrato (evita bloque vacío ~2s).
   const showSkeletons = useShowSkeletons(

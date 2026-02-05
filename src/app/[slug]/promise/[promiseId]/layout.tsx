@@ -6,6 +6,7 @@ import { PublicPageFooterServer } from '@/components/shared/PublicPageFooterServ
 import { PromiseProfileLink } from '@/components/promise/PromiseProfileLink';
 import { PromiseRouteGuard } from '@/components/promise/PromiseRouteGuard';
 import { PromiseNotFoundView } from '@/components/promise/PromiseNotFoundView';
+import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { prisma } from '@/lib/prisma';
 import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
 
@@ -320,19 +321,23 @@ export default async function PromiseLayout({
         </header>
       )}
 
-      {/* Guardián de ruta: Verifica que el usuario esté en la ruta correcta según el estado de las cotizaciones */}
-      {/* Layout Ultraligero: Solo pasa la información, no toma decisiones */}
-      <PromiseRouteGuard 
-        studioSlug={slug} 
-        promiseId={promiseId}
-        initialQuotes={initialQuotes}
-        targetRoute={targetRoute}
-      >
-        {/* Contenido principal con padding-top para header y padding-bottom para notificación fija */}
-        <div className="pt-[65px] pb-[10px]">
-          {children}
-        </div>
-      </PromiseRouteGuard>
+      {/* ⚠️ ARCHITECTURE FIX: PromisePageProvider moved to layout level */}
+      {/* This ensures authorization state persists across page revalidations */}
+      <PromisePageProvider>
+        {/* Guardián de ruta: Verifica que el usuario esté en la ruta correcta según el estado de las cotizaciones */}
+        {/* Layout Ultraligero: Solo pasa la información, no toma decisiones */}
+        <PromiseRouteGuard 
+          studioSlug={slug} 
+          promiseId={promiseId}
+          initialQuotes={initialQuotes}
+          targetRoute={targetRoute}
+        >
+          {/* Contenido principal con padding-top para header y padding-bottom para notificación fija */}
+          <div className="pt-[65px] pb-[10px]">
+            {children}
+          </div>
+        </PromiseRouteGuard>
+      </PromisePageProvider>
 
       {/* Footer by Zen - Server Component optimizado */}
       <PublicPageFooterServer

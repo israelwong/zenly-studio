@@ -10,14 +10,11 @@ import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import { PortfolioNudge } from '@/components/promise/PortfolioNudge';
-import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromiseSettingsRealtime } from '@/hooks/usePromiseSettingsRealtime';
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
-import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
-import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
+import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
-import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
@@ -111,19 +108,6 @@ export function PendientesPageClient({
   const router = useRouter();
   const { setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
 
-  const {
-    progressStep,
-    progressError,
-    autoGenerateContract,
-    setProgressStep,
-    setProgressError,
-    onSuccess,
-    isAuthorizationInProgress,
-    setIsAuthorizationInProgress,
-    authorizationData,
-    setAuthorizationData,
-  } = usePromisePageContext();
-
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -188,19 +172,6 @@ export function PendientesPageClient({
     };
   }, [reloadCotizaciones]);
 
-
-  // Escucha el evento authorization-started (mantener por compatibilidad, aunque ya no es crítico)
-  useEffect(() => {
-    const handleAuthorizationStarted = (e: CustomEvent) => {
-      // El estado ya se estableció síncronamente en AutorizarCotizacionModal,
-      // pero mantenemos esto por compatibilidad y como respaldo
-      setIsAuthorizationInProgress(true);
-    };
-    window.addEventListener('authorization-started', handleAuthorizationStarted as EventListener);
-    return () => window.removeEventListener('authorization-started', handleAuthorizationStarted as EventListener);
-  }, [setIsAuthorizationInProgress]);
-
-
   // ⚠️ SIN LÓGICA DE REDIRECCIÓN: El Gatekeeper en el layout maneja toda la redirección
   // Esta página solo se preocupa por mostrar sus datos
 
@@ -230,121 +201,8 @@ export function PendientesPageClient({
 
   // ⚠️ Limpieza de notificaciones deshabilitada (las notificaciones están deshabilitadas)
 
-  // Procesar autorización cuando se active el estado
-  // Este useEffect se ejecuta cuando isAuthorizationInProgress cambia a true
-  useEffect(() => {
-    if (!isAuthorizationInProgress || !authorizationData) {
-      return;
-    }
-
-    // Función async para procesar la autorización
-    const processAuthorization = async () => {
-      try {
-        const { promiseId, cotizacionId, studioSlug, formData, condicionesComercialesId, condicionesComercialesMetodoPagoId, autoGenerateContract: shouldGenerateContract } = authorizationData;
-
-        // Paso 1: Recopilando información (~400ms)
-        setProgressStep('collecting');
-        await new Promise(resolve => setTimeout(resolve, 400));
-
-        // Paso 2: Validando datos (~400ms)
-        setProgressStep('validating');
-        await new Promise(resolve => setTimeout(resolve, 400));
-
-        // Paso 3: Enviando solicitud a estudio (updatePublicPromiseData)
-        setProgressStep('sending');
-        const updateResult = await updatePublicPromiseData(studioSlug, promiseId, {
-          contact_name: formData.contact_name,
-          contact_phone: formData.contact_phone,
-          contact_email: formData.contact_email,
-          contact_address: formData.contact_address,
-          event_name: formData.event_name,
-          event_location: formData.event_location,
-        });
-
-        if (!updateResult.success) {
-          setProgressError(updateResult.error || 'Error al actualizar datos');
-          setProgressStep('error');
-          setIsAuthorizationInProgress(false);
-          (window as any).__IS_AUTHORIZING = false;
-          setAuthorizationData(null);
-          return;
-        }
-
-        // Paso 4: Registrando solicitud (autorizarCotizacionPublica)
-        setProgressStep('registering');
-        const result = await autorizarCotizacionPublica(
-          promiseId,
-          cotizacionId,
-          studioSlug,
-          condicionesComercialesId,
-          condicionesComercialesMetodoPagoId
-        );
-
-        if (!result.success) {
-          setProgressError(result.error || 'Error al enviar solicitud');
-          setProgressStep('error');
-          setIsAuthorizationInProgress(false);
-          (window as any).__IS_AUTHORIZING = false;
-          setAuthorizationData(null);
-          return;
-        }
-
-        // Recopilar datos de cotización en paralelo
-        (async () => {
-          try {
-            const reloadResult = await getPublicPromiseData(studioSlug, promiseId);
-            if (reloadResult.success && reloadResult.data?.cotizaciones) {
-              window.dispatchEvent(new CustomEvent('reloadCotizaciones', {
-                detail: { cotizaciones: reloadResult.data.cotizaciones }
-              }));
-            }
-          } catch (error) {
-            console.error('[PendientesPageClient] Error al recargar cotizaciones:', error);
-          }
-        })();
-
-        // Esperar 600ms mientras se recopilan datos
-        await new Promise(resolve => setTimeout(resolve, 600));
-
-        // Paso 5: Generando contrato (condicional, solo si autoGenerateContract)
-        if (shouldGenerateContract) {
-          setProgressStep('generating_contract');
-          await new Promise(resolve => setTimeout(resolve, 1200));
-        }
-
-        // Paso 6: Completado - Listo (~800ms)
-        setProgressStep('completed');
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // El estado isAuthorizationInProgress se reseteará en el useEffect de redirección
-        // Los datos se limpiarán también allí
-      } catch (error) {
-        console.error('[PendientesPageClient] Error en processAuthorization:', error);
-        setProgressError('Error al enviar solicitud. Por favor, intenta de nuevo o contacta al estudio.');
-        setProgressStep('error');
-        setIsAuthorizationInProgress(false);
-        (window as any).__IS_AUTHORIZING = false;
-        setAuthorizationData(null);
-      }
-    };
-
-    processAuthorization();
-  }, [isAuthorizationInProgress, authorizationData, setProgressStep, setProgressError, setIsAuthorizationInProgress, setAuthorizationData]);
-
-  // ⚠️ SIN REDIRECCIÓN: El Gatekeeper detectará el cambio de estado y redirigirá automáticamente
-  // Limpiar flags cuando el proceso esté completado
-  useEffect(() => {
-    if (progressStep === 'completed' && isAuthorizationInProgress) {
-      const timer = setTimeout(() => {
-        // Limpiar flag de autorización del contexto
-        setIsAuthorizationInProgress(false);
-        (window as any).__IS_AUTHORIZING = false;
-        setAuthorizationData(null);
-        // El Gatekeeper detectará el cambio y redirigirá automáticamente
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [progressStep, isAuthorizationInProgress, setIsAuthorizationInProgress, setAuthorizationData]);
+  // ⚠️ NOTA: La lógica de procesamiento de autorización está en ProgressOverlayWrapper.tsx
+  // Este componente solo maneja la visualización de la página de pendientes
 
   // Filtrar condiciones comerciales según settings en tiempo real
   const condicionesFiltradas = useMemo(() => {
@@ -365,29 +223,7 @@ export function PendientesPageClient({
 
   return (
     <>
-      {/* Overlay de progreso - MOVIDO AL INICIO para máxima prioridad de renderizado */}
-      {isAuthorizationInProgress && (
-        <ProgressOverlay
-          show={isAuthorizationInProgress}
-          currentStep={progressStep}
-          error={progressError}
-          autoGenerateContract={autoGenerateContract}
-          onClose={() => {
-            setIsAuthorizationInProgress(false);
-            (window as any).__IS_AUTHORIZING = false;
-            setAuthorizationData(null);
-            setProgressError(null);
-            setProgressStep('validating');
-          }}
-          onRetry={() => {
-            setProgressError(null);
-            setProgressStep('validating');
-            setIsAuthorizationInProgress(false);
-            (window as any).__IS_AUTHORIZING = false;
-            setAuthorizationData(null);
-          }}
-        />
-      )}
+      {/* ⚠️ NOTA: ProgressOverlay renderizado en ProgressOverlayWrapper (page.tsx) */}
       {/* ⚠️ Hero Section ya se renderiza en PendientesPageBasic (instantáneo) */}
       {/* No duplicar aquí para evitar header duplicado */}
 
@@ -436,6 +272,16 @@ export function PendientesPageClient({
           paquetes={paquetes}
           autoGenerateContract={shareSettings.auto_generate_contract}
           durationHours={promise.duration_hours}
+          promiseData={{
+            contact_name: promise.contact_name,
+            contact_phone: promise.contact_phone,
+            contact_email: promise.contact_email || '',
+            contact_address: promise.contact_address || '',
+            event_name: promise.event_name || '',
+            event_location: promise.event_location || '',
+            event_date: promise.event_date,
+            event_type_name: promise.event_type_name,
+          }}
         />
       )}
 

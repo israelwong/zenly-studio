@@ -43,6 +43,17 @@ interface CotizacionesSectionProps {
   autoGenerateContract?: boolean;
   recentlyUpdated?: Set<string>;
   durationHours?: number | null;
+  /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
+  promiseData?: {
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+    event_date: Date | null;
+    event_type_name: string | null;
+  };
 }
 
 export function CotizacionesSection({
@@ -62,6 +73,7 @@ export function CotizacionesSection({
   autoGenerateContract = false,
   recentlyUpdated = new Set(),
   durationHours,
+  promiseData,
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -232,6 +244,7 @@ export function CotizacionesSection({
           showPackages={showPackages}
           paquetes={paquetes}
           autoGenerateContract={autoGenerateContract}
+          promiseData={promiseData}
         />
       )}
     </>

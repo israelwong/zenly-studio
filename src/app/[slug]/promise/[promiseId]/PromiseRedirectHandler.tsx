@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { syncPromiseRoute } from '@/lib/utils/public-promise-routing';
 import { PromiseRedirectSkeleton } from './PromiseRedirectSkeleton';
+import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 
 interface PromiseRedirectHandlerProps {
   slug: string;
@@ -14,10 +15,25 @@ export function PromiseRedirectHandler({ slug, promiseId }: PromiseRedirectHandl
   const [error, setError] = useState<string | null>(null);
   const hasRedirectedRef = useRef(false);
   const currentPath = `/${slug}/promise/${promiseId}`;
+  
+  // ⚠️ AUTHORIZATION LOCK: Prevenir redirecciones durante autorización
+  const { isAuthorizationInProgress } = usePromisePageContext();
+  const isAuthorizationInProgressRef = useRef(isAuthorizationInProgress);
+  isAuthorizationInProgressRef.current = isAuthorizationInProgress;
+  
+  // Global lock check
+  const isGlobalLockActive = () => {
+    return isAuthorizationInProgressRef.current || (window as any).__IS_AUTHORIZING === true;
+  };
 
   // Función para sincronizar ruta con el servidor
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current) return;
+    
+    // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+    if (isGlobalLockActive()) {
+      return;
+    }
     
     try {
       const redirected = await syncPromiseRoute(promiseId, window.location.pathname, slug);
@@ -25,7 +41,7 @@ export function PromiseRedirectHandler({ slug, promiseId }: PromiseRedirectHandl
         hasRedirectedRef.current = true;
       }
     } catch (error) {
-      console.error('[PromiseRedirectHandler] Error en syncPromiseRoute:', error);
+      // Error silenciado
     }
   };
 

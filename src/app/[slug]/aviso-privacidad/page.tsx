@@ -7,7 +7,6 @@ import { Shield } from 'lucide-react';
 import { AvisoPrivacidadFooter } from './components/AvisoPrivacidadFooter';
 import { obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
-import { BackButton } from './components/BackButton';
 
 interface AvisoPrivacidadPageProps {
   params: Promise<{ slug: string }>;
@@ -92,7 +91,6 @@ export default async function AvisoPrivacidadPage({ params }: AvisoPrivacidadPag
         </header>
         <main className="flex-1 overflow-auto bg-zinc-900/40 py-12 px-4">
           <div className="max-w-4xl mx-auto space-y-4">
-            <BackButton />
             <ZenCard>
               <ZenCardHeader>
                 <div className="flex items-center gap-3">
@@ -134,7 +132,6 @@ export default async function AvisoPrivacidadPage({ params }: AvisoPrivacidadPag
       </header>
       <main className="flex-1 overflow-auto bg-zinc-900/40 py-12 px-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          <BackButton />
           <ZenCard>
             <ZenCardHeader>
               <div className="flex items-center gap-3">

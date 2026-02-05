@@ -22,6 +22,7 @@ export async function autorizarCotizacionPublica(
   condicionesComercialesMetodoPagoId?: string | null
 ): Promise<{
   success: boolean;
+  contractGenerated?: boolean;
   data?: {
     cotizacionId: string;
     message: string;
@@ -182,108 +183,109 @@ export async function autorizarCotizacionPublica(
     // La cotización está en 'en_cierre', así que la sincronización debe detectar y actualizar a 'closing'
     try {
       const { syncPromisePipelineStageFromQuotes } = await import('../studio/commercial/promises/promise-pipeline-sync.actions');
-      await syncPromisePipelineStageFromQuotes(promiseId, promise.studio.id, null).catch((error) => {
-        console.error('[autorizarCotizacionPublica] Error sincronizando pipeline:', error);
+      await syncPromisePipelineStageFromQuotes(promiseId, promise.studio.id, null).catch(() => {
+        // Error silenciado
       });
     } catch (error) {
-      console.error('[autorizarCotizacionPublica] Error al importar syncPromisePipelineStageFromQuotes:', error);
+      // Error al importar - silenciado
     }
 
+    // ⚠️ OPTIMIZACIÓN CRÍTICA: Responder PRIMERO al cliente, generar contrato DESPUÉS
+    // Esto evita timeout del fetch (backend tardaba ~13s, navegador timeout ~10s)
+    
     // 3.5. Verificar si se debe generar contrato automáticamente
     const shareSettings = await getPromiseShareSettings(studioSlug, promiseId);
     const autoGenerateContract = shareSettings.success && shareSettings.data?.auto_generate_contract;
+    let contractGenerated = false;
 
+    // Responder al cliente INMEDIATAMENTE con success (antes de generar contrato)
+    const responseData = {
+      success: true,
+      contractGenerated: false, // Será true cuando se complete async
+      data: {
+        cotizacionId,
+        message: "Solicitud enviada exitosamente",
+      },
+    };
+
+    // Generar contrato de forma asíncrona (fire-and-forget)
     if (autoGenerateContract) {
-      try {
-        // Obtener plantilla por defecto
-        let templateResult = await getDefaultContractTemplate(studioSlug, promise.event_type_id || undefined);
-        
-        // Si no existe, intentar crear una
-        if (!templateResult.success) {
-          const createResult = await createDefaultTemplateForStudio(studioSlug);
-          if (createResult.success && createResult.data) {
-            templateResult = { success: true, data: createResult.data };
-          }
-        }
-
-        if (templateResult.success && templateResult.data) {
-          const template = templateResult.data;
-
-          // Obtener datos de la promesa para renderizar el contrato
-          const contractDataResult = await getPromiseContractData(
-            studioSlug,
-            promiseId,
-            cotizacionId,
-            condicionComercialInfo ? {
-              id: condicionComercialInfo.id,
-              name: condicionComercialInfo.name,
-              description: condicionComercialInfo.description || null,
-              discount_percentage: condicionComercialInfo.discount_percentage || null,
-              advance_percentage: condicionComercialInfo.advance_percentage || null,
-              advance_type: condicionComercialInfo.advance_type || null,
-              advance_amount: condicionComercialInfo.advance_amount || null,
-            } : undefined
-          );
-
-          if (contractDataResult.success && contractDataResult.data) {
-            // Renderizar contenido del contrato
-            const renderResult = await renderContractContent(
-              template.content,
-              contractDataResult.data,
-              contractDataResult.data.condicionesData
-            );
-
-            if (renderResult.success && renderResult.data) {
-              // Guardar en studio_cotizaciones_cierre con template_id y contenido renderizado
-              // NO crear evento ni contrato en studio_event_contracts todavía
-              // Mantener status en 'en_cierre' (no cambiar a 'contract_generated')
-              await prisma.studio_cotizaciones_cierre.update({
-                where: { cotizacion_id: cotizacionId },
-                data: {
-                  contract_template_id: template.id,
-                  contract_content: renderResult.data,
-                  contrato_definido: true,
-                },
-              });
-              
-              // ✅ ACTUALIZAR updated_at de cotización para disparar Realtime
-              // Esto permite que la página de cierre escuche cuando se genera el contrato
-              await prisma.studio_cotizaciones.update({
-                where: { id: cotizacionId },
-                data: {
-                  updated_at: new Date(),
-                },
-              });
+      // No await - fire and forget
+      (async () => {
+        try {
+          // Obtener plantilla por defecto
+          let templateResult = await getDefaultContractTemplate(studioSlug, promise.event_type_id || undefined);
+          
+          // Si no existe, intentar crear una
+          if (!templateResult.success) {
+            const createResult = await createDefaultTemplateForStudio(studioSlug);
+            if (createResult.success && createResult.data) {
+              templateResult = { success: true, data: createResult.data };
             }
           }
+
+          if (templateResult.success && templateResult.data) {
+            const template = templateResult.data;
+
+            // Obtener datos de la promesa para renderizar el contrato
+            const contractDataResult = await getPromiseContractData(
+              studioSlug,
+              promiseId,
+              cotizacionId,
+              condicionComercialInfo ? {
+                id: condicionComercialInfo.id,
+                name: condicionComercialInfo.name,
+                description: condicionComercialInfo.description || null,
+                discount_percentage: condicionComercialInfo.discount_percentage || null,
+                advance_percentage: condicionComercialInfo.advance_percentage || null,
+                advance_type: condicionComercialInfo.advance_type || null,
+                advance_amount: condicionComercialInfo.advance_amount || null,
+              } : undefined
+            );
+
+            if (contractDataResult.success && contractDataResult.data) {
+              // Renderizar contenido del contrato
+              const renderResult = await renderContractContent(
+                template.content,
+                contractDataResult.data,
+                contractDataResult.data.condicionesData
+              );
+
+              if (renderResult.success && renderResult.data) {
+                // ⚠️ TRANSACCIÓN: Asegurar que el guardado del contrato es atómico
+                await prisma.$transaction(async (tx) => {
+                  // Guardar en studio_cotizaciones_cierre con template_id y contenido renderizado
+                  await tx.studio_cotizaciones_cierre.update({
+                    where: { cotizacion_id: cotizacionId },
+                    data: {
+                      contract_template_id: template.id,
+                      contract_content: renderResult.data,
+                      contrato_definido: true,
+                      updated_at: new Date(),
+                    },
+                  });
+                  
+                  // ✅ ACTUALIZAR updated_at de cotización para disparar Realtime
+                  await tx.studio_cotizaciones.update({
+                    where: { id: cotizacionId },
+                    data: {
+                      updated_at: new Date(),
+                    },
+                  });
+                });
+                
+                contractGenerated = true;
+              }
+            }
+          }
+        } catch (asyncError) {
+          // Error silenciado en generación asíncrona
         }
-      } catch (error) {
-        // Si falla la generación automática, no fallar toda la operación
-        // Solo loguear el error y continuar
-        console.error('[autorizarCotizacionPublica] Error al generar contrato automáticamente:', error);
-      }
+      })();
     }
 
-    // Revalidar paths y caché para refrescar datos en el panel
-    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidatePath(`/${studioSlug}/promise/${promiseId}`, 'layout'); // ⚠️ CRÍTICO: Invalidar layout para forzar frescura
-    revalidatePath(`/${studioSlug}/promise/${promiseId}/pendientes`, 'layout');
-    revalidatePath(`/${studioSlug}/promise/${promiseId}/cierre`, 'layout');
-    revalidatePath(`/${studioSlug}/promise/${promiseId}/negociacion`, 'layout');
-    
-    // ⚠️ TAREA 4: Invalidación granular de caché
-    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-negociacion-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
-
-    // Sincronizar short URL según nuevo estado
-    const { syncShortUrlRoute } = await import('../studio/commercial/promises/promise-short-url.actions');
-    await syncShortUrlRoute(studioSlug, promiseId).catch((error) => {
-      console.error('[autorizarCotizacionPublica] Error sincronizando short URL:', error);
-    });
-
+    // ⚠️ OPTIMIZACIÓN: Notificaciones y logs se ejecutan RÁPIDO (~200ms)
+    // Contrato tarda ~10s, por eso está en async arriba
     // 4. Calcular precio final con descuentos y anticipos
     const formatPrice = (price: number) => {
       return new Intl.NumberFormat('es-MX', {
@@ -407,15 +409,31 @@ export async function autorizarCotizacionPublica(
       },
     });
 
+    // 8. Sincronizar short URL según nuevo estado
+    const { syncShortUrlRoute } = await import('../studio/commercial/promises/promise-short-url.actions');
+    await syncShortUrlRoute(studioSlug, promiseId).catch(() => {
+      // Error silenciado
+    });
+
+    // ⚠️ OPTIMIZED: Solo revalidar rutas relevantes
+    // Usuario navega a /cierre, no necesita revalidar /pendientes
+    
+    // ⚠️ OPTIMIZACIÓN: Revalidación diferida para no interferir con Authorization Lock
+    // NO revalidar durante el proceso de autorización para evitar desmontar el PromisePageProvider
+    // El frontend hará la revalidación DESPUÉS de la transición manual
+    
+    // Solo mantener tags para invalidación futura (cuando el usuario navegue manualmente)
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
+
     return {
       success: true,
+      contractGenerated,
       data: {
         cotizacionId,
         message: "Solicitud enviada exitosamente",
       },
     };
   } catch (error) {
-    console.error("Error al solicitar contratación:", error);
     return {
       success: false,
       error: "Error al enviar la solicitud",

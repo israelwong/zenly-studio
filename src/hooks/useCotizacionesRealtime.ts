@@ -329,7 +329,7 @@ export function useCotizacionesRealtime({
         try {
           onUpdatedRef.current(cotizacionId, changeInfo);
         } catch (error) {
-          console.error('[useCotizacionesRealtime] Error al ejecutar callback:', error);
+          // Error silenciado
         }
       }
     },
@@ -387,7 +387,6 @@ export function useCotizacionesRealtime({
         const authResult = await setupRealtimeAuth(supabaseClientRef.current, requiresAuth);
 
         if (!authResult.success && requiresAuth) {
-          console.error('[useCotizacionesRealtime] Error configurando auth:', authResult.error);
           return;
         }
 
@@ -399,12 +398,6 @@ export function useCotizacionesRealtime({
           .on('broadcast', { event: '*' }, (payload: unknown) => {
             const p = payload as any;
             const operation = p.operation || p.event;
-            // ⚠️ TAREA 5: Instrumentación detallada
-            console.table({
-              event: operation,
-              table: p?.table || p?.payload?.table || 'unknown',
-              change: p?.new || p?.payload?.new || p?.record || 'N/A',
-            });
             if (operation === 'INSERT') handleInsert(payload);
             else if (operation === 'UPDATE') handleUpdate(payload);
             else if (operation === 'DELETE') handleDelete(payload);
@@ -414,14 +407,12 @@ export function useCotizacionesRealtime({
           .on('broadcast', { event: 'DELETE' }, handleDelete);
 
         await subscribeToChannel(channel, (status, err) => {
-          if (err) {
-            console.error('[useCotizacionesRealtime] Error en suscripción:', err);
-          }
+          // Suscripción completada
         });
 
         channelRef.current = channel;
       } catch (error) {
-        console.error('[useCotizacionesRealtime] Error en setupRealtime:', error);
+        // Error silenciado
       }
     };
 

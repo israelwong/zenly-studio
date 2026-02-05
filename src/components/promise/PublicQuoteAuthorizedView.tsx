@@ -87,6 +87,14 @@ export function PublicQuoteAuthorizedView({
     changeType?: 'price' | 'description' | 'name' | 'inserted' | 'deleted' | 'general';
     requiresManualUpdate?: boolean;
   } | null>(null);
+  
+  // ⚠️ EMERGENCY: Fallback de force refresh si el contrato no aparece
+  const [showForceRefresh, setShowForceRefresh] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // ⚠️ SAFETY CHECK: Spinner inicial si auto-generate y no hay contrato
+  const [showInitialSpinner, setShowInitialSpinner] = useState(false);
+  const [hasCompletedSafetyCheck, setHasCompletedSafetyCheck] = useState(false);
 
   // Estado separado para el contrato (se actualiza independientemente)
   // ⚠️ FIX: Inicializar con contrato de initialCotizacion si existe (incluso si solo tiene template_id)
@@ -264,6 +272,64 @@ export function PublicQuoteAuthorizedView({
         });
     }
   }, [isContractSigned, bankInfo, loadingBankInfo, studio.id]);
+
+  // ⚠️ EMERGENCY FALLBACK: Mostrar botón de force refresh si el contrato no aparece después de 5s
+  // Solo en flujo automático (selected_by_prospect = true)
+  useEffect(() => {
+    const isAutomaticFlow = cotizacion.selected_by_prospect === true;
+    const shouldAutoGenerate = shareSettings?.auto_generate_contract === true;
+    
+    if (isAutomaticFlow && shouldAutoGenerate && isEnCierre && !hasContract && !isContractSigned) {
+      const timer = setTimeout(() => {
+        console.log('[PublicQuoteAuthorizedView] ⚠️ Contrato no visible después de 5s - mostrando force refresh');
+        setShowForceRefresh(true);
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    } else {
+      setShowForceRefresh(false);
+    }
+  }, [cotizacion.selected_by_prospect, shareSettings?.auto_generate_contract, isEnCierre, hasContract, isContractSigned]);
+
+  // Handler para force refresh
+  const handleForceRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    console.log('[PublicQuoteAuthorizedView] 🔄 Force refresh activado');
+    
+    // Esperar un momento para mostrar el spinner
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Forzar refresh completo de la página
+    window.location.reload();
+  }, []);
+
+  // ⚠️ SAFETY CHECK: Si es flujo automático (selected_by_prospect) y no hay contrato,
+  // mostrar spinner por 2 segundos y luego hacer router.refresh()
+  // ⚠️ FIX: Solo ejecutar UNA VEZ al montar el componente si las condiciones se cumplen
+  useEffect(() => {
+    const isAutomaticFlow = cotizacion.selected_by_prospect === true;
+    const shouldAutoGenerate = shareSettings?.auto_generate_contract === true;
+    
+    // ⚠️ CRÍTICO: Solo ejecutar si nunca se ha completado el safety check Y es flujo automático
+    if (isAutomaticFlow && shouldAutoGenerate && isEnCierre && !hasContract && !isContractSigned && !hasCompletedSafetyCheck) {
+      console.log('[PublicQuoteAuthorizedView] 🔒 SAFETY CHECK ÚNICO: Flujo automático sin contrato visible');
+      console.log('[PublicQuoteAuthorizedView] ⏳ Mostrando spinner por 2s antes de refresh...');
+      
+      // Marcar inmediatamente como completado para evitar re-ejecuciones
+      setHasCompletedSafetyCheck(true);
+      setShowInitialSpinner(true);
+      
+      const timer = setTimeout(() => {
+        console.log('[PublicQuoteAuthorizedView] 🔄 Ejecutando safety router.refresh()...');
+        setShowInitialSpinner(false);
+        router.refresh();
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+    // ⚠️ SOLO depender de hasCompletedSafetyCheck para prevenir loops infinitos
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCompletedSafetyCheck]);
 
   const handleShowBankInfo = useCallback(async () => {
     if (!studio.id) {
@@ -666,36 +732,89 @@ export function PublicQuoteAuthorizedView({
                       }}
                     />
                   ) : isEnCierre ? (
-                    // Sub-condition B: En cierre pero sin contrato - mostrar mensaje contextual según flujo
+                    // Sub-condition B: En cierre pero sin contrato
                     (() => {
-                      const isAutoGenerate = shareSettings?.auto_generate_contract ?? true;
+                      // ⚠️ FIX: Usar selected_by_prospect como indicador real de flujo
+                      const isAutomaticFlow = cotizacion.selected_by_prospect === true;
+                      const shouldAutoGenerate = shareSettings?.auto_generate_contract ?? true;
                       
+                      // ⚠️ SAFETY CHECK: Solo mostrar spinner si es flujo AUTOMÁTICO
+                      if (showInitialSpinner && isAutomaticFlow && shouldAutoGenerate) {
+                        return (
+                          <ZenCard className="animate-pulse">
+                            <div className="p-6">
+                              <div className="flex items-start gap-4">
+                                <div className="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
+                                  <Loader2 className="h-6 w-6 text-emerald-400 animate-spin" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-emerald-400" />
+                                    Finalizando detalles...
+                                  </h4>
+                                  <p className="text-sm text-zinc-400 leading-relaxed mb-3">
+                                    Tu contrato está listo, estamos sincronizando los últimos detalles. Solo un momento.
+                                  </p>
+                                  <div className="space-y-2">
+                                    <div className="h-2 bg-zinc-800 rounded-full w-full overflow-hidden">
+                                      <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse w-3/4" />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </ZenCard>
+                        );
+                      }
+                      
+                      // Mensaje diferente según flujo (automático vs manual)
                       return (
                         <ZenCard>
                           <div className="p-6">
                             <div className="flex items-start gap-4">
                               <div className="shrink-0 w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
-                                {isAutoGenerate ? (
-                                  <Clock className="h-6 w-6 text-blue-400" />
-                                ) : (
-                                  <FileSearch className="h-6 w-6 text-blue-400" />
-                                )}
+                                <FileSearch className="h-6 w-6 text-blue-400" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
                                   <FileText className="h-5 w-5 text-blue-400" />
-                                  Contrato en preparación
+                                  {isAutomaticFlow ? 'Generando tu contrato' : 'El estudio está preparando tu contrato'}
                                 </h4>
-                                {isAutoGenerate ? (
-                                  // Scenario A: Flujo automático
+                                {isAutomaticFlow ? (
+                                  // Scenario A: Flujo automático (cliente autorizó)
                                   <p className="text-sm text-zinc-400 leading-relaxed">
-                                    Estamos preparando tu contrato. El estudio está generando el documento final con los servicios seleccionados. Te notificaremos en cuanto esté listo para tu revisión y firma.
+                                    Estamos generando tu contrato con los servicios que seleccionaste. Te notificaremos en cuanto esté listo para tu revisión y firma.
                                   </p>
                                 ) : (
-                                  // Scenario B: Flujo manual
+                                  // Scenario B: Flujo manual (estudio movió a cierre)
                                   <p className="text-sm text-zinc-400 leading-relaxed">
-                                    El estudio está preparando los detalles finales de tu contrato. Te notificaremos vía email o WhatsApp en cuanto esté listo para tu revisión y firma.
+                                    El estudio está preparando tu contrato para revisión. Te notificaremos vía email o WhatsApp en cuanto esté listo para tu revisión y firma.
                                   </p>
+                                )}
+                                
+                                {/* ⚠️ EMERGENCY: Force refresh button - solo en flujo automático */}
+                                {isAutomaticFlow && shouldAutoGenerate && showForceRefresh && (
+                                  <div className="mt-4 pt-4 border-t border-zinc-800">
+                                    <p className="text-xs text-zinc-500 mb-3">
+                                      ¿No ves tu contrato? Intenta actualizar la página:
+                                    </p>
+                                    <ZenButton
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={handleForceRefresh}
+                                      disabled={isRefreshing}
+                                      className="w-full"
+                                    >
+                                      {isRefreshing ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                          Actualizando...
+                                        </>
+                                      ) : (
+                                        'Actualizar página'
+                                      )}
+                                    </ZenButton>
+                                  </div>
                                 )}
                               </div>
                             </div>

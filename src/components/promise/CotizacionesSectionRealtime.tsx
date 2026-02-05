@@ -44,6 +44,17 @@ interface CotizacionesSectionRealtimeProps {
   paquetes?: PublicPaquete[];
   autoGenerateContract?: boolean;
   durationHours?: number | null;
+  /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
+  promiseData?: {
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+    event_date: Date | null;
+    event_type_name: string | null;
+  };
 }
 
 export function CotizacionesSectionRealtime({
@@ -62,6 +73,7 @@ export function CotizacionesSectionRealtime({
   paquetes = [],
   autoGenerateContract = false,
   durationHours,
+  promiseData,
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [isPending, startTransition] = useTransition();
@@ -191,6 +203,7 @@ export function CotizacionesSectionRealtime({
         autoGenerateContract={autoGenerateContract}
         recentlyUpdated={recentlyUpdated}
         durationHours={durationHours}
+        promiseData={promiseData}
       />
       {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
       {/* ⚠️ Notificaciones deshabilitadas para evitar conflictos con redirección */}

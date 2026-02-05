@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { syncPromiseRoute, determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
 import { PromisePageSkeleton } from './PromisePageSkeleton';
+import { usePromisePageContext } from './PromisePageContext';
 
 interface PromiseRouteGuardProps {
   studioSlug: string;
@@ -53,10 +54,26 @@ export function PromiseRouteGuard({
   const hasRedirectedRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const serverValidatedRef = useRef(false);
+  
+  // ⚠️ AUTHORIZATION LOCK: Prevenir redirecciones automáticas durante autorización
+  const { isAuthorizationInProgress } = usePromisePageContext();
+
+  // Monitorear cambios en authorization lock (debug desactivado)
+  // useEffect(() => {
+  //   if (isAuthorizationInProgress) {
+  //     console.log('🔒 [CLIENT] AUTHORIZATION LOCK ACTIVATED');
+  //   }
+  // }, [isAuthorizationInProgress]);
 
   // Decisionador Único: useLayoutEffect para comparar rutas ANTES del primer render
   useLayoutEffect(() => {
     if (hasRedirectedRef.current) return;
+    
+    // ⚠️ AUTHORIZATION LOCK: Si hay autorización en progreso, no hacer redirecciones
+    if (isAuthorizationInProgress) {
+      setIsReady(true);
+      return;
+    }
 
     // ✅ BLOQUEO DE REDUNDANCIA / YA EN DESTINO: Si ya estamos en la subruta correcta, no redirigir nunca
     const currentNorm = normalize(pathname);
@@ -72,6 +89,11 @@ export function PromiseRouteGuard({
     if (Array.isArray(initialQuotes) && initialQuotes.length === 0 && serverTargetRoute) {
       // Validación ya en destino hecha arriba; aquí solo redirigir si estamos en ruta distinta y no /cliente
       if (!pathname.includes('/cliente')) {
+        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+        if (isAuthorizationInProgress) {
+          setIsReady(true);
+          return;
+        }
         hasRedirectedRef.current = true;
         router.replace(serverTargetRoute);
       }
@@ -82,6 +104,12 @@ export function PromiseRouteGuard({
     if (initialQuotes && initialQuotes.length > 0 && serverTargetRoute) {
       // Redirigir solo si la ruta actual no coincide con el target (ya en destino se cubrió arriba)
       if (currentNorm !== targetNorm && !pathname.includes('/cliente')) {
+        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+        if (isAuthorizationInProgress) {
+          setIsReady(true);
+          serverValidatedRef.current = true;
+          return;
+        }
         hasRedirectedRef.current = true;
         router.replace(serverTargetRoute);
         return;
@@ -92,7 +120,7 @@ export function PromiseRouteGuard({
     }
     
     // Paciente: sin datos del servidor no marcar ready; mostrar skeleton hasta fallback 2s o sync
-  }, [pathname, serverTargetRoute, initialQuotes, router]);
+  }, [pathname, serverTargetRoute, initialQuotes, router, isAuthorizationInProgress]);
 
   // ✅ HIDRATACIÓN GARANTIZADA: Si serverValidated es true, intentar ponerse en ready inmediatamente
   useEffect(() => {
@@ -100,17 +128,21 @@ export function PromiseRouteGuard({
       if (normalize(pathname) === normalize(serverTargetRoute)) {
         setIsReady(true);
       } else if (!pathname.includes('/cliente')) {
+        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+        if (isAuthorizationInProgress) {
+          setIsReady(true);
+          return;
+        }
         router.replace(serverTargetRoute);
       }
     }
-  }, [pathname, serverTargetRoute, isReady, router]);
+  }, [pathname, serverTargetRoute, isReady, router, isAuthorizationInProgress]);
 
   // 🚨 FALLBACK DE EMERGENCIA: Después de 2 segundos, forzar isReady(true) pase lo que pase
   useEffect(() => {
-    if (isReady) return; // Si ya está ready, no hacer nada
+    if (isReady) return;
     
     const emergencyTimeout = setTimeout(() => {
-      console.warn('🚨 [PromiseRouteGuard] FALLBACK DE EMERGENCIA: Forzando isReady después de 2s');
       setIsReady(true);
     }, 2000);
 
@@ -121,13 +153,18 @@ export function PromiseRouteGuard({
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current || (initialQuotes && serverTargetRoute)) return;
     
+    // ⚠️ AUTHORIZATION LOCK: No sincronizar/redirigir si overlay está activo
+    if (isGlobalLockActive()) {
+      return;
+    }
+    
     try {
       const redirected = await syncPromiseRoute(promiseId, pathname, studioSlug);
       if (redirected) {
         hasRedirectedRef.current = true;
       }
     } catch (error) {
-      console.error('[PromiseRouteGuard] Error en syncPromiseRoute:', error);
+      // Error silenciado
     }
   };
 
@@ -147,6 +184,15 @@ export function PromiseRouteGuard({
   const quotesRef = useRef(initialQuotes || []);
   const handleSyncRouteRef = useRef(handleSyncRoute);
   handleSyncRouteRef.current = handleSyncRoute;
+  
+  // ⚠️ AUTHORIZATION LOCK: Ref para acceder al estado actual en callbacks de realtime
+  const isAuthorizationInProgressRef = useRef(isAuthorizationInProgress);
+  isAuthorizationInProgressRef.current = isAuthorizationInProgress;
+  
+  // ⚠️ GLOBAL LOCK: Verificar también flag global síncrono (más rápido que React state)
+  const isGlobalLockActive = () => {
+    return isAuthorizationInProgressRef.current || (window as any).__IS_AUTHORIZING === true;
+  };
 
   // Actualizar quotesRef cuando cambian las cotizaciones iniciales
   useEffect(() => {
@@ -161,7 +207,15 @@ export function PromiseRouteGuard({
     promiseId,
     // Cualquier cambio (UPDATE, INSERT, DELETE) dispara recálculo de ruta
     onCotizacionUpdated: (cotizacionId, changeInfo) => {
-      if (hasRedirectedRef.current) return;
+      if (hasRedirectedRef.current) {
+        return;
+      }
+      
+      // ⚠️ AUTHORIZATION LOCK: No procesar redirecciones si overlay está activo
+      if (isGlobalLockActive()) {
+        // Actualizar el ref local para la próxima vez, pero NO redirigir ahora
+        return;
+      }
       
       // Actualizar cotización en el ref
       const currentQuotes = [...quotesRef.current];
@@ -205,6 +259,10 @@ export function PromiseRouteGuard({
       
       const newTargetRoute = determinePromiseRoute(updatedQuotes, studioSlug, promiseId);
       if (normalize(pathname) !== normalize(newTargetRoute) && !pathname.includes('/cliente')) {
+        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
+        if (isGlobalLockActive()) {
+          return;
+        }
         hasRedirectedRef.current = true;
         router.replace(newTargetRoute);
       }
