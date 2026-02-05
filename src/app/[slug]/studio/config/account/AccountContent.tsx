@@ -16,7 +16,9 @@ import {
 import { ZenButton, ZenConfirmModal, ZenDialog } from '@/components/ui/zen';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { generateGoogleLinkUrl } from '@/lib/actions/auth/link.actions';
 import { unlinkGoogleIdentity } from '@/lib/actions/studio/account/auth-identities';
+import { obtenerPerfil } from '@/lib/actions/studio/account/perfil.actions';
 import { establecerPassword } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 import type { SetPasswordForm as SetPasswordFormDataType } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
 import { Info } from 'lucide-react';
@@ -32,31 +34,12 @@ const GoogleLogo = ({ className }: { className?: string }) => (
   </svg>
 );
 
-/**
- * Conecta la cuenta de Google al usuario actual (link identity).
- * No usar signInWithOAuth: crearía otra sesión/usuario. linkIdentity mantiene al usuario actual.
- * No llamar signOut antes: rompería el contexto necesario para vincular.
- */
-async function connectGoogleAccount(
-  studioSlug: string,
-  returnPath: string
-): Promise<{ error: string | null }> {
-  const supabase = createClient();
-  const { data: { user }, error: sessionError } = await supabase.auth.getUser();
-  if (sessionError || !user) {
-    return { error: 'Debes tener sesión iniciada para conectar Google. Vuelve a iniciar sesión.' };
-  }
-
+/** Construye la URL completa de callback para el redirect (origen + /auth/callback?next=...). */
+function buildGoogleRedirectTo(returnPath: string, studioSlug: string): string {
   const origin = getOAuthOrigin();
   const pathWithSearch = returnPath.includes('?') ? `${returnPath}&success=true` : `${returnPath}?success=true`;
   const next = pathWithSearch.startsWith('/') ? pathWithSearch : `/${studioSlug}/studio/config/account?success=true`;
-  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
-
-  const { error } = await supabase.auth.linkIdentity({
-    provider: 'google',
-    options: { redirectTo },
-  });
-  return { error: error?.message ?? null };
+  return `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
 interface AccountContentProps {
@@ -83,10 +66,26 @@ export function AccountContent({
   const needsPasswordToUnlink = hasGoogle && !hasPassword;
 
   useEffect(() => {
-    if (searchParams.get('success') === 'true') {
+    setPerfil(initialPerfil ?? null);
+  }, [initialPerfil]);
+
+  useEffect(() => {
+    const success = searchParams.get('success') === 'true';
+    const hasError = searchParams.get('error') || searchParams.get('error_code');
+    if (!success || hasError) return;
+
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      await supabase.auth.refreshSession();
+      if (cancelled) return;
+      const result = await obtenerPerfil(studioSlug);
+      if (cancelled) return;
+      if (result.success && result.data) setPerfil(result.data);
       router.replace(`/${studioSlug}/studio/config/account`, { scroll: false });
       router.refresh();
-    }
+    })();
+    return () => { cancelled = true; };
   }, [studioSlug, searchParams, router]);
 
   useEffect(() => {
@@ -104,10 +103,19 @@ export function AccountContent({
     setGoogleError('');
     setGoogleConnecting(true);
     const returnPath = pathname ?? `/${studioSlug}/studio/config/account`;
-    const { error } = await connectGoogleAccount(studioSlug, returnPath);
+    const redirectTo = buildGoogleRedirectTo(returnPath, studioSlug);
+
+    const { url, error } = await generateGoogleLinkUrl(redirectTo);
+
+    if (url) {
+      window.location.href = url;
+      return;
+    }
+
+    setGoogleConnecting(false);
     if (error) {
       setGoogleError(error);
-      setGoogleConnecting(false);
+      toast.error(error);
     }
   };
 
@@ -163,7 +171,7 @@ export function AccountContent({
           Información Personal
         </h2>
         {perfil ? (
-          <PerfilForm studioSlug={studioSlug} perfil={perfil} onPerfilUpdate={setPerfil} />
+          <PerfilForm studioSlug={studioSlug} perfil={perfil} onPerfilUpdate={setPerfil} isGoogleLinked={hasGoogle} />
         ) : (
           <PerfilSkeleton />
         )}

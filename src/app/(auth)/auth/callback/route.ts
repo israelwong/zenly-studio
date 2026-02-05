@@ -94,6 +94,27 @@ function getSafeRedirectUrl(
 }
 
 /**
+ * Construye URL de redirección con parámetros de error sin duplicar `?`.
+ * Si basePath ya tiene query (ej. ?success=true), los nuevos params se añaden con `&`.
+ * Incluye error_code y error_description para que la UI muestre mensajes específicos (ej. identity_already_exists).
+ */
+function buildErrorRedirectUrl(
+  basePath: string,
+  request: NextRequest,
+  opts: {
+    error?: string;
+    error_code?: string | null;
+    error_description?: string | null;
+  }
+): URL {
+  const url = new URL(basePath, request.url);
+  if (opts.error !== undefined) url.searchParams.set('error', opts.error);
+  if (opts.error_code) url.searchParams.set('error_code', opts.error_code);
+  if (opts.error_description) url.searchParams.set('error_description', opts.error_description);
+  return url;
+}
+
+/**
  * Registra un log de acceso del usuario
  */
 async function logUserAccess(
@@ -314,10 +335,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Manejar error de OAuth (usuario canceló)
+  // Manejar error de OAuth (usuario canceló o error del proveedor, ej. identity_already_exists)
   if (error) {
-    console.error('[OAuth Callback] Error de Google:', error);
-    
+    const errorCode = searchParams.get('error_code');
+    const errorDesc = searchParams.get('error_description');
+    console.error('[OAuth Callback] Error de Google:', { error, error_code: errorCode, error_description: errorDesc });
+
     // Si es una vinculación de recurso, redirigir al studio
     if (type === 'link_resource' && studioSlug) {
       const redirectPath = getSafeRedirectUrl(
@@ -325,20 +348,22 @@ export async function GET(request: NextRequest) {
         `/${studioSlug}/studio/config/integraciones`,
         request
       );
-      
-      return NextResponse.redirect(
-        new URL(
-          `${redirectPath}?error=oauth_cancelled`,
-          request.url
-        )
-      );
+      const errorUrl = buildErrorRedirectUrl(redirectPath, request, {
+        error: 'oauth_failed',
+        error_code: errorCode,
+        error_description: errorDesc,
+      });
+      return NextResponse.redirect(errorUrl);
     }
-    
-    // Para login: usar next si es válido, sino redirigir a login
+
+    // Para login / link identity: usar next si es válido (preserva ?success=true y añade error con &)
     const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-    return NextResponse.redirect(
-      new URL(`${loginRedirect}?error=oauth_cancelled`, request.url)
-    );
+    const errorUrl = buildErrorRedirectUrl(loginRedirect, request, {
+      error: 'oauth_failed',
+      error_code: errorCode,
+      error_description: errorDesc,
+    });
+    return NextResponse.redirect(errorUrl);
   }
 
   // Validar que tenemos código
@@ -568,9 +593,8 @@ export async function GET(request: NextRequest) {
     if (!data.user || !data.session) {
       console.error('[OAuth Callback] No se pudo obtener usuario o sesión');
       const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-      return createRedirectResponse(
-        new URL(`${loginRedirect}?error=auth_failed`, request.url)
-      );
+      const errorUrl = buildErrorRedirectUrl(loginRedirect, request, { error: 'auth_failed' });
+      return createRedirectResponse(errorUrl);
     }
 
     // Verificar si es una vinculación de recurso (no login)
@@ -592,23 +616,18 @@ export async function GET(request: NextRequest) {
 
       if (!result.success) {
         console.log('[OAuth Callback] Error en vinculación, next URL:', next);
-        
+
         const redirectPath = getSafeRedirectUrl(
           next,
           `/${studioSlug}/studio/config/integraciones`,
           request
         );
-        
         console.log('[OAuth Callback] Redirigiendo a (error):', redirectPath);
-        
-        return createRedirectResponse(
-          new URL(
-            `${redirectPath}?error=${encodeURIComponent(
-              result.error || 'Error al vincular recurso'
-            )}`,
-            request.url
-          )
-        );
+
+        const errorUrl = buildErrorRedirectUrl(redirectPath, request, {
+          error: result.error || 'Error al vincular recurso',
+        });
+        return createRedirectResponse(errorUrl);
       }
 
       // Redirigir a página de origen con éxito (o dashboard como fallback)
@@ -700,9 +719,8 @@ export async function GET(request: NextRequest) {
         );
       }
       const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-      return createRedirectResponse(
-        new URL(`${loginRedirect}?error=processing_failed`, request.url)
-      );
+      const errorUrl = buildErrorRedirectUrl(loginRedirect, request, { error: 'processing_failed' });
+      return createRedirectResponse(errorUrl);
     }
 
     // Registrar login exitoso
@@ -776,9 +794,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[OAuth Callback] Error inesperado:', error);
     const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-    return NextResponse.redirect(
-      new URL(`${loginRedirect}?error=unexpected_error`, request.url)
-    );
+    const errorUrl = buildErrorRedirectUrl(loginRedirect, request, { error: 'unexpected_error' });
+    return NextResponse.redirect(errorUrl);
   }
 }
 

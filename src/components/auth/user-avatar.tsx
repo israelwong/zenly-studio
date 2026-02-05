@@ -146,13 +146,21 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
         user?.email ??
         "Usuario";
     const userEmail = user?.email ?? initialUserProfile?.name ?? "Usuario";
-    // Avatar: perfil del estudio → users.avatar_url → metadatos Google OAuth
+    // Avatar: perfil → user_metadata → identities (Google picture tras link suele estar en identity_data)
     const rawAvatar =
-        userProfile?.avatarUrl ?? 
-        initialUserProfile?.avatarUrl ?? 
-        user?.user_metadata?.avatar_url ??
-        user?.user_metadata?.picture ??
-        null;
+        userProfile?.avatarUrl ??
+        initialUserProfile?.avatarUrl ??
+        (user?.user_metadata as Record<string, unknown>)?.avatar_url ??
+        (user?.user_metadata as Record<string, unknown>)?.picture ??
+        (() => {
+            const ids = user?.identities ?? [];
+            for (const id of ids) {
+                const data = id.identity_data as { picture?: string; avatar_url?: string } | undefined;
+                const pic = data?.picture ?? data?.avatar_url;
+                if (pic && typeof pic === "string" && pic.trim() !== "") return pic.trim();
+            }
+            return null as string | null;
+        })();
     const avatarUrl =
         rawAvatar && typeof rawAvatar === "string" && rawAvatar.trim() !== ""
             ? rawAvatar.trim()

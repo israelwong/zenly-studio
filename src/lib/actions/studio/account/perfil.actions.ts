@@ -52,13 +52,26 @@ export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<Pe
 
     const name =
       studioProfile?.full_name ?? dbUser.full_name ?? dbUser.email?.split('@')[0] ?? '';
-    
-    // ✅ Prioridad avatar: studio_user_profiles → users → metadatos de Supabase Auth (Google OAuth)
-    const avatarUrl =
-      (studioProfile?.avatar_url as string | undefined) ?? 
-      (dbUser.avatar_url as string | undefined) ??
-      (user.user_metadata?.avatar_url as string | undefined) ??
-      (user.user_metadata?.picture as string | undefined);
+
+    // ✅ Prioridad: DB → user_metadata → identities (Google picture tras linkIdentity suele estar en identity_data).
+    const avatarCandidates: (string | null | undefined)[] = [
+      studioProfile?.avatar_url,
+      dbUser?.avatar_url,
+      (user.user_metadata as Record<string, unknown>)?.avatar_url,
+      (user.user_metadata as Record<string, unknown>)?.picture,
+    ];
+    const identities = user.identities ?? [];
+    for (const id of identities) {
+      const data = id.identity_data as { picture?: string; avatar_url?: string } | undefined;
+      if (data?.picture) avatarCandidates.push(data.picture);
+      if (data?.avatar_url) avatarCandidates.push(data.avatar_url);
+    }
+    const avatarUrl = (() => {
+      for (const c of avatarCandidates) {
+        if (c != null && typeof c === 'string' && c.trim() !== '') return c.trim();
+      }
+      return undefined;
+    })();
 
     const perfilData: PerfilData = {
       id: dbUser.id,
