@@ -312,11 +312,11 @@ export default async function PromiseLayout({
               </div>
             </div>
             <PromiseProfileLink
-              href={`/${slug}`}
-              className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
-            >
-              Ver perfil
-            </PromiseProfileLink>
+                href={`/${slug}`}
+                className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
+              >
+                Ver perfil
+              </PromiseProfileLink>
           </div>
         </header>
       )}

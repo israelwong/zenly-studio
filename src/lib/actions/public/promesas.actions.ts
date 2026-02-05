@@ -5370,6 +5370,9 @@ export async function getPublicPromiseBasicData(
       phone: string | null;
       email: string | null;
       address: string | null;
+      business_hours_text: string | null;
+      /** Teléfonos con tipo (LLAMADAS | WHATSAPP | AMBOS) para validar botones como en profile/contacto */
+      contact_phones: { number: string; type: string }[];
       promise_share_default_show_packages: boolean;
       promise_share_default_show_categories_subtotals: boolean;
       promise_share_default_show_items_prices: boolean;
@@ -5464,6 +5467,49 @@ export async function getPublicPromiseBasicData(
       };
     }
 
+    // Teléfonos del estudio con tipo (misma lógica que profile/contacto para botones WhatsApp vs Llamar)
+    const contactPhones = await prisma.studio_phones.findMany({
+      where: { studio_id: studio.id, is_active: true },
+      orderBy: { order: 'asc' },
+      select: { number: true, type: true },
+    });
+
+    // Horarios de atención para modal Contáctanos (mismo criterio que profile/public ContactSection)
+    let businessHoursText: string | null = null;
+    const hours = await prisma.studio_business_hours.findMany({
+      where: { studio_id: studio.id, is_active: true },
+      orderBy: [{ order: 'asc' }, { day_of_week: 'asc' }],
+      select: { day_of_week: true, start_time: true, end_time: true },
+    });
+    if (hours.length > 0) {
+      const dayToSpanish: Record<string, string> = {
+        '0': 'Domingo', '1': 'Lunes', '2': 'Martes', '3': 'Miércoles', '4': 'Jueves', '5': 'Viernes', '6': 'Sábado',
+        monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves', friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo',
+      };
+      const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+      const grupos: { [key: string]: string[] } = {};
+      hours.forEach((h) => {
+        const diaLabel = dayToSpanish[h.day_of_week.toLowerCase?.() ?? h.day_of_week] ?? h.day_of_week;
+        const key = `${h.start_time} - ${h.end_time}`;
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(diaLabel);
+      });
+      const formatearDias = (dias: string[]): string => {
+        if (dias.length === 0) return '';
+        if (dias.length === 1) return dias[0];
+        if (dias.length === 2) return dias.join(' y ');
+        const diasOrdenados = [...dias].sort((a, b) => ordenDias.indexOf(a) - ordenDias.indexOf(b));
+        const esConsecutivo = diasOrdenados.every((dia, i) => i === 0 || ordenDias.indexOf(dia) === ordenDias.indexOf(diasOrdenados[i - 1]) + 1);
+        if (esConsecutivo && diasOrdenados.length > 2) {
+          return `${diasOrdenados[0]} a ${diasOrdenados[diasOrdenados.length - 1]}`;
+        }
+        return diasOrdenados.join(', ');
+      };
+      businessHoursText = Object.entries(grupos)
+        .map(([horario, dias]) => `${formatearDias(dias)}: ${horario}`)
+        .join('. ');
+    }
+
     return {
       success: true,
       data: {
@@ -5503,6 +5549,8 @@ export async function getPublicPromiseBasicData(
           phone: studio.phone,
           email: studio.email,
           address: studio.address,
+          business_hours_text: businessHoursText,
+          contact_phones: contactPhones.map((p) => ({ number: p.number, type: p.type })),
           promise_share_default_show_packages: studio.promise_share_default_show_packages,
           promise_share_default_show_categories_subtotals: studio.promise_share_default_show_categories_subtotals,
           promise_share_default_show_items_prices: studio.promise_share_default_show_items_prices,

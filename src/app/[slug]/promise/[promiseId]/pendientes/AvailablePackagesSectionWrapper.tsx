@@ -4,6 +4,7 @@ import { use, useState, useEffect } from 'react';
 import { AvailablePackagesSection } from './AvailablePackagesSection';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import { PortfolioNudge } from '@/components/promise/PortfolioNudge';
+import { PromiseContactBlock } from '@/components/promise/PromiseContactBlock';
 import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 
@@ -99,6 +100,8 @@ interface AvailablePackagesSectionWrapperProps {
       phone: string | null;
       email: string | null;
       address: string | null;
+      business_hours_text?: string | null;
+      contact_phones?: { number: string; type: string }[];
       promise_share_default_show_packages: boolean;
       promise_share_default_show_categories_subtotals: boolean;
       promise_share_default_show_items_prices: boolean;
@@ -174,6 +177,21 @@ export function AvailablePackagesSectionWrapper({
           cotizaciones={activeQuoteData?.cotizaciones ?? []}
           cotizacionesCompletas={activeQuoteData?.cotizaciones ?? []}
           durationHours={basicPromise.promise.duration_hours ?? null}
+        />
+      )}
+
+      {/* Contáctanos: justo debajo de PaquetesSection */}
+      {hasPackages && (
+        <PromiseContactBlock
+          studio={{
+            studio_name: basicPromise.studio.studio_name,
+            logo_url: basicPromise.studio.logo_url,
+            phone: basicPromise.studio.phone,
+            business_hours_text: basicPromise.studio.business_hours_text ?? undefined,
+            contact_phones: basicPromise.studio.contact_phones,
+          }}
+          showDividerTop
+          showDividerBottom
         />
       )}
 

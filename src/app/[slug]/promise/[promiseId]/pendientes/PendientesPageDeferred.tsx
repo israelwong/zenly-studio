@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { ActiveQuoteSection } from './ActiveQuoteSection';
 import { AvailablePackagesSectionWrapper } from './AvailablePackagesSectionWrapper';
 import { PackagesSectionSkeleton } from '@/components/promise/PackagesSectionSkeleton';
+import { PromiseContactBlock } from '@/components/promise/PromiseContactBlock';
 
 interface PendientesPageDeferredProps {
   activeQuotePromise: Promise<{
@@ -115,6 +116,8 @@ interface PendientesPageDeferredProps {
       phone: string | null;
       email: string | null;
       address: string | null;
+      business_hours_text?: string | null;
+      contact_phones?: { number: string; type: string }[];
       promise_share_default_show_packages: boolean;
       promise_share_default_show_categories_subtotals: boolean;
       promise_share_default_show_items_prices: boolean;
@@ -164,6 +167,19 @@ export function PendientesPageDeferred({
         />
       </Suspense>
 
+      {/* Contáctanos: bloque con divisor arriba y abajo */}
+      <PromiseContactBlock
+        studio={{
+          studio_name: basicPromise.studio.studio_name,
+          logo_url: basicPromise.studio.logo_url,
+          phone: basicPromise.studio.phone,
+          business_hours_text: basicPromise.studio.business_hours_text ?? undefined,
+          contact_phones: basicPromise.studio.contact_phones,
+        }}
+        showDividerTop
+        showDividerBottom
+      />
+
       {/* ⚠️ TAREA 3: Paquetes disponibles - carga diferida (~35 items) */}
       <Suspense fallback={<PackagesSectionSkeleton />}>
         <AvailablePackagesSectionWrapper
@@ -174,6 +190,19 @@ export function PendientesPageDeferred({
           promiseId={promiseId}
         />
       </Suspense>
+
+      {/* Contáctanos: debajo de PaquetesSection / Portafolios; sin divisor inferior */}
+      <PromiseContactBlock
+        studio={{
+          studio_name: basicPromise.studio.studio_name,
+          logo_url: basicPromise.studio.logo_url,
+          phone: basicPromise.studio.phone,
+          business_hours_text: basicPromise.studio.business_hours_text ?? undefined,
+          contact_phones: basicPromise.studio.contact_phones,
+        }}
+        showDividerTop
+        showDividerBottom={false}
+      />
     </>
   );
 }
