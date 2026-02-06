@@ -28,12 +28,15 @@ export interface WhatsAppTemplateFormProps {
 
 const VAR_CHIPS: { label: string; value: string }[] = [
   { label: '+ Nombre contacto', value: '[[nombre_contacto]]' },
+  { label: '+ Nombre corto', value: '[[nombre_corto]]' },
   { label: '+ Nombre evento', value: '[[nombre_evento]]' },
+  { label: '+ Tipo evento', value: '[[tipo_evento]]' },
   { label: '+ Fecha evento', value: '[[fecha_evento]]' },
+  { label: '+ Cuenta CLABE', value: '[[cuenta_clabe]]' },
   { label: '+ Link promesa', value: '[[link_promesa]]' },
 ];
 
-const VAR_HINT = 'Variables: [[nombre_prospecto]], [[nombre_evento]], [[link_promesa]]';
+const VAR_HINT = 'Variables: [[nombre_contacto]], [[nombre_corto]], [[nombre_evento]], [[tipo_evento]], [[cuenta_clabe]], [[link_promesa]]';
 
 /**
  * Componente compartido para crear/editar plantillas de WhatsApp

@@ -32,6 +32,8 @@ interface PaymentMethodsModalProps {
   onClose: () => void;
   studioSlug: string;
   onSuccess?: () => void;
+  /** Si true, al abrir el modal se abre directamente el formulario de configuración de transferencia (anidado) */
+  openTransferConfigDirectly?: boolean;
 }
 
 export function PaymentMethodsModal({
@@ -39,6 +41,7 @@ export function PaymentMethodsModal({
   onClose,
   studioSlug,
   onSuccess,
+  openTransferConfigDirectly = false,
 }: PaymentMethodsModalProps) {
   const [metodos, setMetodos] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,7 @@ export function PaymentMethodsModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [metodoToDelete, setMetodoToDelete] = useState<string | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
+  const hasOpenedTransferDirectlyRef = React.useRef(false);
 
   const loadMetodos = useCallback(async () => {
     setLoading(true);
@@ -81,8 +85,26 @@ export function PaymentMethodsModal({
   useEffect(() => {
     if (isOpen) {
       loadMetodos();
+      if (!openTransferConfigDirectly) hasOpenedTransferDirectlyRef.current = false;
+    } else {
+      hasOpenedTransferDirectlyRef.current = false;
     }
-  }, [isOpen, loadMetodos]);
+  }, [isOpen, loadMetodos, openTransferConfigDirectly]);
+
+  useEffect(() => {
+    if (!isOpen || loading || metodos.length === 0 || !openTransferConfigDirectly || hasOpenedTransferDirectlyRef.current) return;
+    const transferMetodo = metodos.find(m => {
+      const name = (m.payment_method_name ?? '').toLowerCase();
+      const pm = (m.payment_method ?? '').toLowerCase();
+      const isTransfer = pm === 'transferencia' || pm === 'spei_directo' || name.includes('transferencia') || name.includes('spei');
+      return isTransfer;
+    });
+    if (transferMetodo) {
+      hasOpenedTransferDirectlyRef.current = true;
+      setSelectedMetodoId(transferMetodo.id);
+      setShowTransferConfig(true);
+    }
+  }, [isOpen, loading, metodos, openTransferConfigDirectly]);
 
   // Helper para convertir error a string
   const getErrorMessage = (error: unknown): string => {

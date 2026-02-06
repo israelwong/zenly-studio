@@ -32,6 +32,8 @@ export interface ZenDialogProps {
   headerActions?: React.ReactNode;
   fullScreen?: boolean;
   footerLeftContent?: React.ReactNode;
+  /** Contenido a la derecha, después del botón Guardar (ej. "Solo Enviar") */
+  footerRightContent?: React.ReactNode;
   /** Si true, permite que los dropdowns y elementos absolutos se muestren fuera del contenedor */
   allowOverflow?: boolean;
 }
@@ -72,6 +74,7 @@ export function ZenDialog({
   headerActions,
   fullScreen = false,
   footerLeftContent,
+  footerRightContent,
   allowOverflow = false
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
@@ -245,8 +248,8 @@ export function ZenDialog({
                   </ZenButton>
                 )}
               </div>
-              {/* Derecha: Eliminar (si deleteOnRight) + Guardar */}
-              <div className="flex items-center gap-3 ml-auto">
+              {/* Derecha: Eliminar (si deleteOnRight) + Guardar + footerRightContent */}
+              <div className="flex items-center gap-2 ml-auto">
                 {showDeleteButton && onDelete && deleteOnRight && (
                   <ZenButton
                     variant="ghost"
@@ -267,6 +270,7 @@ export function ZenDialog({
                     {saveLabel}
                   </ZenButton>
                 )}
+                {footerRightContent}
               </div>
             </div>
             )

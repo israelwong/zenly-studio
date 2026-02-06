@@ -86,6 +86,7 @@ function StudioLayoutContent({
   const [showTerminosManager, setShowTerminosManager] = useState(false);
   const [showAvisoPrivacidad, setShowAvisoPrivacidad] = useState(false);
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [paymentMethodsModalOptions, setPaymentMethodsModalOptions] = useState<{ openTransferConfigDirectly?: boolean }>({});
   const [showContractsModal, setShowContractsModal] = useState(false);
   const [showStudioDataModal, setShowStudioDataModal] = useState(false);
   const [showEventTypesModal, setShowEventTypesModal] = useState(false);
@@ -95,7 +96,11 @@ function StudioLayoutContent({
     const handleOpenTerminos = () => setShowTerminosManager(true);
     const handleOpenAviso = () => setShowAvisoPrivacidad(true);
     const handleOpenCondiciones = () => setShowCondicionesManager(true);
-    const handleOpenPaymentMethods = () => setShowPaymentMethods(true);
+    const handleOpenPaymentMethods = (e?: Event) => {
+      const detail = (e as CustomEvent<{ openTransferConfigDirectly?: boolean }> | undefined)?.detail;
+      setPaymentMethodsModalOptions(detail ?? {});
+      setShowPaymentMethods(true);
+    };
     const handleOpenContracts = () => setShowContractsModal(true);
     const handleOpenStudioData = () => setShowStudioDataModal(true);
     const handleOpenEventTypes = () => setShowEventTypesModal(true);
@@ -103,7 +108,7 @@ function StudioLayoutContent({
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
     window.addEventListener('open-condiciones-modal', handleOpenCondiciones);
-    window.addEventListener('open-payment-methods-modal', handleOpenPaymentMethods);
+    window.addEventListener('open-payment-methods-modal', handleOpenPaymentMethods as EventListener);
     window.addEventListener('open-contracts-modal', handleOpenContracts);
     window.addEventListener('open-studio-data-modal', handleOpenStudioData);
     window.addEventListener('open-event-types-modal', handleOpenEventTypes);
@@ -415,8 +420,9 @@ function StudioLayoutContent({
 
       <PaymentMethodsModal
         isOpen={showPaymentMethods}
-        onClose={() => setShowPaymentMethods(false)}
+        onClose={() => { setShowPaymentMethods(false); setPaymentMethodsModalOptions({}); }}
         studioSlug={studioSlug}
+        openTransferConfigDirectly={paymentMethodsModalOptions.openTransferConfigDirectly}
       />
 
       <ContractTemplateManagerModal

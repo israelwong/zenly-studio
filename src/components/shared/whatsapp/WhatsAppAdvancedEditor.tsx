@@ -18,7 +18,10 @@ export interface WhatsAppAdvancedEditorProps {
   variables?: {
     nombre_contacto?: string;
     nombre_prospecto?: string;
+    nombre_corto?: string;
     nombre_evento?: string;
+    tipo_evento?: string;
+    cuenta_clabe?: string;
     link_promesa?: string;
     fecha_evento?: Date | null;
   };
@@ -54,17 +57,23 @@ export interface WhatsAppAdvancedEditorProps {
 
 const VAR_CHIPS: { label: string; value: string }[] = [
   { label: '+ Nombre contacto', value: '[[nombre_contacto]]' },
+  { label: '+ Nombre corto', value: '[[nombre_corto]]' },
   { label: '+ Nombre evento', value: '[[nombre_evento]]' },
+  { label: '+ Tipo evento', value: '[[tipo_evento]]' },
   { label: '+ Fecha evento', value: '[[fecha_evento]]' },
+  { label: '+ Cuenta CLABE', value: '[[cuenta_clabe]]' },
   { label: '+ Link promesa', value: '[[link_promesa]]' },
 ];
 
 const VAR_LABELS: Record<string, string> = {
   nombre_contacto: 'Nombre contacto',
   nombre_prospecto: 'Nombre contacto',
+  nombre_corto: 'Nombre corto',
   link_promesa: 'Link promesa',
   nombre_evento: 'Nombre evento',
+  tipo_evento: 'Tipo evento',
   fecha_evento: 'Fecha evento',
+  cuenta_clabe: 'Cuenta CLABE',
 };
 
 type Segment =
@@ -102,6 +111,171 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** Offset del cursor en el mensaje serializado (mismo sistema que getMessageFromEditor). */
+function getCursorOffset(element: HTMLElement): number {
+  const sel = window.getSelection();
+  const range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+  if (!range || !element.contains(range.startContainer)) return 0;
+  let offset = 0;
+  const startNode = range.startContainer;
+  const startOff = range.startOffset;
+  function walk(node: Node): boolean {
+    if (node === startNode) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        offset += startOff;
+        return true;
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'BR') {
+          offset += startOff > 0 ? 1 : 0;
+          return true;
+        }
+        const v = el.getAttribute?.('data-var');
+        const slug = el.getAttribute?.('data-portfolio-slug');
+        const shortUrl = el.getAttribute?.('data-portfolio-short-url');
+        if (shortUrl != null) {
+          const len = shortUrl.length;
+          offset += startOff > 0 ? len : 0;
+          return true;
+        }
+        if (slug != null) {
+          const len = 2 + 16 + slug.length + 2; // [[link_portafolio:x]]
+          offset += startOff > 0 ? len : 0;
+          return true;
+        }
+        if (v != null) {
+          const len = 2 + v.length + 2; // [[x]]
+          offset += startOff > 0 ? len : 0;
+          return true;
+        }
+        for (let i = 0; i < node.childNodes.length; i++) {
+          if (walk(node.childNodes[i])) return true;
+        }
+        return true;
+      }
+      return true;
+    }
+    if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+      offset += node.textContent.length;
+      return false;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.tagName === 'BR') {
+        offset += 1;
+        return false;
+      }
+      const shortUrl = el.getAttribute?.('data-portfolio-short-url');
+      const slug = el.getAttribute?.('data-portfolio-slug');
+      const v = el.getAttribute?.('data-var');
+      if (shortUrl != null) {
+        offset += shortUrl.length;
+        return false;
+      }
+      if (slug != null) {
+        offset += 2 + 16 + slug.length + 2;
+        return false;
+      }
+      if (v != null) {
+        offset += 2 + v.length + 2;
+        return false;
+      }
+      for (let i = 0; i < node.childNodes.length; i++) {
+        if (walk(node.childNodes[i])) return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  for (let i = 0; i < element.childNodes.length; i++) {
+    if (walk(element.childNodes[i])) break;
+  }
+  return offset;
+}
+
+/** Restaura el cursor en el mensaje serializado por índice de carácter. */
+function setCursorOffset(element: HTMLElement, targetOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  let current = 0;
+  let found: { node: Node; offset: number } | null = null;
+  function walk(node: Node): boolean {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node.textContent || '').length;
+      if (current + len >= targetOffset) {
+        found = { node, offset: targetOffset - current };
+        return true;
+      }
+      current += len;
+      return false;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.tagName === 'BR') {
+        if (current + 1 >= targetOffset) {
+          found = { node, offset: targetOffset - current };
+          return true;
+        }
+        current += 1;
+        return false;
+      }
+      const shortUrl = el.getAttribute?.('data-portfolio-short-url');
+      const slug = el.getAttribute?.('data-portfolio-slug');
+      const v = el.getAttribute?.('data-var');
+      let len = 0;
+      if (shortUrl != null) len = shortUrl.length;
+      else if (slug != null) len = 2 + 16 + (slug?.length ?? 0) + 2;
+      else if (v != null) len = 2 + (v?.length ?? 0) + 2;
+      if (len > 0) {
+        if (current + len >= targetOffset) {
+          found = { node: el, offset: targetOffset - current > 0 ? 1 : 0 };
+          return true;
+        }
+        current += len;
+        return false;
+      }
+      for (let i = 0; i < node.childNodes.length; i++) {
+        if (walk(node.childNodes[i])) return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  for (let i = 0; i < element.childNodes.length; i++) {
+    if (walk(element.childNodes[i])) break;
+  }
+  if (!found) {
+    const last = element.lastChild;
+    if (last) {
+      if (last.nodeType === Node.TEXT_NODE) {
+        found = { node: last, offset: (last.textContent || '').length };
+      } else {
+        found = { node: last, offset: last.childNodes.length };
+      }
+    } else {
+      found = { node: element, offset: 0 };
+    }
+  }
+  if (found) {
+    try {
+      const range = document.createRange();
+      if (found.node.nodeType === Node.TEXT_NODE) {
+        const maxOff = Math.min(found.offset, (found.node.textContent || '').length);
+        range.setStart(found.node, maxOff);
+      } else {
+        const maxOff = Math.min(found.offset, found.node.childNodes.length);
+        range.setStart(found.node, maxOff);
+      }
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {
+      // ignorar si el rango no es válido
+    }
+  }
+}
+
 /**
  * Editor avanzado de WhatsApp con contentEditable, chips visuales y vista previa en tiempo real
  */
@@ -129,13 +303,17 @@ export function WhatsAppAdvancedEditor({
   const internalEditorRef = useRef<HTMLDivElement>(null);
   const editorRef = externalEditorRef || internalEditorRef;
   const [messageSource, setMessageSource] = useState<'template' | 'chip' | null>(null);
+  const cursorRestoreOffsetRef = useRef<number | null>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   // Preparar variables para vista previa
   const vars = {
     nombre_contacto: variables.nombre_contacto || variables.nombre_prospecto || '',
     nombre_prospecto: variables.nombre_prospecto || variables.nombre_contacto || '',
+    nombre_corto: variables.nombre_corto ?? '',
     nombre_evento: variables.nombre_evento || '',
+    tipo_evento: variables.tipo_evento ?? '',
+    cuenta_clabe: variables.cuenta_clabe ?? '',
     link_promesa: variables.link_promesa || '',
     fecha_evento: variables.fecha_evento ? formatEventDateForWhatsApp(variables.fecha_evento) : '',
   };
@@ -208,23 +386,66 @@ export function WhatsAppAdvancedEditor({
     return range;
   }, []);
 
-  // Inicializar contenido del editor al montar o cuando cambia el mensaje inicialmente
+  // Sincronizar mensaje → DOM solo cuando viene de plantilla o está vacío; no sobrescribir al escribir (evita reset del cursor)
   useEffect(() => {
-    if (editorRef.current) {
-      const currentContent = editorRef.current.innerHTML.trim();
-      const targetMessage = message || defaultMessage;
-      // Solo inicializar si está vacío o si el mensaje cambió externamente (sin ser por input del usuario)
-      if (!currentContent || (messageSource === 'template' && targetMessage)) {
-        setEditorContent(targetMessage);
-        setMessageSource(null);
-      }
+    const el = editorRef.current;
+    if (!el) return;
+    const targetMessage = message || defaultMessage;
+    const currentSerialized = getMessageFromEditor();
+    const isEmpty = !el.innerText?.trim() && !el.querySelector('.whatsapp-modal-chip');
+    if (isEmpty) {
+      setEditorContent(targetMessage);
+      setMessageSource(null);
+      setTimeout(() => setCursorOffset(el, targetMessage.length), 0);
+      return;
     }
-  }, [message, defaultMessage, messageSource, setEditorContent]);
+    if (messageSource === 'template' && targetMessage) {
+      if (currentSerialized !== targetMessage) {
+        setEditorContent(targetMessage);
+        setTimeout(() => setCursorOffset(el, targetMessage.length), 0);
+      }
+      setMessageSource(null);
+    }
+  }, [message, defaultMessage, messageSource, setEditorContent, getMessageFromEditor]);
 
-  // Manejar input del editor
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== 'Enter') return;
+      const el = editorRef.current;
+      if (!el || !el.contains(document.activeElement)) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return;
+      e.preventDefault();
+      document.execCommand('insertLineBreak', false);
+      const savedOffset = getCursorOffset(el);
+      cursorRestoreOffsetRef.current = savedOffset;
+      const newMsg = getMessageFromEditor();
+      if (newMsg !== message) onMessageChange(newMsg);
+      setTimeout(() => {
+        if (editorRef.current && cursorRestoreOffsetRef.current != null) {
+          setCursorOffset(editorRef.current, cursorRestoreOffsetRef.current);
+          cursorRestoreOffsetRef.current = null;
+        }
+      }, 0);
+    },
+    [getMessageFromEditor, message, onMessageChange]
+  );
+
   const handleEditorInput = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const savedOffset = getCursorOffset(el);
     const newMsg = getMessageFromEditor();
-    if (newMsg !== message) onMessageChange(newMsg);
+    if (newMsg !== message) {
+      cursorRestoreOffsetRef.current = savedOffset;
+      onMessageChange(newMsg);
+    }
+    setTimeout(() => {
+      if (editorRef.current && cursorRestoreOffsetRef.current != null) {
+        setCursorOffset(editorRef.current, cursorRestoreOffsetRef.current);
+        cursorRestoreOffsetRef.current = null;
+      }
+    }, 0);
   };
 
   // Insertar variable como chip visual
@@ -405,7 +626,7 @@ export function WhatsAppAdvancedEditor({
           </span>
         );
       }
-      if (['nombre_contacto', 'nombre_prospecto', 'nombre_evento', 'fecha_evento'].includes(seg.key)) {
+      if (['nombre_contacto', 'nombre_prospecto', 'nombre_corto', 'nombre_evento', 'tipo_evento', 'fecha_evento'].includes(seg.key)) {
         return <strong key={i}>{resolved}</strong>;
       }
       return <React.Fragment key={i}>{resolved}</React.Fragment>;
@@ -449,6 +670,7 @@ export function WhatsAppAdvancedEditor({
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
+          onKeyDown={handleEditorKeyDown}
           onInput={handleEditorInput}
           onClick={handleEditorClick}
           className={cn(

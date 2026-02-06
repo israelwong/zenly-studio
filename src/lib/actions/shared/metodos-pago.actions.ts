@@ -79,3 +79,19 @@ export async function obtenerInfoBancariaTransferencia(
   }
 }
 
+/**
+ * Obtiene la información bancaria por slug del estudio (para uso en WhatsApp, etc.)
+ */
+export async function obtenerInfoBancariaTransferenciaPorSlug(
+  studioSlug: string
+): Promise<ApiResponse<StudioBankInfo>> {
+  const studio = await prisma.studios.findUnique({
+    where: { slug: studioSlug },
+    select: { id: true },
+  });
+  if (!studio) {
+    return { success: false, message: 'Estudio no encontrado' };
+  }
+  return obtenerInfoBancariaTransferencia(studio.id);
+}
+

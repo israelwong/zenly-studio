@@ -18,6 +18,7 @@ import { getPortfoliosForWhatsApp, getPortfolioFullDetail } from '@/lib/actions/
 import type { PortfolioForWhatsApp, PortfolioGroup } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.types';
 import type { PublicPortfolio } from '@/types/public-profile';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
+import { obtenerInfoBancariaTransferenciaPorSlug } from '@/lib/actions/shared/metodos-pago.actions';
 import {
   replaceWhatsAppTemplateVariables,
   formatEventDateForWhatsApp,
@@ -53,17 +54,23 @@ const DEFAULT_MESSAGE = 'Hola [[nombre_contacto]]';
 
 const VAR_CHIPS: { label: string; value: string }[] = [
   { label: '+ Nombre contacto', value: '[[nombre_contacto]]' },
+  { label: '+ Nombre corto', value: '[[nombre_corto]]' },
   { label: '+ Nombre evento', value: '[[nombre_evento]]' },
+  { label: '+ Tipo evento', value: '[[tipo_evento]]' },
   { label: '+ Fecha evento', value: '[[fecha_evento]]' },
+  { label: '+ Cuenta CLABE', value: '[[cuenta_clabe]]' },
   { label: '+ Link promesa', value: '[[link_promesa]]' },
 ];
 
 const VAR_LABELS: Record<string, string> = {
   nombre_contacto: 'Nombre contacto',
   nombre_prospecto: 'Nombre contacto',
+  nombre_corto: 'Nombre corto',
   link_promesa: 'Link promesa',
   nombre_evento: 'Nombre evento',
+  tipo_evento: 'Tipo evento',
   fecha_evento: 'Fecha evento',
+  cuenta_clabe: 'Cuenta CLABE',
 };
 
 type Segment =
@@ -281,6 +288,7 @@ export function WhatsAppMessageModal({
   const [isReorderingTemplates, setIsReorderingTemplates] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
+  const [bankInfo, setBankInfo] = useState<{ banco: string; titular: string; clabe: string } | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
@@ -295,17 +303,27 @@ export function WhatsAppMessageModal({
     setLoadingTemplates(true);
     setLoadingResources(true);
     try {
-      const [tplRes, urlRes, portRes, sentRes] = await Promise.all([
+      const [tplRes, urlRes, portRes, sentRes, bankRes] = await Promise.all([
         getWhatsAppTemplates(studioSlug),
         getOrCreateShortUrl(studioSlug, promiseId),
         getPortfoliosForWhatsApp(studioSlug),
         getWhatsAppSentTemplateIdsForPromise(promiseId),
+        obtenerInfoBancariaTransferenciaPorSlug(studioSlug),
       ]);
       if (tplRes.success && tplRes.data) setTemplates(tplRes.data);
       if (sentRes.success && sentRes.data) setSentTemplateIds(new Set(sentRes.data));
       if (urlRes.success && urlRes.data) {
         const base = typeof window !== 'undefined' ? window.location.origin : '';
         setShortUrl(`${base}/s/${urlRes.data.shortCode}`);
+      }
+      if (bankRes.success && bankRes.data?.clabe && bankRes.data?.banco && bankRes.data?.titular) {
+        setBankInfo({
+          banco: bankRes.data.banco,
+          titular: bankRes.data.titular,
+          clabe: bankRes.data.clabe,
+        });
+      } else {
+        setBankInfo(null);
       }
       if (portRes.success && portRes.data) {
         setPortfolioGroups(portRes.data);
@@ -338,10 +356,19 @@ export function WhatsAppMessageModal({
     }
   }, [isOpen, loadData]);
 
+  const contactFirstName = contactName.trim().split(/\s+/)[0] || contactName;
+
+  const cuentaClabeFormatted = bankInfo
+    ? `Nombre banco: ${bankInfo.banco}\nBeneficiario: ${bankInfo.titular}\nCLABE interbancaria: ${bankInfo.clabe}`
+    : '';
+
   const vars = {
     nombre_contacto: contactName,
     nombre_prospecto: contactName,
+    nombre_corto: contactFirstName,
     nombre_evento: eventName ?? '',
+    tipo_evento: eventName ?? '',
+    cuenta_clabe: cuentaClabeFormatted,
     link_promesa: shortUrl ?? '',
     fecha_evento: formatEventDateForWhatsApp(eventDate),
   };
@@ -467,8 +494,25 @@ export function WhatsAppMessageModal({
   };
 
   const handleEditorInput = () => {
+    const el = editorRef.current;
+    const sel = window.getSelection();
+    const savedRange = sel && sel.rangeCount && el?.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
     const newMsg = getMessageFromEditor();
     if (newMsg !== message) setMessage(newMsg);
+    if (savedRange && el) {
+      setTimeout(() => {
+        if (!editorRef.current) return;
+        const s = window.getSelection();
+        if (s && editorRef.current.contains(savedRange.startContainer)) {
+          try {
+            s.removeAllRanges();
+            s.addRange(savedRange);
+          } catch {
+            /* range inválido si el DOM cambió */
+          }
+        }
+      }, 0);
+    }
   };
 
   /** Inserta chip de variable [[tag]] siempre al final del editor. variable debe ser ej. [[nombre_evento]]. */
@@ -785,7 +829,7 @@ export function WhatsAppMessageModal({
           </span>
         );
       }
-      if (['nombre_contacto', 'nombre_prospecto', 'nombre_evento', 'fecha_evento'].includes(seg.key)) {
+      if (['nombre_contacto', 'nombre_prospecto', 'nombre_corto', 'nombre_evento', 'tipo_evento', 'fecha_evento'].includes(seg.key)) {
         return <strong key={i}>{resolved}</strong>;
       }
       return <React.Fragment key={i}>{resolved}</React.Fragment>;
@@ -834,19 +878,34 @@ export function WhatsAppMessageModal({
             >
               {isEditedFromTemplate ? 'Actualizar' : 'Guardar plantilla'}
             </ZenButton>
-            <ZenButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleSoloEnviar}
-              disabled={saving || !previewMessage.trim()}
-            >
-              Solo Enviar
-            </ZenButton>
           </div>
         ) : undefined
       }
+      footerRightContent={
+        <ZenButton
+          type="button"
+          variant="outline"
+          size="md"
+          onClick={handleSoloEnviar}
+          disabled={saving || !previewMessage.trim()}
+        >
+          Solo Enviar
+        </ZenButton>
+      }
     >
+      {!loadingResources && !bankInfo && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <span>La variable <code className="rounded bg-zinc-800 px-1">[[cuenta_clabe]]</code> no está configurada.</span>
+          <ZenButton
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-payment-methods-modal', { detail: { openTransferConfigDirectly: true } }))}
+          >
+            Configurar cuenta CLABE
+          </ZenButton>
+        </div>
+      )}
       <div className="flex gap-0 max-h-[85vh] min-h-[380px] overflow-hidden rounded-lg bg-zinc-950 border border-zinc-800">
         {/* Col 1: Plantillas (card-grouped-list + drag) */}
         <aside className="w-52 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-950 rounded-l-lg overflow-hidden">
@@ -998,7 +1057,10 @@ export function WhatsAppMessageModal({
             variables={{
               nombre_contacto: contactName,
               nombre_prospecto: contactName,
+              nombre_corto: contactFirstName,
               nombre_evento: eventName || undefined,
+              tipo_evento: eventName || undefined,
+              cuenta_clabe: cuentaClabeFormatted || undefined,
               link_promesa: shortUrl || undefined,
               fecha_evento: eventDate,
             }}
