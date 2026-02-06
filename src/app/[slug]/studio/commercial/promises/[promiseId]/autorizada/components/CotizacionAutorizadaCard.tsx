@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/zen';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
+import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { ContractPreviewForPromiseModal } from '../../cierre/components/contratos/ContractPreviewForPromiseModal';
 import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -37,6 +38,8 @@ export function CotizacionAutorizadaCard({
   const [resumen, setResumen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showContractPreview, setShowContractPreview] = useState(false);
+  const [templateContentWithPlaceholders, setTemplateContentWithPlaceholders] = useState<string | null>(null);
+  const [loadingTemplateForPreview, setLoadingTemplateForPreview] = useState(false);
 
   // Cargar resumen del evento creado
   useEffect(() => {
@@ -77,6 +80,30 @@ export function CotizacionAutorizadaCard({
   const precioBaseParaCondiciones = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined && negociacionPrecioPersonalizado > 0 && negociacionPrecioOriginal !== null && negociacionPrecioOriginal !== undefined
     ? negociacionPrecioOriginal
     : cotizacionData.price;
+
+  const savedContractContent = contrato?.content || resumen?.cotizacion?.contract_content_snapshot || '';
+  const contractTemplateId = contrato?.template_id || resumen?.cotizacion?.contract_template_id_snapshot || null;
+
+  const openContractPreview = async () => {
+    if (contractTemplateId) {
+      setLoadingTemplateForPreview(true);
+      try {
+        const result = await getContractTemplate(studioSlug, contractTemplateId);
+        if (result.success && result.data?.content) {
+          setTemplateContentWithPlaceholders(result.data.content);
+        } else {
+          setTemplateContentWithPlaceholders(null);
+        }
+      } catch {
+        setTemplateContentWithPlaceholders(null);
+      } finally {
+        setLoadingTemplateForPreview(false);
+      }
+    } else {
+      setTemplateContentWithPlaceholders(null);
+    }
+    setShowContractPreview(true);
+  };
 
   // Información del pago inicial
   const pagoInicial = resumen?.montoInicial || null;
@@ -360,7 +387,7 @@ export function CotizacionAutorizadaCard({
             {contrato && contrato.content ? (
               <div
                 className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
-                onClick={() => setShowContractPreview(true)}
+                onClick={openContractPreview}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -412,7 +439,7 @@ export function CotizacionAutorizadaCard({
             ) : resumen?.cotizacion?.contract_content_snapshot ? (
               <div
                 className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
-                onClick={() => setShowContractPreview(true)}
+                onClick={openContractPreview}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -505,10 +532,13 @@ export function CotizacionAutorizadaCard({
       </ZenCard>
 
       {/* Modal de previsualización de contrato */}
-      {showContractPreview && (contrato?.content || resumen?.cotizacion?.contract_content_snapshot) && (
+      {showContractPreview && (savedContractContent || templateContentWithPlaceholders) && (
         <ContractPreviewForPromiseModal
           isOpen={showContractPreview}
-          onClose={() => setShowContractPreview(false)}
+          onClose={() => {
+            setShowContractPreview(false);
+            setTemplateContentWithPlaceholders(null);
+          }}
           onConfirm={() => setShowContractPreview(false)}
           onEdit={() => { }}
           studioSlug={studioSlug}
@@ -516,9 +546,9 @@ export function CotizacionAutorizadaCard({
           cotizacionId={cotizacion.id}
           eventId={eventoId}
           template={{
-            id: contrato?.template_id || resumen?.cotizacion?.contract_template_id_snapshot || '',
+            id: contractTemplateId || '',
             name: contrato?.template_name || resumen?.cotizacion?.contract_template_name_snapshot || 'Contrato',
-            content: contrato?.content || resumen?.cotizacion?.contract_content_snapshot || '',
+            content: templateContentWithPlaceholders ?? savedContractContent,
             studio_id: '',
             slug: '',
             is_active: true,

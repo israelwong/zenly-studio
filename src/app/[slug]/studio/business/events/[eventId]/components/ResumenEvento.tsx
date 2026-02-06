@@ -11,6 +11,7 @@ import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/prom
 import { ContractPreviewForPromiseModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cierre/components/contratos/ContractPreviewForPromiseModal';
 import { ResumenCotizacionAutorizada } from './ResumenCotizacionAutorizada';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
+import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 
@@ -24,6 +25,8 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
   const [showCotizacionPreview, setShowCotizacionPreview] = useState(false);
   const [showContratoPreview, setShowContratoPreview] = useState(false);
   const [loadingCotizacion, setLoadingCotizacion] = useState(false);
+  const [loadingContratoTemplate, setLoadingContratoTemplate] = useState(false);
+  const [templateContentWithPlaceholders, setTemplateContentWithPlaceholders] = useState<string | null>(null);
   const [cotizacionCompleta, setCotizacionCompleta] = useState<any>(null);
   const [resumen, setResumen] = useState<any>(null);
   const [loadingResumen, setLoadingResumen] = useState(true);
@@ -131,10 +134,27 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
     }
   };
 
-  const handlePreviewContrato = () => {
-    if (contrato?.content) {
-      setShowContratoPreview(true);
+  const handlePreviewContrato = async () => {
+    if (!contrato?.content) return;
+    const templateId = contrato.template_id || null;
+    setLoadingContratoTemplate(true);
+    try {
+      if (templateId) {
+        const result = await getContractTemplate(studioSlug, templateId);
+        if (result.success && result.data?.content) {
+          setTemplateContentWithPlaceholders(result.data.content);
+        } else {
+          setTemplateContentWithPlaceholders(null);
+        }
+      } else {
+        setTemplateContentWithPlaceholders(null);
+      }
+    } catch {
+      setTemplateContentWithPlaceholders(null);
+    } finally {
+      setLoadingContratoTemplate(false);
     }
+    setShowContratoPreview(true);
   };
 
   const fechaEvento = resumen?.evento?.event_date || eventData.promise?.event_date || eventData.event_date;
@@ -220,9 +240,14 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
                         variant="ghost"
                         size="sm"
                         onClick={handlePreviewContrato}
+                        disabled={loadingContratoTemplate}
                         className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
                       >
-                        <Eye className="h-3 w-3 mr-1" />
+                        {loadingContratoTemplate ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Eye className="h-3 w-3 mr-1" />
+                        )}
                         Ver
                       </ZenButton>
                     )}
@@ -275,7 +300,10 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
       {showContratoPreview && contrato?.content && (
         <ContractPreviewForPromiseModal
           isOpen={showContratoPreview}
-          onClose={() => setShowContratoPreview(false)}
+          onClose={() => {
+            setShowContratoPreview(false);
+            setTemplateContentWithPlaceholders(null);
+          }}
           onConfirm={() => setShowContratoPreview(false)}
           onEdit={() => { }}
           studioSlug={studioSlug}
@@ -286,7 +314,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
             id: contrato.template_id || '',
             name: contrato.template_name || 'Contrato',
             slug: contrato.template_id || '',
-            content: contrato.content,
+            content: templateContentWithPlaceholders ?? contrato.content,
             studio_id: '',
             is_active: true,
             is_default: false,

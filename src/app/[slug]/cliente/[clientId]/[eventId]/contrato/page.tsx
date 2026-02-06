@@ -121,7 +121,7 @@ export default async function EventoContratoPage({ params }: EventoContratoPageP
       signed_at: immutableContract.signed_at || undefined,
       studio_id: '',
       event_id: eventId,
-      template_id: '',
+      template_id: templateId || '',
       version: 1,
       created_by: undefined,
       signed_by_client: !!immutableContract.signed_at,

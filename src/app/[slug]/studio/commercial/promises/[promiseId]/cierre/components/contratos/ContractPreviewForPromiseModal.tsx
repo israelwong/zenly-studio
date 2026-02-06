@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, Edit2 } from 'lucide-react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
-import { ContractPreview } from '@/app/[slug]/studio/config/contratos/components';
+import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
 import type { ContractTemplate } from '@/types/contracts';
 import { toast } from 'sonner';
 
@@ -93,20 +93,18 @@ export function ContractPreviewForPromiseModal({
     }
   };
 
-  // Si hay eventData con condicionesData, usar template.content para permitir re-renderizado
-  // con el desglose completo. Si no hay eventData o es contrato firmado, usar customContent.
-  // Determinar si es modo read-only (evento creado o contrato firmado)
   const isReadOnly = isContractSigned || !!eventId;
 
-  // Si hay eventData con condicionesData, usar template.content para permitir re-renderizado
-  // con el desglose completo. Si no hay eventData o es contrato firmado, usar customContent.
+  // Mismo patrón que PublicContractView: si hay cotizacionData o condicionesData, priorizar
+  // template.content (con @condiciones_comerciales y @cotizacion_autorizada) para que el Master
+  // los re-renderice, incluso en modo read-only o autorizada.
   const contentToPreview = useMemo(() => {
-    if (isReadOnly || !eventData?.condicionesData) {
-      return customContent || template.content;
+    const hasBlockData = eventData?.cotizacionData || eventData?.condicionesData;
+    if (hasBlockData) {
+      return template.content;
     }
-    // Si hay condicionesData disponible, usar template original para re-renderizar con desglose
-    return template.content;
-  }, [customContent, template.content, eventData?.condicionesData, isReadOnly]);
+    return customContent || template.content;
+  }, [customContent, template.content, eventData?.cotizacionData, eventData?.condicionesData]);
 
   const handleConfirm = async () => {
     setConfirming(true);

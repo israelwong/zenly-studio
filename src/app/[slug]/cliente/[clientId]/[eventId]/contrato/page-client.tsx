@@ -7,6 +7,7 @@ import { Loader2, FileText, Download, X, Clock, User, Calendar, Edit, Eye } from
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenConfirmModal, ZenDialog, ZenTextarea, ZenSidebarTrigger } from '@/components/ui/zen';
 import { getEventContractForClient, getAllEventContractsForClient, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
+import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
 import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
 import { toast } from 'sonner';
@@ -69,6 +70,7 @@ export default function EventoContratoPage({
   const [cancelledContractContent, setCancelledContractContent] = useState('');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [eventData, setEventData] = useState<any>(initialEventData);
+  const [templateContentWithPlaceholders, setTemplateContentWithPlaceholders] = useState<string | null>(null);
   const printableRef = useRef<HTMLDivElement>(null);
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [showCancellationConfirmModal, setShowCancellationConfirmModal] = useState(false);
@@ -121,7 +123,7 @@ export default function EventoContratoPage({
           setEventData(dataResult.data);
         }
 
-        // Crear objeto EventContract compatible con el estado
+        // Crear objeto EventContract compatible con el estado (template_id para cargar plantilla y renderizar bloques)
         const contractFromSnapshot: EventContract = {
           id: immutableContract.id,
           content: immutableContract.content,
@@ -131,7 +133,7 @@ export default function EventoContratoPage({
           signed_at: immutableContract.signed_at || undefined,
           studio_id: '',
           event_id: eventId,
-          template_id: '',
+          template_id: (immutableContract as { template_id?: string | null }).template_id ?? '',
           version: 1,
           created_by: undefined,
           signed_by_client: !!immutableContract.signed_at,
@@ -187,6 +189,35 @@ export default function EventoContratoPage({
       loadContract();
     }
   }, [isAuthenticated, cliente?.id, eventId, slug, loadContract, initialContract]);
+
+  // Si hay contrato pero no eventData (p. ej. fallo en servidor), cargar eventData para que el Master pueda renderizar bloques
+  useEffect(() => {
+    if (!contract || eventData || !slug || !eventId) return;
+    let cancelled = false;
+    getEventContractData(slug, eventId).then((result) => {
+      if (!cancelled && result.success && result.data) setEventData(result.data);
+    });
+    return () => { cancelled = true; };
+  }, [contract, eventData, slug, eventId]);
+
+  // Cuando hay eventData con cotizacionData/condicionesData y contrato con template_id, cargar plantilla con placeholders para que el Master renderice los bloques
+  useEffect(() => {
+    const templateId = contract?.template_id;
+    const hasBlockData = eventData?.cotizacionData || eventData?.condicionesData;
+    if (!slug || !templateId || !hasBlockData) {
+      setTemplateContentWithPlaceholders(null);
+      return;
+    }
+    let cancelled = false;
+    getContractTemplate(slug, templateId).then((result) => {
+      if (!cancelled && result.success && result.data?.content) {
+        setTemplateContentWithPlaceholders(result.data.content);
+      } else {
+        setTemplateContentWithPlaceholders(null);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [contract?.template_id, contract?.id, eventData?.cotizacionData, eventData?.condicionesData, slug]);
 
   // Configurar realtime para escuchar cambios en datos de contacto y evento
   useEffect(() => {
@@ -596,6 +627,11 @@ export default function EventoContratoPage({
     await loadCancelledContractContent(cancelledContract);
   };
 
+  const hasBlockData = eventData?.cotizacionData || eventData?.condicionesData;
+  const contentForPreview = hasBlockData && templateContentWithPlaceholders
+    ? templateContentWithPlaceholders
+    : contract?.content ?? '';
+
   const isSigned = contract?.status === 'SIGNED';
   const isPublished = contract?.status === 'PUBLISHED';
   const isCancellationRequestedByStudio = contract?.status === 'CANCELLATION_REQUESTED_BY_STUDIO';
@@ -668,12 +704,13 @@ export default function EventoContratoPage({
           <ZenCardContent className="p-6">
             {contract && eventData ? (
               <ContractPreview
-                content={contract.content}
+                content={contentForPreview}
                 eventData={eventData}
                 cotizacionData={eventData.cotizacionData}
                 condicionesData={eventData.condicionesData}
                 noCard={true}
                 className="h-full"
+                hideFlexibilidadNote={isSigned}
               />
             ) : (
               <div className="space-y-4">
@@ -770,7 +807,7 @@ export default function EventoContratoPage({
             }}
           >
             <ContractPreview
-              content={contract.content}
+              content={contentForPreview}
               eventData={eventData}
               cotizacionData={eventData.cotizacionData}
               condicionesData={eventData.condicionesData}

@@ -5,7 +5,7 @@ import { FileText, CheckCircle2, Edit2, Download, Loader2 } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
 import type { EventContractData } from '@/types/contracts';
-import type { CondicionesComercialesData } from '@/app/[slug]/studio/config/contratos/components/types';
+import type { CondicionesComercialesData } from '@/components/shared/contracts/types';
 import { signPublicContract } from '@/lib/actions/public/contracts.actions';
 import { toast } from 'sonner';
 import { generatePDFFromElement } from '@/lib/utils/pdf-generator';

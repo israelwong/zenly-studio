@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Loader2, Download, Edit2 } from "lucide-react";
 import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
 import { ZenButton } from "@/components/ui/zen";
-import { ContractPreview } from "@/app/[slug]/studio/config/contratos/components";
+import { ContractPreview } from "@/components/shared/contracts/ContractPreview";
 import type { EventContractDataWithConditions } from "@/lib/actions/studio/business/contracts/renderer.actions";
 import { generatePDFFromElement, generateContractFilename } from "@/lib/utils/pdf-generator";
 import type { EventContractData } from "@/types/contracts";

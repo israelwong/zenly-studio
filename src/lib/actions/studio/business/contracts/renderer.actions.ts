@@ -3,8 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { ActionResponse } from "@/types";
 import { EventContractData, ServiceCategory } from "@/types/contracts";
-import type { CondicionesComercialesData } from "@/app/[slug]/studio/config/contratos/components/types";
-import { renderCondicionesComercialesBlock } from "@/app/[slug]/studio/config/contratos/components/utils/contract-renderer";
+import type { CondicionesComercialesData, CotizacionRenderData } from "@/components/shared/contracts/types";
+import { renderCondicionesComercialesBlock, type ContractRendererOptions } from "@/components/shared/contracts/utils/contract-renderer";
 import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
 import { obtenerInfoBancariaTransferencia } from "@/lib/actions/shared/metodos-pago.actions";
 import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
@@ -821,6 +821,59 @@ export async function getEventContractData(
       }
     });
 
+    // Construir cotizacionData (paridad con getPromiseContractData) para bloques @cotizacion_autorizada y @condiciones_comerciales
+    const itemsParaEstructura = cotizacionAprobada.cotizacion_items.map((ci) => ({
+      quantity: ci.quantity,
+      subtotal: Number(ci.subtotal || 0),
+      name_snapshot: (ci as { name_snapshot?: string | null }).name_snapshot ?? null,
+      name: (ci as { name?: string | null }).name ?? (ci as { items?: { name?: string } }).items?.name ?? null,
+      description_snapshot: (ci as { description_snapshot?: string | null }).description_snapshot ?? null,
+      description: (ci as { description?: string | null }).description ?? (ci as { items?: { description?: string } }).items?.description ?? null,
+      seccion_name_snapshot: (ci as { seccion_name_snapshot?: string | null }).seccion_name_snapshot ?? null,
+      seccion_name: (ci as { seccion_name?: string | null }).seccion_name ?? null,
+      category_name_snapshot: (ci as { category_name_snapshot?: string | null }).category_name_snapshot ?? (ci as { service_categories?: { name?: string } }).service_categories?.name ?? null,
+      category_name: (ci as { category_name?: string | null }).category_name ?? (ci as { service_categories?: { name?: string } }).service_categories?.name ?? null,
+      item_id: ci.item_id ?? null,
+      order: (ci as { order?: number | null }).order ?? null,
+      billing_type: (ci as { billing_type?: string | null }).billing_type ?? null,
+    }));
+    const estructuraEvent = construirEstructuraJerarquicaCotizacion(itemsParaEstructura, {
+      incluirDescripciones: true,
+      ordenarPor: "incremental",
+    });
+    const cotizacionData: CotizacionRenderData = {
+      secciones: estructuraEvent.secciones.map((seccion) => ({
+        nombre: seccion.nombre,
+        orden: seccion.orden,
+        categorias: seccion.categorias.map((categoria) => ({
+          nombre: categoria.nombre,
+          orden: categoria.orden,
+          items: categoria.items.map((item) => {
+            const itemId = (item as { item_id?: string | null }).item_id ?? null;
+            const billingType = itemId ? (billingTypeMap.get(itemId) || "SERVICE") : "SERVICE";
+            const cantidadBase = item.cantidad;
+            let cantidadEfectiva = cantidadBase;
+            if (billingType === "HOUR" && eventDuration && eventDuration > 0) {
+              cantidadEfectiva = calcularCantidadEfectiva(billingType, cantidadBase, eventDuration);
+            }
+            const out: CotizacionRenderData["secciones"][0]["categorias"][0]["items"][0] = {
+              nombre: item.nombre,
+              descripcion: item.descripcion,
+              cantidad: cantidadBase,
+              subtotal: item.subtotal,
+              billing_type: billingType,
+              cantidadEfectiva,
+            };
+            if (billingType === "HOUR" && eventDuration && eventDuration > 0) {
+              out.horas = eventDuration;
+            }
+            return out;
+          }),
+        })),
+      })),
+      total: estructuraEvent.total,
+    };
+
     // Formatear fecha (SSoT: solo UTC, sin lógica local)
     const eventDate = event.promise?.event_date || event.event_date;
     const fechaEvento = eventDate
@@ -910,18 +963,24 @@ export async function getEventContractData(
     const descuentoExistente = cotizacionAprobada.discount ? Number(cotizacionAprobada.discount) : 0;
     const precioBaseReal = descuentoExistente > 0 ? precioBase + descuentoExistente : precioBase;
     
-    // Priorizar snapshots inmutables de condiciones comerciales sobre la relaci?n
+    // Priorizar snapshots; si faltan (legacy), usar relación viva para no devolver condiciones vacías
     const tieneSnapshots = !!cotizacionAprobada.condiciones_comerciales_name_snapshot;
-    const condiciones = tieneSnapshots ? {
-      name: cotizacionAprobada.condiciones_comerciales_name_snapshot || '',
-      description: cotizacionAprobada.condiciones_comerciales_description_snapshot,
-      discount_percentage: cotizacionAprobada.condiciones_comerciales_discount_percentage_snapshot,
-      advance_percentage: cotizacionAprobada.condiciones_comerciales_advance_percentage_snapshot,
-      advance_type: cotizacionAprobada.condiciones_comerciales_advance_type_snapshot,
-      advance_amount: cotizacionAprobada.condiciones_comerciales_advance_amount_snapshot != null
-        ? Number(cotizacionAprobada.condiciones_comerciales_advance_amount_snapshot)
-        : null,
-    } : cotizacionAprobada.condiciones_comerciales;
+    let condiciones = tieneSnapshots
+      ? {
+          name: cotizacionAprobada.condiciones_comerciales_name_snapshot || '',
+          description: cotizacionAprobada.condiciones_comerciales_description_snapshot,
+          discount_percentage: cotizacionAprobada.condiciones_comerciales_discount_percentage_snapshot,
+          advance_percentage: cotizacionAprobada.condiciones_comerciales_advance_percentage_snapshot,
+          advance_type: cotizacionAprobada.condiciones_comerciales_advance_type_snapshot,
+          advance_amount:
+            cotizacionAprobada.condiciones_comerciales_advance_amount_snapshot != null
+              ? Number(cotizacionAprobada.condiciones_comerciales_advance_amount_snapshot)
+              : null,
+        }
+      : cotizacionAprobada.condiciones_comerciales;
+    if (!condiciones && cotizacionAprobada.condiciones_comerciales) {
+      condiciones = cotizacionAprobada.condiciones_comerciales;
+    }
     
     // Calcular total final y descuento seg?n modo
     let totalFinal: number;
@@ -986,6 +1045,9 @@ export async function getEventContractData(
       };
     }
 
+    // Total final del contrato (después de descuento/negociación) para el bloque de cotización
+    cotizacionData.total = totalFinal;
+
     // Fecha de firma: día calendario en timezone del estudio (coincide con tarjeta del estudio).
     const studioTzEvent = studio.timezone ?? 'America/Mexico_City';
     const todayUtcBuild = (() => {
@@ -1042,6 +1104,7 @@ export async function getEventContractData(
       banco,
       titular,
       clabe,
+      cotizacionData,
       condicionesData,
     };
 
@@ -1056,7 +1119,8 @@ export async function getEventContractData(
 export async function renderContractContent(
   content: string,
   eventData: EventContractData,
-  condicionesData?: CondicionesComercialesData
+  condicionesData?: CondicionesComercialesData,
+  options?: ContractRendererOptions
 ): Promise<ActionResponse<string>> {
   try {
     let rendered = content;
@@ -1135,9 +1199,9 @@ export async function renderContractContent(
       rendered = rendered.replaceAll(key, value);
     });
 
-    // Renderizar bloque de condiciones comerciales
+    // Renderizar bloque de condiciones comerciales (options.isForPdf = true para PDF servidor)
     if (condicionesData) {
-      const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
+      const condicionesHtml = renderCondicionesComercialesBlock(condicionesData, options);
       rendered = rendered.replace("@condiciones_comerciales", condicionesHtml);
       rendered = rendered.replace("{condiciones_comerciales}", condicionesHtml);
     } else {

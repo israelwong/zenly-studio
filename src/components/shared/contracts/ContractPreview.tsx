@@ -3,14 +3,11 @@
 import React from "react";
 import { EventContractData } from "@/types/contracts";
 import { ZenCard, ZenCardContent } from "@/components/ui/zen";
-import { useContractRenderer } from "@/app/[slug]/studio/config/contratos/components/hooks/useContractRenderer";
+import { useContractRenderer } from "./hooks/useContractRenderer";
 import { cn } from "@/lib/utils";
-import type {
-  CotizacionRenderData,
-  CondicionesComercialesData,
-} from "@/app/[slug]/studio/config/contratos/components/types";
+import type { CotizacionRenderData, CondicionesComercialesData } from "./types";
 
-interface ContractPreviewProps {
+export interface ContractPreviewProps {
   content: string;
   eventData?: EventContractData;
   cotizacionData?: CotizacionRenderData;
@@ -22,6 +19,10 @@ interface ContractPreviewProps {
    * Útil para integrar en otros componentes
    */
   noCard?: boolean;
+  /**
+   * Si es true, oculta la nota "Flexibilidad de pago" / liquidación total (p. ej. contrato firmado en portal cliente)
+   */
+  hideFlexibilidadNote?: boolean;
 }
 
 export function ContractPreview({
@@ -32,6 +33,7 @@ export function ContractPreview({
   showVariables = false,
   className = "",
   noCard = false,
+  hideFlexibilidadNote = false,
 }: ContractPreviewProps) {
   const { renderedContent } = useContractRenderer({
     content,
@@ -192,6 +194,24 @@ export function ContractPreview({
           font-weight: 500 !important;
           color: rgb(212 212 216) !important;
           margin-bottom: 0.5rem !important;
+        }
+        ${hideFlexibilidadNote ? ".contract-preview .contract-note-anticipo, .contract-preview .detalles .calculo-total + div { display: none !important; }" : ""}
+        @media print {
+          .contract-preview,
+          .contract-preview * {
+            color: rgb(0, 0, 0) !important;
+          }
+          .contract-preview table,
+          .contract-preview table td,
+          .contract-preview table th,
+          .contract-preview .calculo-total table,
+          .contract-preview .calculo-total td,
+          .contract-preview .calculo-total th {
+            border-color: rgb(161, 161, 170) !important;
+          }
+          .contract-preview .calculo-total tr:last-child td {
+            border-top-color: rgb(0, 0, 0) !important;
+          }
         }
       `}} />
       <div
