@@ -11,6 +11,8 @@ interface ArchivePromiseModalProps {
   title?: string;
   description?: string;
   confirmText?: string;
+  /** Si la promesa tiene recordatorio asociado, se muestra aviso y el botón indica que se eliminará */
+  hasReminder?: boolean;
 }
 
 export function ArchivePromiseModal({
@@ -18,8 +20,9 @@ export function ArchivePromiseModal({
   onClose,
   onConfirm,
   title = 'Archivar promesa',
-  description = 'El motivo se registrará en la bitácora de seguimiento.',
+  description = 'El motivo se registrará en la bitácora de seguimiento de la promesa.',
   confirmText = 'Archivar',
+  hasReminder = false,
 }: ArchivePromiseModalProps) {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,10 +65,15 @@ export function ArchivePromiseModal({
       maxWidth="sm"
     >
       <div className="space-y-4">
+        {hasReminder && (
+          <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+            Se eliminará el recordatorio asociado a esta promesa.
+          </p>
+        )}
         <ZenTextarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="¿Por qué se archiva? (opcional)"
+          placeholder="Motivo (opcional)"
           rows={3}
           className="resize-none"
         />

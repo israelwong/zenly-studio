@@ -48,6 +48,7 @@ interface PromisesKanbanProps {
   onPromiseCreated: () => void;
   onPromiseUpdated: () => void;
   onPromiseMoved: () => void;
+  onPromiseStageChanged?: (promiseId: string, stageId: string, stage: PipelineStage) => void;
   onPipelineStagesUpdated: () => void;
   isPromiseFormModalOpen?: boolean;
   setIsPromiseFormModalOpen?: (open: boolean) => void;
@@ -64,6 +65,7 @@ function PromisesKanban({
   onPromiseCreated,
   onPromiseUpdated,
   onPromiseMoved,
+  onPromiseStageChanged,
   onPipelineStagesUpdated,
   isPromiseFormModalOpen: externalIsOpen,
   setIsPromiseFormModalOpen: externalSetIsOpen,
@@ -728,6 +730,7 @@ function PromisesKanban({
           });
         }
         toast.success('Promesa archivada exitosamente');
+        onPromiseStageChanged?.(promiseId, archivedStage.id, archivedStage);
       }
     } catch (error) {
       console.error('Error archiving promise:', error);
@@ -739,6 +742,52 @@ function PromisesKanban({
             ? { ...p, promise_pipeline_stage_id: originalStageId }
             : p
         )
+      );
+    } finally {
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 100);
+    }
+  };
+
+  const handlePromiseRestored = async (promiseId: string) => {
+    if (!studioSlug) return;
+    isDraggingRef.current = true;
+    const firstActiveStage = visibleStages.find((s) => s.id !== 'historial-virtual');
+    if (!firstActiveStage) {
+      toast.error('No hay etapa activa para restaurar');
+      isDraggingRef.current = false;
+      return;
+    }
+    const promise = localPromises.find((p) => p.promise_id === promiseId);
+    if (!promise?.promise_id) {
+      isDraggingRef.current = false;
+      return;
+    }
+    const previousStageId = promise.promise_pipeline_stage_id;
+    setLocalPromises((prev) =>
+      prev.map((p) =>
+        p.promise_id === promiseId
+          ? { ...p, promise_pipeline_stage_id: firstActiveStage.id, promise_pipeline_stage: firstActiveStage }
+          : p
+      )
+    );
+    try {
+      const result = await movePromise(studioSlug, { promise_id: promiseId, new_stage_id: firstActiveStage.id });
+      if (!result.success) {
+        toast.error(result.error || 'Error al desarchivar');
+        setLocalPromises((prev) =>
+          prev.map((p) => (p.promise_id === promiseId ? { ...p, promise_pipeline_stage_id: previousStageId } : p))
+        );
+      } else {
+        toast.success('Promesa restaurada');
+        onPromiseStageChanged?.(promiseId, firstActiveStage.id, firstActiveStage);
+      }
+    } catch (err) {
+      console.error('Error restoring promise:', err);
+      toast.error('Error al desarchivar');
+      setLocalPromises((prev) =>
+        prev.map((p) => (p.promise_id === promiseId ? { ...p, promise_pipeline_stage_id: previousStageId } : p))
       );
     } finally {
       setTimeout(() => {
@@ -822,6 +871,7 @@ function PromisesKanban({
                 isFlexible={false}
                 onPromiseArchived={handlePromiseArchived}
                 onPromiseDeleted={handlePromiseDeleted}
+                onPromiseRestored={handlePromiseRestored}
                 onPromiseUpdated={onPromiseUpdated}
                 pipelineStages={localPipelineStages}
                 onPipelineStagesUpdated={onPipelineStagesUpdated}
@@ -841,6 +891,7 @@ function PromisesKanban({
                   isFlexible={true}
                   onPromiseArchived={handlePromiseArchived}
                   onPromiseDeleted={handlePromiseDeleted}
+                  onPromiseRestored={handlePromiseRestored}
                   onPromiseUpdated={onPromiseUpdated}
                   pipelineStages={localPipelineStages}
                   onPipelineStagesUpdated={onPipelineStagesUpdated}
@@ -905,6 +956,7 @@ function KanbanColumn({
   isFlexible = false,
   onPromiseArchived,
   onPromiseDeleted,
+  onPromiseRestored,
   onPromiseUpdated,
   pipelineStages = [],
   onPipelineStagesUpdated,
@@ -917,6 +969,7 @@ function KanbanColumn({
   isFlexible?: boolean;
   onPromiseArchived?: (promiseId: string, archiveReason?: string) => void;
   onPromiseDeleted?: (promiseId: string) => void;
+  onPromiseRestored?: (promiseId: string) => void;
   onPromiseUpdated?: () => void;
   pipelineStages?: PipelineStage[];
   onPipelineStagesUpdated?: () => void;
@@ -1311,8 +1364,11 @@ function KanbanColumn({
                 studioSlug={studioSlug}
                 onArchived={(reason) => promise.promise_id && onPromiseArchived?.(promise.promise_id, reason)}
                 onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
+                onRestore={() => promise.promise_id && onPromiseRestored?.(promise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
+                onReminderUpdated={onPromiseUpdated}
                 pipelineStages={pipelineStages}
+                variant={isVirtualHistorial ? 'compact' : 'default'}
               />
             ))}
           </SortableContext>

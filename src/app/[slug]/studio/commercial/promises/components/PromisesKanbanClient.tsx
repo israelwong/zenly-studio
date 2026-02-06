@@ -110,6 +110,16 @@ export function PromisesKanbanClient({
     // La actualización optimista ya maneja el cambio visual
   }, []);
 
+  const handlePromiseStageChanged = useCallback((promiseId: string, stageId: string, stage: PipelineStage) => {
+    setPromises((prev) =>
+      prev.map((p) =>
+        p.promise_id === promiseId
+          ? { ...p, promise_pipeline_stage_id: stageId, promise_pipeline_stage: stage }
+          : p
+      )
+    );
+  }, []);
+
   const handlePipelineStagesUpdated = useCallback(() => {
     // No recargar, los stages vienen del servidor
   }, []);
@@ -124,6 +134,7 @@ export function PromisesKanbanClient({
       onPromiseCreated={handlePromiseCreated}
       onPromiseUpdated={handlePromiseUpdated}
       onPromiseMoved={handlePromiseMoved}
+      onPromiseStageChanged={handlePromiseStageChanged}
       onPipelineStagesUpdated={handlePipelineStagesUpdated}
       isPromiseFormModalOpen={isPromiseFormModalOpen}
       setIsPromiseFormModalOpen={setIsPromiseFormModalOpen}

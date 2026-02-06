@@ -4,16 +4,17 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock } from 'lucide-react';
+import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { ArchivePromiseModal } from './ArchivePromiseModal';
 import { PromiseDeleteModal } from '@/components/shared/promises';
+import { ReminderFormModal } from '@/components/shared/reminders';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
-import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { deleteReminder, type Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { toast } from 'sonner';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
@@ -27,16 +28,22 @@ interface PromiseKanbanCardProps {
     studioSlug?: string;
     onArchived?: (archiveReason?: string) => void;
     onDeleted?: () => void;
+    onRestore?: () => void;
     onTagsUpdated?: () => void;
+    onReminderUpdated?: () => void;
     pipelineStages?: PipelineStage[];
+    variant?: 'default' | 'compact';
 }
 
-export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onTagsUpdated, pipelineStages = [] }: PromiseKanbanCardProps) {
+export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onRestore, onTagsUpdated, onReminderUpdated, pipelineStages = [], variant = 'default' }: PromiseKanbanCardProps) {
     // Crear mapa de nombres de stages para obtener nombres personalizados
     const stageNameMap = pipelineStages.length > 0 ? createStageNameMap(pipelineStages) : null;
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false);
+    const [showDeleteReminderConfirm, setShowDeleteReminderConfirm] = useState(false);
+    const [isDeletingReminder, setIsDeletingReminder] = useState(false);
     // ✅ OPTIMIZACIÓN: Usar reminder que viene en la promesa (ya no se carga por separado)
     const [reminder, setReminder] = useState<Reminder | null>(
       promise.reminder && !promise.reminder.is_completed ? promise.reminder as Reminder : null
@@ -184,8 +191,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         return agenda.type_scheduling === 'virtual' ? 'virtual' : 'presencial';
     };
 
-    // Verificar si la promesa está archivada
+    // Verificar si la promesa está archivada (o en columna Historial)
     const isArchived = promise.promise_pipeline_stage?.slug === 'archived';
+    const isCompact = variant === 'compact' || isArchived;
 
     // Verificar si la etapa es aprobado
     const isApprovedStage = promise.promise_pipeline_stage?.slug === 'approved' || promise.promise_pipeline_stage?.slug === 'aprobado';
@@ -199,9 +207,16 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         setShowArchiveModal(true);
     };
 
-    // Confirmar archivar: el modal unificado pasa el motivo a onArchived; el modal cierra vía onClose
-    const handleConfirmArchive = (archiveReason?: string) => {
+    // Confirmar archivar: eliminar recordatorio si existe, luego notificar onArchived
+    const handleConfirmArchive = async (archiveReason?: string) => {
         if (!promise.promise_id) return;
+        if (reminder?.id && studioSlug) {
+            const result = await deleteReminder(studioSlug, reminder.id);
+            if (result.success) {
+                setReminder(null);
+                onReminderUpdated?.();
+            }
+        }
         onArchived?.(archiveReason);
     };
 
@@ -268,6 +283,27 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     const promiseId = promise.promise_id || promise.id;
     const href = studioSlug ? getPromisePath(studioSlug, promise) : '#';
 
+    const handleDeleteReminder = async () => {
+        if (!reminder || !studioSlug) return;
+        setIsDeletingReminder(true);
+        try {
+            const result = await deleteReminder(studioSlug, reminder.id);
+            if (result.success) {
+                setReminder(null);
+                setShowDeleteReminderConfirm(false);
+                toast.success('Recordatorio eliminado');
+                onReminderUpdated?.();
+            } else {
+                toast.error(result.error || 'Error al eliminar recordatorio');
+            }
+        } catch (error) {
+            console.error('Error eliminando recordatorio:', error);
+            toast.error('Error al eliminar recordatorio');
+        } finally {
+            setIsDeletingReminder(false);
+        }
+    };
+
     // Tinte dinámico: prioridad 1 terminal (getTerminalColor), prioridad 2 primera etiqueta
     const stageSlug = promise.promise_pipeline_stage?.slug;
     const terminalColor = stageSlug && isTerminalStage(stageSlug) ? getTerminalColor(stageSlug) : null;
@@ -278,7 +314,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         ...style,
     };
 
-    const baseClassName = "rounded-lg p-4 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit";
+    const baseClassName = isCompact
+        ? "rounded-lg p-2.5 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit"
+        : "rounded-lg p-4 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit";
 
     if (tagColor) {
         cardStyles.backgroundColor = `${tagColor}14`;
@@ -315,24 +353,61 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 }}
                 suppressHydrationWarning
             >
-                {/* Drag Handle - Esquina superior izquierda */}
-                <div
-                    {...listeners}
-                    data-drag-handle
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="absolute top-2 left-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
-                    title="Arrastrar para mover"
-                >
-                    <GripVertical className="h-4 w-4" />
-                </div>
+                {/* Drag Handle - oculto en compact (Historial) */}
+                {!isCompact && (
+                    <div
+                        {...listeners}
+                        data-drag-handle
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="absolute top-2 left-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
+                        title="Arrastrar para mover"
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </div>
+                )}
 
                 {/* Botones de Acciones - Esquina superior derecha */}
                 {promise.promise_id && studioSlug && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+                        {isArchived && (
+                            <ZenDropdownMenu>
+                                <ZenDropdownMenuTrigger asChild>
+                                    <button
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="p-1 rounded-md bg-zinc-800/60 hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
+                                        title="Opciones"
+                                        suppressHydrationWarning
+                                    >
+                                        <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                </ZenDropdownMenuTrigger>
+                                <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onRestore?.();
+                                        }}
+                                    >
+                                        <ArchiveRestore className="h-4 w-4 mr-2" />
+                                        Desarchivar
+                                    </ZenDropdownMenuItem>
+                                    <ZenDropdownMenuSeparator />
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowDeleteModal(true);
+                                        }}
+                                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Eliminar
+                                    </ZenDropdownMenuItem>
+                                </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
+                        )}
                         {!isArchived && !isClosing && (
                             <>
-                                {/* Si es etapa aprobado, mostrar solo botón archivar */}
                                 {isApprovedStage ? (
                                     <button
                                         onClick={(e) => {
@@ -357,6 +432,40 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                             </button>
                                         </ZenDropdownMenuTrigger>
                                         <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                            {!reminder ? (
+                                                <ZenDropdownMenuItem
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowReminderModal(true);
+                                                    }}
+                                                >
+                                                    <Clock className="h-4 w-4 mr-2" />
+                                                    Crear recordatorio
+                                                </ZenDropdownMenuItem>
+                                            ) : (
+                                                <>
+                                                    <ZenDropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setShowReminderModal(true);
+                                                        }}
+                                                    >
+                                                        <Clock className="h-4 w-4 mr-2" />
+                                                        Actualizar recordatorio
+                                                    </ZenDropdownMenuItem>
+                                                    <ZenDropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setShowDeleteReminderConfirm(true);
+                                                        }}
+                                                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Eliminar recordatorio
+                                                    </ZenDropdownMenuItem>
+                                                </>
+                                            )}
+                                            <ZenDropdownMenuSeparator />
                                             <ZenDropdownMenuItem
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -385,11 +494,10 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                     </div>
                 )}
 
-                <div className="space-y-1.5 relative z-10">
+                <div className={isCompact ? 'space-y-1 relative z-10' : 'space-y-1.5 relative z-10'}>
                     {/* Header: Avatar, Nombre y Tipo evento */}
-                    <div className="flex items-start gap-2 pl-8">
-                        {/* Avatar - solo mostrar si hay imagen o nombre válido */}
-                        {(promise.avatar_url || (promise.name && formatInitials(promise.name))) && (
+                    <div className={`flex items-start gap-2 ${isCompact ? 'pl-2' : 'pl-8'}`}>
+                        {!isCompact && (promise.avatar_url || (promise.name && formatInitials(promise.name))) && (
                             <ZenAvatar className="h-10 w-10 shrink-0">
                                 {promise.avatar_url ? (
                                     <ZenAvatarImage
@@ -403,11 +511,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             </ZenAvatar>
                         )}
 
-                        {/* Información del contacto - Reorganizada */}
                         <div className="flex-1 min-w-0 space-y-1">
-                            {/* Nombre contacto */}
                             <div className="flex items-center gap-2">
-                                <h3 className="font-medium text-white text-sm leading-tight truncate" title={promise.name}>{getDisplayName(promise.name)}</h3>
+                                <h3 className={`font-medium text-white leading-tight truncate ${isCompact ? 'text-xs' : 'text-sm'}`} title={promise.name}>{getDisplayName(promise.name)}</h3>
                                 {/* Badge de prueba */}
                                 {promise.is_test && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-400/30 shrink-0">
@@ -417,45 +523,70 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 )}
                             </div>
 
-                            {/* Tipo evento */}
-                            {promise.event_type && (
+                            {promise.event_type && !isCompact && (
                                 <div className="text-xs text-zinc-400">
                                     <span className="truncate">{promise.event_type.name}</span>
+                                </div>
+                            )}
+                            {isCompact && (promise.event_type || eventDate) && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 truncate min-w-0">
+                                    {promise.event_type && <span className="shrink-0 truncate">{promise.event_type.name}</span>}
+                                    {promise.event_type && eventDate && <span className="shrink-0 opacity-60">·</span>}
+                                    {eventDate && (
+                                        <span className={getDateColor()}>
+                                            <Calendar className="h-2.5 w-2.5 inline-block align-middle mr-0.5" />
+                                            {formatDisplayDateShort(eventDate)}
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Línea separadora sutil */}
-                    <div className="border-t border-zinc-700/30 pt-1.5"></div>
+                    {!isCompact && <div className="border-t border-zinc-700/30 pt-1.5" />}
 
-                    {/* Fecha de evento - Separada debajo */}
-                    {eventDate ? (
+                    {!isCompact && eventDate ? (
                         <div className={`flex items-center gap-1.5 text-xs ${getDateColor()}`}>
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span className="font-medium">
                                 {formatDisplayDateShort(eventDate)}
-                                {daysRemaining !== null && (
-                                    <span className="ml-1.5 font-normal opacity-80">
-                                        {isExpired
-                                            ? `(Hace ${Math.abs(daysRemaining)} ${Math.abs(daysRemaining) === 1 ? 'día' : 'días'})`
-                                            : `(Faltan ${daysRemaining} ${daysRemaining === 1 ? 'día' : 'días'})`
-                                        }
-                                    </span>
-                                )}
+                                {daysRemaining !== null && (() => {
+                                    const d = Math.abs(daysRemaining);
+                                    const labelPast = d === 1 ? 'día' : 'días';
+                                    const labelFuture = daysRemaining === 1 ? 'día' : 'días';
+                                    return (
+                                        <span className="ml-1.5 font-normal opacity-80">
+                                            {isExpired ? `(Hace ${d} ${labelPast})` : `(Faltan ${daysRemaining} ${labelFuture})`}
+                                        </span>
+                                    );
+                                })()}
                             </span>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-1.5">
-                            <ZenBadge variant="destructive" className="text-[10px] px-1.5 py-0.5 gap-1">
-                                <Calendar className="h-2.5 w-2.5" />
-                                Fecha no definida
+                        !isCompact && (
+                            <div className="flex items-center gap-1.5">
+                                <ZenBadge variant="destructive" className="text-[10px] px-1.5 py-0.5 gap-1">
+                                    <Calendar className="h-2.5 w-2.5" />
+                                    Fecha no definida
+                                </ZenBadge>
+                            </div>
+                        )
+                    )}
+
+                    {isCompact && reminder && (
+                        <div className="flex items-center gap-1">
+                            <ZenBadge
+                                variant={new Date(reminder.reminder_date) < new Date() ? 'destructive' : 'warning'}
+                                className="text-[9px] px-1 py-0.5 gap-0.5"
+                            >
+                                <Clock className="h-2 w-2" />
+                                <span className="truncate max-w-[80px]">{reminder.subject_text}</span>
                             </ZenBadge>
                         </div>
                     )}
 
-                    {/* Detalles - Mostrados directamente debajo de la fecha */}
-                    {(promise.offer || finalAgendamiento || promise.updated_at || promise.last_log) && (
+                    {/* Detalles - ocultos en compact */}
+                    {!isCompact && (promise.offer || finalAgendamiento || promise.updated_at || promise.last_log) && (
                         <div className="space-y-1.5">
                             {/* Badge de procedencia */}
                             {promise.offer ? (
@@ -548,7 +679,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 </div>
                             )}
 
-                            {/* Badge de recordatorio */}
                             {reminder && (
                                 <div className="mt-1">
                                     <ZenBadge
@@ -578,9 +708,43 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 isOpen={showArchiveModal}
                 onClose={() => setShowArchiveModal(false)}
                 onConfirm={handleConfirmArchive}
+                hasReminder={!!reminder}
             />
 
-            {/* Modal de confirmación eliminar - fuera del contenedor clickeable */}
+            {promiseId && studioSlug && showReminderModal && (
+                <ReminderFormModal
+                    isOpen={showReminderModal}
+                    onClose={() => setShowReminderModal(false)}
+                    studioSlug={studioSlug}
+                    promiseId={promiseId}
+                    existingReminder={reminder ?? undefined}
+                    onSuccess={(r) => {
+                        setReminder(r);
+                        setShowReminderModal(false);
+                        onReminderUpdated?.();
+                    }}
+                    onDeleted={() => {
+                        setReminder(null);
+                        setShowReminderModal(false);
+                        onReminderUpdated?.();
+                    }}
+                />
+            )}
+
+            {reminder && (
+                <ZenConfirmModal
+                    isOpen={showDeleteReminderConfirm}
+                    onClose={() => setShowDeleteReminderConfirm(false)}
+                    onConfirm={handleDeleteReminder}
+                    title="Eliminar recordatorio"
+                    description="¿Eliminar este recordatorio? No se puede deshacer."
+                    confirmText="Eliminar"
+                    cancelText="Cancelar"
+                    variant="destructive"
+                    loading={isDeletingReminder}
+                />
+            )}
+
             {promise.promise_id && studioSlug && (
                 <PromiseDeleteModal
                     isOpen={showDeleteModal}

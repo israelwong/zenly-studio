@@ -895,6 +895,7 @@ export function PromiseQuotesPanel({
                           Archivar
                         </ZenDropdownMenuItem>
                       )}
+                      <ZenDropdownMenuSeparator />
                       <ZenDropdownMenuItem
                         onClick={handleBulkDelete}
                         disabled={isBulkActionLoading}
