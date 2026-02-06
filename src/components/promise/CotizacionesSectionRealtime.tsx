@@ -55,6 +55,8 @@ interface CotizacionesSectionRealtimeProps {
     event_date: Date | null;
     event_type_name: string | null;
   };
+  /** true cuando la fecha ya alcanzó cupo (deshabilitar Confirmar reserva) */
+  dateSoldOut?: boolean;
 }
 
 export function CotizacionesSectionRealtime({
@@ -74,6 +76,7 @@ export function CotizacionesSectionRealtime({
   autoGenerateContract = false,
   durationHours,
   promiseData,
+  dateSoldOut = false,
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [isPending, startTransition] = useTransition();
@@ -204,6 +207,7 @@ export function CotizacionesSectionRealtime({
         recentlyUpdated={recentlyUpdated}
         durationHours={durationHours}
         promiseData={promiseData}
+        dateSoldOut={dateSoldOut}
       />
       {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
       {/* ⚠️ Notificaciones deshabilitadas para evitar conflictos con redirección */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
@@ -126,11 +127,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
         }
 
         if (!result.success) {
-          setProgressError(result.error || 'Error al enviar solicitud');
+          const isDateOccupied = result.error === 'DATE_OCCUPIED';
+          const message = isDateOccupied
+            ? 'Lo sentimos, esta fecha ya fue reservada por otro cliente. Agradecemos tu interés y te invitamos a contactarnos para elegir otra fecha.'
+            : (result.error || 'Error al enviar solicitud');
+          setProgressError(message);
           setProgressStep('error');
           setIsAuthorizationInProgress(false);
           (window as any).__IS_AUTHORIZING = false;
           setAuthorizationData(null);
+          if (isDateOccupied) {
+            toast.error(message, { duration: 6000 });
+          }
           isProcessing = false;
           return;
         }

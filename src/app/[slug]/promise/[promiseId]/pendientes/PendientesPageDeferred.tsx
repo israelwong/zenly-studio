@@ -130,6 +130,7 @@ interface PendientesPageDeferredProps {
   };
   studioSlug: string;
   promiseId: string;
+  dateSoldOut?: boolean;
 }
 
 /**
@@ -143,6 +144,7 @@ export function PendientesPageDeferred({
   basicPromise,
   studioSlug,
   promiseId,
+  dateSoldOut = false,
 }: PendientesPageDeferredProps) {
   return (
     <>
@@ -164,6 +166,7 @@ export function PendientesPageDeferred({
           basicPromise={basicPromise}
           studioSlug={studioSlug}
           promiseId={promiseId}
+          dateSoldOut={dateSoldOut}
         />
       </Suspense>
 

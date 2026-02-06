@@ -94,3 +94,37 @@ export async function notifyEventCancelled(
   });
 }
 
+/**
+ * Notifica al estudio que hay promesas afectadas (misma fecha) tras un booking exitoso.
+ * El estudio puede usar la lista para enviar "Fecha ya no disponible" a esos prospectos.
+ */
+export async function notifyCapacityAffectedPromises(
+  studioId: string,
+  eventId: string,
+  eventName: string,
+  affectedPromiseIds: Array<{ id: string }>
+) {
+  if (affectedPromiseIds.length === 0) return;
+  const studio = await prisma.studios.findUnique({
+    where: { id: studioId },
+    select: { slug: true },
+  });
+  const count = affectedPromiseIds.length;
+  return createStudioNotification({
+    scope: StudioNotificationScope.STUDIO,
+    type: StudioNotificationType.CAPACITY_AFFECTED_PROMISES,
+    studio_id: studioId,
+    title: 'Promesas afectadas por capacidad',
+    message: `Se reservó "${eventName}". ${count} promesa${count === 1 ? '' : 's'} con la misma fecha ${count === 1 ? 'queda' : 'quedan'} sin slot. Revisa si enviar "Fecha no disponible".`,
+    category: 'events',
+    priority: NotificationPriority.MEDIUM,
+    route: '/{slug}/studio/commercial/promises',
+    route_params: { slug: studio?.slug },
+    metadata: {
+      event_name: eventName,
+      affected_promise_ids: affectedPromiseIds.map((p) => p.id),
+    },
+    event_id: eventId,
+  });
+}
+

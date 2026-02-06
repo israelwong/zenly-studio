@@ -8,6 +8,7 @@ import { getPromiseShareSettings } from "@/lib/actions/studio/commercial/promise
 import { getDefaultContractTemplate, createDefaultTemplateForStudio } from "@/lib/actions/studio/business/contracts/templates.actions";
 import { getPromiseContractData } from "@/lib/actions/studio/business/contracts/renderer.actions";
 import { renderContractContent } from "@/lib/actions/studio/business/contracts/renderer.actions";
+import { getPublicDateAvailability } from "./promesas.actions";
 
 /**
  * Pre-autorizar cotización desde página pública
@@ -77,6 +78,15 @@ export async function autorizarCotizacionPublica(
       return {
         success: false,
         error: "Cotización no encontrada o no disponible",
+      };
+    }
+
+    // 1.5. Comprobar disponibilidad de la fecha (max_events_per_day) antes de continuar
+    const dateAvailability = await getPublicDateAvailability(studioSlug, promiseId);
+    if (dateAvailability.success && dateAvailability.available === false) {
+      return {
+        success: false,
+        error: "DATE_OCCUPIED",
       };
     }
 

@@ -14,6 +14,7 @@ import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/co
 import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
 import { calculatePackagePrice } from "@/lib/utils/package-price-engine";
 import { calculateCotizacionTotals } from "@/lib/utils/cotizacion-calculation-engine";
+import { checkDateConflict } from "@/lib/utils/booking-conflict";
 import type { PipelineStage } from "@/lib/actions/schemas/promises-schemas";
 
 /**
@@ -5570,6 +5571,51 @@ export async function getPublicPromiseBasicData(
       success: false,
       error: "Error al obtener datos básicos de promesa",
     };
+  }
+}
+
+/**
+ * Comprueba si la fecha del evento de la promesa sigue disponible (max_events_per_day).
+ * Usado en la página pública pendientes para mostrar "Agotado" y deshabilitar Confirmar reserva.
+ */
+export async function getPublicDateAvailability(
+  studioSlug: string,
+  promiseId: string
+): Promise<{ success: boolean; available?: boolean; isFull?: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: { id: promiseId, studio_id: studio.id },
+      select: { event_date: true },
+    });
+    if (!promise) return { success: false, error: 'Promesa no encontrada' };
+
+    if (!promise.event_date) {
+      return { success: true, available: true, isFull: false };
+    }
+
+    const dateOnly = promise.event_date instanceof Date
+      ? promise.event_date
+      : new Date(promise.event_date);
+    const normalized = new Date(Date.UTC(
+      dateOnly.getUTCFullYear(),
+      dateOnly.getUTCMonth(),
+      dateOnly.getUTCDate(),
+      12, 0, 0
+    ));
+
+    const result = await checkDateConflict(studio.id, normalized);
+    if (!result.success) return { success: false, error: result.error };
+    const isFull = result.data?.isFull ?? false;
+    return { success: true, available: !isFull, isFull };
+  } catch (error) {
+    console.error('[getPublicDateAvailability] Error:', error);
+    return { success: false, error: 'Error al comprobar disponibilidad' };
   }
 }
 

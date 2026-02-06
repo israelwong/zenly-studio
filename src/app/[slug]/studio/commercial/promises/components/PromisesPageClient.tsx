@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { UserSearch, Plus, AlertTriangle, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { UserSearch, Plus, AlertTriangle, Trash2, Zap } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import { PromisesKanbanClient } from './PromisesKanbanClient';
+import { PromiseShareOptionsModal } from '../[promiseId]/components/PromiseShareOptionsModal';
 import { deleteTestPromises, getTestPromisesCount } from '@/lib/actions/studio/commercial/promises/promises.actions';
 import { toast } from 'sonner';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -23,11 +25,13 @@ export function PromisesPageClient({
   initialPipelineStages,
   initialUserId,
 }: PromisesPageClientProps) {
+  const router = useRouter();
   const openPromiseFormRef = useRef<(() => void) | null>(null);
   const removeTestPromisesRef = useRef<(() => void) | null>(null);
   const [testPromisesCount, setTestPromisesCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showGlobalSettingsModal, setShowGlobalSettingsModal] = useState(false);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Promesas';
@@ -93,8 +97,17 @@ export function PromisesPageClient({
                 </ZenCardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ZenButton onClick={handleOpenPromiseForm}>
+            <div className="flex items-center gap-1">
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowGlobalSettingsModal(true)}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                Opciones de automatización
+              </ZenButton>
+              <span className="h-5 w-px bg-zinc-700 mx-4 shrink-0" aria-hidden />
+              <ZenButton size="sm" onClick={handleOpenPromiseForm}>
                 <Plus className="h-4 w-4 mr-2" />
                 Registrar Promesa
               </ZenButton>
@@ -156,6 +169,14 @@ export function PromisesPageClient({
         cancelText="Cancelar"
         variant="destructive"
         disabled={isDeleting}
+      />
+
+      <PromiseShareOptionsModal
+        isOpen={showGlobalSettingsModal}
+        onClose={() => setShowGlobalSettingsModal(false)}
+        studioSlug={studioSlug}
+        scope="global"
+        onSuccess={() => router.refresh()}
       />
     </div>
   );

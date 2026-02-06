@@ -54,6 +54,7 @@ interface CotizacionesSectionProps {
     event_date: Date | null;
     event_type_name: string | null;
   };
+  dateSoldOut?: boolean;
 }
 
 export function CotizacionesSection({
@@ -74,6 +75,7 @@ export function CotizacionesSection({
   recentlyUpdated = new Set(),
   durationHours,
   promiseData,
+  dateSoldOut = false,
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -245,6 +247,7 @@ export function CotizacionesSection({
           paquetes={paquetes}
           autoGenerateContract={autoGenerateContract}
           promiseData={promiseData}
+          dateSoldOut={dateSoldOut}
         />
       )}
     </>

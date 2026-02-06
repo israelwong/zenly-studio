@@ -99,6 +99,7 @@ interface ActiveQuoteSectionProps {
   };
   studioSlug: string;
   promiseId: string;
+  dateSoldOut?: boolean;
 }
 
 /**
@@ -109,6 +110,7 @@ export function ActiveQuoteSection({
   basicPromise,
   studioSlug,
   promiseId,
+  dateSoldOut = false,
 }: ActiveQuoteSectionProps) {
   const result = use(activeQuotePromise);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -170,6 +172,7 @@ export function ActiveQuoteSection({
           paquetes={[]} // Paquetes se cargan después
           autoGenerateContract={share_settings.auto_generate_contract}
           durationHours={promise.duration_hours ?? null}
+          dateSoldOut={dateSoldOut}
           promiseData={{
             contact_name: promise.contact_name,
             contact_phone: promise.contact_phone,

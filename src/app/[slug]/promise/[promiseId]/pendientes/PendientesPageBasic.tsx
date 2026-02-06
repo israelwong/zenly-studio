@@ -1,3 +1,4 @@
+import { CalendarX2 } from 'lucide-react';
 import { PublicPromisePageHeader } from '@/components/promise/PublicPromisePageHeader';
 import { PromiseRouteSync } from '@/components/promise/PromiseRouteSync';
 
@@ -38,6 +39,8 @@ interface PendientesPageBasicProps {
   };
   studioSlug: string;
   promiseId: string;
+  /** true cuando la fecha del evento ya alcanzó max_events_per_day (mostrar Agotado) */
+  dateSoldOut?: boolean;
 }
 
 /**
@@ -49,10 +52,21 @@ export function PendientesPageBasic({
   studio,
   studioSlug,
   promiseId,
+  dateSoldOut = false,
 }: PendientesPageBasicProps) {
   return (
     <>
       <PromiseRouteSync studioSlug={studioSlug} promiseId={promiseId} />
+      {dateSoldOut && (
+        <div className="mx-4 mt-6 max-w-2xl rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-8 flex flex-col items-center gap-4 text-center">
+          <div className="p-3 rounded-full bg-amber-500/10">
+            <CalendarX2 className="h-8 w-8 text-amber-400" />
+          </div>
+          <p className="text-base md:text-lg text-zinc-200 leading-relaxed">
+            Lo sentimos, la fecha que buscas ya ha sido reservada por otro cliente. Agradecemos tu preferencia y esperamos poder trabajar contigo más adelante. ¡Mil gracias por la comprensión!
+          </p>
+        </div>
+      )}
       <PublicPromisePageHeader
         prospectName={promise.contact_name}
         eventName={promise.event_name}

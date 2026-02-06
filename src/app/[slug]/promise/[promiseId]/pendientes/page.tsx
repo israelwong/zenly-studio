@@ -2,12 +2,13 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
-import { getPublicPromiseActiveQuote, getPublicPromiseAvailablePackages, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData } from '@/lib/actions/public/promesas.actions';
+import { getPublicPromiseActiveQuote, getPublicPromiseAvailablePackages, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData, getPublicDateAvailability } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PendientesPageSkeleton } from '@/components/promise/PendientesPageSkeleton';
 import { PendientesPageBasic } from './PendientesPageBasic';
 import { PendientesPageDeferred } from './PendientesPageDeferred';
 import { ProgressOverlayWrapper } from './ProgressOverlayWrapper';
+import { PromiseContactBlock } from '@/components/promise/PromiseContactBlock';
 
 // ⚠️ FORCE-DYNAMIC: Evitar caché estático en página de validación
 export const dynamic = 'force-dynamic';
@@ -77,32 +78,49 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
     event_location: promiseRaw.event_location,
   };
 
+  // Disponibilidad de la fecha (max_events_per_day) para mostrar "Agotado" y deshabilitar Confirmar reserva
+  const dateAvailability = await getPublicDateAvailability(slug, promiseId).catch(() => ({ success: true, available: true, isFull: false }));
+  const dateSoldOut = dateAvailability.success && dateAvailability.isFull === true;
+
   // ⚠️ TAREA 2: Fragmentación - Disparar ambas promesas sin await
   const activeQuotePromise = getPublicPromiseActiveQuote(slug, promiseId);
   const availablePackagesPromise = getPublicPromiseAvailablePackages(slug, promiseId);
 
   return (
     <>
-      {/* Overlay de progreso - renderizado a nivel root para máxima visibilidad */}
-      {/* ⚠️ ARCHITECTURE FIX: Provider moved to layout, wrapper stays in page */}
       <ProgressOverlayWrapper studioSlug={slug} promiseId={promiseId} />
-      
-      {/* ⚠️ STREAMING: Parte A - Instantánea (datos básicos) */}
+
       <PendientesPageBasic
         promise={promiseBasic}
         studio={studioBasic}
         studioSlug={slug}
         promiseId={promiseId}
+        dateSoldOut={dateSoldOut}
       />
-      
-      {/* ⚠️ TAREA 2: Parte B - Deferred (cotización activa + paquetes con doble Suspense) */}
-      <PendientesPageDeferred
-        activeQuotePromise={activeQuotePromise}
-        availablePackagesPromise={availablePackagesPromise}
-        basicPromise={{ promise: promiseBasic, studio: studioBasic }}
-        studioSlug={slug}
-        promiseId={promiseId}
-      />
+
+      {dateSoldOut ? (
+        /* Fecha ocupada: solo banner de cortesía + contacto (sin cotizaciones ni pago) */
+        <PromiseContactBlock
+          studio={{
+            studio_name: studioBasic.studio_name,
+            logo_url: studioBasic.logo_url,
+            phone: studioBasic.phone,
+            business_hours_text: studioBasic.business_hours_text ?? undefined,
+            contact_phones: studioBasic.contact_phones,
+          }}
+          showDividerTop
+          showDividerBottom
+        />
+      ) : (
+        <PendientesPageDeferred
+          activeQuotePromise={activeQuotePromise}
+          availablePackagesPromise={availablePackagesPromise}
+          basicPromise={{ promise: promiseBasic, studio: studioBasic }}
+          studioSlug={slug}
+          promiseId={promiseId}
+          dateSoldOut={false}
+        />
+      )}
     </>
   );
 }

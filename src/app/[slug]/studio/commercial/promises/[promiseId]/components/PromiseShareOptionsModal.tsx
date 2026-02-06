@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Package } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
-import { getPromiseShareSettings, updatePromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import {
+  getPromiseShareSettings,
+  getStudioShareDefaults,
+  updatePromiseShareSettings,
+  updateStudioGlobalSettings,
+} from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +16,10 @@ interface PromiseShareOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   studioSlug: string;
-  promiseId: string;
+  /** Requerido cuando scope === 'single' */
+  promiseId?: string;
+  /** global = configuración del estudio (Kanban); single = esta promesa (detalle) */
+  scope?: 'global' | 'single';
   /** Llamado tras guardar (esta promesa o global) para refrescar la vista */
   onSuccess?: () => void;
 }
@@ -21,6 +29,7 @@ export function PromiseShareOptionsModal({
   onClose,
   studioSlug,
   promiseId,
+  scope = 'single',
   onSuccess,
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
@@ -32,7 +41,7 @@ export function PromiseShareOptionsModal({
   const [showCategoriesSubtotals, setShowCategoriesSubtotals] = useState(false);
   const [showItemsPrices, setShowItemsPrices] = useState(false);
   const [minDaysToHire, setMinDaysToHire] = useState(30);
-  const [showStandardConditions, setShowStandardConditions] = useState(true); // Siempre true, no modificable
+  const [showStandardConditions, setShowStandardConditions] = useState(true);
   const [showOfferConditions, setShowOfferConditions] = useState(false);
   const [showPortafolios, setShowPortafolios] = useState(true);
   const [autoGenerateContract, setAutoGenerateContract] = useState(false);
@@ -40,31 +49,65 @@ export function PromiseShareOptionsModal({
   const [roundingMode, setRoundingMode] = useState<'exact' | 'charm'>('charm');
   const [weContactYou, setWeContactYou] = useState(false);
   const [sendToContractProcess, setSendToContractProcess] = useState(false);
-  const [showMinDaysToHire, setShowMinDaysToHire] = useState(true); // Activo por defecto
+  const [showMinDaysToHire, setShowMinDaysToHire] = useState(true);
   const [showConfirmSensitiveModal, setShowConfirmSensitiveModal] = useState(false);
   const [pendingSensitiveOption, setPendingSensitiveOption] = useState<'subtotals' | 'prices' | null>(null);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
   const [pendingSaveScope, setPendingSaveScope] = useState<'all' | 'single' | null>(null);
-  /** Ámbito del guardado: solo esta promesa (remember_preferences: false) o todas (true) */
   const [saveScope, setSaveScope] = useState<'single' | 'all'>('single');
+  const [maxEventsPerDay, setMaxEventsPerDay] = useState(1);
+
+  const isGlobal = scope === 'global';
 
   useEffect(() => {
-    if (isOpen && promiseId) {
-      loadSettings();
-    } else if (!isOpen) {
-      // Resetear estados cuando el modal se cierra
+    if (!isOpen) {
       setLoading(false);
       setSaving(false);
+      return;
     }
-  }, [isOpen, promiseId]);
+    if (isGlobal) {
+      loadGlobalSettings();
+    } else if (promiseId) {
+      loadSettings();
+    }
+  }, [isOpen, promiseId, scope]);
+
+  const loadGlobalSettings = async () => {
+    setLoading(true);
+    try {
+      const result = await getStudioShareDefaults(studioSlug);
+      if (result.success && result.data) {
+        const d = result.data;
+        setShowPackages(d.show_packages);
+        setShowCategoriesSubtotals(d.show_categories_subtotals);
+        setShowItemsPrices(d.show_items_prices);
+        setMinDaysToHire(d.min_days_to_hire);
+        setShowStandardConditions(d.show_standard_conditions ?? true);
+        setShowOfferConditions(d.show_offer_conditions ?? false);
+        setShowPortafolios(d.portafolios ?? true);
+        setAutoGenerateContract(d.auto_generate_contract ?? false);
+        setAllowRecalc(d.allow_recalc ?? true);
+        setRoundingMode(d.rounding_mode === 'exact' ? 'exact' : 'charm');
+        setMaxEventsPerDay(Math.max(1, d.max_events_per_day ?? 1));
+      } else {
+        toast.error(result.error || 'Error al cargar configuración');
+      }
+    } catch (error) {
+      console.error('Error loading global settings:', error);
+      toast.error('Error al cargar configuración');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadSettings = async () => {
+    if (!promiseId) return;
     setLoading(true);
     try {
       const result = await getPromiseShareSettings(studioSlug, promiseId);
       if (result.success && result.data) {
         setHasCotizacion(result.data.has_cotizacion);
-        setHasOverride(!result.data.remember_preferences); // true si tiene override específico
+        setHasOverride(!result.data.remember_preferences);
         setShowPackages(result.data.show_packages);
         setShowCategoriesSubtotals(result.data.show_categories_subtotals);
         setShowItemsPrices(result.data.show_items_prices);
@@ -116,50 +159,75 @@ export function PromiseShareOptionsModal({
       toast.error('El mínimo de días debe ser mayor a 0');
       return;
     }
+    if (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay))) {
+      toast.error('Capacidad operativa debe ser al menos 1');
+      return;
+    }
 
-    // Si hay opciones sensibles activadas, mostrar confirmación adicional
-    if (showCategoriesSubtotals || showItemsPrices) {
+    if (!isGlobal && (showCategoriesSubtotals || showItemsPrices)) {
       setPendingSaveScope(rememberPreferences ? 'all' : 'single');
       setShowSaveConfirmModal(true);
       return;
     }
 
-    // Si no hay opciones sensibles, guardar directamente
     await performSave(rememberPreferences);
   };
 
   const performSave = async (rememberPreferences: boolean) => {
     setSaving(true);
-    setSavingScope(rememberPreferences ? 'all' : 'single');
+    if (!isGlobal) setSavingScope(rememberPreferences ? 'all' : 'single');
     try {
-      const result = await updatePromiseShareSettings(studioSlug, promiseId, {
-        show_packages: showPackages,
-        show_categories_subtotals: showCategoriesSubtotals,
-        show_items_prices: showItemsPrices,
-        min_days_to_hire: minDaysToHire,
-        show_standard_conditions: showStandardConditions,
-        show_offer_conditions: showOfferConditions,
-        portafolios: showPortafolios,
-        auto_generate_contract: autoGenerateContract,
-        allow_recalc: allowRecalc,
-        rounding_mode: roundingMode,
-        remember_preferences: rememberPreferences,
-      });
-
-      if (result.success) {
-        if (rememberPreferences) {
-          toast.success('Preferencias guardadas para todas las promesas');
+      if (isGlobal) {
+        const maxEvents = Math.max(1, maxEventsPerDay);
+        const result = await updateStudioGlobalSettings(studioSlug, {
+          show_packages: showPackages,
+          show_categories_subtotals: showCategoriesSubtotals,
+          show_items_prices: showItemsPrices,
+          min_days_to_hire: minDaysToHire,
+          show_standard_conditions: showStandardConditions,
+          show_offer_conditions: showOfferConditions,
+          portafolios: showPortafolios,
+          auto_generate_contract: autoGenerateContract,
+          allow_recalc: allowRecalc,
+          rounding_mode: roundingMode,
+          max_events_per_day: maxEvents,
+        });
+        if (result.success) {
+          toast.success('Configuración del estudio guardada');
+          onSuccess?.();
+          onClose();
         } else {
-          toast.success('Preferencias guardadas solo para esta promesa');
+          toast.error(result.error || 'Error al guardar configuración');
         }
-        onSuccess?.();
-        onClose();
-      } else {
-        toast.error(result.error || 'Error al guardar preferencias');
+      } else if (promiseId) {
+        const result = await updatePromiseShareSettings(studioSlug, promiseId, {
+          show_packages: showPackages,
+          show_categories_subtotals: showCategoriesSubtotals,
+          show_items_prices: showItemsPrices,
+          min_days_to_hire: minDaysToHire,
+          show_standard_conditions: showStandardConditions,
+          show_offer_conditions: showOfferConditions,
+          portafolios: showPortafolios,
+          auto_generate_contract: autoGenerateContract,
+          allow_recalc: allowRecalc,
+          rounding_mode: roundingMode,
+          remember_preferences: rememberPreferences,
+        });
+        if (result.success) {
+          if (rememberPreferences) {
+            toast.success('Preferencias guardadas para todas las promesas');
+          } else {
+            toast.success('Preferencias guardadas solo para esta promesa');
+          }
+          onSuccess?.();
+          onClose();
+        } else {
+          toast.error(result.error || 'Error al guardar preferencias');
+        }
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Error al guardar preferencias');
+      toast.error(isGlobal ? 'Error al guardar configuración' : 'Error al guardar preferencias');
     } finally {
       setSaving(false);
       setSavingScope(null);
@@ -188,46 +256,52 @@ export function PromiseShareOptionsModal({
       onCancel={onClose}
       footerLeftContent={
         <div className="flex flex-col gap-3 w-full min-w-0">
-          <div
-            className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900/50 p-0.5"
-            role="group"
-            aria-label="Ámbito de guardado"
-          >
-            <button
-              type="button"
-              onClick={() => setSaveScope('single')}
-              disabled={saving}
-              className={cn(
-                'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
-                saveScope === 'single'
-                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-300'
-              )}
+          {!isGlobal && (
+            <div
+              className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900/50 p-0.5"
+              role="group"
+              aria-label="Ámbito de guardado"
             >
-              Solo esta promesa
-            </button>
-            <button
-              type="button"
-              onClick={() => setSaveScope('all')}
-              disabled={saving}
-              className={cn(
-                'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
-                saveScope === 'all'
-                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-300'
-              )}
-            >
-              Todas las promesas
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setSaveScope('single')}
+                disabled={saving}
+                className={cn(
+                  'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
+                  saveScope === 'single'
+                    ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-300'
+                )}
+              >
+                Solo esta promesa
+              </button>
+              <button
+                type="button"
+                onClick={() => setSaveScope('all')}
+                disabled={saving}
+                className={cn(
+                  'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
+                  saveScope === 'all'
+                    ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-300'
+                )}
+              >
+                Todas las promesas
+              </button>
+            </div>
+          )}
           <ZenButton
             type="button"
             variant="primary"
             size="sm"
             className="w-full"
-            onClick={() => handleSave(saveScope === 'all')}
+            onClick={() => handleSave(isGlobal ? true : saveScope === 'all')}
             loading={saving}
-            disabled={minDaysToHire < 1 || saving}
+            disabled={
+              minDaysToHire < 1 ||
+              saving ||
+              (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)))
+            }
           >
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </ZenButton>
@@ -309,8 +383,42 @@ export function PromiseShareOptionsModal({
           </div>
         ) : (
           <>
-            {/* Badge si tiene configuración personalizada */}
-            {hasOverride && (
+            {/* Capacidad Operativa (solo scope global) */}
+            {isGlobal && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-zinc-200">Capacidad Operativa</h3>
+                <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-zinc-200">
+                      Eventos máximos por día
+                    </label>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Límite de eventos que se pueden agendar por día para evitar sobrecupo
+                    </p>
+                  </div>
+                  <div className="w-24 shrink-0">
+                    <ZenInput
+                      type="number"
+                      min={1}
+                      value={maxEventsPerDay.toString()}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(value) && value >= 1) setMaxEventsPerDay(value);
+                        else if (e.target.value === '') setMaxEventsPerDay(1);
+                      }}
+                      onBlur={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        if (Number.isNaN(value) || value < 1) setMaxEventsPerDay(1);
+                      }}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Badge si tiene configuración personalizada (solo single) */}
+            {!isGlobal && hasOverride && (
               <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-amber-500" />
                 <span className="text-sm text-amber-400 font-medium">

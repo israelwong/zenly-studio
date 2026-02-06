@@ -979,7 +979,6 @@ export function EventFormModal({
             cancelLabel="Cancelar"
             isLoading={loading}
             zIndex={zIndex}
-            allowOverflow={true}
         >
             {isInitialLoading && !initialData ? (
                 <div className="space-y-4">

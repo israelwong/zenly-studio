@@ -37,6 +37,8 @@ export enum StudioNotificationType {
   CLIENT_PROFILE_UPDATED = 'CLIENT_PROFILE_UPDATED',
   CLIENT_EVENT_INFO_UPDATED = 'CLIENT_EVENT_INFO_UPDATED',
   CONTRACT_SIGNED = 'CONTRACT_SIGNED',
+  /** Fecha del evento ocupada: otras promesas con la misma fecha quedan afectadas (candidatas a "Fecha no disponible") */
+  CAPACITY_AFFECTED_PROMISES = 'CAPACITY_AFFECTED_PROMISES',
 }
 
 export enum NotificationPriority {

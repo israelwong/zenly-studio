@@ -67,6 +67,7 @@ interface CotizacionDetailSheetProps {
     event_date: Date | null;
     event_type_name: string | null;
   };
+  dateSoldOut?: boolean;
 }
 
 export function CotizacionDetailSheet({
@@ -85,6 +86,7 @@ export function CotizacionDetailSheet({
   paquetes = [],
   autoGenerateContract = false,
   promiseData,
+  dateSoldOut = false,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -618,6 +620,7 @@ export function CotizacionDetailSheet({
           promiseId={promiseId}
           studioSlug={studioSlug}
           promiseData={promiseData}
+          dateSoldOut={dateSoldOut}
           condicionesComercialesId={
             // Si está en negociación, usar la condición comercial definida
             currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id

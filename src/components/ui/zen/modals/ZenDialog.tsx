@@ -138,10 +138,10 @@ export function ZenDialog({
       {/* Contenido del modal - encima del overlay */}
       <div
         className={cn(
-          'shadow-xl w-full flex flex-col relative',
+          'shadow-xl w-full flex flex-col relative min-h-0',
           fullScreen
             ? 'h-screen rounded-none'
-            : 'rounded-lg max-h-[90vh]',
+            : 'rounded-lg max-h-[90vh] overflow-hidden',
           title ? 'bg-zinc-900' : 'bg-zinc-950/50 backdrop-blur-md border border-zinc-800/50',
           !fullScreen && maxWidthClasses[maxWidth]
         )}

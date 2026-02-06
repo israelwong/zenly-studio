@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { flushSync } from 'react-dom';
-import { CheckCircle2, ChevronRight, Check, Shield } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Check, Shield, CalendarX2 } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import {
   Dialog,
@@ -56,6 +56,8 @@ interface AutorizarCotizacionModalProps {
     event_date: Date | null;
     event_type_name: string | null;
   };
+  /** true cuando la fecha ya alcanzó cupo (max_events_per_day): deshabilitar Confirmar reserva */
+  dateSoldOut?: boolean;
 }
 
 type ProgressStep = 'validating' | 'sending' | 'registering' | 'collecting' | 'generating_contract' | 'preparing' | 'completed' | 'error';
@@ -183,6 +185,7 @@ export function AutorizarCotizacionModal({
   onCloseDetailSheet,
   isFromNegociacion = false,
   promiseData: promiseDataProp,
+  dateSoldOut = false,
 }: AutorizarCotizacionModalProps) {
   // Estado del Booking Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -464,19 +467,29 @@ export function AutorizarCotizacionModal({
         );
       case 3:
         return (
-          <Step3Summary
-            formData={formData}
-            cotizacionName={cotizacion.name}
-            precioCalculado={precioCalculado || null}
-            precioFinal={precioFinal}
-            isFromNegociacion={isFromNegociacion}
-            errors={errors}
-            termsAccepted={termsAccepted}
-            onAcceptTerms={handleAcceptTerms}
-            onEditEvent={() => setCurrentStep(2)}
-            onEditContact={() => setCurrentStep(1)}
-            studioSlug={studioSlug}
-          />
+          <>
+            {dateSoldOut && (
+              <div className="mb-4 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 flex items-center gap-2">
+                <CalendarX2 className="h-4 w-4 text-amber-400 shrink-0" />
+                <p className="text-sm text-amber-200">
+                  Esta fecha ya no está disponible. Se alcanzó el cupo máximo de eventos para ese día. Contáctanos para elegir otra fecha.
+                </p>
+              </div>
+            )}
+            <Step3Summary
+              formData={formData}
+              cotizacionName={cotizacion.name}
+              precioCalculado={precioCalculado || null}
+              precioFinal={precioFinal}
+              isFromNegociacion={isFromNegociacion}
+              errors={errors}
+              termsAccepted={termsAccepted}
+              onAcceptTerms={handleAcceptTerms}
+              onEditEvent={() => setCurrentStep(2)}
+              onEditContact={() => setCurrentStep(1)}
+              studioSlug={studioSlug}
+            />
+          </>
         );
       default:
         return null;
@@ -528,7 +541,7 @@ export function AutorizarCotizacionModal({
           onNext={handleNext}
           onCancel={onClose}
           canGoBack={currentStep > 1}
-          canGoNext={true}
+          canGoNext={currentStep < 3 || !dateSoldOut}
           isSubmitting={isSubmitting}
           isLoadingData={isLoadingData}
         />

@@ -776,6 +776,7 @@ model studios {
   promise_share_default_auto_generate_contract     Boolean                          @default(false)
   promise_share_default_allow_recalc               Boolean                          @default(true)
   promise_share_default_rounding_mode              String                           @default("charm")
+  max_events_per_day                               Int                              @default(1)
   google_oauth_refresh_token                      String?
   google_oauth_email                              String?
   google_oauth_scopes                             String?

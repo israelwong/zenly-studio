@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { notifyEventCreated } from '@/lib/notifications/studio/helpers/event-notifications';
+import { notifyEventCreated, notifyCapacityAffectedPromises } from '@/lib/notifications/studio/helpers/event-notifications';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { getPromiseContractData } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
@@ -12,6 +12,7 @@ import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utili
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { checkDateConflict } from '@/lib/utils/booking-conflict';
 
 interface CierreResponse {
   success: boolean;
@@ -1469,6 +1470,8 @@ export async function autorizarYCrearEvento(
   options?: {
     registrarPago?: boolean;
     montoInicial?: number;
+    /** Si true, permite crear evento aunque se supere max_events_per_day */
+    forceBooking?: boolean;
   }
 ): Promise<{
   success: boolean;
@@ -1478,6 +1481,7 @@ export async function autorizarYCrearEvento(
     pago_registrado: boolean;
   };
   error?: string;
+  conflictingPromises?: Array<{ id: string; event_date: Date | null; pipeline_stage_slug: string | null }>;
 }> {
   try {
     // 1. Validar studio
@@ -1608,6 +1612,30 @@ export async function autorizarYCrearEvento(
       return {
         success: false,
         error: 'No se encontr? la etapa "approved" en el pipeline de promesas',
+      };
+    }
+
+    // 6.5. Comprobar capacidad del d?a (max_events_per_day) antes de la transacci?n
+    let eventDateForConflict: Date;
+    if (cotizacion.promise.event_date) {
+      const ed = cotizacion.promise.event_date instanceof Date
+        ? cotizacion.promise.event_date
+        : new Date(cotizacion.promise.event_date);
+      eventDateForConflict = new Date(Date.UTC(ed.getUTCFullYear(), ed.getUTCMonth(), ed.getUTCDate(), 12, 0, 0));
+    } else {
+      const now = new Date();
+      eventDateForConflict = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
+    }
+
+    const conflictResult = await checkDateConflict(studio.id, eventDateForConflict);
+    if (!conflictResult.success) {
+      return { success: false, error: conflictResult.error ?? 'Error al comprobar disponibilidad' };
+    }
+    if (conflictResult.data?.isFull && !options?.forceBooking) {
+      return {
+        success: false,
+        error: 'DATE_OCCUPIED',
+        conflictingPromises: conflictResult.data.conflictingPromises,
       };
     }
 
@@ -2046,6 +2074,19 @@ export async function autorizarYCrearEvento(
     } catch (notificationError) {
       // No fallar la operaci?n principal si falla la notificaci?n
       console.error('[autorizarYCrearEvento] Error al crear notificaci?n:', notificationError);
+    }
+
+    // 9.1. Notificar promesas afectadas (misma fecha, sin slot) para que el estudio pueda enviar "Fecha no disponible"
+    try {
+      if (conflictResult.data?.conflictingPromises?.length) {
+        const affected = conflictResult.data.conflictingPromises.filter((p) => p.id !== promiseId);
+        if (affected.length > 0) {
+          const eventoNombre = cotizacion.promise.event_name || cotizacion.promise.name || 'Evento';
+          await notifyCapacityAffectedPromises(studio.id, result.evento_id, eventoNombre, affected);
+        }
+      }
+    } catch (notificationError) {
+      console.error('[autorizarYCrearEvento] Error notificando promesas afectadas (no crítico):', notificationError);
     }
 
     // 10. Sincronizar con Google Calendar si está habilitado (fuera de la transacci?n)

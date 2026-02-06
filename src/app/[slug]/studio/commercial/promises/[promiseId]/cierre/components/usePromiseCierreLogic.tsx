@@ -601,8 +601,11 @@ export function usePromiseCierreLogic({
           setAuthorizationEventoId(eventoId);
           // Overlay permanece visible con estado completado y botones Ver cierre / Gestionar evento
         } else {
-          setAuthorizationError(result.error || 'Error al autorizar cotización');
-          toast.error(result.error || 'Error al autorizar cotización');
+          const msg = result.error === 'DATE_OCCUPIED'
+            ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Opciones de automatización" o fuerza la reserva si aplica.'
+            : (result.error || 'Error al autorizar cotización');
+          setAuthorizationError(msg);
+          toast.error(msg);
         }
       }
     } catch (error) {
