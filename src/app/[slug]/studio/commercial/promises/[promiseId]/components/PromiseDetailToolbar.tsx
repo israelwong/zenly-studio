@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExternalLink, Copy, Check, MessageSquare } from 'lucide-react';
+import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { logProfileShared } from '@/lib/actions/studio/commercial/promises';
@@ -160,10 +160,9 @@ export function PromiseDetailToolbar({
             variant="ghost"
             size="sm"
             onClick={() => setWhatsappModalOpen(true)}
-            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+            className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
           >
-            <MessageSquare className="h-3.5 w-3.5" />
-            <span>Enviar plantilla</span>
+            Enviar plantilla
           </ZenButton>
           
           {/* Botón: Abrir chat */}
@@ -171,16 +170,13 @@ export function PromiseDetailToolbar({
             variant="ghost"
             size="sm"
             onClick={() => {
-              // Formatear número: eliminar espacios, guiones, paréntesis y el prefijo + si existe
               const cleanPhone = contactData.phone.replace(/[\s\-\(\)\+]/g, '');
-              // Construir URL de WhatsApp
               const whatsappUrl = `https://wa.me/${cleanPhone}`;
               window.open(whatsappUrl, '_blank');
             }}
-            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+            className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span>Abrir chat</span>
+            Abrir chat
           </ZenButton>
         </div>
       )}

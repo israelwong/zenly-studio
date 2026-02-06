@@ -689,7 +689,7 @@ export function PublicQuoteAuthorizedView({
                   <div className="mb-4">
                     <h3 className="text-xl font-bold text-zinc-100 mb-1">
                       {isContractSigned
-                        ? 'Contrato Firmado ✓'
+                        ? 'Contrato Firmado'
                         : 'Firma tu Contrato Digital'}
                     </h3>
                     <p className="text-sm text-zinc-400">
@@ -885,13 +885,11 @@ export function PublicQuoteAuthorizedView({
                         </span>
                       </div>
 
-                      {/* Saldo Pendiente - Solo si NO es pago completo */}
-                      {(() => {
+                      {/* Saldo Pendiente - omitido en vista pública */}
+                      {false && (() => {
                         const advancePercentage = condicionesComerciales?.advance_percentage || 0;
                         const isFullPayment = advancePercentage === 100;
-                        
                         if (isFullPayment || cotizacion.diferido <= 0) return null;
-                        
                         return (
                           <div className="flex items-center justify-between py-3 px-4 bg-zinc-800/30 rounded-lg border border-zinc-700/30">
                             <span className="text-sm text-zinc-400">Saldo pendiente:</span>

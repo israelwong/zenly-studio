@@ -92,7 +92,7 @@ export function PromiseQuotesPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   // Estado para colapsar/expandir cotizaciones archivadas y canceladas
-  const [isCollapsedArchived, setIsCollapsedArchived] = useState(true);
+  const [isCollapsedArchived, setIsCollapsedArchived] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),

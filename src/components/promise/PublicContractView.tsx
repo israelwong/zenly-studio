@@ -362,11 +362,18 @@ export function PublicContractView({
         onClose={() => !isSigning && onClose()}
         title="Contrato de Prestación de Servicios"
         description={
-          isSigned 
-            ? 'Contrato firmado' 
-            : contractVersion 
-              ? `Revisa y firma tu contrato (Versión ${contractVersion})`
-              : 'Revisa y firma tu contrato'
+          isSigned ? (
+            <div className="flex items-center gap-2 text-emerald-400 mt-1">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">
+                Contrato firmado{contractVersion ? ` · v${contractVersion}` : ''}
+              </span>
+            </div>
+          ) : contractVersion ? (
+            `Revisa y firma tu contrato (Versión ${contractVersion})`
+          ) : (
+            'Revisa y firma tu contrato'
+          )
         }
         maxWidth="4xl"
         zIndex={10070}
@@ -443,8 +450,17 @@ export function PublicContractView({
             </div>
           )}
 
+          {/* Info de versión - omitido en vista pública */}
+          {false && contractVersion && (
+            <div className="pt-2 border-t border-zinc-800">
+              <p className="text-xs text-zinc-500 text-center">
+                Versión {contractVersion} del contrato
+              </p>
+            </div>
+          )}
+
           {/* Acciones: habilitar solo cuando el preview del contrato está montado */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-zinc-800">
+          <div className="flex flex-col sm:flex-row gap-2 ">
             {!isSigned && (
               <ZenButton
                 variant="primary"
@@ -493,28 +509,6 @@ export function PublicContractView({
                   Cerrar
                 </ZenButton>
               </>
-            )}
-          </div>
-          
-          {/* Info de versión y estado de firma */}
-          <div className="pt-2 border-t border-zinc-800 space-y-2">
-            {contractVersion && (
-              <p className="text-xs text-zinc-500 text-center">
-                Versión {contractVersion} del contrato
-              </p>
-            )}
-            {isSigned && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3">
-                <div className="flex items-center gap-2 justify-center">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <p className="text-sm font-medium text-emerald-400">
-                    Contrato firmado digitalmente
-                  </p>
-                </div>
-                <p className="text-xs text-emerald-400/70 text-center mt-1">
-                  Este documento tiene validez legal y puede ser descargado en formato PDF
-                </p>
-              </div>
             )}
           </div>
         </div>

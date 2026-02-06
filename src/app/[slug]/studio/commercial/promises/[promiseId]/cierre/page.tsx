@@ -11,8 +11,8 @@ interface PromiseCierrePageProps {
 }
 
 /**
- * Cadenero: si la promesa no está en cierre, redirect a la sub-ruta correcta.
- * Si está en cierre, renderiza el contenido (datos vienen del layout).
+ * Cadenero: permite cierre y autorizada para que el overlay de éxito no sea interrumpido por redirect.
+ * Solo redirige si el estado no es ni cierre ni autorizada (ej. pendiente).
  */
 export default async function PromiseCierrePage({ params }: PromiseCierrePageProps) {
   const { slug: studioSlug, promiseId } = await params;
@@ -21,7 +21,9 @@ export default async function PromiseCierrePage({ params }: PromiseCierrePagePro
 
   if (stateResult.success && stateResult.data) {
     const state = stateResult.data.state;
-    if (state !== 'cierre') {
+    const allowedStates = ['cierre', 'autorizada'];
+    if (!allowedStates.includes(state)) {
+      console.log('🚀 [DEBUG]: Redirecting because state is:', state);
       redirect(getPromisePathFromState(studioSlug, promiseId, state));
     }
   }

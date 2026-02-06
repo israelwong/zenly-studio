@@ -1639,8 +1639,33 @@ export async function autorizarYCrearEvento(
       };
     }
 
+    // Resolver etiqueta "Aprobado" fuera de la transacción para evitar "Transaction not found" en transacciones largas
+    let tagAprobadoId: string;
+    const tagAprobadoExistente = await prisma.studio_promise_tags.findFirst({
+      where: {
+        studio_id: studio.id,
+        OR: [{ name: 'Aprobado' }, { slug: 'aprobado' }],
+        is_active: true,
+      },
+      select: { id: true },
+    });
+    if (tagAprobadoExistente) {
+      tagAprobadoId = tagAprobadoExistente.id;
+    } else {
+      const created = await prisma.studio_promise_tags.create({
+        data: {
+          studio_id: studio.id,
+          name: 'Aprobado',
+          slug: 'aprobado',
+          color: '#10B981',
+          order: 0,
+        },
+        select: { id: true },
+      });
+      tagAprobadoId = created.id;
+    }
+
     // 7. TRANSACCI?N AT?MICA
-    // Aumentar timeout a 30s para transacciones complejas con múltiples queries y updates por bloques
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacci?n para evitar race conditions)
       const eventoExistente = await tx.studio_events.findFirst({
@@ -1733,7 +1758,7 @@ export async function autorizarYCrearEvento(
 
       let evento;
       if (eventoExistente) {
-        // Actualizar evento existente (puede estar cancelado o activo)
+        // Actualizar evento existente (puede estar cancelado o activo). Al re-activar, actualizar created_at para que "Evento creado el" refleje la fecha de esta creación/re-creación.
         evento = await tx.studio_events.update({
           where: { id: eventoExistente.id },
           data: {
@@ -1742,6 +1767,7 @@ export async function autorizarYCrearEvento(
             stage_id: primeraEtapa.id,
             event_date: eventDateNormalized,
             status: 'ACTIVE',
+            created_at: new Date(),
             updated_at: new Date(),
           },
         });
@@ -1880,29 +1906,11 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.7.1. Asignar etiqueta "Aprobado" a la promesa (visible en Kanban e historial)
-      let tagAprobado = await tx.studio_promise_tags.findFirst({
-        where: {
-          studio_id: studio.id,
-          OR: [{ name: 'Aprobado' }, { slug: 'aprobado' }],
-          is_active: true,
-        },
-      });
-      if (!tagAprobado) {
-        tagAprobado = await tx.studio_promise_tags.create({
-          data: {
-            studio_id: studio.id,
-            name: 'Aprobado',
-            slug: 'aprobado',
-            color: '#10B981',
-            order: 0,
-          },
-        });
-      }
+      // 8.7.1. Asignar etiqueta "Aprobado" a la promesa (tag resuelto fuera de la transacción)
       await tx.studio_promises_tags.create({
         data: {
           promise_id: promiseId,
-          tag_id: tagAprobado.id,
+          tag_id: tagAprobadoId,
         },
       });
 
@@ -2038,8 +2046,8 @@ export async function autorizarYCrearEvento(
         pago_registrado: pagoRegistrado,
       };
     }, {
-      maxWait: 10000, // 10 segundos para iniciar la transacción
-      timeout: 20000, // 20 segundos para completar la transacción (reducido ya que items se actualizan fuera)
+      maxWait: 10000, // 10 s para adquirir conexión
+      timeout: 30000, // 30 s para completar (evita "Transaction not found" en transacciones largas)
     });
 
     // 8.5. Actualizar items de cotización FUERA de la transacción (evita timeout)

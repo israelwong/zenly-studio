@@ -28,6 +28,8 @@ interface ContractPreviewForPromiseModalProps {
   };
   isContractSigned?: boolean; // Indica si el contrato ya fue firmado
   eventId?: string; // Si el evento ya existe, usar getEventContractData en lugar de getPromiseContractData (read-only)
+  /** Solo ver: muestra solo botón "Cerrar", sin Confirmar plantilla ni Editar */
+  viewOnly?: boolean;
 }
 
 export function ContractPreviewForPromiseModal({
@@ -43,6 +45,7 @@ export function ContractPreviewForPromiseModal({
   condicionesComerciales,
   isContractSigned = false,
   eventId,
+  viewOnly = false,
 }: ContractPreviewForPromiseModalProps) {
   const [eventData, setEventData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +96,7 @@ export function ContractPreviewForPromiseModal({
     }
   };
 
-  const isReadOnly = isContractSigned || !!eventId;
+  const isReadOnly = isContractSigned || !!eventId || viewOnly;
 
   // Mismo patrón que PublicContractView: si hay cotizacionData o condicionesData, priorizar
   // template.content (con @condiciones_comerciales y @cotizacion_autorizada) para que el Master
@@ -121,10 +124,12 @@ export function ContractPreviewForPromiseModal({
       onClose={onClose}
       title={`Vista Previa: ${template.name}`}
       description={
-        isContractSigned 
-          ? "Contrato firmado por el cliente" 
-          : eventId 
-          ? "Contrato inmutable del evento creado" 
+        viewOnly
+          ? "Vista previa del contrato"
+          : isContractSigned
+          ? "Contrato firmado por el cliente"
+          : eventId
+          ? "Contrato inmutable del evento creado"
           : "Revisa el contrato antes de confirmar"
       }
       maxWidth="4xl"
@@ -134,6 +139,7 @@ export function ContractPreviewForPromiseModal({
       isLoading={confirming}
       saveDisabled={!isReadOnly && (loading || confirming)}
       cancelLabel={isReadOnly ? "Cerrar" : "Cancelar"}
+      cancelAlignRight={isReadOnly}
       closeOnClickOutside={false}
       zIndex={10080}
       footerLeftContent={
@@ -154,14 +160,16 @@ export function ContractPreviewForPromiseModal({
           <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
         </div>
       ) : (
-        <div className="h-[calc(90vh-280px)] min-h-[500px]">
-          <ContractPreview
-            content={contentToPreview}
-            eventData={eventData || undefined}
-            cotizacionData={eventData?.cotizacionData}
-            condicionesData={eventData?.condicionesData}
-            className="h-full"
-          />
+        <div className="flex flex-col max-h-[calc(90vh-180px)] min-h-[400px] overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <ContractPreview
+              content={contentToPreview}
+              eventData={eventData || undefined}
+              cotizacionData={eventData?.cotizacionData}
+              condicionesData={eventData?.condicionesData}
+              className="min-h-full"
+            />
+          </div>
         </div>
       )}
     </ZenDialog>

@@ -20,6 +20,8 @@ function getContractTableTheme(isForPdf: boolean) {
       bgHeader: "rgb(244, 244, 245)",
       bgRowHighlight: "rgb(244, 244, 245)",
       bgTotal: "rgb(228, 228, 231)",
+      bgNoteBox: "rgb(244, 244, 245)",
+      borderNoteBox: "rgb(212, 212, 216)",
     };
   }
   return {
@@ -30,6 +32,8 @@ function getContractTableTheme(isForPdf: boolean) {
     bgHeader: "rgba(6, 78, 59, 0.5)",
     bgRowHighlight: "rgba(6, 78, 59, 0.35)",
     bgTotal: "rgba(6, 78, 59, 0.6)",
+    bgNoteBox: "rgba(250, 204, 21, 0.12)",
+    borderNoteBox: "rgba(250, 204, 21, 0.4)",
   };
 }
 
@@ -297,7 +301,7 @@ export function renderCondicionesComercialesBlock(
 
       if (!isFullPayment) {
         html += `
-          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgRowHighlight}; border-left: 4px solid ${t.border}; border-radius: 4px;">
+          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgNoteBox}; border-left: 4px solid ${t.borderNoteBox}; border-radius: 4px;">
             <p style="font-size: 12px; color: ${t.textPrimary}; line-height: 1.6;">
               💡 <span style="font-weight: 600;">Flexibilidad de pago:</span> Este es el monto mínimo para formalizar tu fecha.
               Si prefieres abonar una cantidad mayor, puedes hacerlo y se acreditará a tu saldo pendiente.
@@ -306,7 +310,7 @@ export function renderCondicionesComercialesBlock(
         `;
       } else {
         html += `
-          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgRowHighlight}; border-left: 4px solid ${t.border}; border-radius: 4px;">
+          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgNoteBox}; border-left: 4px solid ${t.borderNoteBox}; border-radius: 4px;">
             <p style="font-size: 12px; color: ${t.textPrimary}; line-height: 1.6;">Este contrato requiere liquidación total para confirmar tu reserva.</p>
           </div>
         `;

@@ -36,6 +36,8 @@ export interface ZenDialogProps {
   footerRightContent?: React.ReactNode;
   /** Si true, permite que los dropdowns y elementos absolutos se muestren fuera del contenedor */
   allowOverflow?: boolean;
+  /** Si true y solo hay botón Cancelar (sin Guardar), alinea Cancelar a la derecha */
+  cancelAlignRight?: boolean;
 }
 
 const maxWidthClasses = {
@@ -75,7 +77,8 @@ export function ZenDialog({
   fullScreen = false,
   footerLeftContent,
   footerRightContent,
-  allowOverflow = false
+  allowOverflow = false,
+  cancelAlignRight = false,
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
   const [isAnimating, setIsAnimating] = React.useState(false);
@@ -88,23 +91,13 @@ export function ZenDialog({
     if (isOpen) {
       setIsAnimating(true);
     } else {
-      // Dar tiempo para la animación de salida
-      const timer = setTimeout(() => {
-        setIsAnimating(false);
-      }, 200); // Duración de la animación
-      return () => clearTimeout(timer);
+      setIsAnimating(false);
     }
   }, [isOpen]);
 
   if (!mounted || !isAnimating) return null;
 
-  const handleCancel = () => {
-    if (onCancel) {
-      onCancel();
-    } else {
-      onClose();
-    }
-  };
+  const isVisible = isOpen;
 
   // Asegurar que el overlay esté debajo del contenido
   const overlayZIndex = zIndex;
@@ -115,7 +108,7 @@ export function ZenDialog({
       className={cn(
         "fixed inset-0 flex items-center justify-center transition-all duration-200",
         fullScreen ? "p-0" : "p-4",
-        isOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
       )}
       style={{
         zIndex: contentZIndex,
@@ -126,13 +119,12 @@ export function ZenDialog({
       <div
         className={cn(
           "absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200",
-          isOpen ? "opacity-100" : "opacity-0"
+          isVisible ? "opacity-100" : "opacity-0"
         )}
         style={{
           zIndex: 0
         }}
         onClick={(e) => {
-          // Solo cerrar si closeOnClickOutside está habilitado
           if (closeOnClickOutside && e.target === e.currentTarget) {
             onClose();
           }
@@ -190,9 +182,11 @@ export function ZenDialog({
                 {headerActions}
                 {showCloseButton && (
                   <ZenButton
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={onClose}
+                    aria-label="Cerrar"
                     className="text-zinc-400 hover:text-zinc-300"
                   >
                     <X className="h-5 w-5" />
@@ -225,13 +219,13 @@ export function ZenDialog({
               </div>
             ) : (
             <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-zinc-700">
-              {/* Izquierda: footerLeftContent o Cancelar */}
-              <div className={cn("flex items-center gap-4", footerLeftContent && "flex-1 min-w-0")}>
+              {/* Izquierda: footerLeftContent o Cancelar (salvo cancelAlignRight) */}
+              <div className={cn("flex items-center gap-4", (footerLeftContent || (onCancel && !cancelAlignRight)) && "flex-1 min-w-0")}>
                 {footerLeftContent}
-                {!footerLeftContent && onCancel && (
+                {!footerLeftContent && onCancel && !cancelAlignRight && (
                   <ZenButton
                     variant="ghost"
-                    onClick={handleCancel}
+                    onClick={onClose}
                     disabled={isLoading}
                   >
                     {cancelLabel}
@@ -248,8 +242,17 @@ export function ZenDialog({
                   </ZenButton>
                 )}
               </div>
-              {/* Derecha: Eliminar (si deleteOnRight) + Guardar + footerRightContent */}
+              {/* Derecha: Cancelar (si cancelAlignRight) + Eliminar (si deleteOnRight) + Guardar + footerRightContent */}
               <div className="flex items-center gap-2 ml-auto">
+                {onCancel && cancelAlignRight && (
+                  <ZenButton
+                    variant="ghost"
+                    onClick={onClose}
+                    disabled={isLoading}
+                  >
+                    {cancelLabel}
+                  </ZenButton>
+                )}
                 {showDeleteButton && onDelete && deleteOnRight && (
                   <ZenButton
                     variant="ghost"

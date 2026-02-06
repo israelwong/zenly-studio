@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { CotizacionRenderData } from "./types";
-import { renderCotizacionBlock } from "./utils/contract-renderer";
+import type { CotizacionRenderData } from "@/components/shared/contracts/types";
+import { renderCotizacionBlock } from "@/components/shared/contracts/utils/contract-renderer";
 
 interface CotizacionBlockProps {
   cotizacion: CotizacionRenderData;

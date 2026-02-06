@@ -1544,6 +1544,44 @@ export async function cancelarEvento(
       },
     });
 
+    // Resolver etiquetas Aprobado y Cancelada fuera de la transacción (evita "Transaction not found")
+    let tagAprobadoId: string | null = null;
+    let tagCanceladaId: string;
+    if (evento.promise_id && etapaDestino) {
+      const tagAprobado = await prisma.studio_promise_tags.findFirst({
+        where: {
+          studio_id: studio.id,
+          OR: [{ slug: 'aprobado' }, { name: 'Aprobado' }],
+          is_active: true,
+        },
+        select: { id: true },
+      });
+      if (tagAprobado) tagAprobadoId = tagAprobado.id;
+
+      let tagCancelada = await prisma.studio_promise_tags.findUnique({
+        where: {
+          studio_id_slug: { studio_id: studio.id, slug: 'cancelada' },
+        },
+      });
+      if (!tagCancelada) {
+        tagCancelada = await prisma.studio_promise_tags.create({
+          data: {
+            studio_id: studio.id,
+            name: 'Cancelada',
+            slug: 'cancelada',
+            color: '#EF4444',
+            order: 0,
+          },
+        });
+      } else if (!tagCancelada.is_active) {
+        tagCancelada = await prisma.studio_promise_tags.update({
+          where: { id: tagCancelada.id },
+          data: { is_active: true },
+        });
+      }
+      tagCanceladaId = tagCancelada.id;
+    }
+
     // Transacción para garantizar consistencia
     await prisma.$transaction(async (tx) => {
       // 1. Actualizar evento a "CANCELLED" y liberar promise_id y cotizacion_id
@@ -1601,19 +1639,12 @@ export async function cancelarEvento(
         });
 
         if (promesaExiste) {
-          // 3.1. Quitar etiqueta "Aprobado" de la promesa si existe
-          const tagAprobado = await tx.studio_promise_tags.findFirst({
-            where: {
-              studio_id: studio.id,
-              OR: [{ slug: 'aprobado' }, { name: 'Aprobado' }],
-              is_active: true,
-            },
-          });
-          if (tagAprobado) {
+          // 3.1. Quitar etiqueta "Aprobado" (tag resuelto fuera de la transacción)
+          if (tagAprobadoId) {
             const relacionAprobado = await tx.studio_promises_tags.findFirst({
               where: {
                 promise_id: evento.promise_id,
-                tag_id: tagAprobado.id,
+                tag_id: tagAprobadoId,
               },
             });
             if (relacionAprobado) {
@@ -1634,41 +1665,11 @@ export async function cancelarEvento(
             },
           });
 
-          // 3.3. Crear o encontrar etiqueta "Cancelada" y agregarla a la promesa
-          const tagSlug = 'cancelada';
-          let tagCancelada = await tx.studio_promise_tags.findUnique({
-            where: {
-              studio_id_slug: {
-                studio_id: studio.id,
-                slug: tagSlug,
-              },
-            },
-          });
-
-          if (!tagCancelada) {
-            // Crear tag si no existe
-            tagCancelada = await tx.studio_promise_tags.create({
-              data: {
-                studio_id: studio.id,
-                name: 'Cancelada',
-                slug: tagSlug,
-                color: '#EF4444', // Rojo para cancelada
-                order: 0,
-              },
-            });
-          } else if (!tagCancelada.is_active) {
-            // Reactivar tag si está inactivo
-            tagCancelada = await tx.studio_promise_tags.update({
-              where: { id: tagCancelada.id },
-              data: { is_active: true },
-            });
-          }
-
-          // Agregar tag a la promesa si no está ya asignado
+          // 3.3. Agregar etiqueta "Cancelada" (tag resuelto fuera de la transacción)
           const existingTagRelation = await tx.studio_promises_tags.findFirst({
             where: {
               promise_id: evento.promise_id,
-              tag_id: tagCancelada.id,
+              tag_id: tagCanceladaId,
             },
           });
 
@@ -1676,7 +1677,7 @@ export async function cancelarEvento(
             await tx.studio_promises_tags.create({
               data: {
                 promise_id: evento.promise_id,
-                tag_id: tagCancelada.id,
+                tag_id: tagCanceladaId,
               },
             });
           }

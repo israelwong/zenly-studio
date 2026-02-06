@@ -264,15 +264,18 @@ export function PromisePendienteClient({
               eventoId={eventoId}
             />
             <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
-            <Suspense fallback={<SidebarSkeleton />}>
-              <PromisePublicConfigCard
-                studioSlug={studioSlug}
-                promiseId={promiseId}
-                initialShareSettings={initialShareSettings}
-                initialCondicionesComerciales={initialCondicionesComerciales}
-                selectedCotizacionPrice={selectedCotizacion?.price ?? null}
-              />
-            </Suspense>
+            {/* Oculto temporalmente: card "X ajustes activos" — descomentar para mostrar */}
+            {false && (
+              <Suspense fallback={<SidebarSkeleton />}>
+                <PromisePublicConfigCard
+                  studioSlug={studioSlug}
+                  promiseId={promiseId}
+                  initialShareSettings={initialShareSettings}
+                  initialCondicionesComerciales={initialCondicionesComerciales}
+                  selectedCotizacionPrice={selectedCotizacion?.price ?? null}
+                />
+              </Suspense>
+            )}
           </div>
         </div>
       </div>

@@ -3,6 +3,8 @@
 import React, { memo, useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2 } from 'lucide-react';
 import { ZenConfirmModal } from '@/components/ui/zen';
+import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
@@ -238,118 +240,131 @@ export const ContratoSection = memo(function ContratoSection({
     }
   };
 
+  const headerTitle = contratoFirmado ? 'Contrato firmado' : 'Contrato Digital';
+
   return (
-    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
-      <div className="flex items-start gap-3">
-        {loadingRegistro ? (
-          <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
-        ) : (
-          contratoIcon
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
-            {contratoFirmado && contractData?.contract_template_id ? (
-              <button
-                type="button"
-                onClick={handleOpenPreview}
-                className="flex-1 min-w-0 text-left group"
-              >
-                <span className="text-xs uppercase tracking-wide font-semibold text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                  Contrato firmado
-                </span>
-                <span className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5 group-hover:text-zinc-400">
-                  <Eye className="h-3.5 w-3.5 shrink-0" />
-                  Clic para ver preview
-                </span>
-              </button>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <span className={`text-xs uppercase tracking-wide font-semibold ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
-                  {contratoFirmado ? 'Contrato firmado' : 'Contrato Digital'}
-                </span>
-                {!contratoFirmado && !contratoEstado && contractData?.contrato_definido && contractData?.contract_version && (
-                  <span className="text-xs text-zinc-500">Versión {contractData.contract_version}</span>
-                )}
-              </div>
-            )}
-            {contratoBoton && !contratoFirmado && (
-              <button
-                onClick={onContratoButtonClick}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
-              >
-                {contratoBoton}
-              </button>
-            )}
-            {tieneContratoGenerado && onRegenerateContract && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (contratoFirmado) {
-                    setShowRegenerateConfirm(true);
-                  } else {
-                    handleConfirmRegenerate();
-                  }
-                }}
-                disabled={isRegenerating}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 disabled:opacity-50"
-                title="Regenerar contrato"
-                aria-label="Regenerar contrato"
-              >
-                {isRegenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                ) : (
-                  'Regenerar'
-                )}
-              </button>
-            )}
-            {contratoFirmado && onCancelarContrato && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCancelarContratoConfirm(true);
-                }}
-                className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                title="Cancelar contrato"
-                aria-label="Cancelar contrato"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          {contratoEstado && !contratoFirmado && (
-            <div className={`text-xs ${contratoColor}`}>
-              <p>{contratoEstado}</p>
-              {contractData?.contrato_definido && contractData?.contract_version && (
-                <p className="text-zinc-500 mt-0.5">
-                  Versión {contractData.contract_version}
-                  {contractData.contract_version > 1 && contractData.ultima_version_info && (
-                    <>
-                      {contractData.ultima_version_info.change_type === 'AUTO_REGENERATE' &&
-                        contractData.ultima_version_info.change_reason?.includes('actualización de datos') && (
-                          <span className="ml-1">• Regenerado por actualización de datos del cliente</span>
-                        )}
-                      {contractData.ultima_version_info.change_type === 'MANUAL_EDIT' && (
-                        <span className="ml-1">• Editado manualmente por el estudio</span>
-                      )}
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
+    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg overflow-hidden">
+      {/* Header alineado con otros cards */}
+      <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
+        <div className="flex items-center gap-2 min-w-0">
+          {loadingRegistro ? (
+            <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 animate-spin" />
+          ) : (
+            contratoIcon
           )}
-          {contratoFirmado && contractData?.contract_version && (
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Versión {contractData.contract_version}
-            </p>
+          <span className={`text-xs uppercase tracking-wide font-semibold truncate ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
+            {headerTitle}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {contratoBoton && !contratoFirmado && (
+            <button
+              onClick={onContratoButtonClick}
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+            >
+              {contratoBoton}
+            </button>
+          )}
+          {tieneContratoGenerado && onRegenerateContract && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (contratoFirmado) {
+                  setShowRegenerateConfirm(true);
+                } else {
+                  handleConfirmRegenerate();
+                }
+              }}
+              disabled={isRegenerating}
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
+              title="Regenerar contrato"
+              aria-label="Regenerar contrato"
+            >
+              {isRegenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              ) : (
+                'Regenerar'
+              )}
+            </button>
+          )}
+          {contratoFirmado && onCancelarContrato && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCancelarContratoConfirm(true);
+              }}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+              title="Cancelar contrato"
+              aria-label="Cancelar contrato"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
 
+      {/* Contenido */}
+      <div className="p-3 space-y-2">
+        {contratoFirmado && contractData?.contract_template_id && (
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={handleOpenPreview}
+              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors w-full text-left cursor-pointer"
+            >
+              <Eye className="h-3.5 w-3.5 shrink-0" />
+              Clic para ver preview
+            </button>
+            {contractData.contract_version != null && (
+              <p className="text-xs text-zinc-500">
+                Versión del contrato: {contractData.contract_version}
+              </p>
+            )}
+            {contractData.contract_signed_at && (() => {
+              const studioTz = 'America/Mexico_City';
+              const dayInTz = getDateOnlyInTimezone(contractData.contract_signed_at, studioTz);
+              const normalized = dayInTz ?? toUtcDateOnly(contractData.contract_signed_at);
+              const textoFirma = normalized
+                ? formatDisplayDate(normalized, { day: 'numeric', month: 'long', year: 'numeric' })
+                : '—';
+              return (
+                <p className="text-xs text-zinc-500">
+                  Firmado el: {textoFirma}
+                </p>
+              );
+            })()}
+          </div>
+        )}
+        {contratoEstado && !contratoFirmado && (
+          <div className={`text-xs ${contratoColor}`}>
+            <p>{contratoEstado}</p>
+            {contractData?.contrato_definido && contractData?.contract_version && (
+              <p className="text-zinc-500 mt-0.5">
+                Versión {contractData.contract_version}
+                {contractData.contract_version > 1 && contractData.ultima_version_info && (
+                  <>
+                    {contractData.ultima_version_info.change_type === 'AUTO_REGENERATE' &&
+                      contractData.ultima_version_info.change_reason?.includes('actualización de datos') && (
+                        <span className="ml-1">• Regenerado por actualización de datos del cliente</span>
+                      )}
+                    {contractData.ultima_version_info.change_type === 'MANUAL_EDIT' && (
+                      <span className="ml-1">• Editado manualmente por el estudio</span>
+                    )}
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+        {!contratoFirmado && !contratoEstado && contractData?.contrato_definido && contractData?.contract_version && (
+          <p className="text-xs text-zinc-500">Versión {contractData.contract_version}</p>
+        )}
+
       {/* Card de gestión de contrato */}
       {contratoBoton && contractData?.contract_template_id && (
-        <div className="mt-2 pt-2 border-t border-zinc-700/50">
+        <div className="pt-2 border-t border-zinc-700/50">
           <ContratoGestionCard
             studioSlug={studioSlug}
             promiseId={promiseId}
@@ -366,6 +381,7 @@ export const ContratoSection = memo(function ContratoSection({
           />
         </div>
       )}
+      </div>
 
       <ZenConfirmModal
         isOpen={showCancelarContratoConfirm}

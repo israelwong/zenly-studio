@@ -3,14 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { startTransition } from 'react';
-import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, CreditCard, Tag, Clock, Receipt, CheckCircle } from 'lucide-react';
+import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, Clock, Receipt, CheckCircle } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
   ZenCardHeader,
   ZenCardTitle,
   ZenButton,
+  ZenConfirmModal,
 } from '@/components/ui/zen';
+import { toast } from 'sonner';
+import { cancelarEvento } from '@/lib/actions/studio/business/events';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
@@ -19,7 +22,7 @@ import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatNumber } from '@/lib/actions/utils/formatting';
 import { formatDisplayDate, formatDisplayDateLong } from '@/lib/utils/date-formatter';
-import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface CotizacionAutorizadaCardProps {
   cotizacion: CotizacionListItem;
@@ -40,6 +43,8 @@ export function CotizacionAutorizadaCard({
   const [showContractPreview, setShowContractPreview] = useState(false);
   const [templateContentWithPlaceholders, setTemplateContentWithPlaceholders] = useState<string | null>(null);
   const [loadingTemplateForPreview, setLoadingTemplateForPreview] = useState(false);
+  const [showCancelEventModal, setShowCancelEventModal] = useState(false);
+  const [isCancellingEvent, setIsCancellingEvent] = useState(false);
 
   // Cargar resumen del evento creado
   useEffect(() => {
@@ -265,11 +270,9 @@ export function CotizacionAutorizadaCard({
               <h3 className="text-base font-semibold text-zinc-200">
                 {cotizacionData.name}
               </h3>
-              {cotizacionData.description && (
-                <p className="text-sm text-zinc-400 mt-1">
-                  {cotizacionData.description}
-                </p>
-              )}
+              <p className="text-sm text-zinc-400 mt-1.5 leading-relaxed">
+                {cotizacionData.description?.trim() || 'Descripción no definida'}
+              </p>
             </div>
 
             {/* Desglose de Cotización */}
@@ -319,197 +322,91 @@ export function CotizacionAutorizadaCard({
             )}
 
             {/* Pago Inicial */}
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="w-4 h-4 text-zinc-400" />
-                <h3 className="text-sm font-semibold text-zinc-300">
-                  Pago Inicial
-                </h3>
-              </div>
-              {hayPagoInicial && primerPago ? (
-                <div className="space-y-3">
-                  {/* Monto destacado */}
-                  <div className="flex items-baseline justify-between pb-3 border-b border-zinc-700/50">
-                    <span className="text-xs text-zinc-500">Monto:</span>
-                    <span className="text-lg font-bold text-emerald-400">
-                      ${formatNumber(pagoInicial, 2)} MXN
-                    </span>
-                  </div>
-
-                  {/* Detalles del pago */}
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                        <Tag className="w-3.5 h-3.5 text-zinc-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-zinc-500 mb-1">Concepto</p>
-                        <p className="text-zinc-200 font-medium leading-tight">{primerPago.concept}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                        <CreditCard className="w-3.5 h-3.5 text-zinc-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-zinc-500 mb-1">Método de Pago</p>
-                        <p className="text-zinc-300 leading-tight">{primerPago.metodo_pago}</p>
-                      </div>
-                    </div>
-
-                    {primerPago.payment_date && (
-                      <div className="flex items-start gap-3">
-                        <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                          <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-zinc-500 mb-1">Fecha de Pago</p>
-                          <p className="text-zinc-300 leading-tight">
-                            {formatDisplayDate(toUtcDateOnly(primerPago.payment_date))}
-                          </p>
-                        </div>
-                      </div>
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex items-center gap-3">
+              <DollarSign className="w-5 h-5 text-zinc-400 shrink-0" />
+              <div className="flex-1 min-w-0 text-sm">
+                <span className="font-semibold text-zinc-300">Pago Inicial</span>
+                {hayPagoInicial && primerPago ? (
+                  <>
+                    <span className="text-emerald-400 font-medium"> · ${formatNumber(pagoInicial, 2)} MXN</span>
+                    {(primerPago.concept || primerPago.payment_date) && (
+                      <span className="text-zinc-500 text-xs block mt-0.5">
+                        {[primerPago.concept, primerPago.payment_date && formatDisplayDate(toUtcDateOnly(primerPago.payment_date))].filter(Boolean).join(' · ')}
+                      </span>
                     )}
-                  </div>
-
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm text-zinc-500">
-                    Promesa de pago
-                  </p>
-                </div>
-              )}
+                  </>
+                ) : (
+                  <span className="text-zinc-500"> · Promesa de pago</span>
+                )}
+              </div>
             </div>
 
             {/* Contrato Inmutable */}
             {contrato && contrato.content ? (
               <div
-                className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 cursor-pointer hover:bg-blue-500/20 transition-colors flex items-center gap-3"
                 onClick={openContractPreview}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <FileText className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <h3 className="text-sm font-semibold text-blue-300">
-                        Contrato v{contrato.version || 1}
-                      </h3>
-                      {contrato.template_name && (
-                        <p className="text-xs text-blue-400/80">
-                          Plantilla: {contrato.template_name}
-                        </p>
-                      )}
-                      <div className="space-y-1">
-                        {contrato.signed_at ? (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              <p className="text-xs text-emerald-400/90 font-medium">
-                                Firmado
-                              </p>
-                            </div>
-                            <div className="pl-5">
-                              <p className="text-xs text-blue-400/80">
-                                {(() => {
-                                  const d = toUtcDateOnly(contrato.signed_at);
-                                  const t = new Date(contrato.signed_at);
-                                  const dateStr = d ? formatDisplayDateLong(d) : '—';
-                                  const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
-                                  return `${dateStr}, ${timeStr}`;
-                                })()}
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <p className="text-xs text-amber-400/90 font-medium">
-                              Pendiente de firma
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <Eye className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <FileText className="w-5 h-5 text-blue-400 shrink-0" />
+                <div className="flex-1 min-w-0 text-sm text-blue-300/90">
+                  <span className="font-semibold text-blue-300">Contrato v{contrato.version || 1}</span>
+                  {contrato.signed_at ? (
+                    <>
+                      <span className="text-emerald-400/90"> · Firmado</span>
+                      <span className="text-blue-400/80">
+                        {' · '}
+                        {(() => {
+                          const dayInTz = getDateOnlyInTimezone(contrato.signed_at, 'America/Mexico_City');
+                          const d = dayInTz ?? toUtcDateOnly(contrato.signed_at);
+                          return d ? formatDisplayDate(d, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+                        })()}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-amber-400/90"> · Pendiente de firma</span>
+                  )}
                 </div>
+                <Eye className="w-4 h-4 text-blue-400 shrink-0" />
               </div>
             ) : resumen?.cotizacion?.contract_content_snapshot ? (
               <div
-                className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 cursor-pointer hover:bg-blue-500/20 transition-colors flex items-center gap-3"
                 onClick={openContractPreview}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <FileText className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <h3 className="text-sm font-semibold text-blue-300">
-                        Contrato v{resumen.cotizacion.contract_version_snapshot || 1}
-                      </h3>
-                      {resumen.cotizacion.contract_template_name_snapshot && (
-                        <p className="text-xs text-blue-400/80">
-                          Plantilla: {resumen.cotizacion.contract_template_name_snapshot}
-                        </p>
-                      )}
-                      <div className="space-y-1">
-                        {resumen.cotizacion.contract_signed_at_snapshot ? (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              <p className="text-xs text-emerald-400/90 font-medium">
-                                Firmado
-                              </p>
-                            </div>
-                            <div className="pl-5">
-                              <p className="text-xs text-blue-400/80">
-                                {(() => {
-                                  const signedAt = resumen.cotizacion.contract_signed_at_snapshot;
-                                  const d = toUtcDateOnly(signedAt);
-                                  const t = new Date(signedAt);
-                                  const dateStr = d ? formatDisplayDateLong(d) : '—';
-                                  const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
-                                  return `${dateStr}, ${timeStr}`;
-                                })()}
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <p className="text-xs text-amber-400/90 font-medium">
-                              Pendiente de firma
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <Eye className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <FileText className="w-5 h-5 text-blue-400 shrink-0" />
+                <div className="flex-1 min-w-0 text-sm text-blue-300/90">
+                  <span className="font-semibold text-blue-300">Contrato v{resumen.cotizacion.contract_version_snapshot || 1}</span>
+                  {resumen.cotizacion.contract_signed_at_snapshot ? (
+                    <>
+                      <span className="text-emerald-400/90"> · Firmado</span>
+                      <span className="text-blue-400/80">
+                        {' · '}
+                        {(() => {
+                          const signedAt = resumen.cotizacion.contract_signed_at_snapshot;
+                          const dayInTz = getDateOnlyInTimezone(signedAt, 'America/Mexico_City');
+                          const d = dayInTz ?? toUtcDateOnly(signedAt);
+                          return d ? formatDisplayDate(d, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+                        })()}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-amber-400/90"> · Pendiente de firma</span>
+                  )}
                 </div>
+                <Eye className="w-4 h-4 text-blue-400 shrink-0" />
               </div>
             ) : null}
 
-            {/* Fecha de creación del evento */}
-            {resumen?.evento?.created_at && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500 pt-2">
-                <Calendar className="w-3.5 h-3.5 shrink-0" />
-                <span>
-                  Evento creado el {(() => {
-                    const created = resumen.evento.created_at;
-                    const d = toUtcDateOnly(created);
-                    const t = new Date(created);
-                    const dateStr = d ? formatDisplayDateLong(d) : '—';
-                    const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
-                    return `${dateStr}, ${timeStr}`;
-                  })()}
-                </span>
-              </div>
-            )}
-
-            {/* Botón para ir al evento */}
-            <div className="pt-2">
+            {/* Botones: Cancelar evento | Gestionar evento */}
+            <div className="pt-2 flex items-center gap-2">
+              <ZenButton
+                variant="ghost"
+                onClick={() => setShowCancelEventModal(true)}
+                className="shrink-0"
+                aria-label="Cancelar evento"
+              >
+                Cancelar evento
+              </ZenButton>
               <ZenButton
                 variant="primary"
                 onClick={() => {
@@ -518,15 +415,66 @@ export function CotizacionAutorizadaCard({
                     router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
                   });
                 }}
-                className="w-full"
+                className="flex-1 min-w-0"
               >
                 <ArrowRight className="w-4 h-4 mr-2" />
                 Gestionar Evento
               </ZenButton>
-              <p className="text-xs text-zinc-500 text-center mt-3">
-                Este evento ya fue creado y está en gestión
-              </p>
             </div>
+
+            <ZenConfirmModal
+              isOpen={showCancelEventModal}
+              onClose={() => !isCancellingEvent && setShowCancelEventModal(false)}
+              onConfirm={async () => {
+                setIsCancellingEvent(true);
+                try {
+                  const result = await cancelarEvento(studioSlug, eventoId);
+                  if (result.success) {
+                    toast.success('Evento cancelado correctamente');
+                    setShowCancelEventModal(false);
+                    window.dispatchEvent(new CustomEvent('close-overlays'));
+                    router.refresh();
+                  } else {
+                    toast.error(result.error || 'Error al cancelar evento');
+                  }
+                } catch {
+                  toast.error('Error al cancelar evento');
+                } finally {
+                  setIsCancellingEvent(false);
+                }
+              }}
+              title="Cancelar evento"
+              description="El evento pasará a estado cancelado. La cotización se desvinculará y la promesa volverá a etapa pendiente. Esta acción no se puede deshacer."
+              confirmText="Sí, cancelar evento"
+              cancelText="No cancelar"
+              variant="destructive"
+              loading={isCancellingEvent}
+            />
+
+            {/* Fecha de creación del evento */}
+            {resumen?.evento?.created_at && (
+              <div className="flex items-center gap-2 text-xs text-zinc-500 mt-1.5">
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Evento creado el {(() => {
+                    const raw = resumen.evento.created_at;
+                    const studioTz = 'America/Mexico_City';
+                    // Normalizar: ISO sin Z se interpreta como UTC para evitar desfase de día
+                    const created = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/Z|[+-]\d{2}:?\d{2}$/.test(raw)
+                      ? new Date(raw + (raw.endsWith('Z') ? '' : 'Z'))
+                      : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)
+                        ? new Date(raw + 'T12:00:00.000Z')
+                        : new Date(raw as string | Date);
+                    if (Number.isNaN(created.getTime())) return '—';
+                    const dayInTz = getDateOnlyInTimezone(created, studioTz);
+                    const d = dayInTz ?? toUtcDateOnly(created);
+                    const dateStr = d ? formatDisplayDateLong(d) : '—';
+                    const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: studioTz, hour: '2-digit', minute: '2-digit' }).format(created);
+                    return `${dateStr}, ${timeStr}`;
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
         </ZenCardContent>
       </ZenCard>

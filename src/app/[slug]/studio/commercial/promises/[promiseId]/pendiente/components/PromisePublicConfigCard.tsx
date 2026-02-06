@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
 import { getPromiseShareSettings, type PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
@@ -116,9 +116,9 @@ export function PromisePublicConfigCard({
             size="sm"
             onClick={openConfigModal}
             className="gap-1 px-1.5 py-0.5 h-6 text-[11px] border-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 shrink-0"
-            title="Configurar"
+            title="Opciones de automatización"
           >
-            <Settings2 className="h-3 w-3" />
+            <Zap className="h-3 w-3" />
           </ZenButton>
         </div>
         <CollapsibleContent>

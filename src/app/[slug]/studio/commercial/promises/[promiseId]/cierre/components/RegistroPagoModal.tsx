@@ -176,6 +176,7 @@ export function RegistroPagoModal({
       maxWidth="md"
       onSave={handleConfirm}
       onCancel={onClose}
+      // Cancelar usa la secuencia interna de ZenDialog (requestClose → animación 250ms → onClose), igual que la X
       saveLabel={saving ? 'Guardando...' : 'Guardar'}
       cancelLabel="Cancelar"
       isLoading={saving}

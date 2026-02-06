@@ -304,7 +304,7 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
           {!hasViewedPreview && (
             <button
               onClick={handleOpenPreviewFromCard}
-              className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
               <span>Ver preview del contrato</span>
@@ -336,6 +336,7 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
           customContent={contractContent || customizedContent}
           condicionesComerciales={condicionesComerciales}
           isContractSigned={isContractSigned}
+          viewOnly
         />
       )}
 

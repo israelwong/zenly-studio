@@ -145,6 +145,24 @@ export function formatDisplayDateLong(
 }
 
 /**
+ * Formatea un instante (fecha + hora) en la zona horaria indicada.
+ * Usar para "fecha de firma" con hora (MASTER_DATE_SSOT_GUIDE: studio.timezone o America/Mexico_City).
+ */
+export function formatDisplayDateTimeInTimezone(
+  value: Date | string | null | undefined,
+  timeZone: string = 'America/Mexico_City'
+): string {
+  if (value == null) return '—';
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-MX', {
+    timeZone,
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+/**
  * Prueba interna de certificación SSoT: una fecha ISO de medianoche UTC
  * (ej. 2025-04-25T00:00:00.000Z) debe devolver siempre el mismo día calendario
  * formateado (sábado, 25 de abril de 2025) sin importar la zona horaria del entorno.

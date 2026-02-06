@@ -185,7 +185,7 @@ export function EditarCotizacionClient({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {canShowPasarACierre && (
+              {false && canShowPasarACierre && (
                 <ZenButton
                   variant="primary"
                   size="md"

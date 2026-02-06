@@ -525,6 +525,7 @@ export function usePromiseCierreLogic({
         window.dispatchEvent(new CustomEvent('close-overlays'));
         router.refresh();
         startTransition(() => {
+          console.log('🚀 [DEBUG]: Redirect triggered by usePromiseCierreLogic.tsx because user cancelled cierre (navigate to pendiente)');
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
         });
       } else {
@@ -550,56 +551,63 @@ export function usePromiseCierreLogic({
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
   const [authorizationEventoId, setAuthorizationEventoId] = useState<string | null>(null);
 
+  const TASKS_AUTORIZAR = [
+    'Obteniendo catálogo de servicios',
+    'Calculando precios y desglose',
+    'Guardando cotización autorizada',
+    'Creando evento en agenda',
+    'Actualizando estado de cotización',
+    'Archivando otras cotizaciones de la promesa',
+    'Registrando pago inicial',
+    'Finalizando autorización',
+  ];
+
+  const STEP_DELAY_MS = 350;
+
   const handleConfirmAutorizar = useCallback(async () => {
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
-    setCurrentTask('Obteniendo catálogo de servicios');
+    setCurrentTask(TASKS_AUTORIZAR[0]);
     setCompletedTasks([]);
     setAuthorizationError(null);
+    setAuthorizationEventoId(null);
 
-    // Simular progreso de tareas (no podemos obtener progreso real desde server actions)
-    const tasks = [
-      'Obteniendo catálogo de servicios',
-      'Calculando precios y desglose',
-      'Guardando cotización autorizada',
-      'Creando evento en agenda',
-      'Actualizando estado de cotización',
-      'Archivando otras cotizaciones de la promesa',
-      'Registrando pago inicial',
-      'Finalizando autorización',
-    ];
-
-    let currentTaskIndex = 0;
-    const progressInterval = setInterval(() => {
-      if (currentTaskIndex < tasks.length - 1) {
-        setCompletedTasks(prev => [...prev, tasks[currentTaskIndex]]);
-        currentTaskIndex++;
-        setCurrentTask(tasks[currentTaskIndex]);
-      }
-    }, 2000); // Actualizar cada 2 segundos
+    const runProgressAnimation = (): Promise<void> => {
+      return new Promise((resolve) => {
+        let i = 0;
+        const next = () => {
+          if (i >= TASKS_AUTORIZAR.length) {
+            setCurrentTask('');
+            resolve();
+            return;
+          }
+          setCurrentTask(TASKS_AUTORIZAR[i]);
+          setTimeout(() => {
+            const stepName = TASKS_AUTORIZAR[i];
+            setCompletedTasks((prev) => [...prev, stepName]);
+            console.log('✅ [STEP]: Completed step', stepName);
+            i++;
+            next();
+          }, STEP_DELAY_MS);
+        };
+        next();
+      });
+    };
 
     try {
       if (cotizacion.status === 'en_cierre') {
-        const result = await autorizarYCrearEvento(
-          studioSlug,
-          promiseId,
-          cotizacion.id,
-          {
-            registrarPago: pagoData?.pago_registrado || false,
-            montoInicial: pagoData?.pago_monto || undefined,
-          }
-        );
+        const serverPromise = autorizarYCrearEvento(studioSlug, promiseId, cotizacion.id, {
+          registrarPago: pagoData?.pago_registrado || false,
+          montoInicial: pagoData?.pago_monto || undefined,
+        });
+        const animationPromise = runProgressAnimation();
 
-        clearInterval(progressInterval);
-        setCompletedTasks(tasks);
-        setCurrentTask('');
+        const [result] = await Promise.all([serverPromise, animationPromise]);
 
         if (result.success && result.data) {
-          await new Promise(resolve => setTimeout(resolve, 500));
           toast.success('¡Cotización autorizada y evento creado!');
           const eventoId = result.data?.evento_id ?? null;
           setAuthorizationEventoId(eventoId);
-          // Overlay permanece visible con estado completado y botones Ver cierre / Gestionar evento
         } else {
           const msg = result.error === 'DATE_OCCUPIED'
             ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Opciones de automatización" o fuerza la reserva si aplica.'
@@ -609,13 +617,12 @@ export function usePromiseCierreLogic({
         }
       }
     } catch (error) {
-      clearInterval(progressInterval);
       const errorMessage = error instanceof Error ? error.message : 'Error al autorizar cotización';
       setAuthorizationError(errorMessage);
       console.error('[handleConfirmAutorizar] Error:', error);
       toast.error('Error al autorizar cotización');
-    } finally {
-      // No cerrar overlay en éxito: se muestra estado completado con botones. Solo en error se deja abierto para que el usuario cierre.
+      setCurrentTask('');
+      setCompletedTasks(TASKS_AUTORIZAR);
     }
   }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData]);
 

@@ -2,7 +2,7 @@
 
 export { ContractEditor } from "./ContractEditor";
 export type { ContractEditorRef } from "./ContractEditor";
-export { ContractPreview } from "./ContractPreview";
+export { ContractPreview } from "@/components/shared/contracts/ContractPreview";
 export { ContractEditorToolbar } from "./ContractEditorToolbar";
 export { VariableAutocomplete } from "./VariableAutocomplete";
 export { VariableBadge } from "./VariableBadge";
@@ -18,7 +18,7 @@ export type {
   CotizacionRenderData,
   CondicionesComercialesData,
   ParsedVariable,
-} from "./types";
+} from "@/components/shared/contracts/types";
 
 export {
   parseVariables,
@@ -31,5 +31,5 @@ export {
 export {
   renderCotizacionBlock,
   renderCondicionesComercialesBlock,
-} from "./utils/contract-renderer";
+} from "@/components/shared/contracts/utils/contract-renderer";
 

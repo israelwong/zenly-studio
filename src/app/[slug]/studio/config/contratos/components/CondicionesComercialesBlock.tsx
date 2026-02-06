@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { CondicionesComercialesData } from "./types";
-import { renderCondicionesComercialesBlock } from "./utils/contract-renderer";
+import type { CondicionesComercialesData } from "@/components/shared/contracts/types";
+import { renderCondicionesComercialesBlock } from "@/components/shared/contracts/utils/contract-renderer";
 
 interface CondicionesComercialesBlockProps {
   condiciones: CondicionesComercialesData;

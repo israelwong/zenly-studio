@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Settings } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Zap } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -167,23 +167,20 @@ export function PromiseDetailHeader({
                             return null; // Evento contratado y activo: ocultar botones
                         }
 
-                        // No hay evento: mostrar botones (Automatizar está en la card "Lo que el prospecto ve")
+                        // No hay evento: mostrar botones
                         return (
                             <>
-                                {/* Botón Configurar */}
-                                {onConfigClick && (
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={onConfigClick}
-                                        className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
-                                        title="Configurar"
-                                    >
-                                        <Settings className="h-3.5 w-3.5" />
-                                        <span>Configurar</span>
-                                    </ZenButton>
-                                )}
-                                </>
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onAutomateClick}
+                                    className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                                    title="Opciones de automatización"
+                                >
+                                    <Zap className="h-3.5 w-3.5" />
+                                    <span>Opciones de automatización</span>
+                                </ZenButton>
+                            </>
                         );
                     })()}
                     {/* Dropdown menu: solo mostrar si NO hay evento creado */}
