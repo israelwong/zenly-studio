@@ -218,6 +218,29 @@ export async function createStudioAndSubscription(
       return newStudio;
     });
 
+    // [SEED-AUDIT-REQUIRED] Event Pipeline Stages updated on Phase 4.4/5.1
+    // Pipeline de eventos (manager stages): 5 etapas estándar + Archivado
+    const eventPipelineStages = [
+      { name: 'Planeación', slug: 'planeacion', color: '#3B82F6', order: 10, stage_type: 'PLANNING' as const },
+      { name: 'Producción', slug: 'produccion', color: '#10B981', order: 20, stage_type: 'PRODUCTION' as const },
+      { name: 'Edición', slug: 'edicion', color: '#F59E0B', order: 30, stage_type: 'PRODUCTION' as const },
+      { name: 'Revisión Interna', slug: 'revision-interna', color: '#8B5CF6', order: 40, stage_type: 'REVIEW' as const },
+      { name: 'Entrega', slug: 'entrega', color: '#06B6D4', order: 50, stage_type: 'DELIVERY' as const },
+      { name: 'Archivado', slug: 'archivado', color: '#71717a', order: 100, stage_type: 'ARCHIVED' as const, is_system: true },
+    ];
+    await prisma.studio_manager_pipeline_stages.createMany({
+      data: eventPipelineStages.map((s) => ({
+        studio_id: studio.id,
+        name: s.name,
+        slug: s.slug,
+        color: s.color,
+        order: s.order,
+        stage_type: s.stage_type,
+        is_active: true,
+        is_system: s.is_system ?? false,
+      })),
+    });
+
     // Activar módulos core incluidos en el plan trial
     const coreModules = await prisma.platform_modules.findMany({
       where: {

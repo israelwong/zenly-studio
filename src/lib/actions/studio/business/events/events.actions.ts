@@ -319,19 +319,17 @@ export async function getEvents(
             },
           },
           promise: {
-            select: {
-              id: true,
-              name: true,
-              address: true,
-              event_date: true,
-              event_location: true,
+            include: {
               contact: {
-                select: {
-                  id: true,
-                  name: true,
-                  phone: true,
-                  email: true,
-                },
+                select: { id: true, name: true, phone: true, email: true },
+              },
+              reminder: {
+                select: { id: true, subject_text: true, reminder_date: true, is_completed: true },
+              },
+              logs: {
+                orderBy: { created_at: 'desc' },
+                take: 1,
+                select: { content: true, created_at: true },
               },
             },
           },
@@ -411,6 +409,11 @@ export async function getEvents(
           promise: evento.promise,
           stage: evento.stage,
           agenda: evento.agenda[0] || null,
+          reminder:
+            evento.promise?.reminder && !evento.promise.reminder.is_completed
+              ? evento.promise.reminder
+              : null,
+          last_log: evento.promise?.logs?.[0] ?? null,
         };
       })
     );

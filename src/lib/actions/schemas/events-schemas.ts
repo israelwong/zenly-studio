@@ -82,6 +82,15 @@ export interface EventWithContact {
     address: string | null;
     concept: string | null;
   } | null;
+  /** Recordatorio activo de la promesa asociada (solo si promise_id y reminder no completado) */
+  reminder?: {
+    id: string;
+    subject_text: string;
+    reminder_date: Date;
+    is_completed: boolean;
+  } | null;
+  /** Último log/comentario de la promesa asociada */
+  last_log?: { content: string; created_at: Date } | null;
 }
 
 export interface EventPipelineStage {

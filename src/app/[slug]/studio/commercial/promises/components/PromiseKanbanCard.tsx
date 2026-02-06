@@ -360,7 +360,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                         data-drag-handle
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="absolute top-2 left-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
+                        className="absolute top-2 left-1.5 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
                         title="Arrastrar para mover"
                     >
                         <GripVertical className="h-4 w-4" />
@@ -496,7 +496,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
 
                 <div className={isCompact ? 'space-y-1 relative z-10' : 'space-y-1.5 relative z-10'}>
                     {/* Header: Avatar, Nombre y Tipo evento */}
-                    <div className={`flex items-start gap-2 ${isCompact ? 'pl-2' : 'pl-8'}`}>
+                    <div className={`flex items-start gap-2 ${isCompact ? 'pl-2' : 'pl-6'}`}>
                         {!isCompact && (promise.avatar_url || (promise.name && formatInitials(promise.name))) && (
                             <ZenAvatar className="h-10 w-10 shrink-0">
                                 {promise.avatar_url ? (

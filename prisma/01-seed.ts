@@ -555,13 +555,20 @@ async function seedMetodosPagoBasicos(studio_id: string) {
 async function seedPipelines() {
     console.log('📊 Seeding pipelines V2.0...');
 
-    // MANAGER PIPELINE - ACTUALIZADO V2.1 (Refactorización Events)
+    // Eliminar etapa legacy 'revision' si existe (reemplazada por edicion + revision-interna)
+    await prisma.studio_manager_pipeline_stages.deleteMany({
+        where: { studio_id: DEMO_STUDIO_ID, slug: 'revision' },
+    });
+
+    // [SEED-AUDIT-REQUIRED] Event Pipeline Stages updated on Phase 4.4/5.1
+    // MANAGER PIPELINE (Event Stages) - Estándar: 5 etapas + Archivado
     const managerStages = [
-        { slug: 'planeacion', name: 'Planeación', stage_type: 'PLANNING' as const, color: '#3B82F6', order: 0 },
-        { slug: 'produccion', name: 'Producción', stage_type: 'PRODUCTION' as const, color: '#10B981', order: 1 },
-        { slug: 'revision', name: 'Revisión', stage_type: 'REVIEW' as const, color: '#F59E0B', order: 2 },
-        { slug: 'entrega', name: 'Entrega', stage_type: 'DELIVERY' as const, color: '#8B5CF6', order: 3 },
-        { slug: 'archivado', name: 'Archivado', stage_type: 'ARCHIVED' as const, color: '#6B7280', order: 4, is_system: true },
+        { slug: 'planeacion', name: 'Planeación', stage_type: 'PLANNING' as const, color: '#3B82F6', order: 10 },
+        { slug: 'produccion', name: 'Producción', stage_type: 'PRODUCTION' as const, color: '#10B981', order: 20 },
+        { slug: 'edicion', name: 'Edición', stage_type: 'PRODUCTION' as const, color: '#F59E0B', order: 30 },
+        { slug: 'revision-interna', name: 'Revisión Interna', stage_type: 'REVIEW' as const, color: '#8B5CF6', order: 40 },
+        { slug: 'entrega', name: 'Entrega', stage_type: 'DELIVERY' as const, color: '#06B6D4', order: 50 },
+        { slug: 'archivado', name: 'Archivado', stage_type: 'ARCHIVED' as const, color: '#71717a', order: 100, is_system: true },
     ];
 
     for (const stage of managerStages) {
@@ -572,7 +579,12 @@ async function seedPipelines() {
                     slug: stage.slug,
                 },
             },
-            update: {},
+            update: {
+                name: stage.name,
+                color: stage.color,
+                order: stage.order,
+                stage_type: stage.stage_type,
+            },
             create: {
                 studio_id: DEMO_STUDIO_ID,
                 ...stage,

@@ -42,8 +42,9 @@ export async function getEventPipelineStages(
       where: {
         studio_id: studio.id,
         is_active: true,
+        slug: { not: 'revision' }, // Excluir etapa legacy (reemplazada por edicion + revision-interna)
       },
-      orderBy: { order: 'asc' },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
     });
 
     const pipelineStages: EventPipelineStage[] = stages.map((stage) => ({
