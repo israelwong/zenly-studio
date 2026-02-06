@@ -159,6 +159,20 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
               </div>
 
               <div>
+                <p className="text-xs font-medium text-zinc-400 mb-0.5">Teléfono</p>
+                <p className="text-sm text-zinc-200">
+                  {eventData.contact?.phone || eventData.promise?.contact?.phone || '—'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-zinc-400 mb-0.5">Correo</p>
+                <p className="text-sm text-zinc-200">
+                  {eventData.contact?.email || eventData.promise?.contact?.email || '—'}
+                </p>
+              </div>
+
+              <div>
                 <p className="text-xs font-medium text-zinc-400 mb-1">Tipo de evento</p>
                 {eventData.event_type?.name ? (
                   <ZenBadge variant="success" size="sm">{eventData.event_type.name}</ZenBadge>

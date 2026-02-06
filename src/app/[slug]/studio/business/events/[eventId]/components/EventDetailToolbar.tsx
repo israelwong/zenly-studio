@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ExternalLink, Copy, Check, ChevronRight, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Copy, Check, ExternalLink, Phone } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { BitacoraSheet } from '@/components/shared/bitacora';
@@ -29,6 +29,13 @@ export function EventDetailToolbar({
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
 
   const hasContactData = !!contactPhone;
+
+  // Abrir bitácora desde QuickNoteCard u otros (mismo patrón que PromiseLayoutClient)
+  useEffect(() => {
+    const handler = () => setLogsSheetOpen(true);
+    window.addEventListener('open-bitacora-sheet', handler);
+    return () => window.removeEventListener('open-bitacora-sheet', handler);
+  }, []);
 
   const buildPortalLoginUrl = () => {
     if (!contactPhone) return null;
@@ -58,8 +65,7 @@ export function EventDetailToolbar({
       toast.error('No hay número de teléfono disponible');
       return;
     }
-
-    window.open(portalUrl, '_blank');
+    window.open(`${window.location.origin}${portalUrl}`, '_blank');
   };
 
   const handleWhatsApp = async () => {
@@ -97,13 +103,12 @@ export function EventDetailToolbar({
   return (
     <>
       <div className="flex items-center justify-between gap-1.5 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
+        {/* Izquierda: Compartir + Revisar */}
         <div className="flex items-center gap-3">
-          {/* Sección: Compartir */}
           {hasContactData && (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-zinc-500 font-medium">Compartir</span>
-                {/* Botón Copiar URL */}
+                <span className="text-xs text-zinc-500 font-medium">Portal del cliente</span>
                 <ZenButton
                   variant="ghost"
                   size="sm"
@@ -118,80 +123,47 @@ export function EventDetailToolbar({
                   ) : (
                     <>
                       <Copy className="h-3.5 w-3.5" />
-                      <span>Copiar portal URL</span>
+                      <span>Copiar URL</span>
                     </>
                   )}
                 </ZenButton>
-              </div>
-
-              {/* Divisor */}
-              <div className="h-4 w-px bg-zinc-700" />
-            </>
-          )}
-
-          {/* Sección: Contactar */}
-          {hasContactData && (
-            <>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-zinc-500 font-medium">Contactar</span>
-                {/* Botón WhatsApp */}
                 <ZenButton
                   variant="ghost"
                   size="sm"
-                  onClick={handleWhatsApp}
-                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-emerald-500/10 hover:text-emerald-400"
+                  onClick={handlePreviewPortal}
+                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
                 >
-                  <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-                  <span>WhatsApp</span>
-                </ZenButton>
-
-                {/* Botón Llamada */}
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCall}
-                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-blue-500/10 hover:text-blue-400"
-                >
-                  <Phone className="h-3.5 w-3.5" />
-                  <span>Llamar</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Abrir portal</span>
                 </ZenButton>
               </div>
-
-              {/* Divisor */}
-              <div className="h-4 w-px bg-zinc-700" />
             </>
-          )}
-
-          {/* Sección: Revisar */}
-          {hasContactData && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-zinc-500 font-medium">Revisar</span>
-              {/* Botón Portal del cliente */}
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={handlePreviewPortal}
-                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>Portal del cliente</span>
-              </ZenButton>
-            </div>
           )}
         </div>
 
-        {/* Botón de bitácora alineado a la derecha */}
-        {promiseId && (
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
-            title="Bitácora"
-            onClick={() => setLogsSheetOpen(true)}
-          >
-            <span>Bitácora</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </ZenButton>
+        {/* Derecha: Contactar */}
+        {hasContactData && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-500 font-medium">Contactar</span>
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={handleWhatsApp}
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-emerald-500/10 hover:text-emerald-400"
+            >
+              <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
+              <span>WhatsApp</span>
+            </ZenButton>
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={handleCall}
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-blue-500/10 hover:text-blue-400"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              <span>Llamar</span>
+            </ZenButton>
+          </div>
         )}
       </div>
 
@@ -205,6 +177,7 @@ export function EventDetailToolbar({
           contactId={contactId}
         />
       )}
+
     </>
   );
 }

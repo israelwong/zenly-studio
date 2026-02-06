@@ -8,6 +8,7 @@ import { EventPaymentsCard } from '../[eventId]/components/EventPaymentsCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
 import { EventCronogramaCard } from '../[eventId]/components/EventCronogramaCard';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
+import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/QuickNoteCard';
 // import { EventTodoCard } from '../[eventId]/components/EventTodoCard';
 // import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
@@ -30,13 +31,20 @@ export function EventPanel({
     <div className="space-y-6">
       {/* Layout de 3 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna 1: Resumen del Evento */}
+        {/* Columna 1: Resumen del Evento + Bitácora heredada */}
         <div className="lg:col-span-1 space-y-6">
           <ResumenEvento
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}
           />
+          {eventData.promise_id && (
+            <QuickNoteCard
+              studioSlug={studioSlug}
+              promiseId={eventData.promise_id}
+              onLogAdded={onEventUpdated}
+            />
+          )}
           <CondicionesComerciales
             studioSlug={studioSlug}
             eventId={eventId}
