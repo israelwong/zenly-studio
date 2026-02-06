@@ -14,6 +14,8 @@ import { usePromiseContext } from '../../context/PromiseContext';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
+import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
 
 export interface PromisePendienteClientProps {
@@ -45,6 +47,10 @@ export interface PromisePendienteClientProps {
   initialShareSettings?: (PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean }) | null;
   /** Últimos 3 logs para preview en Bitácora (inicialización) */
   initialLastLogs?: PromiseLog[];
+  /** Cita inicial (server). Evita skeleton y fetch en mount. */
+  initialAgendamiento?: AgendaItem | null;
+  /** Seguimiento inicial (server). Evita skeleton y fetch en mount. */
+  initialReminder?: Reminder | null;
 }
 
 function SidebarSkeleton() {
@@ -69,6 +75,8 @@ export function PromisePendienteClient({
   initialCotizaciones = [],
   initialShareSettings = null,
   initialLastLogs = [],
+  initialAgendamiento,
+  initialReminder,
 }: PromisePendienteClientProps) {
   const params = useParams();
   const studioSlug = params.slug as string;
@@ -257,11 +265,12 @@ export function PromisePendienteClient({
 
           {/* Columna 3: Recordatorio → Cita → Bitácora → Lo que el prospecto ve (colapsable) */}
           <div className="lg:col-span-1 flex flex-col gap-4">
-            <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
+            <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} initialReminder={initialReminder} />
             <PromiseAppointmentCard
               studioSlug={studioSlug}
               promiseId={promiseId}
               eventoId={eventoId}
+              initialAgendamiento={initialAgendamiento}
             />
             <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
             {/* Oculto temporalmente: card "X ajustes activos" — descomentar para mostrar */}

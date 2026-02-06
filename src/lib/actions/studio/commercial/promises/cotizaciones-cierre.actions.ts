@@ -62,7 +62,7 @@ export async function obtenerRegistroCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Paralelizar: registro de cierre + última versión del contrato
@@ -180,7 +180,7 @@ export async function crearRegistroCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Verificar que no exista ya un registro
@@ -253,7 +253,7 @@ export async function actualizarCondicionesCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Actualizar o crear registro de cierre
@@ -328,7 +328,7 @@ export async function obtenerDatosContratoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const registro = await prisma.studio_cotizaciones_cierre.findUnique({
@@ -424,7 +424,7 @@ export async function obtenerDatosCondicionesCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const registro = await prisma.studio_cotizaciones_cierre.findUnique({
@@ -501,7 +501,7 @@ export async function obtenerDatosPagoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const registro = await prisma.studio_cotizaciones_cierre.findUnique({
@@ -577,7 +577,7 @@ export async function quitarCondicionesCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Actualizar registro de cierre para quitar condiciones
@@ -639,7 +639,7 @@ export async function actualizarContratoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Obtener promiseId desde cotización si no se proporcionó
@@ -973,7 +973,7 @@ export async function regenerarContratoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Verificar que el contrato no est? firmado
@@ -1279,7 +1279,7 @@ export async function actualizarPagoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Determinar si es pago registrado o promesa de pago
@@ -1349,7 +1349,7 @@ export async function eliminarRegistroCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Eliminar registro si existe
@@ -1411,7 +1411,7 @@ export async function obtenerVersionesContratoCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Obtener todas las versiones del contrato
@@ -1517,7 +1517,7 @@ export async function autorizarYCrearEvento(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.status !== 'en_cierre') {

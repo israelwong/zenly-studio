@@ -31,11 +31,14 @@ interface SeguimientoMinimalCardProps {
   studioSlug: string;
   promiseId: string;
   onSuccess?: () => void;
+  /** Datos iniciales del servidor. Si está definido (null o item), no se hace fetch en mount ni skeleton. */
+  initialReminder?: Reminder | null;
 }
 
-export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: SeguimientoMinimalCardProps) {
-  const [reminder, setReminder] = useState<Reminder | null>(null);
-  const [loading, setLoading] = useState(true);
+export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initialReminder: initialReminderProp }: SeguimientoMinimalCardProps) {
+  const hasInitial = initialReminderProp !== undefined;
+  const [reminder, setReminder] = useState<Reminder | null>(hasInitial ? (initialReminderProp ?? null) : null);
+  const [loading, setLoading] = useState(!hasInitial);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -55,6 +58,13 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (hasInitial) {
+      setLoading(false);
+      getReminderSubjects(studioSlug, { includeInactive: false, orderBy: 'order' }).then((subjectsRes) => {
+        if (subjectsRes.success && subjectsRes.data) setSubjects(subjectsRes.data);
+      });
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       const [reminderRes, subjectsRes] = await Promise.all([
@@ -68,7 +78,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
     };
     load();
     return () => { cancelled = true; };
-  }, [studioSlug, promiseId]);
+  }, [studioSlug, promiseId, hasInitial]);
 
   useEffect(() => {
     if (!loading && !reminder && selectedDate === undefined) {

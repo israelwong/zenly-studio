@@ -9,6 +9,7 @@ import { archiveCotizacion, deleteCotizacion, pasarACierre } from '@/lib/actions
 import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
 import { toast } from 'sonner';
 import { startTransition } from 'react';
+import { getStudioPageTitle, STUDIO_PAGE_NAMES } from '@/lib/utils/studio-page-title';
 
 interface EditarCotizacionClientProps {
   initialCotizacion: {
@@ -30,7 +31,7 @@ interface EditarCotizacionClientProps {
     negociacion_precio_original?: number | null;
     negociacion_precio_personalizado?: number | null;
     items: Array<{
-      item_id: string;
+      item_id: string | null;
       quantity: number;
       unit_price: number;
       subtotal: number;
@@ -38,6 +39,7 @@ interface EditarCotizacionClientProps {
       expense: number;
       order: number;
       id: string;
+      billing_type?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
       name: string | null;
       description: string | null;
       category_name: string | null;
@@ -50,6 +52,8 @@ interface EditarCotizacionClientProps {
       description_raw?: string | null;
       category_name_raw?: string | null;
       seccion_name_raw?: string | null;
+      categoria_id?: string | null;
+      original_item_id?: string | null;
     }>;
   } | null;
   initialCondicionComercial: {
@@ -61,11 +65,14 @@ interface EditarCotizacionClientProps {
     advance_amount: number | null;
     discount_percentage: number | null;
   } | null;
+  /** Estado de ruta de la promesa (pendiente | cierre | autorizada) para enlace "Regresar" directo. */
+  promiseState?: 'pendiente' | 'cierre' | 'autorizada' | null;
 }
 
 export function EditarCotizacionClient({
   initialCotizacion,
   initialCondicionComercial,
+  promiseState,
 }: EditarCotizacionClientProps) {
   const params = useParams();
   const router = useRouter();
@@ -75,6 +82,10 @@ export function EditarCotizacionClient({
   const cotizacionId = params.cotizacionId as string;
   const contactId = searchParams.get('contactId');
   const fromCierre = searchParams.get('from') === 'cierre';
+
+  // Fallback: si no llega promiseState (ej. cache antiguo), ir a pendiente en lugar de raíz para evitar redirect
+  const effectiveState = promiseState ?? 'pendiente';
+  const backHref = `/${studioSlug}/studio/commercial/promises/${promiseId}/${effectiveState}`;
 
   const [isMounted, setIsMounted] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -86,7 +97,7 @@ export function EditarCotizacionClient({
 
   React.useEffect(() => {
     setIsMounted(true);
-    document.title = 'Zenly Studio - Cotizaciรณn';
+    document.title = getStudioPageTitle(STUDIO_PAGE_NAMES.COTIZACION);
   }, []);
 
   const cotizacionStatus = initialCotizacion?.status || null;
@@ -113,10 +124,10 @@ export function EditarCotizacionClient({
     try {
       const result = await pasarACierre(studioSlug, cotizacionId);
       if (result.success) {
-        toast.success('Cotizaciรณn pasada a proceso de cierre');
+        toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} pasada a proceso de cierre`);
         window.dispatchEvent(new CustomEvent('close-overlays'));
         startTransition(() => {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          router.push(backHref);
         });
       } else {
         toast.error(result.error || 'Error al pasar cotizaciรณn a cierre');
@@ -155,11 +166,9 @@ export function EditarCotizacionClient({
                   window.dispatchEvent(new CustomEvent('close-overlays'));
                   startTransition(() => {
                     if (fromCierre) {
-                      // Si viene de cierre, usar router.back() para regresar a la ruta anterior
                       router.back();
                     } else {
-                      // Si no viene de cierre, navegar explícitamente al detalle de la promesa
-                      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+                      router.push(backHref);
                     }
                   });
                 }}
@@ -259,7 +268,7 @@ export function EditarCotizacionClient({
           try {
             const result = await archiveCotizacion(cotizacionId, studioSlug);
             if (result.success) {
-              toast.success('Cotizaciรณn archivada exitosamente');
+              toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} archivada exitosamente`);
               setShowArchiveModal(false);
               window.dispatchEvent(new CustomEvent('close-overlays'));
               if (fromCierre) {
@@ -268,7 +277,7 @@ export function EditarCotizacionClient({
                 });
               } else {
                 startTransition(() => {
-                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+                  router.push(backHref);
                 });
               }
             } else {
@@ -280,8 +289,8 @@ export function EditarCotizacionClient({
             setIsActionLoading(false);
           }
         }}
-        title="Archivar Cotizaciรณn"
-        description="ยฟEstรกs seguro de archivar esta cotizaciรณn? Podrรกs desarchivarla mรกs tarde."
+        title={`Archivar ${STUDIO_PAGE_NAMES.COTIZACION}`}
+        description="¿Estás seguro de archivar esta cotización? Podrás desarchivarla más tarde."
         confirmText="Archivar"
         cancelText="Cancelar"
         variant="default"
@@ -296,7 +305,7 @@ export function EditarCotizacionClient({
           try {
             const result = await deleteCotizacion(cotizacionId, studioSlug);
             if (result.success) {
-              toast.success('Cotizaciรณn eliminada exitosamente');
+              toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} eliminada exitosamente`);
               setShowDeleteModal(false);
               window.dispatchEvent(new CustomEvent('close-overlays'));
               if (fromCierre) {
@@ -305,7 +314,7 @@ export function EditarCotizacionClient({
                 });
               } else {
                 startTransition(() => {
-                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+                  router.push(backHref);
                 });
               }
             } else {
@@ -317,8 +326,8 @@ export function EditarCotizacionClient({
             setIsActionLoading(false);
           }
         }}
-        title="Eliminar Cotizaciรณn"
-        description="ยฟEstรกs seguro de eliminar esta cotizaciรณn? Esta acciรณn no se puede deshacer."
+        title={`Eliminar ${STUDIO_PAGE_NAMES.COTIZACION}`}
+        description="¿Estás seguro de eliminar esta cotización? Esta acción no se puede deshacer."
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"

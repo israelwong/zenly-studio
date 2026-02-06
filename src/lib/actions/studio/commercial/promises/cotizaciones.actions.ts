@@ -20,6 +20,7 @@ import { guardarEstructuraCotizacionAutorizada, calcularYGuardarPreciosCotizacio
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
+import { getPromiseRouteStateFromSlug, type PromiseRouteState } from '@/lib/utils/promise-navigation';
 
 export interface CotizacionListItem {
   id: string;
@@ -593,6 +594,7 @@ export async function getCotizacionById(
     selected_at?: Date | null;
     negociacion_precio_original?: number | null;
     negociacion_precio_personalizado?: number | null;
+    promise_route_state?: PromiseRouteState | null;
     items: Array<{
       item_id: string | null; // null para custom items
       quantity: number;
@@ -659,6 +661,11 @@ export async function getCotizacionById(
         selected_at: true,
         negociacion_precio_original: true,
         negociacion_precio_personalizado: true,
+        promise: {
+          select: {
+            pipeline_stage: { select: { slug: true } },
+          },
+        },
         cotizacion_items: {
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -676,7 +683,7 @@ export async function getCotizacionById(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Separar items del catálogo y custom items
@@ -745,6 +752,11 @@ export async function getCotizacionById(
     // Combinar ambos tipos de items manteniendo el orden
     const itemsOrdenados = [...catalogItems, ...customItems].sort((a, b) => a.order - b.order);
 
+    const stageSlug = cotizacion.promise?.pipeline_stage?.slug ?? null;
+    const promiseRouteState: PromiseRouteState | null = stageSlug
+      ? getPromiseRouteStateFromSlug(stageSlug)
+      : null;
+
     return {
       success: true,
       data: {
@@ -771,6 +783,7 @@ export async function getCotizacionById(
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
         items: itemsOrdenados,
+        promise_route_state: promiseRouteState,
       },
     };
   } catch (error) {
@@ -808,7 +821,7 @@ export async function deleteCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Eliminar la cotizaciรณn (los items se eliminan en cascade)
@@ -877,7 +890,7 @@ export async function archiveCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.status === 'archivada') {
@@ -935,7 +948,7 @@ export async function unarchiveCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.status !== 'archivada') {
@@ -1002,7 +1015,7 @@ export async function duplicateCotizacion(
     });
 
     if (!original) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Obtener el order mรกximo para colocar la duplicada al final
@@ -1283,7 +1296,7 @@ export async function updateCotizacionName(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const updated = await prisma.studio_cotizaciones.update({
@@ -1353,7 +1366,7 @@ export async function toggleCotizacionVisibility(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const updated = await prisma.studio_cotizaciones.update({
@@ -1426,7 +1439,7 @@ export async function toggleNegociacionStatus(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo permitir quitar de negociaciรณn (volver a pendiente)
@@ -1514,7 +1527,7 @@ export async function quitarCancelacionCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo permitir quitar cancelaciรณn si estรก cancelada
@@ -1632,7 +1645,7 @@ export async function updateCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // No permitir actualizar si est? autorizada o aprobada
@@ -1807,7 +1820,7 @@ export async function updateCotizacion(
       }
 
       // NOTA: No archivamos otras cotizaciones aqu?
-      // El archivado solo ocurre cuando se autoriza una cotizaciรณn (en autorizarCotizacion)
+      // El archivado solo ocurre cuando se autoriza una cotización (en autorizarCotizacion)
     });
 
     // Calcular y guardar precios de los items del catálogo (los custom ya tienen precios)
@@ -1961,7 +1974,7 @@ export async function autorizarCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada') {
@@ -2056,7 +2069,7 @@ export async function autorizarCotizacion(
             updated_at: new Date(),
           },
         });
-        console.log(`[AUTORIZACION] ${otrasCotizaciones.length} cotizaciones archivadas automรกticamente.`);
+        console.log(`[AUTORIZACION] ${otrasCotizaciones.length} cotizaciones archivadas automáticamente.`);
       }
 
       // 3. Obtener etapa anterior antes de actualizar
@@ -2217,7 +2230,7 @@ export async function cancelarCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo se pueden cancelar cotizaciones autorizadas, aprobadas o en cierre
@@ -2301,7 +2314,7 @@ export async function cancelarCotizacionYEvento(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo se pueden cancelar cotizaciones autorizadas o aprobadas
@@ -2435,7 +2448,7 @@ export async function pasarACierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Verificar que la cotización NO esté ya en cierre
@@ -2575,7 +2588,7 @@ export async function cancelarCierre(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaciรณn no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Verificar que la cotizaciรณn estรฉ en cierre

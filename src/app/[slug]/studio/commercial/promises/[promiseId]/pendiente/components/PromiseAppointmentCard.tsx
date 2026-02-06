@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, MapPin, Video, CalendarClock, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
@@ -28,16 +28,20 @@ interface PromiseAppointmentCardProps {
   studioSlug: string;
   promiseId: string;
   eventoId?: string | null;
+  /** Datos iniciales del servidor. Si está definido (null o item), no se hace fetch en mount ni skeleton. */
+  initialAgendamiento?: AgendaItem | null;
 }
 
 export function PromiseAppointmentCard({
   studioSlug,
   promiseId,
   eventoId,
+  initialAgendamiento: initialAgendamientoProp,
 }: PromiseAppointmentCardProps) {
   const router = useRouter();
-  const [agendamiento, setAgendamiento] = useState<AgendaItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const hasInitial = initialAgendamientoProp !== undefined;
+  const [agendamiento, setAgendamiento] = useState<AgendaItem | null>(hasInitial ? (initialAgendamientoProp ?? null) : null);
+  const [loading, setLoading] = useState(!hasInitial);
   const [submitting, setSubmitting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -61,8 +65,9 @@ export function PromiseAppointmentCard({
   };
 
   useEffect(() => {
+    if (hasInitial) return;
     loadAgendamiento();
-  }, [studioSlug, promiseId]);
+  }, [studioSlug, promiseId, hasInitial]);
 
   useEffect(() => {
     const handler = () => loadAgendamiento();
@@ -122,7 +127,7 @@ export function PromiseAppointmentCard({
           setEditMode(false);
           toast.success('Cita actualizada');
           window.dispatchEvent(new CustomEvent('agenda-updated'));
-          router.refresh();
+          startTransition(() => router.refresh());
         } else {
           toast.error(result.error || 'Error al actualizar');
         }
@@ -132,7 +137,7 @@ export function PromiseAppointmentCard({
           setAgendamiento(result.data || null);
           toast.success('Cita agendada');
           window.dispatchEvent(new CustomEvent('agenda-updated'));
-          router.refresh();
+          startTransition(() => router.refresh());
         } else {
           toast.error(result.error || 'Error al crear');
         }
@@ -154,7 +159,7 @@ export function PromiseAppointmentCard({
         setAgendamiento(null);
         toast.success('Cita cancelada');
         window.dispatchEvent(new CustomEvent('agenda-updated'));
-        router.refresh();
+        startTransition(() => router.refresh());
       } else {
         toast.error(result.error || 'Error al cancelar');
       }

@@ -22,6 +22,7 @@ export function PromiseReminderCard({
   promiseId,
   variant = 'default',
 }: PromiseReminderCardProps) {
+  const router = useRouter();
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCompleting, setIsCompleting] = useState(false);

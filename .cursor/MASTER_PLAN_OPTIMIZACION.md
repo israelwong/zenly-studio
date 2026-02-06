@@ -14,6 +14,7 @@
 3. [Plan de Vuelo por Fases](#3-plan-de-vuelo-por-fases)
 4. [Checklist de Control](#4-checklist-de-control)
 5. [Rutas Públicas de Promesas](#5-rutas-públicas-de-promesas)
+6. [Atomic Seeding (Carga Atómica)](#6-atomic-seeding-carga-atómica)
 
 ---
 
@@ -428,11 +429,31 @@ Validaciones Estado:   2/2   (100%) ✅
 
 ---
 
+## 6. Atomic Seeding (Carga Atómica)
+
+**Estado:** ✅ **Documentado y aplicado** (Promise Pendiente, Feb 2026)
+
+**Objetivo:** Eliminar bounces de navegación y skeletons en la primera pintada: todos los datos de la vista se obtienen en el Server Component y se inyectan como props `initial*` a los Client Components.
+
+**Reglas:**
+- **Server-Side Priming:** Incluir en el `Promise.all` de cada `page.tsx` todos los datos que las cards/paneles necesitan (agenda, recordatorios, etc.).
+- **Zero-Skeleton:** Los Client Components que reciben `initial*` inicializan estado con ellos; si hay dato inicial, no skeleton y no fetch en mount.
+- **startTransition para router.refresh:** Tras mutaciones, usar `startTransition(() => router.refresh())` para no interrumpir una navegación en curso.
+
+**Referencias:**
+- **Regla Cursor:** `.cursor/rules/atomic-seeding-pattern.mdc` (globs: `page.tsx`, `*Client*.tsx`, `*Card*.tsx`)
+- **Patrón:** `.cursor/docs/patterns/PATRON_ATOMIC_SEEDING.md`
+- **Caso de uso:** `pendiente/page.tsx`, `PromisePendienteClient`, `PromiseAppointmentCard`, `SeguimientoMinimalCard`
+
+---
+
 ## 🔗 Referencias
 
 - **Metodología:** `docs/architecture/metodologia-optimizacion-zen.md`
 - **Auditoría Lista:** `.cursor/audit-promises-loading.md`
 - **Auditoría Detalle:** `.cursor/audit-promise-detail-routes.md`
+- **Atomic Seeding (regla):** `.cursor/rules/atomic-seeding-pattern.mdc`
+- **Atomic Seeding (patrón):** `.cursor/docs/patterns/PATRON_ATOMIC_SEEDING.md`
 
 ---
 

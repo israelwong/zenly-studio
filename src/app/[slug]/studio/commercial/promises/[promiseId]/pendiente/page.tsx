@@ -6,6 +6,8 @@ import { getPaymentMethodsForAuthorization } from '@/lib/actions/studio/commerci
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { getLastPromiseLogs } from '@/lib/actions/studio/commercial/promises';
+import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
+import { getReminderByPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { PromisePendienteClient } from './components/PromisePendienteClient';
 
 interface PromisePendientePageProps {
@@ -34,12 +36,16 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     cotizacionesResult,
     shareSettingsResult,
     lastLogsResult,
+    agendamientoResult,
+    reminderResult,
   ] = await Promise.all([
     obtenerCondicionesComerciales(studioSlug),
     getPaymentMethodsForAuthorization(studioSlug),
     getCotizacionesByPromiseId(promiseId),
     getPromiseShareSettings(studioSlug, promiseId),
     getLastPromiseLogs(promiseId, 3),
+    obtenerAgendamientoPorPromise(studioSlug, promiseId),
+    getReminderByPromise(studioSlug, promiseId),
   ]);
 
   const condicionesComerciales = condicionesResult.success && condicionesResult.data
@@ -84,6 +90,8 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     shareSettingsResult.success && shareSettingsResult.data ? shareSettingsResult.data : null;
 
   const initialLastLogs = lastLogsResult.success && lastLogsResult.data ? lastLogsResult.data : [];
+  const initialAgendamiento = agendamientoResult.success && agendamientoResult.data ? agendamientoResult.data : null;
+  const initialReminder = reminderResult.success && reminderResult.data != null ? reminderResult.data : null;
 
   return (
     <PromisePendienteClient
@@ -93,6 +101,8 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       initialCotizaciones={cotizacionesResult.success && cotizacionesResult.data ? cotizacionesResult.data : []}
       initialShareSettings={initialShareSettings}
       initialLastLogs={initialLastLogs}
+      initialAgendamiento={initialAgendamiento}
+      initialReminder={initialReminder}
     />
   );
 }
