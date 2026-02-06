@@ -16,7 +16,8 @@ import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/Tar
 import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideSheet';
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package } from 'lucide-react';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap } from 'lucide-react';
+import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import { TerminosCondicionesEditor } from '@/components/shared/terminos-condiciones';
 import { AvisoPrivacidadManager } from '@/components/shared/avisos-privacidad/AvisoPrivacidadManager';
@@ -90,6 +91,7 @@ function StudioLayoutContent({
   const [showContractsModal, setShowContractsModal] = useState(false);
   const [showStudioDataModal, setShowStudioDataModal] = useState(false);
   const [showEventTypesModal, setShowEventTypesModal] = useState(false);
+  const [showAutomationModal, setShowAutomationModal] = useState(false);
 
   // Escuchar eventos del catálogo de configuración
   useEffect(() => {
@@ -190,12 +192,26 @@ function StudioLayoutContent({
     }
   }, [pathname, closeAllOverlays]);
 
-  // Configuraciones disponibles para el catálogo
+  // Configuraciones disponibles para el catálogo (keywords para búsqueda)
   const configurationSections: ConfigurationSection[] = [
     {
       id: 'comercial',
       title: 'Configuración Comercial',
       items: [
+        {
+          id: 'automatizacion',
+          title: 'Opciones de Automatización',
+          description: 'Configura la capacidad diaria del estudio, gestión de conflictos de fecha, envío automático de WhatsApp y recordatorios inteligentes.',
+          icon: Zap,
+          onClick: () => {
+            promisesConfig?.closeConfigCatalog?.();
+            setTimeout(() => setShowAutomationModal(true), 150);
+          },
+          category: 'comercial',
+          isFullWidth: true,
+          tags: ['Capacidad', 'Conflictos de fecha', 'WhatsApp', 'Notificaciones', 'Recordatorios', 'Disponibilidad', 'Agenda', 'Flujos'],
+          keywords: ['capacidad', 'conflictos de fecha', 'whatsapp', 'notificaciones', 'mensajes automáticos', 'recordatorios', 'reglas de negocio', 'disponibilidad', 'agenda', 'flujos', 'automatización', 'automatizacion', 'promesas', 'prospecto', 'cotización', 'cupos', 'contrato', 'correo', 'etapas'],
+        },
         {
           id: 'condiciones',
           title: 'Condiciones Comerciales',
@@ -207,6 +223,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'comercial',
+          keywords: ['condiciones', 'pago', 'utilidad', 'descuento'],
         },
         {
           id: 'pagos',
@@ -219,6 +236,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'comercial',
+          keywords: ['pagos', 'transferencia', 'clabe', 'tarjeta', 'efectivo'],
         },
         {
           id: 'contratos',
@@ -231,6 +249,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'comercial',
+          keywords: ['contratos', 'plantilla', 'documentos'],
         },
         {
           id: 'tipos-evento',
@@ -243,6 +262,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'comercial',
+          keywords: ['tipos', 'evento', 'boda', 'quinceañera', 'paquetes'],
         },
       ],
     },
@@ -261,6 +281,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'legal',
+          keywords: ['términos', 'terminos', 'condiciones', 'legal'],
         },
         {
           id: 'aviso',
@@ -273,6 +294,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'legal',
+          keywords: ['aviso', 'privacidad', 'datos', 'legal'],
         },
         {
           id: 'datos-legales',
@@ -285,6 +307,7 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'legal',
+          keywords: ['estudio', 'rfc', 'razón social', 'legal', 'domicilio'],
         },
       ],
     },
@@ -444,6 +467,13 @@ function StudioLayoutContent({
         isOpen={showEventTypesModal}
         onClose={() => setShowEventTypesModal(false)}
         studioSlug={studioSlug}
+      />
+
+      <PromiseShareOptionsModal
+        isOpen={showAutomationModal}
+        onClose={() => setShowAutomationModal(false)}
+        studioSlug={studioSlug}
+        scope="global"
       />
     </div>
   );

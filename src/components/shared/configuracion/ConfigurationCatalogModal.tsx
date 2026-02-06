@@ -12,6 +12,12 @@ export interface ConfigurationItem {
   icon: LucideIcon;
   onClick: () => void;
   category: string;
+  /** Palabras clave para búsqueda (ej: "whatsapp", "correo", "etapas") */
+  keywords?: string[];
+  /** Ocupa todo el ancho de la fila (super card) */
+  isFullWidth?: boolean;
+  /** Etiquetas "Funciones incluidas" mostradas en la card (ej: Capacidad, WhatsApp) */
+  tags?: string[];
 }
 
 export interface ConfigurationSection {
@@ -46,12 +52,14 @@ export function ConfigurationCatalogModal({
     const query = searchQuery.toLowerCase().trim();
     return sections
       .map((section) => {
-        const filteredItems = section.items.filter(
-          (item) =>
-            item.title.toLowerCase().includes(query) ||
-            item.description.toLowerCase().includes(query) ||
-            item.category.toLowerCase().includes(query)
-        );
+        const filteredItems = section.items.filter((item) => {
+          const matchTitle = item.title.toLowerCase().includes(query);
+          const matchDesc = item.description.toLowerCase().includes(query);
+          const matchCategory = item.category.toLowerCase().includes(query);
+          const matchKeywords =
+            item.keywords?.some((k) => k.toLowerCase().includes(query)) ?? false;
+          return matchTitle || matchDesc || matchCategory || matchKeywords;
+        });
         return { ...section, items: filteredItems };
       })
       .filter((section) => section.items.length > 0);
@@ -99,12 +107,13 @@ export function ConfigurationCatalogModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {section.items.map((item) => {
                     const Icon = item.icon;
+                    const fullWidth = item.isFullWidth === true;
                     return (
                       <button
                         key={item.id}
                         type="button"
                         onClick={() => handleItemClick(item)}
-                        className="text-left"
+                        className={`text-left ${fullWidth ? 'md:col-span-2' : ''}`}
                       >
                         <div className="h-full rounded-lg bg-zinc-800/30 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700/50 transition-all duration-200 cursor-pointer group p-4">
                           <div className="flex items-start gap-3">
@@ -115,9 +124,21 @@ export function ConfigurationCatalogModal({
                               <h4 className="text-sm font-medium text-zinc-200 group-hover:text-emerald-400 transition-colors duration-200 mb-1">
                                 {item.title}
                               </h4>
-                              <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+                              <p className={`text-xs text-zinc-400 leading-relaxed ${fullWidth ? '' : 'line-clamp-2'}`}>
                                 {item.description}
                               </p>
+                              {fullWidth && item.tags && item.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-3">
+                                  {item.tags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-700/60 text-zinc-400 border border-zinc-600/50"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
