@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock } from 'lucide-react';
+import { Calendar, MessageSquare, MessageSquarePlus, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { ArchivePromiseModal } from './ArchivePromiseModal';
+import { QuickLogModal } from './QuickLogModal';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import { ReminderFormModal } from '@/components/shared/reminders';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises';
@@ -31,11 +32,13 @@ interface PromiseKanbanCardProps {
     onRestore?: () => void;
     onTagsUpdated?: () => void;
     onReminderUpdated?: () => void;
+    /** Actualización local de la promesa (ej. last_log tras agregar nota) para UI inmediata. */
+    onUpdateLocalPromise?: (promiseId: string, updates: { last_log?: PromiseWithContact['last_log'] }) => void;
     pipelineStages?: PipelineStage[];
     variant?: 'default' | 'compact';
 }
 
-export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onRestore, onTagsUpdated, onReminderUpdated, pipelineStages = [], variant = 'default' }: PromiseKanbanCardProps) {
+export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onRestore, onTagsUpdated, onReminderUpdated, onUpdateLocalPromise, pipelineStages = [], variant = 'default' }: PromiseKanbanCardProps) {
     // Crear mapa de nombres de stages para obtener nombres personalizados
     const stageNameMap = pipelineStages.length > 0 ? createStageNameMap(pipelineStages) : null;
     const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -44,6 +47,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showDeleteReminderConfirm, setShowDeleteReminderConfirm] = useState(false);
     const [isDeletingReminder, setIsDeletingReminder] = useState(false);
+    const [showQuickLogModal, setShowQuickLogModal] = useState(false);
     // ✅ OPTIMIZACIÓN: Usar reminder que viene en la promesa (ya no se carga por separado)
     const [reminder, setReminder] = useState<Reminder | null>(
       promise.reminder && !promise.reminder.is_completed ? promise.reminder as Reminder : null
@@ -432,6 +436,15 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                             </button>
                                         </ZenDropdownMenuTrigger>
                                         <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                            <ZenDropdownMenuItem
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowQuickLogModal(true);
+                                                }}
+                                            >
+                                                <MessageSquarePlus className="h-4 w-4 mr-2" />
+                                                Agregar nota
+                                            </ZenDropdownMenuItem>
                                             {!reminder ? (
                                                 <ZenDropdownMenuItem
                                                     onClick={(e) => {
@@ -492,6 +505,19 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             </>
                         )}
                     </div>
+                )}
+
+                {studioSlug && promise.promise_id && (
+                    <QuickLogModal
+                        isOpen={showQuickLogModal}
+                        onClose={() => setShowQuickLogModal(false)}
+                        studioSlug={studioSlug}
+                        promiseId={promise.promise_id}
+                        onSaved={(newLog) => {
+                            if (newLog && promise.promise_id) onUpdateLocalPromise?.(promise.promise_id, { last_log: newLog });
+                            onTagsUpdated?.();
+                        }}
+                    />
                 )}
 
                 <div className={isCompact ? 'space-y-1 relative z-10' : 'space-y-1.5 relative z-10'}>

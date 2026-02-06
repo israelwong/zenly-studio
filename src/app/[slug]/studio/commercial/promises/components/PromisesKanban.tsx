@@ -661,6 +661,13 @@ function PromisesKanban({
     });
   };
 
+  // Actualizar promesa en estado local (ej. last_log tras agregar nota)
+  const handleUpdateLocalPromise = useCallback((promiseId: string, updates: { last_log?: PromiseWithContact['last_log'] }) => {
+    setLocalPromises((prev) =>
+      prev.map((p) => (p.promise_id === promiseId ? { ...p, ...updates } : p))
+    );
+  }, []);
+
   // Manejar eliminar promesa con actualización local
   const handlePromiseDeleted = async (promiseId: string) => {
     // Remover la promesa del estado local inmediatamente
@@ -876,6 +883,7 @@ function PromisesKanban({
                 pipelineStages={localPipelineStages}
                 onPipelineStagesUpdated={onPipelineStagesUpdated}
                 onUpdateLocalStage={updateLocalStage}
+                onUpdateLocalPromise={handleUpdateLocalPromise}
               />
             ))
           ) : (
@@ -896,6 +904,7 @@ function PromisesKanban({
                   pipelineStages={localPipelineStages}
                   onPipelineStagesUpdated={onPipelineStagesUpdated}
                   onUpdateLocalStage={updateLocalStage}
+                  onUpdateLocalPromise={handleUpdateLocalPromise}
                 />
               ))}
             </div>
@@ -918,6 +927,7 @@ function PromisesKanban({
                 onArchived={(reason) => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id, reason)}
                 onDeleted={() => activePromise.promise_id && handlePromiseDeleted(activePromise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
+                onUpdateLocalPromise={handleUpdateLocalPromise}
                 pipelineStages={localPipelineStages}
               />
             </div>
@@ -961,6 +971,7 @@ function KanbanColumn({
   pipelineStages = [],
   onPipelineStagesUpdated,
   onUpdateLocalStage,
+  onUpdateLocalPromise,
 }: {
   stage: PipelineStage;
   promises: PromiseWithContact[];
@@ -974,6 +985,7 @@ function KanbanColumn({
   pipelineStages?: PipelineStage[];
   onPipelineStagesUpdated?: () => void;
   onUpdateLocalStage?: (stageId: string, updates: Partial<PipelineStage>) => void;
+  onUpdateLocalPromise?: (promiseId: string, updates: { last_log?: PromiseWithContact['last_log'] }) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -1367,6 +1379,7 @@ function KanbanColumn({
                 onRestore={() => promise.promise_id && onPromiseRestored?.(promise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
                 onReminderUpdated={onPromiseUpdated}
+                onUpdateLocalPromise={onUpdateLocalPromise}
                 pipelineStages={pipelineStages}
                 variant={isVirtualHistorial ? 'compact' : 'default'}
               />
