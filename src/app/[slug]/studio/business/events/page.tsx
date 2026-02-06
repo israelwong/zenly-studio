@@ -1,7 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import { getEvents, getEventPipelineStages } from '@/lib/actions/studio/business/events';
 import { EventsPageClient } from './components/EventsPageClient';
-import { verificarMetodosSinConfigurar } from '@/lib/actions/studio/config/metodos-pago.actions';
 
 interface EventsPageProps {
   params: Promise<{
@@ -45,23 +44,15 @@ export default async function EventsPage({ params }: EventsPageProps) {
   // Cargar eventos como Promise (no bloqueante - streaming)
   const eventsPromise = getCachedEvents();
 
-  // Verificar métodos de pago (ligero, bloqueante)
-  const metodosResult = await verificarMetodosSinConfigurar(studioSlug);
-
   const pipelineStages = stagesResult.success && stagesResult.data
     ? stagesResult.data
     : [];
-
-  const metodosSinConfigurar = metodosResult.success && metodosResult.count !== undefined
-    ? metodosResult.count
-    : 0;
 
   return (
     <EventsPageClient
       studioSlug={studioSlug}
       initialPipelineStages={pipelineStages}
       eventsPromise={eventsPromise}
-      metodosSinConfigurar={metodosSinConfigurar}
     />
   );
 }
