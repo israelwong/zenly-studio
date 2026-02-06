@@ -1,17 +1,37 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ZenButton, ZenInput, ZenCard, ZenCardContent } from "@/components/ui/zen";
+import { ZenButton, ZenCard, ZenCardContent } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import {
   obtenerTiposEvento,
-  crearTipoEvento,
-  actualizarTipoEvento,
   eliminarTipoEvento,
 } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import type { TipoEventoData } from "@/lib/actions/schemas/tipos-evento-schemas";
-import { X, Plus, Pencil, Trash2, Loader2, AlertTriangle, Package } from "lucide-react";
+import { TipoEventoEnrichedModal } from "@/components/shared/tipos-evento/TipoEventoEnrichedModal";
+import { X, Plus, Pencil, Trash2, Loader2, Package, Image as ImageIcon, Video } from "lucide-react";
 import { toast } from "sonner";
+
+/** Skeleton que imita un ítem de la lista (cover 48x48 + título + metadata) para evitar layout shift */
+function EventTypeListSkeleton() {
+  return (
+    <ZenCard className="overflow-hidden">
+      <ZenCardContent className="p-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 shrink-0 rounded-md bg-zinc-800 animate-pulse" />
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-2">
+            <div className="w-32 h-4 rounded bg-zinc-800 animate-pulse" />
+            <div className="w-20 h-3 rounded bg-zinc-800/80 animate-pulse" />
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-zinc-800 animate-pulse" />
+            <div className="w-8 h-8 rounded-lg bg-zinc-800 animate-pulse" />
+          </div>
+        </div>
+      </ZenCardContent>
+    </ZenCard>
+  );
+}
 
 interface TipoEventoManagementModalProps {
   isOpen: boolean;
@@ -28,10 +48,8 @@ export function TipoEventoManagementModal({
 }: TipoEventoManagementModalProps) {
   const [eventTypes, setEventTypes] = useState<TipoEventoData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const [creatingNew, setCreatingNew] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [enrichedModalOpen, setEnrichedModalOpen] = useState(false);
+  const [enrichedModalTipo, setEnrichedModalTipo] = useState<TipoEventoData | undefined>(undefined);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
     name: string;
@@ -44,6 +62,19 @@ export function TipoEventoManagementModal({
       loadEventTypes();
     }
   }, [isOpen, studioSlug]);
+
+  // Debug: verificar que cover_image_url / cover_video_url llegan al componente
+  useEffect(() => {
+    if (isOpen && eventTypes.length > 0) {
+      console.log("Event Type Data (covers):", eventTypes.map((t) => ({
+        id: t.id,
+        nombre: t.nombre,
+        cover_image_url: t.cover_image_url ?? null,
+        cover_video_url: t.cover_video_url ?? null,
+        cover_media_type: t.cover_media_type ?? null,
+      })));
+    }
+  }, [isOpen, eventTypes]);
 
   const loadEventTypes = async () => {
     setLoading(true);
@@ -62,91 +93,21 @@ export function TipoEventoManagementModal({
     }
   };
 
-  const handleCreate = async () => {
-    if (!newName.trim()) {
-      toast.error("El nombre es requerido");
-      return;
-    }
-
-    // Validar que no exista duplicado
-    const nombreNormalizado = newName.trim().toLowerCase();
-    const existe = eventTypes.some(
-      (type) => type.nombre.toLowerCase() === nombreNormalizado
-    );
-
-    if (existe) {
-      toast.error("Ya existe un tipo de evento con ese nombre");
-      return;
-    }
-
-    setActionLoading("create");
-    try {
-      const result = await crearTipoEvento(studioSlug, {
-        nombre: newName.trim(),
-        status: "active",
-      });
-
-      if (result.success && result.data) {
-        toast.success(`Tipo de evento "${result.data.nombre}" creado`);
-        setNewName("");
-        setCreatingNew(false);
-        // Actualizar lista local
-        setEventTypes([...eventTypes, result.data]);
-        // No llamar onUpdate aquí - se llama al cerrar el modal
-      } else {
-        toast.error(result.error || "Error al crear tipo de evento");
-      }
-    } catch (error) {
-      console.error("Error creating event type:", error);
-      toast.error("Error al crear tipo de evento");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleUpdate = async (id: string) => {
-    if (!editingName.trim()) {
-      toast.error("El nombre es requerido");
-      return;
-    }
-
-    // Validar que no exista duplicado (excluyendo el actual)
-    const nombreNormalizado = editingName.trim().toLowerCase();
-    const existe = eventTypes.some(
-      (type) => type.id !== id && type.nombre.toLowerCase() === nombreNormalizado
-    );
-
-    if (existe) {
-      toast.error("Ya existe un tipo de evento con ese nombre");
-      return;
-    }
-
-    setActionLoading(id);
-    try {
-      const result = await actualizarTipoEvento(studioSlug, id, {
-        nombre: editingName.trim(),
-      });
-
-      if (result.success) {
-        toast.success("Tipo de evento actualizado");
-        setEditingId(null);
-        setEditingName("");
-        // Actualizar lista local
-        setEventTypes(
-          eventTypes.map((type) =>
-            type.id === id ? { ...type, nombre: editingName.trim() } : type
-          )
+  const handleEnrichedSuccess = async (tipoEvento: TipoEventoData) => {
+    const result = await obtenerTiposEvento(studioSlug);
+    if (result.success && result.data) {
+      setEventTypes(result.data);
+    } else {
+      if (enrichedModalTipo) {
+        setEventTypes((prev) =>
+          prev.map((t) => (t.id === tipoEvento.id ? tipoEvento : t))
         );
-        // No llamar onUpdate aquí - se llama al cerrar el modal
       } else {
-        toast.error(result.error || "Error al actualizar tipo de evento");
+        setEventTypes((prev) => [...prev, tipoEvento]);
       }
-    } catch (error) {
-      console.error("Error updating event type:", error);
-      toast.error("Error al actualizar tipo de evento");
-    } finally {
-      setActionLoading(null);
     }
+    setEnrichedModalOpen(false);
+    setEnrichedModalTipo(undefined);
   };
 
   const handleDeleteClick = (type: TipoEventoData) => {
@@ -191,16 +152,6 @@ export function TipoEventoManagementModal({
     }
   };
 
-  const startEdit = (type: TipoEventoData) => {
-    setEditingId(type.id);
-    setEditingName(type.nombre);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingName("");
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -240,193 +191,124 @@ export function TipoEventoManagementModal({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 text-zinc-500 animate-spin" />
-                <span className="ml-2 text-sm text-zinc-500">Cargando...</span>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Botón crear nuevo */}
-                {!creatingNew && (
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCreatingNew(true)}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Crear nuevo tipo de evento
-                  </ZenButton>
-                )}
+            <div className="space-y-4">
+              <ZenButton
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEnrichedModalTipo(undefined);
+                  setEnrichedModalOpen(true);
+                }}
+                className="w-full"
+                disabled={loading}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Crear nuevo tipo de evento
+              </ZenButton>
 
-                {/* Form crear nuevo */}
-                {creatingNew && (
-                  <ZenCard className="border-emerald-500/30 bg-emerald-500/5">
-                    <ZenCardContent className="p-4 space-y-3">
-                      <div>
-                        <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
-                          Nuevo tipo de evento
-                        </label>
-                        <ZenInput
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          placeholder="Ej: Bodas, XV Años, Corporativo..."
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleCreate();
-                            if (e.key === "Escape") {
-                              setCreatingNew(false);
-                              setNewName("");
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <ZenButton
-                          onClick={handleCreate}
-                          disabled={!newName.trim() || actionLoading === "create"}
-                          className="flex-1"
-                        >
-                          {actionLoading === "create" ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Creando...
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Crear
-                            </>
-                          )}
-                        </ZenButton>
-                        <ZenButton
-                          variant="ghost"
-                          onClick={() => {
-                            setCreatingNew(false);
-                            setNewName("");
-                          }}
-                        >
-                          Cancelar
-                        </ZenButton>
-                      </div>
-                    </ZenCardContent>
-                  </ZenCard>
-                )}
-
-                {/* Lista de tipos de evento */}
-                {eventTypes.length === 0 ? (
-                  <div className="text-center py-12 text-zinc-500 text-sm">
-                    No hay tipos de evento creados
-                  </div>
-                ) : (
-                  <div className="space-y-2">
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <EventTypeListSkeleton key={i} />
+                  ))}
+                </div>
+              ) : eventTypes.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-sm">
+                  No hay tipos de evento creados
+                </div>
+              ) : (
+                <div className="space-y-2">
                     {eventTypes.map((type) => (
-                      <ZenCard
-                        key={type.id}
-                        className={
-                          editingId === type.id
-                            ? "border-emerald-500/30 bg-emerald-500/5"
-                            : ""
-                        }
-                      >
+                      <ZenCard key={type.id} className="overflow-hidden">
                         <ZenCardContent className="p-4">
-                          {editingId === type.id ? (
-                            // Modo edición
-                            <div className="space-y-3">
-                              <ZenInput
-                                value={editingName}
-                                onChange={(e) => setEditingName(e.target.value)}
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleUpdate(type.id);
-                                  if (e.key === "Escape") cancelEdit();
-                                }}
-                              />
-                              <div className="flex gap-2">
-                                <ZenButton
-                                  size="sm"
-                                  onClick={() => handleUpdate(type.id)}
-                                  disabled={
-                                    !editingName.trim() || actionLoading === type.id
-                                  }
-                                  className="flex-1"
-                                >
-                                  {actionLoading === type.id ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Guardando...
-                                    </>
-                                  ) : (
-                                    "Guardar"
-                                  )}
-                                </ZenButton>
-                                <ZenButton
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={cancelEdit}
-                                >
-                                  Cancelar
-                                </ZenButton>
-                              </div>
+                          <div className="flex items-center gap-4">
+                            {/* Thumbnail portada 48x48: imagen > video > placeholder (gradiente + icono) */}
+                            <div className="relative w-12 h-12 shrink-0 rounded-md overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-700/90 border border-zinc-700/50">
+                              {/* Placeholder siempre debajo: gradiente + icono */}
+                              <span className="absolute inset-0 flex items-center justify-center text-zinc-500" aria-hidden>
+                                {type.cover_media_type === "video" ? (
+                                  <Video className="h-5 w-5" />
+                                ) : (
+                                  <ImageIcon className="h-5 w-5" />
+                                )}
+                              </span>
+                              {type.cover_image_url?.trim() ? (
+                                <img
+                                  src={type.cover_image_url}
+                                  alt=""
+                                  className="relative z-10 block w-full h-12 object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ) : type.cover_video_url?.trim() ? (
+                                <video
+                                  src={type.cover_video_url}
+                                  className="relative z-10 block w-full h-12 object-cover"
+                                  muted
+                                  autoPlay
+                                  loop
+                                  playsInline
+                                  preload="auto"
+                                />
+                              ) : null}
                             </div>
-                          ) : (
-                            // Modo vista
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-sm font-medium text-zinc-200">
-                                    {type.nombre}
-                                  </h3>
-                                  {type.status === "inactive" && (
-                                    <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
-                                      Inactivo
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
-                                  <span className="flex items-center gap-1">
-                                    <Package className="h-3 w-3" />
-                                    {type.paquetes?.length || 0} paquete(s)
+                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-sm font-medium text-zinc-200">
+                                  {type.nombre}
+                                </h3>
+                                {type.status === "inactive" && (
+                                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
+                                    Inactivo
                                   </span>
-                                  {type._count?.eventos !== undefined && (
-                                    <span>
-                                      {type._count.eventos} evento(s)
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                  onClick={() => startEdit(type)}
-                                  className="p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-emerald-400"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteClick(type)}
-                                  disabled={actionLoading === type.id}
-                                  className="p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-red-400 disabled:opacity-50"
-                                  title="Eliminar"
-                                >
-                                  {actionLoading === type.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </button>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+                                <span className="flex items-center gap-1">
+                                  <Package className="h-3 w-3" />
+                                  {type.paquetes?.length ?? type._count?.paquetes ?? 0} paquete(s)
+                                </span>
+                                {type._count?.eventos !== undefined && (
+                                  <span>
+                                    {type._count.eventos} evento(s)
+                                  </span>
+                                )}
                               </div>
                             </div>
-                          )}
+
+                            <div className="flex items-center gap-1 shrink-0 self-center">
+                              <button
+                                onClick={() => {
+                                  setEnrichedModalTipo(type);
+                                  setEnrichedModalOpen(true);
+                                }}
+                                className="p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-emerald-400"
+                                title="Editar"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(type)}
+                                disabled={actionLoading === type.id}
+                                className="p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-red-400 disabled:opacity-50"
+                                title="Eliminar"
+                              >
+                                {actionLoading === type.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
                         </ZenCardContent>
                       </ZenCard>
                     ))}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
           </div>
 
           {/* Footer */}
@@ -443,6 +325,18 @@ export function TipoEventoManagementModal({
           </div>
         </div>
       </div>
+
+      <TipoEventoEnrichedModal
+        isOpen={enrichedModalOpen}
+        onClose={() => {
+          setEnrichedModalOpen(false);
+          setEnrichedModalTipo(undefined);
+        }}
+        onSuccess={handleEnrichedSuccess}
+        studioSlug={studioSlug}
+        tipoEvento={enrichedModalTipo}
+        zIndex={10060}
+      />
 
       {/* Confirm Delete Modal */}
       {deleteConfirm && (
