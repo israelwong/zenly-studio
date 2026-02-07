@@ -86,6 +86,7 @@ export async function logWhatsAppSentWithMessage(
         content: messageText.trim() || `WhatsApp enviado a ${contactName}`,
         log_type: 'whatsapp_sent',
         metadata,
+        origin_context: 'PROMISE',
       },
     });
     return { success: true, data: { logged: true } };

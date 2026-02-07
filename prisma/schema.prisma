@@ -1463,17 +1463,19 @@ model studio_whatsapp_templates {
 }
 
 model studio_promise_logs {
-  id          String                        @id @default(cuid())
-  promise_id  String
-  user_id     String?
-  template_id String?
-  content     String
-  log_type    String                        @default("system")
-  metadata    Json?
-  created_at  DateTime                      @default(now())
-  promise     studio_promises               @relation(fields: [promise_id], references: [id], onDelete: Cascade)
-  user        studio_users?                  @relation(fields: [user_id], references: [id])
-  template    studio_promise_log_templates?  @relation(fields: [template_id], references: [id], onDelete: SetNull)
+  id              String                        @id @default(cuid())
+  promise_id      String
+  user_id         String?
+  template_id     String?
+  content         String
+  log_type        String                        @default("system")
+  metadata        Json?
+  /** Contexto de origen: PROMISE (seguimiento de promesa) o EVENT (tras crear evento). */
+  origin_context  String                        @default("PROMISE")
+  created_at      DateTime                      @default(now())
+  promise         studio_promises               @relation(fields: [promise_id], references: [id], onDelete: Cascade)
+  user            studio_users?                 @relation(fields: [user_id], references: [id])
+  template        studio_promise_log_templates? @relation(fields: [template_id], references: [id], onDelete: SetNull)
 
   @@index([promise_id, created_at])
   @@index([user_id])

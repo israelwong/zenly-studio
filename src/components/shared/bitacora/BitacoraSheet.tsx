@@ -206,9 +206,18 @@ export function BitacoraSheet({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             {isWhatsApp && (
                               <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-400 shrink-0" size={14} />
+                            )}
+                            {log.origin_context === 'EVENT' ? (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-600/20 text-violet-400 border border-violet-500/30">
+                                Evento
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                                Promesa
+                              </span>
                             )}
                             <span className={cn(
                               "text-xs font-medium",

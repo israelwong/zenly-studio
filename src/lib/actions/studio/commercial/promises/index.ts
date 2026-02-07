@@ -28,7 +28,7 @@ export {
   logPromiseAction,
 } from './promise-logs.actions';
 
-export type { PromiseLogAction, PromiseLog, PromiseLogsResponse } from './promise-logs.actions';
+export type { PromiseLogAction, PromiseLog, PromiseLogsResponse, PromiseLogOriginContext } from './promise-logs.actions';
 
 export {
   getPromiseLogTemplates,

@@ -1228,6 +1228,7 @@ export async function regenerateStudioContract(
           action: 'studio_regenerate_contract',
           cotizacion_id: cotizacionId,
         },
+        origin_context: 'PROMISE',
       },
     });
 
@@ -2026,6 +2027,7 @@ export async function autorizarYCrearEvento(
           user_id: null,
           content: logContent,
           log_type: 'quotation_authorized',
+          origin_context: 'EVENT',
           metadata: {
             action: 'evento_creado',
             cotizacion_id: cotizacionId,

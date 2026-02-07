@@ -109,6 +109,7 @@ export async function solicitarPersonalizacion(
         user_id: null,
         content: contenidoLog,
         log_type: "system",
+        origin_context: "PROMISE",
         metadata: {
           action: "personalizacion_solicitada",
           item_id: itemId,

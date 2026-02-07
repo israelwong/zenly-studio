@@ -4599,6 +4599,7 @@ export async function updatePublicPromiseData(
           user_id: null,
           content: `${data.contact_name.trim()} actualizó sus datos para contrato`,
           log_type: "system",
+          origin_context: "PROMISE",
           metadata: { action: "public_promise_data_updated" },
         },
       });

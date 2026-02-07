@@ -1742,7 +1742,8 @@ export async function cancelarEvento(
           eventId: eventoId,
           eventName: evento.promise?.name || 'Evento sin nombre',
           quotationName: evento.cotizacion?.name,
-        }
+        },
+        'EVENT'
       ).catch((error) => {
         console.error('[CANCELAR EVENTO] Error registrando log:', error);
       });

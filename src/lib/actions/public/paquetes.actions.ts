@@ -458,6 +458,7 @@ export async function solicitarPaquetePublico(
         user_id: null,
         content: contenidoLog,
         log_type: "system",
+        origin_context: "PROMISE",
         metadata: {
           action: "paquete_pre_autorizado_cotizacion_creada",
           cotizacion_id: cotizacion.id,

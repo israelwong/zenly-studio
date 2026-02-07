@@ -5,12 +5,16 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
+/** Contexto de origen del log: promesa (seguimiento) o evento (tras crear evento). */
+export type PromiseLogOriginContext = 'PROMISE' | 'EVENT';
+
 const createPromiseLogSchema = z.object({
   promise_id: z.string(),
   content: z.string().min(1, 'El contenido es requerido'),
   log_type: z.string().default('user_note'),
   metadata: z.record(z.unknown()).optional(),
   template_id: z.string().optional(),
+  origin_context: z.enum(['PROMISE', 'EVENT']).optional().default('PROMISE'),
 });
 
 export type CreatePromiseLogData = z.infer<typeof createPromiseLogSchema>;
@@ -56,7 +60,9 @@ const LOG_ACTIONS: Record<
   stage_change: (meta) => {
     const from = (meta?.from as string) || 'desconocida';
     const to = (meta?.to as string) || 'desconocida';
-    return `Cambio de etapa: ${from} → ${to}`;
+    const origin = meta?.origin_context as string | undefined;
+    const contextLabel = origin === 'EVENT' ? 'Estatus de Evento actualizado' : 'Estatus de Promesa actualizado';
+    return `${contextLabel}: ${from} → ${to}`;
   },
   whatsapp_sent: (meta) => {
     const contactName = (meta?.contactName as string) || 'contacto';
@@ -192,6 +198,7 @@ export interface PromiseLog {
   content: string;
   log_type: string;
   metadata: Record<string, unknown> | null;
+  origin_context: PromiseLogOriginContext;
   created_at: Date;
   user: {
     id: string;
@@ -442,6 +449,7 @@ export async function getLastPromiseLogs(
       content: log.content,
       log_type: log.log_type,
       metadata: log.metadata as Record<string, unknown> | null,
+      origin_context: (log.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as PromiseLogOriginContext,
       created_at: log.created_at,
       user: log.user
         ? {
@@ -490,6 +498,7 @@ export async function getPromiseLogs(
       content: log.content,
       log_type: log.log_type,
       metadata: log.metadata as Record<string, unknown> | null,
+      origin_context: (log.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as PromiseLogOriginContext,
       created_at: log.created_at,
       user: log.user
         ? {
@@ -568,6 +577,7 @@ export async function createPromiseLog(
     // Si es una nota manual, usar 'user_note' para distinguir de notas del sistema
     const finalLogType = validatedData.log_type === 'note' ? 'user_note' : validatedData.log_type;
 
+    const originContext = (validatedData.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as 'PROMISE' | 'EVENT';
     const log = await prisma.studio_promise_logs.create({
       data: {
         promise_id: validatedData.promise_id,
@@ -576,6 +586,7 @@ export async function createPromiseLog(
         content: validatedData.content,
         log_type: finalLogType,
         metadata: validatedData.metadata || null,
+        origin_context: originContext,
       },
       include: {
         user: {
@@ -594,6 +605,7 @@ export async function createPromiseLog(
       content: log.content,
       log_type: log.log_type,
       metadata: log.metadata as Record<string, unknown> | null,
+      origin_context: (log.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as PromiseLogOriginContext,
       created_at: log.created_at,
       user: log.user
         ? {
@@ -635,7 +647,8 @@ export async function logPromiseAction(
   action: PromiseLogAction,
   source: 'user' | 'system' = 'system',
   userId?: string | null,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  originContext: PromiseLogOriginContext = 'PROMISE'
 ): Promise<ActionResponse<PromiseLog>> {
   try {
     // Verificar que la promesa existe
@@ -648,13 +661,14 @@ export async function logPromiseAction(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Generar contenido basado en la acción
+    // Generar contenido basado en la acción (pasar origin_context para mensajes contextuales)
     const contentGenerator = LOG_ACTIONS[action];
     if (!contentGenerator) {
       return { success: false, error: `Acción desconocida: ${action}` };
     }
 
-    const content = contentGenerator(metadata);
+    const metaWithContext = { ...metadata, origin_context: originContext };
+    const content = contentGenerator(metaWithContext);
 
     // Determinar user_id según el source
     const finalUserId = source === 'user' ? userId || null : null;
@@ -666,6 +680,7 @@ export async function logPromiseAction(
         content,
         log_type: action,
         metadata: metadata || null,
+        origin_context: originContext,
       },
       include: {
         user: {
@@ -684,6 +699,7 @@ export async function logPromiseAction(
       content: log.content,
       log_type: log.log_type,
       metadata: log.metadata as Record<string, unknown> | null,
+      origin_context: (log.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as PromiseLogOriginContext,
       created_at: log.created_at,
       user: log.user
         ? {
@@ -761,6 +777,7 @@ export async function updatePromiseLog(
       content: updated.content,
       log_type: updated.log_type,
       metadata: updated.metadata as Record<string, unknown> | null,
+      origin_context: (updated.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as PromiseLogOriginContext,
       created_at: updated.created_at,
       user: updated.user
         ? { id: updated.user.id, full_name: updated.user.full_name }

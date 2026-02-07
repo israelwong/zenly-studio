@@ -1368,6 +1368,7 @@ export async function crearAgendamiento(
 
         // Log si está asociado a una promesa (solo log, sin notificación)
         if (agenda.promise_id) {
+            const originContext = validatedData.contexto === 'evento' ? 'EVENT' : 'PROMISE';
             await logPromiseAction(
                 studioSlug,
                 agenda.promise_id,
@@ -1379,7 +1380,8 @@ export async function crearAgendamiento(
                     time: agenda.time,
                     concept: agenda.concept,
                     type_scheduling: agenda.type_scheduling,
-                }
+                },
+                originContext
             ).catch((error) => {
                 console.error('[AGENDA_UNIFIED] Error creando log:', error);
             });
@@ -1642,7 +1644,7 @@ export async function actualizarAgendamiento(
         if (agenda.promise_id) {
             const wasCancelled = updateData.status === 'cancelado';
             const action: 'agenda_updated' | 'agenda_cancelled' = wasCancelled ? 'agenda_cancelled' : 'agenda_updated';
-            
+            const originContext = agenda.evento_id ? 'EVENT' : 'PROMISE';
             await logPromiseAction(
                 studioSlug,
                 agenda.promise_id,
@@ -1654,7 +1656,8 @@ export async function actualizarAgendamiento(
                     time: agenda.time,
                     concept: agenda.concept,
                     type_scheduling: agenda.type_scheduling,
-                }
+                },
+                originContext
             ).catch((error) => {
                 console.error('[AGENDA_UNIFIED] Error creando log:', error);
             });

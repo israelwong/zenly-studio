@@ -183,6 +183,7 @@ export async function signPublicContract(
         user_id: null,
         content: `Cliente firmó el contrato de la cotización: "${cotizacion.name}"`,
         log_type: "system",
+        origin_context: "PROMISE",
         metadata: {
           action: "contract_signed_by_prospect",
           cotizacion_id: cotizacionId,

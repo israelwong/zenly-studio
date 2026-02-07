@@ -340,7 +340,10 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
                       <p className="text-xs text-zinc-300 break-words whitespace-pre-wrap text-left w-full">
                         {log.content}
                       </p>
-                      <div className="flex justify-start mt-0.5">
+                      <div className="flex justify-start items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className={cn('text-[10px] font-medium px-1 py-0.5 rounded', log.origin_context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : 'bg-blue-600/20 text-blue-400')}>
+                          {log.origin_context === 'EVENT' ? 'Evento' : 'Promesa'}
+                        </span>
                         <span className={cn('shrink-0 text-[11px] leading-none', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
                           {formatDateTime(log.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>

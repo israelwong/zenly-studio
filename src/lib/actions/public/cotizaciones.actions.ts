@@ -402,6 +402,7 @@ export async function autorizarCotizacionPublica(
         user_id: null,
         content: contenidoLog,
         log_type: "system",
+        origin_context: "PROMISE",
         metadata: {
           action: "cotizacion_contratacion_solicitada",
           cotizacion_id: cotizacionId,
