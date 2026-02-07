@@ -789,6 +789,7 @@ model studios {
   platform_leads                                  platform_leads?
   platform_user_profiles                          platform_user_profiles[]
   agenda                                          studio_agenda[]
+  agenda_subject_templates                        studio_agenda_subject_templates[]
   avisos_privacidad                               studio_avisos_privacidad[]
   business_hours                                  studio_business_hours[]
   category_media                                  studio_category_media[]          @relation("category_media")
@@ -1997,25 +1998,28 @@ model studio_crew_member_account {
 }
 
 model studio_agenda {
-  id               String                 @id @default(cuid())
-  studio_id        String
-  status           String                 @default("pendiente")
-  agenda_tipo      String?
-  created_at       DateTime               @default(now())
-  evento_id        String?
-  promise_id       String?
-  contexto         String?
-  metadata         Json?
-  link_meeting_url String?
-  type_scheduling  String?
-  updated_at       DateTime               @updatedAt
-  user_id          String?
-  address          String?
-  concept          String?
-  date             DateTime?
-  description      String?
-  time             String?
-  google_event_id  String?
+  id                String                 @id @default(cuid())
+  studio_id         String
+  status            String                 @default("pendiente")
+  agenda_tipo       String?
+  created_at        DateTime               @default(now())
+  evento_id         String?
+  promise_id        String?
+  contexto          String?
+  metadata          Json?
+  link_meeting_url  String?
+  type_scheduling   String?
+  updated_at        DateTime               @updatedAt
+  user_id           String?
+  address           String?
+  concept           String?
+  date              DateTime?
+  description       String?
+  time              String?
+  google_event_id   String?
+  location_name     String?
+  location_address  String?
+  location_url      String?
   eventos          studio_events?         @relation(fields: [evento_id], references: [id])
   promise          studio_promises?       @relation(fields: [promise_id], references: [id])
   studio           studios                @relation(fields: [studio_id], references: [id])
@@ -2028,6 +2032,18 @@ model studio_agenda {
   @@index([date])
   @@index([contexto, date])
   @@index([google_event_id])
+}
+
+model studio_agenda_subject_templates {
+  id          String   @id @default(cuid())
+  studio_id   String
+  text        String
+  usage_count Int      @default(0)
+  created_at  DateTime @default(now())
+  studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, text])
+  @@index([studio_id])
 }
 
 model studio_agenda_tipos {

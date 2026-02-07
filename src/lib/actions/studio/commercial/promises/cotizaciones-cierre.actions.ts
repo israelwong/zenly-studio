@@ -1949,39 +1949,30 @@ export async function autorizarYCrearEvento(
           },
         });
 
-        // Construir concepto: "Nombre Evento (Tipo Evento)" o solo "Nombre Evento"
-        const eventTypeName = cotizacion.promise.event_type?.name;
-        const eventName = cotizacion.promise.event_name;
-        let concept = 'Evento';
-
-        if (eventName && eventTypeName) {
-          concept = `${eventName} (${eventTypeName})`;
-        } else if (eventName) {
-          concept = eventName;
-        } else if (eventTypeName) {
-          concept = eventTypeName;
-        }
-
-        // Construir metadata para evento principal
+        // Construir metadata para evento principal (silent creation: location refinable en Event Detail)
         const metadata = {
           agenda_type: 'main_event_date',
           sync_google: true,
           google_calendar_type: 'primary',
           is_main_event_date: true,
+          is_main_event: true,
         };
 
-        // Crear nueva entrada en agenda para el evento usando la fecha normalizada
+        // Crear entrada inicial en agenda: nombre de lugar heredado; dirección y Maps pendientes de completar en Event Detail
         await tx.studio_agenda.create({
           data: {
             studio_id: studio.id,
             evento_id: evento.id,
             promise_id: promiseId,
-            date: eventDateNormalized, // Usar fecha normalizada con UTC
-            concept: concept,
-            address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
+            date: eventDateNormalized,
+            concept: 'Evento Principal',
+            location_name: cotizacion.promise.event_location || null,
+            location_address: null,
+            location_url: null,
+            type_scheduling: 'presencial',
             contexto: 'evento',
             status: 'pendiente',
-            metadata: metadata,
+            metadata,
           },
         });
       } else {

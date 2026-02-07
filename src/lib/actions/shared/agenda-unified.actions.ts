@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { logPromiseAction } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import { incrementAgendaSubjectTemplateUsage } from '@/lib/actions/shared/agenda-subject-templates.actions';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 // =============================================================================
@@ -25,6 +26,9 @@ const createAgendaSchema = z.object({
     agenda_tipo: z.string().optional(),
     user_id: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
+    location_name: z.string().optional(),
+    location_address: z.string().optional(),
+    location_url: z.string().optional(),
 });
 
 const updateAgendaSchema = createAgendaSchema.partial().extend({
@@ -62,6 +66,9 @@ export interface AgendaItem {
     metadata?: Record<string, unknown> | null;
     created_at?: Date | null;
     updated_at?: Date | null;
+    location_name?: string | null;
+    location_address?: string | null;
+    location_url?: string | null;
     // Datos relacionados
     contact_name?: string | null;
     contact_phone?: string | null;
@@ -403,10 +410,13 @@ export async function obtenerAgendaUnificada(
                 id: agenda.id,
                 date: fechaNormalizada,
                 time: agenda.time,
-                address: agenda.address,
+                address: agenda.location_address ?? agenda.address,
                 concept: agenda.concept,
                 description: agenda.description,
-                link_meeting_url: agenda.link_meeting_url,
+                link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+                location_name: agenda.location_name ?? null,
+                location_address: agenda.location_address ?? null,
+                location_url: agenda.location_url ?? null,
                 type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
                 status: agenda.status,
                 contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
@@ -860,10 +870,13 @@ export async function obtenerAgendamientoPorId(
             id: agenda.id,
             date: agenda.date || new Date(),
             time: agenda.time,
-            address: agenda.address,
+            address: agenda.location_address ?? agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
+            link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+            location_name: agenda.location_name ?? null,
+            location_address: agenda.location_address ?? null,
+            location_url: agenda.location_url ?? null,
             type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
@@ -962,10 +975,13 @@ export async function obtenerAgendamientoPorPromise(
             id: agenda.id,
             date: agenda.date || new Date(),
             time: agenda.time,
-            address: agenda.address,
+            address: agenda.location_address ?? agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
+            link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+            location_name: agenda.location_name ?? null,
+            location_address: agenda.location_address ?? null,
+            location_url: agenda.location_url ?? null,
             type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: 'promise',
@@ -1075,10 +1091,13 @@ export async function obtenerAgendamientosPorEvento(
                 id: agenda.id,
                 date: agenda.date || new Date(),
                 time: agenda.time,
-                address: agenda.address,
+                address: agenda.location_address ?? agenda.address,
                 concept: agenda.concept,
                 description: agenda.description,
-                link_meeting_url: agenda.link_meeting_url,
+                link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+                location_name: agenda.location_name ?? null,
+                location_address: agenda.location_address ?? null,
+                location_url: agenda.location_url ?? null,
                 type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
                 status: agenda.status,
                 contexto: 'evento',
@@ -1262,6 +1281,9 @@ export async function crearAgendamiento(
                 link_meeting_url: validatedData.link_meeting_url || null,
                 type_scheduling: validatedData.type_scheduling || null,
                 agenda_tipo: validatedData.agenda_tipo || null,
+                location_name: validatedData.location_name || null,
+                location_address: validatedData.location_address || null,
+                location_url: validatedData.location_url || null,
                 user_id: validatedData.user_id || null,
                 metadata: metadataToSave,
                 status: 'pendiente',
@@ -1319,10 +1341,13 @@ export async function crearAgendamiento(
             id: agenda.id,
             date: agenda.date || new Date(),
             time: agenda.time,
-            address: agenda.address,
+            address: agenda.location_address ?? agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
+            link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+            location_name: agenda.location_name ?? null,
+            location_address: agenda.location_address ?? null,
+            location_url: agenda.location_url ?? null,
             type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
@@ -1365,6 +1390,10 @@ export async function crearAgendamiento(
         };
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+        if (agenda.concept?.trim()) {
+            await incrementAgendaSubjectTemplateUsage(studio.id, agenda.concept.trim());
+        }
 
         // Log si está asociado a una promesa (solo log, sin notificación)
         if (agenda.promise_id) {
@@ -1489,6 +1518,9 @@ export async function actualizarAgendamiento(
         if (updateData.description !== undefined) updatePayload.description = updateData.description || null;
         if (updateData.link_meeting_url !== undefined) updatePayload.link_meeting_url = updateData.link_meeting_url || null;
         if (updateData.type_scheduling !== undefined) updatePayload.type_scheduling = updateData.type_scheduling || null;
+        if (updateData.location_name !== undefined) updatePayload.location_name = updateData.location_name || null;
+        if (updateData.location_address !== undefined) updatePayload.location_address = updateData.location_address || null;
+        if (updateData.location_url !== undefined) updatePayload.location_url = updateData.location_url || null;
         if (updateData.agenda_tipo !== undefined) updatePayload.agenda_tipo = updateData.agenda_tipo || null;
         if (updateData.user_id !== undefined) updatePayload.user_id = updateData.user_id || null;
         if (updateData.contexto) updatePayload.contexto = updateData.contexto;
@@ -1608,10 +1640,13 @@ export async function actualizarAgendamiento(
             id: agenda.id,
             date: agenda.date || new Date(),
             time: agenda.time,
-            address: agenda.address,
+            address: agenda.location_address ?? agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
+            link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+            location_name: agenda.location_name ?? null,
+            location_address: agenda.location_address ?? null,
+            location_url: agenda.location_url ?? null,
             type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
@@ -1639,6 +1674,10 @@ export async function actualizarAgendamiento(
         };
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+        if (agenda.concept?.trim()) {
+            await incrementAgendaSubjectTemplateUsage(studio.id, agenda.concept.trim());
+        }
 
         // Log si está asociado a una promesa
         if (agenda.promise_id) {
@@ -1777,10 +1816,13 @@ export async function verificarDisponibilidadFecha(
             id: agenda.id,
             date: agenda.date || new Date(),
             time: agenda.time,
-            address: agenda.address,
+            address: agenda.location_address ?? agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
+            link_meeting_url: agenda.location_url ?? agenda.link_meeting_url,
+            location_name: agenda.location_name ?? null,
+            location_address: agenda.location_address ?? null,
+            location_url: agenda.location_url ?? null,
             type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,

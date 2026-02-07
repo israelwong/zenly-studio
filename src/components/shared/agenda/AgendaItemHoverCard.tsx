@@ -4,7 +4,7 @@ import React from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ZenButton } from '@/components/ui/zen';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback } from '@/components/ui/zen/media/ZenAvatar';
-import { ExternalLink, Mail, Phone, Calendar as CalendarIcon, Clock, Tag, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, Mail, Phone, Calendar as CalendarIcon, Clock, Tag, CheckCircle2, MapPin, Video, FileText } from 'lucide-react';
 import { formatInitials } from '@/lib/actions/utils/formatting';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 
@@ -93,6 +93,56 @@ export function AgendaItemHoverCard({
             </div>
           )}
 
+          {/* Asunto */}
+          {item.concept && (
+            <div className="flex items-center gap-2 text-xs text-zinc-300">
+              <FileText className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="font-medium text-zinc-200">{item.concept}</span>
+            </div>
+          )}
+
+          {/* Dirección: mostrar o "Pendiente de definir" */}
+          {!item.is_pending_date && !item.is_confirmed_event_date && (
+            <div className="flex items-start gap-2 text-xs text-zinc-300">
+              <MapPin className="h-3.5 w-3.5 text-zinc-400 mt-0.5 shrink-0" />
+              <span>{item.address?.trim() || 'Pendiente de definir'}</span>
+            </div>
+          )}
+
+          {/* Google Maps / Link reunión: botón o badge Pendiente */}
+          {!item.is_pending_date && !item.is_confirmed_event_date && item.type_scheduling && (
+            <div className="flex items-center gap-2">
+              {item.link_meeting_url ? (
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(item.link_meeting_url!, '_blank');
+                  }}
+                  className="text-xs h-7 border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                >
+                  {item.type_scheduling === 'presencial' ? (
+                    <>
+                      <MapPin className="h-3 w-3 mr-1.5" />
+                      Abrir en Maps
+                    </>
+                  ) : (
+                    <>
+                      <Video className="h-3 w-3 mr-1.5" />
+                      Abrir enlace
+                    </>
+                  )}
+                </ZenButton>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 text-amber-400 text-xs border border-amber-500/30">
+                  <MapPin className="h-3 w-3" />
+                  Pendiente
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Correo */}
           {item.contact_email && (
             <div className="flex items-center gap-2 text-xs text-zinc-300">
@@ -174,12 +224,20 @@ export function AgendaItemHoverCard({
             ) : null}
           </div>
 
-          {/* Badge tipo de cita */}
+          {/* Badge tipo de cita con iconos claros */}
           {!item.is_pending_date && !item.is_confirmed_event_date && item.type_scheduling && (
-            <div className="mt-2 pt-2 border-t border-zinc-800">
-              <span className="text-xs text-zinc-400">
-                {item.type_scheduling === 'virtual' ? 'Virtual' : 'Presencial'}
-              </span>
+            <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center gap-2">
+              {item.type_scheduling === 'virtual' ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-violet-400">
+                  <Video className="h-3.5 w-3.5" />
+                  Virtual
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Presencial
+                </span>
+              )}
             </div>
           )}
         </div>

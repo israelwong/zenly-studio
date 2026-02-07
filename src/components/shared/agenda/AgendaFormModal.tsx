@@ -45,6 +45,9 @@ export function AgendaFormModal({
     link_meeting_url?: string;
     type_scheduling?: 'presencial' | 'virtual';
     agenda_tipo?: string;
+    location_name?: string;
+    location_address?: string;
+    location_url?: string;
   }) => {
     setLoading(true);
 
@@ -64,6 +67,9 @@ export function AgendaFormModal({
           link_meeting_url: data.link_meeting_url,
           type_scheduling: data.type_scheduling,
           agenda_tipo: data.agenda_tipo,
+          location_name: data.location_name,
+          location_address: data.location_address,
+          location_url: data.location_url,
         });
 
         if (result.success) {
@@ -88,6 +94,9 @@ export function AgendaFormModal({
           link_meeting_url: data.link_meeting_url,
           type_scheduling: data.type_scheduling,
           agenda_tipo: data.agenda_tipo,
+          location_name: data.location_name,
+          location_address: data.location_address,
+          location_url: data.location_url,
         });
 
         if (result.success) {

@@ -50,6 +50,7 @@ export function PromiseAppointmentCard({
   const [time, setTime] = useState('');
   const [typeScheduling, setTypeScheduling] = useState<'presencial' | 'virtual'>('presencial');
   const [concept, setConcept] = useState('');
+  const [linkMeetingUrl, setLinkMeetingUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const loadAgendamiento = async () => {
@@ -82,11 +83,13 @@ export function PromiseAppointmentCard({
       setTime(agendamiento.time || '');
       setTypeScheduling((agendamiento.type_scheduling as 'presencial' | 'virtual') || 'presencial');
       setConcept(agendamiento.concept || agendamiento.description || '');
+      setLinkMeetingUrl(agendamiento.location_url ?? agendamiento.link_meeting_url ?? '');
     } else if (!agendamiento) {
       setDate(undefined);
       setTime('');
       setTypeScheduling('presencial');
       setConcept('');
+      setLinkMeetingUrl('');
       setEditMode(false);
     }
   }, [agendamiento, editMode]);
@@ -116,6 +119,9 @@ export function PromiseAppointmentCard({
         concept: concept.trim() || (typeScheduling === 'presencial' ? 'Cita presencial' : 'Cita virtual'),
         description: concept.trim() || undefined,
         type_scheduling: typeScheduling,
+        ...(typeScheduling === 'virtual' && linkMeetingUrl.trim()
+          ? { link_meeting_url: linkMeetingUrl.trim(), location_url: linkMeetingUrl.trim() }
+          : {}),
       };
       if (hasAgenda && agendamiento?.id && editMode) {
         const result = await actualizarAgendamiento(studioSlug, {
@@ -321,6 +327,21 @@ export function PromiseAppointmentCard({
                 className="h-8 text-xs border-zinc-700 bg-zinc-900"
               />
             </div>
+            {typeScheduling === 'virtual' && (
+              <div className="space-y-0.5">
+                <label className="text-xs text-zinc-500 flex items-center gap-1">
+                  <Video className="h-3 w-3" />
+                  Link de reunión virtual
+                </label>
+                <ZenInput
+                  type="url"
+                  value={linkMeetingUrl}
+                  onChange={(e) => setLinkMeetingUrl(e.target.value)}
+                  placeholder="https://meet.google.com/... o https://zoom.us/..."
+                  className="h-8 text-xs border-zinc-700 bg-zinc-900"
+                />
+              </div>
+            )}
             <div className="flex gap-1.5 pt-0.5">
               {editMode && (
                 <ZenButton

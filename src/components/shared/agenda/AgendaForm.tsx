@@ -1,13 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, MapPin } from 'lucide-react';
-import { ZenInput, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, MapPin, Plus, Settings, Trash2 } from 'lucide-react';
+import { ZenInput, ZenButton, ZenCard, ZenCardContent, ZenDialog, ZenConfirmModal } from '@/components/ui/zen';
 import { ZenCalendar } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
+import {
+  getAgendaSubjectTemplates,
+  createAgendaSubjectTemplate,
+  updateAgendaSubjectTemplate,
+  deleteAgendaSubjectTemplate,
+  type AgendaSubjectTemplate,
+} from '@/lib/actions/shared/agenda-subject-templates.actions';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface AgendaFormProps {
     studioSlug: string;
@@ -24,6 +33,9 @@ interface AgendaFormProps {
         link_meeting_url?: string;
         type_scheduling?: 'presencial' | 'virtual';
         agenda_tipo?: string;
+        location_name?: string;
+        location_address?: string;
+        location_url?: string;
     }) => Promise<void>;
     onCancel?: () => void;
     onCancelCita?: () => Promise<void>;
@@ -54,13 +66,26 @@ export function AgendaForm({
         return undefined;
     });
     const [time, setTime] = useState(initialData?.time || '');
-    const [address, setAddress] = useState(initialData?.address || '');
+    const [subject, setSubject] = useState(initialData?.concept || '');
+    const [locationName, setLocationName] = useState(initialData?.location_name || '');
+    const [address, setAddress] = useState(initialData?.location_address ?? initialData?.address ?? '');
     const [description, setDescription] = useState(initialData?.description || '');
+    const [showSubjectSuggestions, setShowSubjectSuggestions] = useState(false);
+    const [subjectTemplates, setSubjectTemplates] = useState<AgendaSubjectTemplate[]>([]);
+    const [loadingSubjectTemplates, setLoadingSubjectTemplates] = useState(false);
+    const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+    const [modalTemplates, setModalTemplates] = useState<AgendaSubjectTemplate[]>([]);
+    const [loadingModalTemplates, setLoadingModalTemplates] = useState(false);
+    const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+    const [editTemplateText, setEditTemplateText] = useState('');
+    const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+    const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
+    const subjectSuggestionsRef = useRef<HTMLDivElement>(null);
     const [linkMeetingUrl, setLinkMeetingUrl] = useState(
-        initialData?.type_scheduling === 'presencial' ? initialData?.link_meeting_url || '' : ''
+        initialData?.type_scheduling === 'presencial' ? (initialData?.location_url ?? initialData?.link_meeting_url) || '' : ''
     );
     const [virtualLink, setVirtualLink] = useState(
-        initialData?.type_scheduling === 'virtual' ? initialData?.link_meeting_url || '' : ''
+        initialData?.type_scheduling === 'virtual' ? (initialData?.location_url ?? initialData?.link_meeting_url) || '' : ''
     );
     const [eventType, setEventType] = useState<'presencial' | 'virtual' | null>(
         initialData?.type_scheduling || null
@@ -95,7 +120,9 @@ export function AgendaForm({
                 setDate(undefined);
             }
             setTime(initialData?.time || '');
-            setAddress(initialData?.address || '');
+            setSubject(initialData?.concept || '');
+            setLocationName(initialData?.location_name || '');
+            setAddress(initialData?.location_address ?? initialData?.address ?? '');
             setDescription(initialData?.description || '');
             setLinkMeetingUrl(
                 initialData?.type_scheduling === 'presencial' ? initialData?.link_meeting_url || '' : ''
@@ -112,6 +139,8 @@ export function AgendaForm({
                 setInitialDataId(undefined);
                 setDate(undefined);
                 setTime('');
+                setSubject('');
+                setLocationName('');
                 setAddress('');
                 setDescription('');
                 setLinkMeetingUrl('');
@@ -121,6 +150,92 @@ export function AgendaForm({
             }
         }
     }, [initialData?.id, initialData?.date, initialData?.time, initialData?.address, initialData?.description, initialData?.type_scheduling, initialData?.link_meeting_url, initialDataId, hasUserModified]);
+
+    useEffect(() => {
+        setLoadingSubjectTemplates(true);
+        getAgendaSubjectTemplates(studioSlug)
+            .then((res) => {
+                if (res.success && res.data) setSubjectTemplates(res.data);
+            })
+            .finally(() => setLoadingSubjectTemplates(false));
+    }, [studioSlug]);
+
+    const filteredSubjectTemplates = useMemo(() => {
+        if (!subject.trim()) return subjectTemplates;
+        const q = subject.trim().toLowerCase();
+        return subjectTemplates.filter((t) => t.text.toLowerCase().includes(q));
+    }, [subjectTemplates, subject]);
+
+    const subjectExactMatch = useMemo(
+        () => subjectTemplates.some((t) => t.text.trim().toLowerCase() === subject.trim().toLowerCase()),
+        [subjectTemplates, subject]
+    );
+    const canAddSubjectAsNew = subject.trim().length > 0 && !subjectExactMatch;
+
+    const handleSelectSubjectTemplate = (t: AgendaSubjectTemplate) => {
+        setSubject(t.text);
+        setShowSubjectSuggestions(false);
+        setHasUserModified(true);
+    };
+
+    const handleAddSubjectAsNewTemplate = async () => {
+        const trimmed = subject.trim();
+        if (!trimmed) return;
+        const res = await createAgendaSubjectTemplate(studioSlug, trimmed);
+        if (res.success) {
+            setSubjectTemplates((prev) => [res.data!, ...prev]);
+            setShowSubjectSuggestions(false);
+            toast.success('Plantilla agregada');
+            setHasUserModified(true);
+        } else {
+            toast.error(res.error ?? 'Error al crear plantilla');
+        }
+    };
+
+    const openTemplatesModal = () => {
+        setShowSubjectSuggestions(false);
+        setTemplatesModalOpen(true);
+        setEditingTemplateId(null);
+        setEditTemplateText('');
+        setDeletingTemplateId(null);
+        setLoadingModalTemplates(true);
+        getAgendaSubjectTemplates(studioSlug)
+            .then((res) => {
+                if (res.success && res.data) setModalTemplates(res.data);
+            })
+            .finally(() => setLoadingModalTemplates(false));
+    };
+
+    const handleSaveEditTemplate = async (templateId: string) => {
+        const trimmed = editTemplateText.trim();
+        if (!trimmed) return;
+        const result = await updateAgendaSubjectTemplate(studioSlug, templateId, trimmed);
+        if (result.success) {
+            setModalTemplates((prev) => prev.map((x) => (x.id === templateId ? result.data! : x)));
+            setSubjectTemplates((prev) => prev.map((x) => (x.id === templateId ? result.data! : x)));
+            if (subject === editTemplateText.trim()) setSubject(trimmed);
+            setEditingTemplateId(null);
+            setEditTemplateText('');
+            toast.success('Plantilla actualizada');
+        } else {
+            toast.error(result.error ?? 'Error al actualizar');
+        }
+    };
+
+    const confirmDeleteTemplate = async () => {
+        if (!deletingTemplateId) return;
+        setIsDeletingTemplate(true);
+        const result = await deleteAgendaSubjectTemplate(studioSlug, deletingTemplateId);
+        if (result.success) {
+            setModalTemplates((prev) => prev.filter((x) => x.id !== deletingTemplateId));
+            setSubjectTemplates((prev) => prev.filter((x) => x.id !== deletingTemplateId));
+            setDeletingTemplateId(null);
+            toast.success('Plantilla eliminada');
+        } else {
+            toast.error(result.error ?? 'Error al eliminar');
+        }
+        setIsDeletingTemplate(false);
+    };
 
     // Verificar disponibilidad cuando cambia la fecha
     useEffect(() => {
@@ -177,18 +292,20 @@ export function AgendaForm({
 
         setErrors({});
 
-        // Generar concepto automáticamente basado en el tipo de cita
-        const conceptoGenerado = eventType === 'presencial' ? 'Cita presencial' : 'Cita virtual';
+        const conceptValue = subject.trim() || (eventType === 'presencial' ? 'Cita presencial' : 'Cita virtual');
 
         try {
             await onSubmit({
                 date: date!,
                 time: time || undefined,
                 address: eventType === 'presencial' ? address || undefined : undefined,
-                concept: conceptoGenerado,
+                concept: conceptValue,
                 description: description || undefined,
                 link_meeting_url: eventType === 'presencial' ? linkMeetingUrl || undefined : eventType === 'virtual' ? virtualLink || undefined : undefined,
                 type_scheduling: eventType || undefined,
+                location_name: locationName.trim() || undefined,
+                location_address: eventType === 'presencial' ? (address || undefined) : undefined,
+                location_url: eventType === 'presencial' ? (linkMeetingUrl || undefined) : eventType === 'virtual' ? (virtualLink || undefined) : undefined,
             });
         } catch (error) {
             console.error('Error submitting agenda form:', error);
@@ -374,6 +491,69 @@ export function AgendaForm({
                 )}
             </div>
 
+            {/* Asunto (con plantillas tipo QuickNote) */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-300">Asunto</label>
+                <div className="relative" ref={subjectSuggestionsRef}>
+                    <ZenInput
+                        value={subject}
+                        onChange={(e) => {
+                            setSubject(e.target.value);
+                            setHasUserModified(true);
+                        }}
+                        onFocus={() => setShowSubjectSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSubjectSuggestions(false), 200)}
+                        placeholder="Ej: Sesión de fotos, Entrega de fotos, Cita presencial..."
+                        disabled={loading}
+                    />
+                    {showSubjectSuggestions && (
+                        <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-60 overflow-y-auto">
+                            {canAddSubjectAsNew && (
+                                <button
+                                    type="button"
+                                    onClick={handleAddSubjectAsNewTemplate}
+                                    className="w-full px-3 py-2 text-left text-sm text-blue-400 hover:bg-zinc-800 flex items-center gap-2 transition-colors border-b border-zinc-700"
+                                >
+                                    <Plus className="h-4 w-4 shrink-0" />
+                                    Agregar &quot;{subject.trim().length > 40 ? subject.trim().slice(0, 40) + '…' : subject.trim()}&quot; como nueva plantilla
+                                </button>
+                            )}
+                            {loadingSubjectTemplates ? (
+                                <div className="py-4 text-center text-xs text-zinc-500">Cargando…</div>
+                            ) : filteredSubjectTemplates.length === 0 ? (
+                                <div className="px-3 py-4 text-center text-xs text-zinc-500">
+                                    {canAddSubjectAsNew ? null : 'Sin plantillas. Escribe y agrega una.'}
+                                </div>
+                            ) : (
+                                filteredSubjectTemplates.map((t) => (
+                                    <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => handleSelectSubjectTemplate(t)}
+                                        className={cn(
+                                            'w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center justify-between gap-2'
+                                        )}
+                                    >
+                                        <span className="truncate">{t.text}</span>
+                                        {t.usage_count > 0 && (
+                                            <span className="shrink-0 text-[10px] text-zinc-500">{t.usage_count}</span>
+                                        )}
+                                    </button>
+                                ))
+                            )}
+                            <button
+                                type="button"
+                                onClick={openTemplatesModal}
+                                className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-zinc-800 flex items-center gap-2 transition-colors border-t border-zinc-700"
+                            >
+                                <Settings className="h-4 w-4 shrink-0" />
+                                Gestionar plantillas
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Nombre o descripción */}
             <div className="space-y-2">
                 <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
@@ -394,6 +574,20 @@ export function AgendaForm({
             {/* Campos condicionales según tipo */}
             {eventType === 'presencial' && (
                 <>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            Nombre del lugar
+                        </label>
+                        <ZenInput
+                            value={locationName}
+                            onChange={(e) => {
+                                setLocationName(e.target.value);
+                                setHasUserModified(true);
+                            }}
+                            placeholder="Ej: Hacienda del Bosque"
+                        />
+                    </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
                             <MapPin className="h-4 w-4" />
@@ -493,6 +687,102 @@ export function AgendaForm({
                     </ZenButton>
                 )}
             </div>
+
+            <ZenDialog
+                isOpen={templatesModalOpen}
+                onClose={() => setTemplatesModalOpen(false)}
+                title="Plantillas de asunto"
+                description="Edita o elimina los asuntos disponibles para agendamientos"
+                onCancel={() => setTemplatesModalOpen(false)}
+                cancelLabel="Cerrar"
+                maxWidth="md"
+            >
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {loadingModalTemplates ? (
+                        <div className="py-8 text-center text-sm text-zinc-500">Cargando…</div>
+                    ) : modalTemplates.length === 0 ? (
+                        <p className="text-sm text-zinc-400 text-center py-8">No hay plantillas. Escribe un asunto arriba y agrega una.</p>
+                    ) : (
+                        modalTemplates.map((t) => (
+                            <div
+                                key={t.id}
+                                className="flex items-center gap-2 p-3 rounded-md border border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                            >
+                                {editingTemplateId === t.id ? (
+                                    <>
+                                        <ZenInput
+                                            value={editTemplateText}
+                                            onChange={(e) => setEditTemplateText(e.target.value)}
+                                            className="flex-1 min-w-0"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveEditTemplate(t.id);
+                                                if (e.key === 'Escape') {
+                                                    setEditingTemplateId(null);
+                                                    setEditTemplateText('');
+                                                }
+                                            }}
+                                        />
+                                        <ZenButton type="button" size="sm" onClick={() => handleSaveEditTemplate(t.id)}>
+                                            Guardar
+                                        </ZenButton>
+                                        <ZenButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setEditingTemplateId(null);
+                                                setEditTemplateText('');
+                                            }}
+                                        >
+                                            Cancelar
+                                        </ZenButton>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="flex-1 min-w-0 truncate text-sm text-zinc-200">{t.text}</span>
+                                        {t.usage_count > 0 && (
+                                            <span className="text-[10px] text-zinc-500">{t.usage_count}</span>
+                                        )}
+                                        <ZenButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setEditingTemplateId(t.id);
+                                                setEditTemplateText(t.text);
+                                            }}
+                                            title="Editar"
+                                        >
+                                            <FileText className="h-3.5 w-3.5" />
+                                        </ZenButton>
+                                        <ZenButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-400 hover:text-red-300"
+                                            onClick={() => setDeletingTemplateId(t.id)}
+                                            title="Eliminar"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </ZenButton>
+                                    </>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </ZenDialog>
+
+            <ZenConfirmModal
+                isOpen={deletingTemplateId !== null}
+                onClose={() => setDeletingTemplateId(null)}
+                onConfirm={confirmDeleteTemplate}
+                title="Eliminar plantilla"
+                description="¿Eliminar esta plantilla de asunto? No se borran los agendamientos ya creados."
+                confirmLabel="Eliminar"
+                variant="destructive"
+                loading={isDeletingTemplate}
+            />
         </form>
     );
 }

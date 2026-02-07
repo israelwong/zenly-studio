@@ -201,97 +201,131 @@ export function PromiseAgendamiento({
                 </div>
               )}
 
-              {/* Dirección o Link */}
-              {agendamiento.type_scheduling === 'presencial' && agendamiento.address && (
+              {/* Nombre del lugar */}
+              {(agendamiento.location_name || agendamiento.type_scheduling === 'presencial') && (
                 <div className="flex items-start gap-2.5">
                   <MapPin className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-zinc-400 mb-0.5">Dirección</p>
+                    <p className="text-xs font-medium text-zinc-400 mb-0.5">Nombre del lugar</p>
                     <p className="text-xs text-zinc-300 leading-relaxed">
-                      {agendamiento.address}
+                      {agendamiento.location_name || '—'}
                     </p>
                   </div>
                 </div>
               )}
 
-              {agendamiento.type_scheduling === 'presencial' && agendamiento.link_meeting_url && (
+              {/* Dirección: valor o Pendiente */}
+              {agendamiento.type_scheduling === 'presencial' && (
                 <div className="flex items-start gap-2.5">
-                  <LinkIcon className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <MapPin className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-zinc-400 mb-0.5">Link de Google Maps</p>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={agendamiento.link_meeting_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-emerald-400 hover:text-emerald-300 underline truncate flex-1"
-                      >
-                        {agendamiento.link_meeting_url}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(agendamiento.link_meeting_url || '');
-                            setCopiedLink(agendamiento.link_meeting_url || null);
-                            toast.success('Link copiado al portapapeles');
-                            setTimeout(() => setCopiedLink(null), 2000);
-                          } catch (error) {
-                            console.error('Error copying to clipboard:', error);
-                            toast.error('Error al copiar link');
-                          }
-                        }}
-                        className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors flex-shrink-0"
-                        title="Copiar link"
-                      >
-                        {copiedLink === agendamiento.link_meeting_url ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                    </div>
+                    <p className="text-xs font-medium text-zinc-400 mb-0.5">Dirección</p>
+                    {(agendamiento.location_address ?? agendamiento.address) ? (
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        {agendamiento.location_address ?? agendamiento.address}
+                      </p>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Pendiente
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
 
-              {agendamiento.type_scheduling === 'virtual' && agendamiento.link_meeting_url && (
+              {/* Link Google Maps (presencial) o Link reunión virtual: valor o Pendiente */}
+              {agendamiento.type_scheduling === 'presencial' && (
+                <div className="flex items-start gap-2.5">
+                  <LinkIcon className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-400 mb-0.5">Link de Google Maps</p>
+                    {(agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={agendamiento.location_url ?? agendamiento.link_meeting_url ?? ''}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-400 hover:text-emerald-300 underline truncate flex-1"
+                        >
+                          {agendamiento.location_url ?? agendamiento.link_meeting_url}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const url = agendamiento.location_url ?? agendamiento.link_meeting_url ?? '';
+                              await navigator.clipboard.writeText(url);
+                              setCopiedLink(url || null);
+                              toast.success('Link copiado al portapapeles');
+                              setTimeout(() => setCopiedLink(null), 2000);
+                            } catch (error) {
+                              console.error('Error copying to clipboard:', error);
+                              toast.error('Error al copiar link');
+                            }
+                          }}
+                          className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors flex-shrink-0"
+                          title="Copiar link"
+                        >
+                          {copiedLink === (agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {agendamiento.type_scheduling === 'virtual' && (
                 <div className="flex items-start gap-2.5">
                   <LinkIcon className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-zinc-400 mb-0.5">Link de reunión virtual</p>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={agendamiento.link_meeting_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-emerald-400 hover:text-emerald-300 underline truncate flex-1"
-                      >
-                        {agendamiento.link_meeting_url}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(agendamiento.link_meeting_url || '');
-                            setCopiedLink(agendamiento.link_meeting_url || null);
-                            toast.success('Link copiado al portapapeles');
-                            setTimeout(() => setCopiedLink(null), 2000);
-                          } catch (error) {
-                            console.error('Error copying to clipboard:', error);
-                            toast.error('Error al copiar link');
-                          }
-                        }}
-                        className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors flex-shrink-0"
-                        title="Copiar link"
-                      >
-                        {copiedLink === agendamiento.link_meeting_url ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                    </div>
+                    {(agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={agendamiento.location_url ?? agendamiento.link_meeting_url ?? ''}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-400 hover:text-emerald-300 underline truncate flex-1"
+                        >
+                          {agendamiento.location_url ?? agendamiento.link_meeting_url}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const url = agendamiento.location_url ?? agendamiento.link_meeting_url ?? '';
+                              await navigator.clipboard.writeText(url);
+                              setCopiedLink(url || null);
+                              toast.success('Link copiado al portapapeles');
+                              setTimeout(() => setCopiedLink(null), 2000);
+                            } catch (error) {
+                              console.error('Error copying to clipboard:', error);
+                              toast.error('Error al copiar link');
+                            }
+                          }}
+                          className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors flex-shrink-0"
+                          title="Copiar link"
+                        >
+                          {copiedLink === (agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Pendiente
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

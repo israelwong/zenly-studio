@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { Calendar, momentLocalizer, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/es';
-import { ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, MapPin, Video } from 'lucide-react';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { AgendaItemHoverCard } from './AgendaItemHoverCard';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -296,7 +296,12 @@ const AgendaEventComponent = ({
 
   const trigger = (
     <div className="rbc-event-content cursor-pointer w-full h-full relative z-10 flex items-center justify-between gap-1.5">
-      <span className="flex-1 truncate">
+      {item.type_scheduling === 'virtual' ? (
+        <Video className="h-3.5 w-3.5 text-white/90 shrink-0" aria-hidden />
+      ) : item.type_scheduling === 'presencial' ? (
+        <MapPin className="h-3.5 w-3.5 text-white/90 shrink-0" aria-hidden />
+      ) : null}
+      <span className="flex-1 truncate min-w-0">
         {event.title ? event.title.charAt(0).toUpperCase() + event.title.slice(1).toLowerCase() : ''}
       </span>
       {/* Indicador de sincronización Google Calendar */}
