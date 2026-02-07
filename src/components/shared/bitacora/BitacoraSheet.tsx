@@ -19,11 +19,15 @@ import { usePromiseLogsRealtime } from '@/hooks/usePromiseLogsRealtime';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { cn } from '@/lib/utils';
 
+export type BitacoraSheetContext = 'EVENT' | 'PROMISE';
+
 interface BitacoraSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   studioSlug: string;
   promiseId: string | null;
+  /** Contexto para filtrar logs: EVENT (vista evento) o PROMISE (vista promesa) */
+  context?: BitacoraSheetContext;
   contactId?: string | null;
   onLogAdded?: (newLog?: PromiseLog) => void;
   onLogDeleted?: (logId: string) => void;
@@ -34,6 +38,7 @@ export function BitacoraSheet({
   onOpenChange,
   studioSlug,
   promiseId,
+  context = 'PROMISE',
   contactId,
   onLogAdded,
   onLogDeleted,
@@ -95,6 +100,7 @@ export function BitacoraSheet({
         promise_id: promiseId,
         content: messageToSend,
         log_type: 'note',
+        origin_context: context,
       });
 
       if (result.success && result.data) {
@@ -106,8 +112,7 @@ export function BitacoraSheet({
         toast.error(result.error || 'Error al agregar nota');
         setMessage(messageToSend);
       }
-    } catch (error) {
-      console.error('Error creating log:', error);
+    } catch {
       toast.error('Error al agregar nota');
       setMessage(messageToSend);
     } finally {
@@ -126,8 +131,7 @@ export function BitacoraSheet({
       } else {
         toast.error(result.error || 'Error al eliminar nota');
       }
-    } catch (error) {
-      console.error('Error deleting log:', error);
+    } catch {
       toast.error('Error al eliminar nota');
     } finally {
       setIsDeleting(false);

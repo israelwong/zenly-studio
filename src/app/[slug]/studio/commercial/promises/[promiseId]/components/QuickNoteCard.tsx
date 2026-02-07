@@ -48,14 +48,9 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
   });
 
   useEffect(() => {
-    console.log('BITÁCORA EN PANTALLA: Escuchando para ID:', promiseId);
-  }, [promiseId]);
-
-  useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ promiseId?: string }>).detail;
       if (detail?.promiseId === promiseId) {
-        console.log('CLIENTE: Forzando refetch con bust:', Date.now().toString());
         loadLogs(Date.now().toString());
       }
     };
@@ -133,7 +128,6 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
     setShowSuggestions(false);
     setSearch('');
     try {
-      console.log('[DEBUG: CreateLog] Contexto enviado:', context, 'PromiseID:', promiseId);
       const result = await createPromiseLog(studioSlug, {
         promise_id: promiseId,
         content: template.text,
@@ -167,7 +161,6 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
         setSending(false);
         return;
       }
-      console.log('[DEBUG: CreateLog] Contexto enviado:', context, 'PromiseID:', promiseId);
       const logResult = await createPromiseLog(studioSlug, {
         promise_id: promiseId,
         content: trimmed,
@@ -423,10 +416,10 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
                         <span
                           className={cn(
                             'text-[10px] font-medium px-1 py-0.5 rounded',
-                            context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : log.origin_context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : 'bg-blue-600/20 text-blue-400'
+                            log.origin_context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : 'bg-blue-600/20 text-blue-400'
                           )}
                         >
-                          {context === 'EVENT' ? 'Evento' : log.origin_context === 'EVENT' ? 'Evento' : 'Promesa'}
+                          {log.origin_context === 'EVENT' ? 'Evento' : 'Promesa'}
                         </span>
                         <span className={cn('shrink-0 text-[11px] leading-none', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
                           {formatDateTime(log.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
