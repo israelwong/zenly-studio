@@ -3,19 +3,23 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
+export type PromiseLogTemplateOriginContext = 'EVENT' | 'PROMISE';
+
 export interface PromiseLogTemplate {
   id: string;
   studio_id: string;
   text: string;
   usage_count: number;
+  origin_context: string;
   created_at: Date;
 }
 
 /**
- * Listar plantillas de notas del estudio, ordenadas por uso y texto
+ * Listar plantillas del estudio filtradas por contexto (EVENT o PROMISE).
  */
 export async function getPromiseLogTemplates(
-  studioSlug: string
+  studioSlug: string,
+  origin_context: PromiseLogTemplateOriginContext
 ): Promise<{ success: true; data: PromiseLogTemplate[] } | { success: false; error: string }> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -27,13 +31,14 @@ export async function getPromiseLogTemplates(
     }
 
     const templates = await prisma.studio_promise_log_templates.findMany({
-      where: { studio_id: studio.id },
+      where: { studio_id: studio.id, origin_context },
       orderBy: [{ usage_count: 'desc' }, { text: 'asc' }],
       select: {
         id: true,
         studio_id: true,
         text: true,
         usage_count: true,
+        origin_context: true,
         created_at: true,
       },
     });
@@ -52,11 +57,12 @@ export async function getPromiseLogTemplates(
 }
 
 /**
- * Crear plantilla de nota (o devolver la existente si ya existe el mismo texto)
+ * Crear plantilla de nota con el contexto actual (o devolver la existente si ya existe el mismo texto en ese contexto).
  */
 export async function createPromiseLogTemplate(
   studioSlug: string,
-  text: string
+  text: string,
+  origin_context: PromiseLogTemplateOriginContext = 'PROMISE'
 ): Promise<{ success: true; data: PromiseLogTemplate } | { success: false; error: string }> {
   try {
     const trimmed = text.trim();
@@ -74,7 +80,7 @@ export async function createPromiseLogTemplate(
 
     const existing = await prisma.studio_promise_log_templates.findUnique({
       where: {
-        studio_id_text: { studio_id: studio.id, text: trimmed },
+        studio_id_text_origin_context: { studio_id: studio.id, text: trimmed, origin_context },
       },
     });
 
@@ -87,12 +93,14 @@ export async function createPromiseLogTemplate(
       data: {
         studio_id: studio.id,
         text: trimmed,
+        origin_context,
       },
       select: {
         id: true,
         studio_id: true,
         text: true,
         usage_count: true,
+        origin_context: true,
         created_at: true,
       },
     });
@@ -137,13 +145,16 @@ export async function updatePromiseLogTemplate(
       return { success: false, error: 'Plantilla no encontrada' };
     }
 
-    const duplicate = await prisma.studio_promise_log_templates.findUnique({
+    const duplicate = await prisma.studio_promise_log_templates.findFirst({
       where: {
-        studio_id_text: { studio_id: studio.id, text: trimmed },
+        studio_id: studio.id,
+        text: trimmed,
+        origin_context: existing.origin_context,
+        id: { not: templateId },
       },
     });
-    if (duplicate && duplicate.id !== templateId) {
-      return { success: false, error: 'Ya existe una plantilla con ese texto' };
+    if (duplicate) {
+      return { success: false, error: 'Ya existe una plantilla con ese texto en este contexto' };
     }
 
     const template = await prisma.studio_promise_log_templates.update({
@@ -154,6 +165,7 @@ export async function updatePromiseLogTemplate(
         studio_id: true,
         text: true,
         usage_count: true,
+        origin_context: true,
         created_at: true,
       },
     });

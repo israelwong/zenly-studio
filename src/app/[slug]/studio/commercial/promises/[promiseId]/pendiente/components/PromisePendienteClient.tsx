@@ -272,7 +272,7 @@ export function PromisePendienteClient({
               eventoId={eventoId}
               initialAgendamiento={initialAgendamiento}
             />
-            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
+            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} context="PROMISE" initialLastLogs={initialLastLogs} />
             {/* Oculto temporalmente: card "X ajustes activos" — descomentar para mostrar */}
             {false && (
               <Suspense fallback={<SidebarSkeleton />}>

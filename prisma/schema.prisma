@@ -1438,16 +1438,19 @@ model studio_promise_pipeline_stages {
 }
 
 model studio_promise_log_templates {
-  id          String                 @id @default(cuid())
-  studio_id   String
-  text        String
-  usage_count Int                    @default(0)
-  created_at  DateTime               @default(now())
-  studio      studios                @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  logs        studio_promise_logs[]
+  id              String                 @id @default(cuid())
+  studio_id       String
+  text            String
+  usage_count     Int                    @default(0)
+  /** EVENT: plantillas en vista evento; PROMISE: plantillas en vista promesa */
+  origin_context  String                 @default("PROMISE")
+  created_at      DateTime               @default(now())
+  studio          studios                @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  logs            studio_promise_logs[]
 
-  @@unique([studio_id, text])
+  @@unique([studio_id, text, origin_context])
   @@index([studio_id])
+  @@index([studio_id, origin_context])
 }
 
 model studio_whatsapp_templates {

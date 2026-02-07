@@ -2116,9 +2116,9 @@ export async function autorizarYCrearEvento(
     // Invalidar caché del cliente
     const contactId = cotizacion.promise.contact_id;
     if (contactId) {
-      revalidateTag(`cliente-eventos-${contactId}`, 'max');
-      revalidateTag(`cliente-evento-${promiseId}-${contactId}`, 'max');
-      revalidateTag(`cliente-dashboard-${result.evento_id}-${contactId}`, 'max');
+      revalidateTag(`cliente-eventos-${contactId}`);
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
+      revalidateTag(`cliente-dashboard-${result.evento_id}-${contactId}`);
     }
 
     return {

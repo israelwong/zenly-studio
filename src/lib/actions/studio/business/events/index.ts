@@ -4,6 +4,7 @@ export {
   cancelarEvento,
   getEvents,
   moveEvent,
+  actualizarNombreEvento,
   obtenerCotizacionesAutorizadasCount,
   obtenerCrewMembers,
   asignarCrewAItem,

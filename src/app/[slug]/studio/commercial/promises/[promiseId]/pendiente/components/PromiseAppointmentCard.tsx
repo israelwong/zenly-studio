@@ -201,6 +201,9 @@ export function PromiseAppointmentCard({
       <ZenCardContent className="p-2.5 space-y-2">
         {hasAgenda && !editMode ? (
           <>
+            {agendamiento.concept && (
+              <p className="text-sm font-medium text-emerald-400 truncate">{agendamiento.concept}</p>
+            )}
             <div className="flex items-center gap-2 text-xs text-zinc-400">
               {tipoPresencial ? (
                 <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
@@ -212,9 +215,6 @@ export function PromiseAppointmentCard({
                 {agendamiento.time ? ` · ${agendamiento.time}` : ''}
               </span>
             </div>
-            {agendamiento.concept && (
-              <p className="text-xs text-zinc-500 truncate">{agendamiento.concept}</p>
-            )}
             {!isDisabled && (
               <div className="flex gap-1.5 pt-0.5">
                 <ZenButton
@@ -245,6 +245,43 @@ export function PromiseAppointmentCard({
           </>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-2 text-sm">
+            <AgendaSubjectInput
+              context="COMMERCIAL"
+              studioSlug={studioSlug}
+              value={concept}
+              onChange={setConcept}
+              label="Asunto"
+              placeholder="Nombre o descripción"
+            />
+            <div className="space-y-0.5">
+              <label className="text-xs text-zinc-500">Tipo</label>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTypeScheduling('presencial')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1 h-8 rounded border text-xs',
+                    typeScheduling === 'presencial'
+                      ? 'bg-emerald-600/20 border-emerald-600 text-emerald-400'
+                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
+                  )}
+                >
+                  <MapPin className="h-3.5 w-3.5" /> Presencial
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTypeScheduling('virtual')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1 h-8 rounded border text-xs',
+                    typeScheduling === 'virtual'
+                      ? 'bg-emerald-600/20 border-emerald-600 text-emerald-400'
+                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
+                  )}
+                >
+                  <Video className="h-3.5 w-3.5" /> Virtual
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-0.5">
                 <label className="text-xs text-zinc-500">Fecha</label>
@@ -290,43 +327,6 @@ export function PromiseAppointmentCard({
                 />
               </div>
             </div>
-            <div className="space-y-0.5">
-              <label className="text-xs text-zinc-500">Tipo</label>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setTypeScheduling('presencial')}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-1 h-8 rounded border text-xs',
-                    typeScheduling === 'presencial'
-                      ? 'bg-emerald-600/20 border-emerald-600 text-emerald-400'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-                  )}
-                >
-                  <MapPin className="h-3.5 w-3.5" /> Presencial
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypeScheduling('virtual')}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-1 h-8 rounded border text-xs',
-                    typeScheduling === 'virtual'
-                      ? 'bg-emerald-600/20 border-emerald-600 text-emerald-400'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-                  )}
-                >
-                  <Video className="h-3.5 w-3.5" /> Virtual
-                </button>
-              </div>
-            </div>
-            <AgendaSubjectInput
-              context="COMMERCIAL"
-              studioSlug={studioSlug}
-              value={concept}
-              onChange={setConcept}
-              label="Asunto"
-              placeholder="Nombre o descripción"
-            />
             {typeScheduling === 'virtual' && (
               <div className="space-y-0.5">
                 <label className="text-xs text-zinc-500 flex items-center gap-1">

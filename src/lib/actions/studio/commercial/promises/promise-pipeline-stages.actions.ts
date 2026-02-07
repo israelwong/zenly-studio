@@ -131,7 +131,7 @@ export async function createPipelineStage(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`pipeline-stages-${studioSlug}`, 'max'); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`pipeline-stages-${studioSlug}`); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,
@@ -199,7 +199,7 @@ export async function updatePipelineStage(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`pipeline-stages-${studioSlug}`, 'max'); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`pipeline-stages-${studioSlug}`); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,
@@ -244,7 +244,7 @@ export async function reorderPipelineStages(
     );
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`pipeline-stages-${studioSlug}`, 'max'); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`pipeline-stages-${studioSlug}`); // Invalidar caché de stages (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,

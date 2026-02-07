@@ -8,8 +8,10 @@ import {
   getEventsSchema,
   moveEventSchema,
   updateEventDateSchema,
+  updateEventNameSchema,
   type MoveEventData,
   type UpdateEventDateData,
+  type UpdateEventNameData,
   type EventsListResponse,
   type EventResponse,
   type EventWithContact,
@@ -39,6 +41,7 @@ export interface EventoBasico {
     name: string;
     phone: string;
     email: string | null;
+    google_contact_id?: string | null;
     address: string | null;
     avatar_url?: string | null;
     acquisition_channel?: {
@@ -62,6 +65,7 @@ export interface EventoBasico {
       name: string;
       phone: string;
       email: string | null;
+      google_contact_id?: string | null;
       address: string | null;
     } | null;
   } | null;
@@ -87,6 +91,7 @@ export interface EventoDetalle extends EventoBasico {
       name: string;
       phone: string;
       email: string | null;
+      google_contact_id?: string | null;
     };
   } | null;
   cotizacion?: {
@@ -655,7 +660,7 @@ export async function moveEvent(
     revalidatePath(`/${studioSlug}/studio/business/events/${evento.id}`);
     
     // Invalidar caché de lista (con studioSlug para aislamiento)
-    revalidateTag(`events-list-${studioSlug}`, 'max');
+    revalidateTag(`events-list-${studioSlug}`);
 
     return {
       success: true,
@@ -791,6 +796,7 @@ export async function obtenerEventoDetalle(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    console.log('[DEBUG: EventQuery] Iniciando búsqueda en DB para evento:', eventoId);
     const evento = await prisma.studio_events.findFirst({
       where: {
         id: eventoId,
@@ -809,6 +815,7 @@ export async function obtenerEventoDetalle(
             name: true,
             phone: true,
             email: true,
+            google_contact_id: true,
             address: true,
             avatar_url: true,
             acquisition_channel_id: true,
@@ -851,6 +858,7 @@ export async function obtenerEventoDetalle(
                 name: true,
                 phone: true,
                 email: true,
+                google_contact_id: true,
                 address: true,
                 acquisition_channel_id: true,
                 social_network_id: true,
@@ -1095,6 +1103,12 @@ export async function obtenerEventoDetalle(
     if (!evento) {
       return { success: false, error: 'Evento no encontrado' };
     }
+
+    const contactForLog = evento.contact ?? evento.promise?.contact ?? null;
+    const valorContacto = contactForLog
+      ? { name: contactForLog.name, phone: contactForLog.phone, email: contactForLog.email }
+      : 'sin contacto';
+    console.log('[DEBUG: EventQuery] Cargando datos frescos del servidor para el evento:', eventoId, 'Valor de contacto actual:', valorContacto);
 
     if (!evento.promise_id) {
       return { success: false, error: 'Evento sin promesa asociada' };
@@ -1767,7 +1781,7 @@ export async function cancelarEvento(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
     
     // Invalidar caché de lista (con studioSlug para aislamiento)
-    revalidateTag(`events-list-${studioSlug}`, 'max');
+    revalidateTag(`events-list-${studioSlug}`);
     
     // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {
@@ -2269,6 +2283,54 @@ export async function actualizarFechaEvento(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar fecha del evento',
+    };
+  }
+}
+
+/**
+ * Actualizar nombre del evento (campo name en studio_promises)
+ */
+export async function actualizarNombreEvento(
+  studioSlug: string,
+  data: UpdateEventNameData
+): Promise<EventoDetalleResponse> {
+  try {
+    const validatedData = updateEventNameSchema.parse(data);
+    const { event_id, name } = validatedData;
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const evento = await prisma.studio_events.findFirst({
+      where: { id: event_id, studio_id: studio.id },
+      select: { promise_id: true },
+    });
+
+    if (!evento?.promise_id) {
+      return { success: false, error: 'Evento sin promesa asociada' };
+    }
+
+    await prisma.studio_promises.update({
+      where: { id: evento.promise_id },
+      data: { name: name || '' },
+    });
+
+    const eventResult = await obtenerEventoDetalle(studioSlug, event_id);
+    if (!eventResult.success || !eventResult.data) {
+      return { success: true, data: undefined };
+    }
+    return { success: true, data: eventResult.data };
+  } catch (error) {
+    console.error('[EVENTOS] Error actualizando nombre del evento:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar nombre del evento',
     };
   }
 }

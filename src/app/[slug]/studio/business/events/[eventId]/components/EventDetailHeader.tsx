@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
-import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ArrowLeft, MoreVertical, Loader2, Check } from 'lucide-react';
+import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { moveEvent, obtenerEventoDetalle } from '@/lib/actions/studio/business/events';
+import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface EventDetailHeaderProps {
   studioSlug: string;
@@ -32,8 +34,81 @@ export const EventDetailHeader = function EventDetailHeader({
 }: EventDetailHeaderProps) {
   const router = useRouter();
   const [isChangingStage, setIsChangingStage] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [savedNameFeedback, setSavedNameFeedback] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
   const isArchived = currentStage?.slug === 'archivado';
+
+  const displayName = eventData.promise?.name || eventData.name || 'Evento sin nombre';
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const handleStartEditName = () => {
+    setEditNameValue(displayName);
+    setIsEditingName(true);
+  };
+
+  const handleUpdateName = async () => {
+    const trimmed = editNameValue.trim();
+    if (trimmed === displayName || !trimmed) {
+      setIsEditingName(false);
+      setEditNameValue(displayName);
+      return;
+    }
+    setIsSavingName(true);
+    try {
+      const { actualizarNombreEvento } = await import('@/lib/actions/studio/business/events/events.actions');
+      const result = await actualizarNombreEvento(studioSlug, {
+        event_id: eventId,
+        name: trimmed,
+      });
+      if (result.success) {
+        if (result.data) onEventUpdated(result.data);
+        setIsEditingName(false);
+        setSavedNameFeedback(true);
+        toast.success('Nombre actualizado');
+        setTimeout(() => setSavedNameFeedback(false), 1500);
+        if (eventData.promise_id) {
+          createPromiseLog(studioSlug, {
+            promise_id: eventData.promise_id,
+            content: `Nombre del evento actualizado: '${displayName}' ➔ '${trimmed}'`,
+            log_type: 'user_note',
+            origin_context: 'EVENT',
+          }).catch(() => {});
+        }
+      } else {
+        toast.error(result.error || 'Error al guardar');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar el nombre');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleNameBlur = () => {
+    handleUpdateName();
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      (e.target as HTMLInputElement).blur();
+    }
+    if (e.key === 'Escape') {
+      setEditNameValue(displayName);
+      setIsEditingName(false);
+    }
+  };
 
   const handlePipelineStageChange = async (newStageId: string) => {
     if (!eventId || newStageId === currentPipelineStageId) return;
@@ -76,7 +151,44 @@ export const EventDetailHeader = function EventDetailHeader({
             <ArrowLeft className="h-4 w-4" />
           </ZenButton>
           <div>
-            <ZenCardTitle>{eventData.name || 'Evento sin nombre'}</ZenCardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {isEditingName ? (
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={editNameValue}
+                  onChange={(e) => setEditNameValue(e.target.value)}
+                  onBlur={handleNameBlur}
+                  onKeyDown={handleNameKeyDown}
+                  disabled={isSavingName}
+                  className={cn(
+                    'min-w-[120px] max-w-[320px] rounded px-1 py-0.5 text-lg font-semibold leading-tight',
+                    'bg-zinc-800/80 text-zinc-100 placeholder-zinc-500',
+                    'border border-zinc-600 focus:border-emerald-500/60 focus:outline-none focus:ring-1 focus:ring-emerald-500/40',
+                    'disabled:opacity-60'
+                  )}
+                  placeholder="Nombre del evento"
+                />
+              ) : (
+                <ZenCardTitle
+                  className="mb-0 cursor-pointer rounded px-1 py-0.5 hover:bg-zinc-800/60 transition-colors"
+                  onClick={handleStartEditName}
+                >
+                  {displayName}
+                </ZenCardTitle>
+              )}
+              {isSavingName && (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
+              )}
+              {savedNameFeedback && !isSavingName && (
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+              )}
+              {eventData.event_type?.name && (
+                <ZenBadge variant="success" size="sm" className="shrink-0">
+                  {eventData.event_type.name}
+                </ZenBadge>
+              )}
+            </div>
             <ZenCardDescription>
               Detalle del evento
             </ZenCardDescription>

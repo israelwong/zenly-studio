@@ -285,7 +285,7 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        // Redirigir con éxito
+        // Redirigir con éxito (returnUrl viene del state; si el usuario abrió desde detalle de evento, incluye eventId en la ruta)
         const redirectPath = getSafeRedirectUrl(
           result.returnUrl || returnUrl,
           `/${result.studioSlug || studioSlugFromState}/studio/config/integraciones`,

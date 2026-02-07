@@ -234,8 +234,8 @@ export async function updatePromiseShareSettings(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
-    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, "max");
-    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, "max");
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`);
 
     return { success: true };
   } catch (error) {

@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
@@ -473,12 +473,16 @@ export async function getLastPromiseLogs(
  * Obtener logs de una promesa
  * ✅ OPTIMIZACIÓN: Orden asc directamente en servidor + límite de seguridad
  */
-export async function getPromiseLogs(
-  promiseId: string
+async function fetchPromiseLogsFromDb(
+  promiseId: string,
+  context?: PromiseLogOriginContext
 ): Promise<PromiseLogsResponse> {
   try {
+    const where: { promise_id: string; origin_context?: string } = { promise_id: promiseId };
+    if (context) where.origin_context = context;
+
     const logs = await prisma.studio_promise_logs.findMany({
-      where: { promise_id: promiseId },
+      where,
       include: {
         user: {
           select: {
@@ -487,8 +491,8 @@ export async function getPromiseLogs(
           },
         },
       },
-      orderBy: { created_at: 'asc' }, // ✅ Orden asc directamente en servidor
-      take: 100, // ✅ Límite de seguridad para evitar traer miles de registros
+      orderBy: { created_at: 'asc' },
+      take: 100,
     });
 
     const promiseLogs: PromiseLog[] = logs.map((log) => ({
@@ -502,23 +506,43 @@ export async function getPromiseLogs(
       created_at: log.created_at,
       user: log.user
         ? {
-          id: log.user.id,
-          full_name: log.user.full_name,
-        }
+            id: log.user.id,
+            full_name: log.user.full_name,
+          }
         : null,
     }));
 
-    return {
-      success: true,
-      data: promiseLogs,
-    };
+    return { success: true as const, data: promiseLogs };
   } catch (error) {
     console.error('[PROMISE_LOGS] Error obteniendo logs:', error);
     return {
-      success: false,
+      success: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
     };
   }
+}
+
+export async function getPromiseLogs({
+  promiseId,
+  bust,
+  context,
+}: {
+  promiseId: string;
+  bust?: string;
+  /** Filtrar logs por contexto (EVENT vs PROMISE); si no se pasa, se devuelven todos */
+  context?: PromiseLogOriginContext;
+}): Promise<PromiseLogsResponse> {
+  console.log('[DEBUG: getPromiseLogs] ID:', promiseId, 'Bust:', bust || 'ninguno', 'Context:', context || 'todos');
+
+  if (bust) {
+    return await fetchPromiseLogsFromDb(promiseId, context);
+  }
+
+  return unstable_cache(
+    () => fetchPromiseLogsFromDb(promiseId, context),
+    ['promise-logs', promiseId, context ?? 'all'],
+    { tags: [`logs-${promiseId}`, context ? `logs-${promiseId}-${context}` : ''].filter(Boolean) }
+  )();
 }
 
 /**
@@ -528,6 +552,7 @@ export async function createPromiseLog(
   studioSlug: string,
   data: CreatePromiseLogData
 ): Promise<ActionResponse<PromiseLog>> {
+  console.log('[DEBUG: createPromiseLog] Intentando crear log para PromiseID:', data.promise_id);
   try {
     const validatedData = createPromiseLogSchema.parse(data);
 
@@ -623,16 +648,38 @@ export async function createPromiseLog(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidateTag(`logs-${validatedData.promise_id}`);
+    revalidatePath('/', 'layout');
 
+    const verified = await prisma.studio_promise_logs.findUnique({
+      where: { id: log.id },
+      select: { id: true },
+    });
+    if (!verified) {
+      console.error('[DEBUG: createPromiseLog] ERROR DB: insert reportó éxito pero el registro no existe en DB', {
+        logId: log.id,
+        promise_id: validatedData.promise_id,
+        origin_context: originContext,
+      });
+    }
+
+    console.log('[DEBUG: createPromiseLog] Log insertado correctamente en DB con ID:', log.id);
     return {
       success: true,
       data: promiseLog,
     };
   } catch (error) {
-    console.error('[PROMISE_LOGS] Error creando log:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error('[DEBUG: createPromiseLog] FALLO al insertar log:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      data: data?.promise_id,
+      origin_context: data?.origin_context,
+    });
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al crear log',
+      error: err.message || 'Error al crear log',
     };
   }
 }

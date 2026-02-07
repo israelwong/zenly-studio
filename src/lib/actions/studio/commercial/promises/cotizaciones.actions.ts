@@ -1323,7 +1323,7 @@ export async function updateCotizacionName(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`quote-detail-${cotizacionId}`, 'max');
+    revalidateTag(`quote-detail-${cotizacionId}`);
 
     return {
       success: true,
@@ -1875,7 +1875,7 @@ export async function updateCotizacion(
     }
 
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
-    revalidateTag(`quote-detail-${validatedData.cotizacion_id}`, 'max');
+    revalidateTag(`quote-detail-${validatedData.cotizacion_id}`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}`);
       // Las revisiones ahora se manejan como cotizaciones normales (flujo legacy eliminado)
@@ -2529,7 +2529,7 @@ export async function pasarACierre(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
       // ⚠️ CRÍTICO: Invalidar layout de rutas públicas para forzar frescura
@@ -2538,8 +2538,8 @@ export async function pasarACierre(
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'layout');
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/negociacion`, 'layout');
       // Invalidar tag específico para forzar revalidación del estado de la promesa
-      revalidateTag(`promise-state-${cotizacion.promise_id}`, 'max');
-      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');
+      revalidateTag(`promise-state-${cotizacion.promise_id}`);
+      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`);
     }
 
     return {
@@ -2656,7 +2656,7 @@ export async function cancelarCierre(
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
       // ⚠️ CRÍTICO: Invalidar caché de route state público para evitar bucle infinito
       // Cuando se cancela el cierre, el status cambia a pendiente pero el caché puede seguir mostrando en_cierre
-      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');
+      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`);
       
       // Sincronizar short URL según nuevo estado
       const { syncShortUrlRoute } = await import('./promise-short-url.actions');

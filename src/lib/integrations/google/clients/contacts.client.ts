@@ -6,10 +6,13 @@ import { prisma } from '@/lib/prisma';
 import { decryptToken } from '@/lib/utils/encryption';
 
 /**
- * Obtiene un cliente autenticado de Google Contacts (People API) para un estudio
- * Sigue el patrón de getGoogleCalendarClient y getGoogleDriveClient
+ * Obtiene un cliente autenticado de Google Contacts (People API) para un estudio.
+ * Devuelve null si el refresh token es inválido (ej. invalid_grant); así la sync
+ * puede fallar sin bloquear la operación principal (ej. updateContact).
  */
-export async function getGoogleContactsClient(studioSlug: string) {
+export async function getGoogleContactsClient(
+  studioSlug: string
+): Promise<{ people: ReturnType<typeof google.people>; oauth2Client: import('googleapis').auth.OAuth2 } | null> {
   // Obtener credenciales OAuth compartidas
   const credentialsResult = await obtenerCredencialesGoogle();
   if (!credentialsResult.success || !credentialsResult.data) {
@@ -84,10 +87,12 @@ export async function getGoogleContactsClient(studioSlug: string) {
     // Actualizar credenciales con el nuevo access_token si fue refrescado
     oauth2Client.setCredentials(credentials);
   } catch (error) {
-    console.error('[getGoogleContactsClient] Error refrescando token:', error);
-    throw new Error(
-      'Error al refrescar access token. Por favor, reconecta tu cuenta de Google.'
+    // No lanzar: permitir que la actualización del contacto en DB siga siendo exitosa.
+    // El llamador debe comprobar null y omitir o fallar la sync con un mensaje controlado.
+    console.error(
+      '[getGoogleContactsClient] Token expirado o inválido. Reconecta Google para sincronizar contactos.'
     );
+    return null;
   }
 
   // Crear cliente de People API
@@ -184,9 +189,13 @@ export async function crearGrupoContactosZEN(
   studioName: string,
   peopleClient?: ReturnType<typeof google.people>
 ): Promise<{ resourceName: string }> {
-  // Si se proporciona el cliente, usarlo directamente (evita leer DB)
-  // Si no, obtenerlo normalmente desde DB
-  const people = peopleClient || (await getGoogleContactsClient(studioSlug)).people;
+  const client = !peopleClient ? await getGoogleContactsClient(studioSlug) : null;
+  const people = peopleClient ?? client?.people ?? null;
+  if (!people) {
+    throw new Error(
+      'Google Contacts no disponible. Reconecta tu cuenta para crear el grupo.'
+    );
+  }
 
   const nombreGrupo = `ZEN: ${studioName}`;
 
@@ -239,9 +248,15 @@ export async function renombrarGrupoContactosZEN(
   nuevoNombre: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { people } = await getGoogleContactsClient(studioSlug);
+    const client = await getGoogleContactsClient(studioSlug);
+    if (!client) {
+      return {
+        success: false,
+        error: 'Google Contacts no disponible. Reconecta tu cuenta.',
+      };
+    }
 
-    await people.contactGroups.update({
+    await client.people.contactGroups.update({
       resourceName: groupResourceName,
       updateGroupFields: 'name',
       requestBody: {
@@ -281,15 +296,33 @@ export async function sincronizarContactoGoogle(
   },
   groupResourceName?: string
 ): Promise<{ resourceName: string; etag: string }> {
-  const { people } = await getGoogleContactsClient(studioSlug);
+  const client = await getGoogleContactsClient(studioSlug);
+  if (!client) {
+    throw new Error(
+      'Google Contacts no disponible. Reconecta tu cuenta para sincronizar.'
+    );
+  }
+  const { people } = client;
 
   if (contactData.resourceName) {
-    // UPDATE
+    // UPDATE: la API exige person.etag para concurrencia optimista
+    const { data: currentPerson } = await people.people.get({
+      resourceName: contactData.resourceName,
+      personFields: 'metadata',
+    });
+    const etag = currentPerson?.etag;
+    if (!etag) {
+      throw new Error('No se pudo obtener etag del contacto en Google');
+    }
+
     const updated = await people.people.updateContact({
       resourceName: contactData.resourceName,
       updatePersonFields:
         'names,emailAddresses,phoneNumbers,organizations,biographies',
-      requestBody: contactData,
+      requestBody: {
+        ...contactData,
+        etag,
+      },
     });
 
     if (!updated.data.resourceName || !updated.data.etag) {
@@ -347,9 +380,12 @@ export async function eliminarContactoGoogle(
   studioSlug: string,
   resourceName: string
 ): Promise<{ success: boolean }> {
-  const { people } = await getGoogleContactsClient(studioSlug);
+  const client = await getGoogleContactsClient(studioSlug);
+  if (!client) {
+    return { success: false };
+  }
 
-  await people.people.deleteContact({
+  await client.people.people.deleteContact({
     resourceName,
     deletePersonFields:
       'names,emailAddresses,phoneNumbers,organizations,biographies',

@@ -144,7 +144,7 @@ export async function actualizarPerfilCliente(
     // Revalidar todas las páginas del cliente que puedan mostrar datos del contacto (incluyendo contratos)
     revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'page');
     // Invalidar caché de eventos del cliente
-    revalidateTag(`cliente-eventos-${clienteData.id}`, 'max');
+    revalidateTag(`cliente-eventos-${clienteData.id}`);
 
     // Obtener todas las promesas del cliente para invalidar dashboards individuales
     const promises = await prisma.studio_promises.findMany({
@@ -169,8 +169,8 @@ export async function actualizarPerfilCliente(
     // Invalidar caché de cada evento/dashboard del cliente
     for (const promise of promises) {
       const eventId = promise.event?.id || promise.id;
-      revalidateTag(`cliente-evento-${promise.id}-${clienteData.id}`, 'max');
-      revalidateTag(`cliente-dashboard-${eventId}-${clienteData.id}`, 'max');
+      revalidateTag(`cliente-evento-${promise.id}-${clienteData.id}`);
+      revalidateTag(`cliente-dashboard-${eventId}-${clienteData.id}`);
     }
 
     return {

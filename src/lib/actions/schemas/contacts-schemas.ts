@@ -19,7 +19,8 @@ export const createContactSchema = z.object({
 });
 
 export const updateContactSchema = createContactSchema.partial().extend({
-  id: z.string().min(1, 'ID es requerido')
+  id: z.string().min(1, 'ID es requerido'),
+  event_id: z.string().optional(), // Para revalidar detalle del evento tras actualizar contacto
 });
 
 export const getContactsSchema = z.object({

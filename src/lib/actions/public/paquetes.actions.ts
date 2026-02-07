@@ -350,8 +350,8 @@ export async function solicitarPaquetePublico(
     
     // ⚠️ TAREA 4: Invalidación granular de caché
     const { revalidateTag } = await import('next/cache');
-    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-pendientes-${studioSlug}-${promiseId}`, 'max');
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-pendientes-${studioSlug}-${promiseId}`);
 
     // 8. Calcular precio final con descuentos y anticipos
     const formatPrice = (price: number) => {

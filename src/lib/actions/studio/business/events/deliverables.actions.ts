@@ -169,7 +169,7 @@ export async function crearEntregable(
     // Invalidar caché del cliente
     if (evento.contact_id) {
       const eventIdOrPromiseId = evento.promise_id || evento.id;
-      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${evento.contact_id}`, 'max');
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${evento.contact_id}`);
     }
 
     return { success: true, data: entregable };

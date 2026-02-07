@@ -260,6 +260,7 @@ export async function procesarCallbackGoogleContacts(
         enabled: hasContactsScope,
         groupResourceName,
         lastSyncAt: null,
+        status: 'ACTIVE',
       },
     };
 

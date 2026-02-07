@@ -296,7 +296,7 @@ export async function crearPago(
         // Invalidar caché del cliente
         if (cotizacion.promise?.contact_id && cotizacion.promise_id) {
           const eventIdOrPromiseId = validatedData.promise_id || cotizacion.promise_id;
-          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`, 'max');
+          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`);
         }
 
         const item: PaymentItem = {

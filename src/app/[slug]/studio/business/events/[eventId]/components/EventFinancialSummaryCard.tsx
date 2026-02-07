@@ -201,7 +201,7 @@ export function EventFinancialSummaryCard({
             </div>
           </div>
         </ZenCardHeader>
-        <ZenCardContent className="px-4 pt-4 pb-2">
+        <ZenCardContent className="px-4 pt-4 pb-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div className="p-3 bg-zinc-900/80 rounded-lg border border-zinc-700/50">
               <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">

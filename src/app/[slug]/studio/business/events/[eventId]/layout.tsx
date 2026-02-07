@@ -36,7 +36,7 @@ export default async function EventLayout({
     },
     ['event-detail', studioSlug, eventId],
     {
-      tags: [`event-detail-${eventId}-${studioSlug}`],
+      tags: ['evento-detalle', `evento-${eventId}`],
       revalidate: false, // Invalidación manual por tags
     }
   );

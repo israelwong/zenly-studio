@@ -103,40 +103,53 @@ export function EventDetailToolbar({
   return (
     <>
       <div className="flex items-center justify-between gap-1.5 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
-        {/* Izquierda: Compartir + Revisar */}
+        {/* Izquierda: Portal + Contrato + Contactar */}
         <div className="flex items-center gap-3">
           {hasContactData && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-zinc-500 font-medium">Portal del cliente</span>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyPortalUrl}
+                className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
+              >
+                {linkCopied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copiar URL</span>
+                  </>
+                )}
+              </ZenButton>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handlePreviewPortal}
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Abrir portal</span>
+              </ZenButton>
+            </div>
+          )}
+          {promiseId && (
             <>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-zinc-500 font-medium">Portal del cliente</span>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyPortalUrl}
-                  className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
-                >
-                  {linkCopied ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Copiado</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>Copiar URL</span>
-                    </>
-                  )}
-                </ZenButton>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePreviewPortal}
-                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  <span>Abrir portal</span>
-                </ZenButton>
-              </div>
+              {hasContactData && (
+                <div className="h-5 w-px bg-zinc-700 shrink-0" aria-hidden />
+              )}
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-contrato-preview'))}
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+              >
+                <span>Ver contrato</span>
+              </ZenButton>
             </>
           )}
         </div>

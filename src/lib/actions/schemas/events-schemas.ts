@@ -22,6 +22,11 @@ export const updateEventDateSchema = z.object({
   event_date: z.coerce.date(),
 });
 
+export const updateEventNameSchema = z.object({
+  event_id: z.string().cuid(),
+  name: z.string().max(200, 'El nombre es demasiado largo').transform((s) => s.trim() || null),
+});
+
 // ============================================
 // TYPES
 // ============================================
@@ -29,6 +34,7 @@ export const updateEventDateSchema = z.object({
 export type GetEventsParams = z.infer<typeof getEventsSchema>;
 export type MoveEventData = z.infer<typeof moveEventSchema>;
 export type UpdateEventDateData = z.infer<typeof updateEventDateSchema>;
+export type UpdateEventNameData = z.infer<typeof updateEventNameSchema>;
 
 export interface EventWithContact {
   id: string;

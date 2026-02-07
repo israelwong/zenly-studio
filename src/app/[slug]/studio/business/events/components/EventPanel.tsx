@@ -40,6 +40,7 @@ export function EventPanel({
             <QuickNoteCard
               studioSlug={studioSlug}
               promiseId={eventData.promise_id}
+              context="EVENT"
               onLogAdded={onEventUpdated}
             />
           )}

@@ -601,8 +601,8 @@ export async function actualizarEventoInfo(
       
       // Invalidar caché del cliente
       const eventId = promise.event.id;
-      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`, 'max');
-      revalidateTag(`cliente-evento-${promiseId}-${contactId}`, 'max');
+      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`);
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
     }
 
     return {

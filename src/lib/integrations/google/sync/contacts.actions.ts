@@ -3,8 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import {
   sincronizarContactoGoogle,
-  getGoogleContactsClient,
 } from '@/lib/integrations/google/clients/contacts.client';
+import { marcarContactosGoogleExpirado } from '@/lib/integrations/google/studio/status.actions';
 
 /**
  * Sincroniza un Contacto del Estudio con Google Contacts
@@ -153,9 +153,18 @@ export async function sincronizarContactoConGoogle(
     };
   } catch (error: any) {
     console.error('[sincronizarContactoConGoogle] Error:', error);
+    const msg = error?.message || '';
+    if (
+      msg.includes('no disponible') ||
+      msg.includes('Reconecta') ||
+      msg.includes('invalid_grant') ||
+      msg.includes('refresh')
+    ) {
+      await marcarContactosGoogleExpirado(studioSlug);
+    }
     return {
       success: false,
-      error: error?.message || 'Error al sincronizar contacto con Google',
+      error: msg || 'Error al sincronizar contacto con Google',
     };
   }
 }

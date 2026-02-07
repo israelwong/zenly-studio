@@ -11,15 +11,19 @@ import { cn } from '@/lib/utils';
 import type { PromiseLogTemplate } from '@/lib/actions/studio/commercial/promises/promise-log-templates.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 
+export type QuickNoteCardContext = 'EVENT' | 'PROMISE';
+
 interface QuickNoteCardProps {
   studioSlug: string;
   promiseId: string;
+  /** Contexto de la bitácora: EVENT (vista evento) o PROMISE (vista promesa) */
+  context: QuickNoteCardContext;
   /** Últimos 3 logs desde servidor para mostrar en inicialización */
   initialLastLogs?: PromiseLog[];
   onLogAdded?: () => void;
 }
 
-export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onLogAdded }: QuickNoteCardProps) {
+export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs = [], onLogAdded }: QuickNoteCardProps) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [templates, setTemplates] = useState<PromiseLogTemplate[]>([]);
@@ -37,7 +41,49 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
   const [savingLog, setSavingLog] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const { logs, addLog, updateLog } = usePromiseLogs({ promiseId, enabled: true });
+  const { logs, loading, addLog, appendLog, addOptimisticLog, updateLog, loadLogs } = usePromiseLogs({
+    promiseId,
+    enabled: true,
+    context,
+  });
+
+  useEffect(() => {
+    console.log('BITÁCORA EN PANTALLA: Escuchando para ID:', promiseId);
+  }, [promiseId]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ promiseId?: string }>).detail;
+      if (detail?.promiseId === promiseId) {
+        console.log('CLIENTE: Forzando refetch con bust:', Date.now().toString());
+        loadLogs(Date.now().toString());
+      }
+    };
+    window.addEventListener('promise-logs-invalidate', handler);
+    return () => window.removeEventListener('promise-logs-invalidate', handler);
+  }, [promiseId, loadLogs]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{ promiseId?: string; content?: string }>).detail;
+      if (d?.promiseId === promiseId && d?.content) {
+        addOptimisticLog(d.content, context);
+      }
+    };
+    window.addEventListener('promise-logs-optimistic-add', handler);
+    return () => window.removeEventListener('promise-logs-optimistic-add', handler);
+  }, [promiseId, context, addOptimisticLog]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{ log?: PromiseLog }>).detail;
+      if (d?.log && d.log.promise_id === promiseId) {
+        appendLog(d.log);
+      }
+    };
+    window.addEventListener('promise-logs-append', handler);
+    return () => window.removeEventListener('promise-logs-append', handler);
+  }, [promiseId, appendLog]);
 
   const logsRecentFirst = useMemo(
     () => [...logs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
@@ -54,22 +100,21 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
 
   const loadTemplates = () => {
     setLoadingTemplates(true);
-    getPromiseLogTemplates(studioSlug)
+    getPromiseLogTemplates(studioSlug, context)
       .then((res) => {
         if (res.success && res.data) setTemplates(res.data);
       })
       .finally(() => setLoadingTemplates(false));
   };
 
-  // Precargar plantillas al montar para que el dropdown abra al instante al hacer focus (igual que SeguimientoMinimalCard con asuntos)
   useEffect(() => {
     setLoadingTemplates(true);
-    getPromiseLogTemplates(studioSlug)
+    getPromiseLogTemplates(studioSlug, context)
       .then((res) => {
         if (res.success && res.data) setTemplates(res.data);
       })
       .finally(() => setLoadingTemplates(false));
-  }, [studioSlug]);
+  }, [studioSlug, context]);
 
   const filteredTemplates = useMemo(() => {
     if (!search.trim()) return templates;
@@ -88,11 +133,13 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
     setShowSuggestions(false);
     setSearch('');
     try {
+      console.log('[DEBUG: CreateLog] Contexto enviado:', context, 'PromiseID:', promiseId);
       const result = await createPromiseLog(studioSlug, {
         promise_id: promiseId,
         content: template.text,
         log_type: 'note',
         template_id: template.id,
+        origin_context: context,
       });
       if (result.success && result.data) {
         addLog(result.data);
@@ -114,17 +161,19 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
     setSending(true);
     setShowSuggestions(false);
     try {
-      const templateResult = await createPromiseLogTemplate(studioSlug, trimmed);
+      const templateResult = await createPromiseLogTemplate(studioSlug, trimmed, context);
       if (!templateResult.success) {
         toast.error(templateResult.error ?? 'Error al crear plantilla');
         setSending(false);
         return;
       }
+      console.log('[DEBUG: CreateLog] Contexto enviado:', context, 'PromiseID:', promiseId);
       const logResult = await createPromiseLog(studioSlug, {
         promise_id: promiseId,
         content: trimmed,
         log_type: 'note',
         template_id: templateResult.data.id,
+        origin_context: context,
       });
       if (logResult.success && logResult.data) {
         addLog(logResult.data);
@@ -152,7 +201,7 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
     setEditText('');
     setDeletingId(null);
     setLoadingModal(true);
-    getPromiseLogTemplates(studioSlug)
+    getPromiseLogTemplates(studioSlug, context)
       .then((res) => {
         if (res.success && res.data) setModalTemplates(res.data);
       })
@@ -222,6 +271,36 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
     }
     setSavingLog(false);
   };
+
+  if (loading) {
+    return (
+      <div className="bg-zinc-900 shadow-lg shadow-black/20 rounded-lg transition-colors duration-200 border-2 border-zinc-800">
+        <div className="border-b border-zinc-800 py-2 px-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="h-4 w-32 rounded bg-zinc-800 animate-pulse" />
+            <div className="h-6 w-16 rounded bg-zinc-800 animate-pulse" />
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="h-9 w-full rounded-md bg-zinc-800 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-3 w-24 rounded bg-zinc-800/80 animate-pulse" />
+            <ul className="flex flex-col gap-3 pt-1">
+              {[1, 2, 3].map((i) => (
+                <li key={i} className="flex gap-2 items-start">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-700 mt-1.5" />
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="h-3 w-full max-w-[90%] rounded bg-zinc-800 animate-pulse" />
+                    <div className="h-3 w-20 rounded bg-zinc-800/80 animate-pulse" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ZenCard variant="outlined" className="border-zinc-800">
@@ -341,8 +420,13 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
                         {log.content}
                       </p>
                       <div className="flex justify-start items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className={cn('text-[10px] font-medium px-1 py-0.5 rounded', log.origin_context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : 'bg-blue-600/20 text-blue-400')}>
-                          {log.origin_context === 'EVENT' ? 'Evento' : 'Promesa'}
+                        <span
+                          className={cn(
+                            'text-[10px] font-medium px-1 py-0.5 rounded',
+                            context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : log.origin_context === 'EVENT' ? 'bg-violet-600/20 text-violet-400' : 'bg-blue-600/20 text-blue-400'
+                          )}
+                        >
+                          {context === 'EVENT' ? 'Evento' : log.origin_context === 'EVENT' ? 'Evento' : 'Promesa'}
                         </span>
                         <span className={cn('shrink-0 text-[11px] leading-none', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
                           {formatDateTime(log.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
