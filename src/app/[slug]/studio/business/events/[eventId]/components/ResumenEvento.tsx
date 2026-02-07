@@ -161,7 +161,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-              Contrato
+              Resumen del evento
             </ZenCardTitle>
             {!loadingResumen && contrato?.content && (
               <ZenButton
