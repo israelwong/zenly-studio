@@ -2,9 +2,7 @@
 
 import React from 'react';
 import { ResumenEvento } from '../[eventId]/components/ResumenEvento';
-import { CondicionesComerciales } from '../[eventId]/components/CondicionesComerciales';
-import { EventCotizacionesCard } from '../[eventId]/components/EventCotizacionesCard';
-import { EventPaymentsCard } from '../[eventId]/components/EventPaymentsCard';
+import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancialSummaryCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
 import { EventCronogramaCard } from '../[eventId]/components/EventCronogramaCard';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
@@ -45,37 +43,27 @@ export function EventPanel({
               onLogAdded={onEventUpdated}
             />
           )}
-          <CondicionesComerciales
-            studioSlug={studioSlug}
-            eventId={eventId}
-            eventData={eventData}
-          />
         </div>
 
-        {/* Columna 2: Cotizaciones + Pagos */}
+        {/* Columna 2: Hub financiero */}
         <div className="lg:col-span-1 space-y-6">
-          <EventCotizacionesCard
-            studioSlug={studioSlug}
-            eventId={eventId}
-            promiseId={eventData.promise_id}
-            cotizaciones={eventData.cotizaciones || []}
-            eventData={eventData}
-            onUpdated={onEventUpdated}
-          />
-
-          <EventPaymentsCard
-            studioSlug={studioSlug}
-            cotizacionId={eventData.cotizacion?.id}
-            contractValue={eventData.contract_value ?? undefined}
-            paidAmount={eventData.paid_amount}
-            pendingAmount={eventData.pending_amount}
-            payments={(eventData.payments ?? []).map(payment => ({
-              id: payment.id,
-              amount: payment.amount,
-              payment_method: payment.payment_method,
-              payment_date: payment.payment_date,
-              concept: payment.concept || '',
+          <EventFinancialSummaryCard
+            initialQuote={
+              eventData.cotizaciones?.length
+                ? eventData.cotizaciones
+                : eventData.cotizacion
+                  ? [eventData.cotizacion]
+                  : null
+            }
+            initialPayments={(eventData.payments ?? []).map((p) => ({
+              id: p.id,
+              amount: p.amount,
+              payment_method: p.payment_method,
+              payment_date: p.payment_date,
+              concept: p.concept ?? '',
             }))}
+            studioSlug={studioSlug}
+            cotizacionId={eventData.cotizacion?.id ?? null}
             onPaymentAdded={onEventUpdated}
           />
         </div>

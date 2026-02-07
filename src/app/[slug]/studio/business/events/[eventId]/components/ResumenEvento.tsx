@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Eye, FileText, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
-import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
-import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { ContractPreviewForPromiseModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cierre/components/contratos/ContractPreviewForPromiseModal';
@@ -157,15 +155,31 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
     setShowContratoPreview(true);
   };
 
-  const fechaEvento = resumen?.evento?.event_date || eventData.promise?.event_date || eventData.event_date;
-
   return (
     <>
       <ZenCard>
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-            Resumen del Evento
-          </ZenCardTitle>
+          <div className="flex items-center justify-between">
+            <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+              Contrato
+            </ZenCardTitle>
+            {!loadingResumen && contrato?.content && (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handlePreviewContrato}
+                disabled={loadingContratoTemplate}
+                className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
+              >
+                {loadingContratoTemplate ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <Eye className="h-3 w-3 mr-1" />
+                )}
+                Contrato
+              </ZenButton>
+            )}
+          </div>
         </ZenCardHeader>
         <ZenCardContent className="p-4">
           <div className="space-y-4">
@@ -214,53 +228,6 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
                   {eventData.promise?.event_location || eventData.event_location || 'Sin locación'}
                 </p>
               </div>
-            </div>
-
-            {/* Contrato */}
-            <div className="pt-3 border-t border-zinc-800 space-y-2">
-              {loadingResumen ? (
-                <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-zinc-400 mb-1">Contrato</p>
-                      <div className="flex items-center gap-2">
-                        {isContratoFirmado ? (
-                          <ZenBadge variant="success" size="sm">Firmado</ZenBadge>
-                        ) : contrato ? (
-                          <ZenBadge variant="warning" size="sm">Pendiente de firma</ZenBadge>
-                        ) : (
-                          <ZenBadge variant="secondary" size="sm">Sin contrato</ZenBadge>
-                        )}
-                      </div>
-                    </div>
-                    {contrato?.content && (
-                      <ZenButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={handlePreviewContrato}
-                        disabled={loadingContratoTemplate}
-                        className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
-                      >
-                        {loadingContratoTemplate ? (
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        ) : (
-                          <Eye className="h-3 w-3 mr-1" />
-                        )}
-                        Ver
-                      </ZenButton>
-                    )}
-                  </div>
-
-                  {isContratoFirmado && fechaEvento && (
-                    <div>
-                      <p className="text-xs font-medium text-zinc-400 mb-0.5">Fecha de evento</p>
-                      <p className="text-xs text-zinc-300">{formatDisplayDateLong(toUtcDateOnly(fechaEvento))}</p>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
         </ZenCardContent>

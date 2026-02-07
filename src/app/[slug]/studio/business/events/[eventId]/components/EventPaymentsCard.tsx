@@ -29,6 +29,8 @@ const formatAmount = (amount: number): string => {
 interface EventPaymentsCardProps {
     studioSlug: string;
     cotizacionId?: string;
+    /** Si true, usa payments (del evento por promise_id) como lista y no fetchea por cotizacion_id. Así "Pagado" y el historial coinciden. */
+    usePaymentsFromEvent?: boolean;
     contractValue?: number;
     paidAmount?: number;
     pendingAmount?: number;
@@ -42,62 +44,61 @@ interface EventPaymentsCardProps {
     onPaymentAdded?: () => void;
 }
 
+function toPaymentItem(p: {
+    id: string;
+    amount: number;
+    payment_method: string;
+    payment_date: Date;
+    concept: string;
+}): PaymentItem {
+    return {
+        id: p.id,
+        amount: p.amount,
+        payment_method: p.payment_method,
+        payment_date: p.payment_date,
+        concept: p.concept,
+        description: null,
+        created_at: p.payment_date,
+    };
+}
+
 export function EventPaymentsCard({
     studioSlug,
     cotizacionId,
+    usePaymentsFromEvent = false,
     contractValue = 0,
     paidAmount = 0,
     pendingAmount = 0,
     payments: initialPayments,
-    // onPaymentAdded, // No se utiliza actualmente - comentado para evitar re-cargas innecesarias
 }: EventPaymentsCardProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [payments, setPayments] = useState<PaymentItem[]>([]);
+    const [payments, setPayments] = useState<PaymentItem[]>(() =>
+        initialPayments.map(toPaymentItem)
+    );
     const [editingPayment, setEditingPayment] = useState<PaymentItem | null>(null);
     const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
     const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-    // Cargar pagos solo una vez al montar o cuando cambia cotizacionId
+    // En contexto de evento: usar pagos del evento (por promise_id). Si no, fetchear por cotizacion_id.
     useEffect(() => {
-        const loadPayments = async () => {
-            if (!cotizacionId) {
-                // Si no hay cotizacionId, usar los pagos iniciales
-                setPayments(
-                    initialPayments.map(p => ({
-                        id: p.id,
-                        amount: p.amount,
-                        payment_method: p.payment_method,
-                        payment_date: p.payment_date,
-                        concept: p.concept,
-                        description: null,
-                        created_at: p.payment_date,
-                    }))
-                );
-                return;
-            }
-
-            setLoading(true);
-            try {
-                const result = await obtenerPagosPorCotizacion(studioSlug, cotizacionId);
-                if (result.success) {
-                    setPayments(result.data || []);
-                }
-            } catch (error) {
-                console.error('Error loading payments:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadPayments();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [studioSlug, cotizacionId]); // Solo recargar cuando cambia cotizacionId, no cuando cambian initialPayments
+        if (usePaymentsFromEvent || !cotizacionId) {
+            setPayments(initialPayments.map(toPaymentItem));
+            return;
+        }
+        setLoading(true);
+        obtenerPagosPorCotizacion(studioSlug, cotizacionId)
+            .then((result) => {
+                if (result.success) setPayments(result.data || []);
+            })
+            .catch((err) => console.error('Error loading payments:', err))
+            .finally(() => setLoading(false));
+    }, [studioSlug, cotizacionId, usePaymentsFromEvent, initialPayments]);
 
     // Calcular totales localmente basándose en los pagos actuales
     const localTotals = useMemo(() => {
@@ -209,22 +210,6 @@ export function EventPaymentsCard({
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {/* Resumen financiero */}
-                            <div className="grid grid-cols-3 gap-2 text-xs">
-                                <div className="p-2 bg-zinc-900 rounded">
-                                    <p className="text-zinc-400">Total</p>
-                                    <p className="font-semibold text-zinc-200">{formatAmount(contractValue)}</p>
-                                </div>
-                                <div className="p-2 bg-green-900/20 rounded border border-green-500/30">
-                                    <p className="text-zinc-400">Pagado</p>
-                                    <p className="font-semibold text-green-400">{formatAmount(localTotals.paidAmount)}</p>
-                                </div>
-                                <div className="p-2 bg-red-900/20 rounded border border-red-500/30">
-                                    <p className="text-zinc-400">Pendiente</p>
-                                    <p className="font-semibold text-red-400">{formatAmount(localTotals.pendingAmount)}</p>
-                                </div>
-                            </div>
-
                             {payments.length === 0 && (
                                 <div className="text-center py-4">
                                     <p className="text-xs text-zinc-500 mb-2">
