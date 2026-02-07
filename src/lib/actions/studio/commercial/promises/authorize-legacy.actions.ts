@@ -141,20 +141,14 @@ export async function autorizarCotizacionLegacy(
       return { success: false, error: 'La cotización no tiene contacto asociado' };
     }
 
-    // Obtener la primera etapa del pipeline de eventos (Planeación)
-    const primeraEtapa = await prisma.studio_manager_pipeline_stages.findFirst({
-      where: {
-        studio_id: studio.id,
-        is_active: true,
-        slug: 'planeacion',
-      },
-      orderBy: {
-        order: 'asc',
-      },
+    // Primera etapa del Event Pipeline (menor order, ej. Planeación) — orderBy para no depender del valor fijo
+    const initialStage = await prisma.studio_manager_pipeline_stages.findFirst({
+      where: { studio_id: studio.id, is_active: true },
+      orderBy: { order: 'asc' },
     });
 
-    if (!primeraEtapa) {
-      return { success: false, error: 'No se encontró la etapa inicial del pipeline de eventos.' };
+    if (!initialStage) {
+      return { success: false, error: 'No se encontró una etapa inicial activa en el pipeline de eventos.' };
     }
 
     // Obtener etapa "approved" del pipeline de promises
@@ -178,7 +172,7 @@ export async function autorizarCotizacionLegacy(
           promise_id: validated.promise_id,
           cotizacion_id: validated.cotizacion_id,
           event_type_id: cotizacion.promise?.event_type_id || null,
-          stage_id: primeraEtapa.id,
+          stage_id: initialStage.id,
           event_date: cotizacion.promise.event_date,
           status: 'ACTIVE',
           name: cotizacion.promise.name || 'Evento de ' + cotizacion.contact?.name,

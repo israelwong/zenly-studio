@@ -113,6 +113,7 @@ export async function obtenerResumenEventoCreado(
     }
 
     // Obtener pagos asociados a la cotización
+    // Solo pagos activos (completed); excluye cancelados por evento cancelado para aislamiento financiero
     const pagos = await prisma.studio_pagos.findMany({
       where: {
         cotizacion_id: evento.cotizacion.id,
@@ -132,7 +133,8 @@ export async function obtenerResumenEventoCreado(
     });
 
     const totalPagado = pagos.reduce((sum, pago) => sum + pago.amount, 0);
-    const montoInicial = pagos.length > 0 ? pagos[0].amount : null;
+    // Monto mostrado = suma real de pagos (nunca cotizacion_cierre.pago_monto)
+    const montoInicial = totalPagado > 0 ? totalPagado : null;
 
     return {
       success: true,

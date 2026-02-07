@@ -251,6 +251,7 @@ export function usePromiseCierreLogic({
     if (isNewCotizacion) {
       lastCotizacionIdRef.current = cotizacion.id;
       initialLoadDoneRef.current = false;
+      userConfirmedPagoInSessionRef.current = false;
       setHasLoadedRegistroOnce(false);
     }
     loadRegistroCierre();
@@ -268,6 +269,8 @@ export function usePromiseCierreLogic({
   // Realtime: escuchar cambios en studio_cotizaciones_cierre (firma del cliente o cancelación)
   // Solo mostrar toast de firma cuando contractSignedAt viene definido (cliente firmó), no cuando se canceló
   const lastFirmadoToastRef = useRef(0);
+  /** Solo true si el usuario abrió el modal de pago y guardó en esta sesión (evita usar 5000 residual del registro) */
+  const userConfirmedPagoInSessionRef = useRef(false);
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
@@ -476,6 +479,7 @@ export function usePromiseCierreLogic({
   }, []);
 
   const handlePagoSuccess = useCallback(async () => {
+    userConfirmedPagoInSessionRef.current = true;
     const result = await obtenerDatosPagoCierre(studioSlug, cotizacion.id);
     if (result.success && result.data) {
       setPagoData(prev => {
@@ -492,6 +496,7 @@ export function usePromiseCierreLogic({
   }, [studioSlug, cotizacion.id]);
 
   const handleEliminarPago = useCallback(async () => {
+    userConfirmedPagoInSessionRef.current = true;
     const result = await actualizarPagoCierre(studioSlug, cotizacion.id, {
       concepto: null,
       monto: null,
@@ -596,9 +601,14 @@ export function usePromiseCierreLogic({
 
     try {
       if (cotizacion.status === 'en_cierre') {
+        // Solo registrar pago si el usuario abrió el modal y guardó un monto > 0 en esta sesión (nunca usar registro cargado)
+        const usuarioConfirmoPagoEnSesion = userConfirmedPagoInSessionRef.current;
+        const tienePagoExplicito =
+          usuarioConfirmoPagoEnSesion &&
+          !!(pagoData?.pago_concepto?.trim() && pagoData?.pago_monto != null && Number(pagoData.pago_monto) > 0);
         const serverPromise = autorizarYCrearEvento(studioSlug, promiseId, cotizacion.id, {
-          registrarPago: pagoData?.pago_registrado || false,
-          montoInicial: pagoData?.pago_monto || undefined,
+          registrarPago: tienePagoExplicito,
+          montoInicial: tienePagoExplicito ? Number(pagoData!.pago_monto) : 0,
         });
         const animationPromise = runProgressAnimation();
 

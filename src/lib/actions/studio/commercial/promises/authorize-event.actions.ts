@@ -69,10 +69,11 @@ export async function authorizeEventAfterContract(
       return { success: false, error: "La cotización no coincide con el evento del contrato" };
     }
 
-    // Buscar etapa "Autorizado"
-    const etapaAutorizado = await prisma.studio_event_pipeline_stages.findFirst({
+    // Buscar etapa "Autorizado" en el pipeline de eventos (manager stages)
+    const etapaAutorizado = await prisma.studio_manager_pipeline_stages.findFirst({
       where: {
         studio_id: studio.id,
+        is_active: true,
         OR: [
           { name: { contains: "autorizado", mode: "insensitive" } },
           { name: { contains: "aprobado", mode: "insensitive" } },

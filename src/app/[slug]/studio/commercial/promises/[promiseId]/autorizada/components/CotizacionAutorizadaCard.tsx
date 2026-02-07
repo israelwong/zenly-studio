@@ -110,9 +110,9 @@ export function CotizacionAutorizadaCard({
     setShowContractPreview(true);
   };
 
-  // Información del pago inicial
-  const pagoInicial = resumen?.montoInicial || null;
-  const hayPagoInicial = pagoInicial && pagoInicial > 0;
+  // Siempre mostrar suma real de studio_pagos (nunca cotizacion_cierre.pago_monto)
+  const totalPagado = resumen?.totalPagado ?? 0;
+  const hayPagoInicial = totalPagado > 0;
   const primerPago = resumen?.pagos?.[0];
 
   // Loading state - Skeleton
@@ -328,7 +328,7 @@ export function CotizacionAutorizadaCard({
                 <span className="font-semibold text-zinc-300">Pago Inicial</span>
                 {hayPagoInicial && primerPago ? (
                   <>
-                    <span className="text-emerald-400 font-medium"> · ${formatNumber(pagoInicial, 2)} MXN</span>
+                    <span className="text-emerald-400 font-medium"> · ${formatNumber(totalPagado, 2)} MXN</span>
                     {(primerPago.concept || primerPago.payment_date) && (
                       <span className="text-zinc-500 text-xs block mt-0.5">
                         {[primerPago.concept, primerPago.payment_date && formatDisplayDate(toUtcDateOnly(primerPago.payment_date))].filter(Boolean).join(' · ')}

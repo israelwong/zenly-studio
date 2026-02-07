@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { CotizacionesSection } from './CotizacionesSection';
-import type { CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
-// ⚠️ RealtimeUpdateNotification deshabilitado para evitar conflictos
+import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 
 // ⚠️ BLOQUEO GLOBAL: Persiste aunque el componente se re-monte
@@ -79,13 +78,15 @@ export function CotizacionesSectionRealtime({
   dateSoldOut = false,
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
+  const [localCondiciones, setLocalCondiciones] = useState<typeof condicionesComerciales>(condicionesComerciales);
   const [isPending, startTransition] = useTransition();
-  // ⚠️ Notificaciones deshabilitadas para evitar conflictos
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
   const lastReloadTimeRef = useRef<number>(0);
-  const blockUntilRef = useRef<number>(0); // Bloqueo de 5 segundos
+  const blockUntilRef = useRef<number>(0);
+  const silentSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silentSyncInFlightRef = useRef(false);
 
   // ⚠️ ACTUALIZACIÓN LOCAL: Actualizar solo la cotización específica que cambió
   const updateCotizacionLocal = useCallback((cotizacionId: string, updates: Partial<PublicCotizacion>) => {
@@ -171,21 +172,55 @@ export function CotizacionesSectionRealtime({
   }, [promiseId, studioSlug, cotizaciones, startTransition]);
 
   useEffect(() => {
-    // Actualizar estado cuando cambian las cotizaciones iniciales (SSR)
     setCotizaciones(initialCotizaciones);
   }, [initialCotizaciones]);
 
-  // Cleanup del timeout al desmontar
+  useEffect(() => {
+    setLocalCondiciones(condicionesComerciales);
+  }, [condicionesComerciales]);
+
+  // Silent realtime sync: update items/totals/conditions without alerts or refresh UI
+  const runSilentSync = useCallback(() => {
+    if (typeof window === 'undefined' || !window.location.pathname.includes('/pendientes')) return;
+    if (silentSyncInFlightRef.current) return;
+    silentSyncInFlightRef.current = true;
+    import('@/lib/actions/public/promesas.actions')
+      .then(({ getPublicPromisePendientes }) => getPublicPromisePendientes(studioSlug, promiseId))
+      .then((result) => {
+        if (result.success && result.data?.cotizaciones) {
+          startTransition(() => {
+            setCotizaciones(result.data!.cotizaciones);
+            if (result.data!.condiciones_comerciales) {
+              setLocalCondiciones(result.data!.condiciones_comerciales);
+            }
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        silentSyncInFlightRef.current = false;
+      });
+  }, [studioSlug, promiseId, startTransition]);
+
+  const scheduleSilentSync = useCallback(() => {
+    if (silentSyncTimeoutRef.current) clearTimeout(silentSyncTimeoutRef.current);
+    silentSyncTimeoutRef.current = setTimeout(runSilentSync, 300);
+  }, [runSilentSync]);
+
+  useCotizacionesRealtime({
+    studioSlug,
+    promiseId,
+    ignoreCierreEvents: true,
+    onCotizacionUpdated: scheduleSilentSync,
+    onCotizacionInserted: scheduleSilentSync,
+  });
+
   useEffect(() => {
     return () => {
-      if (reloadTimeoutRef.current) {
-        clearTimeout(reloadTimeoutRef.current);
-      }
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+      if (silentSyncTimeoutRef.current) clearTimeout(silentSyncTimeoutRef.current);
     };
   }, []);
-
-  // ⚠️ SIN HOOK PROPIO: El padre (PendientesPageClient) maneja todo el Realtime
-  // Esto evita competencia y garantiza que la redirección funcione correctamente
 
   return (
     <>
@@ -195,7 +230,7 @@ export function CotizacionesSectionRealtime({
         studioSlug={studioSlug}
         studioId={studioId}
         sessionId={sessionId}
-        condicionesComerciales={condicionesComerciales}
+        condicionesComerciales={localCondiciones ?? condicionesComerciales}
         terminosCondiciones={terminosCondiciones}
         showCategoriesSubtotals={showCategoriesSubtotals}
         showItemsPrices={showItemsPrices}

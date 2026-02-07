@@ -70,6 +70,7 @@ export function computeContractTotalFromQuotes(quotes: QuoteSnapshot[]): number 
 
 /**
  * Calcula total pagado y saldo pendiente a partir del total contrato y la lista de pagos.
+ * El llamador debe pasar solo pagos activos (status === 'completed'); excluir cancelados.
  */
 export function computeFinancialSummary(
   contractTotal: number,

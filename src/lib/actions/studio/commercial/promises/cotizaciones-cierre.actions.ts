@@ -198,10 +198,15 @@ export async function crearRegistroCierre(
       };
     }
 
-    // Crear registro nuevo
+    // Crear registro nuevo (pago explícitamente null/0 — sin default monetario)
     const registro = await prisma.studio_cotizaciones_cierre.create({
       data: {
         cotizacion_id: cotizacionId,
+        pago_registrado: false,
+        pago_concepto: null,
+        pago_monto: null,
+        pago_fecha: null,
+        pago_metodo_id: null,
       },
     });
 
@@ -1585,19 +1590,16 @@ export async function autorizarYCrearEvento(
       }
     }
 
-    // 5. Obtener primera etapa del pipeline de eventos (debe ser "Planeaci?n" con order: 0)
-    const primeraEtapa = await prisma.studio_manager_pipeline_stages.findFirst({
-      where: {
-        studio_id: studio.id,
-        is_active: true,
-      },
+    // 5. Primera etapa del Event Pipeline (menor order, ej. Planeación) — orderBy para no depender del valor fijo
+    const initialStage = await prisma.studio_manager_pipeline_stages.findFirst({
+      where: { studio_id: studio.id, is_active: true },
       orderBy: { order: 'asc' },
     });
 
-    if (!primeraEtapa) {
+    if (!initialStage) {
       return {
         success: false,
-        error: 'No se encontr? una etapa inicial activa en el pipeline de eventos. Aseg?rate de tener al menos una etapa con order: 0.',
+        error: 'No se encontró una etapa inicial activa en el pipeline de eventos.',
       };
     }
 
@@ -1765,7 +1767,7 @@ export async function autorizarYCrearEvento(
           data: {
             cotizacion_id: cotizacionId,
             event_type_id: cotizacion.promise.event_type_id || null,
-            stage_id: primeraEtapa.id,
+            stage_id: initialStage.id,
             event_date: eventDateNormalized,
             status: 'ACTIVE',
             created_at: new Date(),
@@ -1781,7 +1783,7 @@ export async function autorizarYCrearEvento(
             promise_id: promiseId,
             cotizacion_id: cotizacionId,
             event_type_id: cotizacion.promise.event_type_id || null,
-            stage_id: primeraEtapa.id,
+            stage_id: initialStage.id,
             event_date: eventDateNormalized,
             status: 'ACTIVE',
           },
@@ -1842,16 +1844,13 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.5. Registrar pago inicial (si est? definido en el registro de cierre)
-      // Para clientes manuales es opcional, pero si est? definido debe registrarse
+      // 8.5. Registrar pago inicial solo si el cliente pidió pago Y monto > 0 (nunca usar registro residual)
       let pagoRegistrado = false;
-      if (
-        registroCierre.pago_registrado &&
-        registroCierre.pago_monto &&
-        registroCierre.pago_monto > 0
-      ) {
-        // Usar el monto del registro de cierre si no se proporciona en options
-        const montoInicial = options?.montoInicial || Number(registroCierre.pago_monto);
+      const clientePidioPago = options?.registrarPago === true;
+      const montoCliente = options?.montoInicial ?? 0;
+      const montoEfectivo = clientePidioPago && montoCliente > 0 ? montoCliente : 0;
+      if (montoEfectivo > 0) {
+        const montoInicial = montoEfectivo;
         // Obtener nombre del m?todo de pago dentro de la transacci?n
         let metodoPagoNombre = 'Manual'; // Valor por defecto
         if (registroCierre.pago_metodo_id) {
@@ -2037,7 +2036,7 @@ export async function autorizarYCrearEvento(
             evento_fecha: eventDateNormalized.toISOString(),
             contract_signed: !!registroCierre.contract_signed_at,
             pago_registrado: pagoRegistrado,
-            pago_monto: pagoRegistrado && options?.montoInicial ? options.montoInicial : null,
+            pago_monto: pagoRegistrado ? montoEfectivo : null,
           },
         },
       });

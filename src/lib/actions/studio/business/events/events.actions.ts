@@ -1103,10 +1103,11 @@ export async function obtenerEventoDetalle(
     // Calcular montos financieros desde la promesa
     const financials = await getPromiseFinancials(evento.promise_id);
 
-    // Obtener pagos desde studio_pagos relacionado con la promesa
+    // Obtener solo pagos activos (excluir cancelados por evento cancelado)
     const pagos = await prisma.studio_pagos.findMany({
       where: {
         promise_id: evento.promise_id,
+        status: 'completed',
       },
       select: {
         id: true,
@@ -1614,6 +1615,18 @@ export async function cancelarEvento(
             status: 'cancelada',
             evento_id: null, // Liberar relación con evento
             discount: null, // Limpiar descuento al cancelar
+            updated_at: new Date(),
+          },
+        });
+
+        // 2.2. Marcar pagos de esas cotizaciones como cancelados (aislamiento financiero: resumen no los suma)
+        await tx.studio_pagos.updateMany({
+          where: {
+            cotizacion_id: { in: cotizacionIds },
+            status: 'completed',
+          },
+          data: {
+            status: 'canceled',
             updated_at: new Date(),
           },
         });
