@@ -55,6 +55,8 @@ export function AgendaForm({
     onDelete,
     loading = false,
 }: AgendaFormProps) {
+    const subjectContext = contexto === 'promise' ? 'COMMERCIAL' : contexto === 'evento' ? 'OPERATIONAL' : 'GLOBAL';
+
     const [date, setDate] = useState<Date | undefined>(() => {
         if (initialData?.date) {
             // Normalizar fecha inicial usando métodos UTC para evitar problemas de zona horaria
@@ -153,12 +155,12 @@ export function AgendaForm({
 
     useEffect(() => {
         setLoadingSubjectTemplates(true);
-        getAgendaSubjectTemplates(studioSlug)
+        getAgendaSubjectTemplates(studioSlug, subjectContext)
             .then((res) => {
                 if (res.success && res.data) setSubjectTemplates(res.data);
             })
             .finally(() => setLoadingSubjectTemplates(false));
-    }, [studioSlug]);
+    }, [studioSlug, subjectContext]);
 
     const filteredSubjectTemplates = useMemo(() => {
         if (!subject.trim()) return subjectTemplates;
@@ -181,7 +183,9 @@ export function AgendaForm({
     const handleAddSubjectAsNewTemplate = async () => {
         const trimmed = subject.trim();
         if (!trimmed) return;
-        const res = await createAgendaSubjectTemplate(studioSlug, trimmed);
+        // Never pass GLOBAL when form knows context: evento → OPERATIONAL, promise → COMMERCIAL
+        const createContext = contexto === 'evento' ? 'OPERATIONAL' : contexto === 'promise' ? 'COMMERCIAL' : undefined;
+        const res = await createAgendaSubjectTemplate(studioSlug, trimmed, createContext);
         if (res.success) {
             setSubjectTemplates((prev) => [res.data!, ...prev]);
             setShowSubjectSuggestions(false);
@@ -199,7 +203,7 @@ export function AgendaForm({
         setEditTemplateText('');
         setDeletingTemplateId(null);
         setLoadingModalTemplates(true);
-        getAgendaSubjectTemplates(studioSlug)
+        getAgendaSubjectTemplates(studioSlug, subjectContext)
             .then((res) => {
                 if (res.success && res.data) setModalTemplates(res.data);
             })

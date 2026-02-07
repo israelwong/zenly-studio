@@ -11,12 +11,20 @@ import {
   ZenDropdownMenuItem,
   ZenDropdownMenuTrigger,
 } from '@/components/ui/zen/overlays/ZenDropdownMenu';
-import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { AgendaUnifiedSheet } from './AgendaUnifiedSheet';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
-import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+
+/** Solo los dos primeros bloques de texto del nombre (p. ej. "Juan Carlos Pérez" → "Juan Carlos"). */
+function formatDisplayName(fullName: string | null | undefined): string {
+  if (!fullName) return 'Sin contacto';
+  const nameParts = fullName.trim().split(/\s+/);
+  if (nameParts.length <= 2) return fullName;
+  return `${nameParts[0]} ${nameParts[1]}`;
+}
 
 /**
  * Filtra items para el header: excluye event_date (fechas de promesa sin cita), ordena y toma los 6 próximos.
@@ -214,23 +222,25 @@ function AgendaEventItem({
   open: boolean;
   onEventClick: (event: AgendaItem) => void;
 }) {
-  const relativeTime = useRelativeTime(event.date, open);
-  
-  // Formatear fecha y hora (SSoT UTC)
+  // Formato: "Sábado, 28 de marzo" (con hora si existe)
   const formatDateTime = (date: Date | string, time?: string | null) => {
     const normalized = toUtcDateOnly(date);
-    const dateStr = normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '';
-    if (time) {
-      return `${dateStr} a las ${time}`;
-    }
+    if (!normalized) return '';
+    const dateStr = format(normalized, "EEEE, d 'de' MMMM", { locale: es });
+    if (time) return `${dateStr} a las ${time}`;
     return dateStr;
   };
 
-  const eventName = event.event_name || event.concept || event.contact_name || 'Evento';
+  // Título principal: contact_name formateado (máx. 2 palabras) o fallback
+  const contactDisplayName = formatDisplayName(event.contact_name);
+  const title = contactDisplayName !== 'Sin contacto' ? contactDisplayName : (event.event_name || event.concept || 'Sin nombre');
+  // Línea debajo: concept y/o event_type_name
+  const subtitleParts = [event.concept, event.event_type_name].filter(Boolean) as string[];
+  const subtitle = subtitleParts.length > 0 ? subtitleParts.join(' · ') : null;
+
   const metadata = event.metadata as Record<string, unknown> | null;
   const agendaType = metadata?.agenda_type as string | undefined;
 
-  // Clasificación por metadata: commercial_appointment | main_event_date | event_appointment | scheduler_task | event_date
   const isCommercialAppointment = agendaType === 'commercial_appointment' ||
     (event.contexto === 'promise' && event.type_scheduling);
   const isEventAppointment = agendaType === 'event_appointment' ||
@@ -268,6 +278,12 @@ function AgendaEventItem({
   }
 
   const Icon = icon;
+  const contextBadge =
+    event.contexto === 'promise'
+      ? { label: 'Promesa', className: 'bg-blue-500/20 text-blue-400 border-blue-500/40' }
+      : event.contexto === 'evento'
+        ? { label: 'Evento', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' }
+        : null;
 
   return (
     <ZenDropdownMenuItem
@@ -277,20 +293,33 @@ function AgendaEventItem({
       onClick={() => onEventClick(event)}
     >
       <div className="flex items-start gap-2 w-full">
-        <div className={cn("mt-0.5 flex-shrink-0", iconColor)}>
+        <div className={cn('mt-0.5 flex-shrink-0', iconColor)}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <p className="text-sm font-medium text-zinc-200 line-clamp-2">
-              {eventName}
+              {title}
             </p>
-          </div>
-          {isMainEventDate && event.event_type_name ? (
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs text-zinc-400">
-                {event.event_type_name}
+            {contextBadge && (
+              <span
+                className={cn(
+                  'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border',
+                  contextBadge.className
+                )}
+              >
+                {contextBadge.label}
               </span>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
+              {subtitle}
+            </p>
+          )}
+          {isMainEventDate && event.event_type_name && !subtitle ? (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-xs text-zinc-400">{event.event_type_name}</span>
               <span className="text-xs text-zinc-600">•</span>
               <span className="text-xs text-zinc-500">
                 {formatDateTime(event.date, event.time)}
@@ -301,14 +330,9 @@ function AgendaEventItem({
               <p className="text-xs text-zinc-400 mt-1 line-clamp-1">
                 {typeLabel}
               </p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-zinc-500">
-                  {formatDateTime(event.date, event.time)}
-                </span>
-                <span className="text-xs text-zinc-500">
-                  • {relativeTime}
-                </span>
-              </div>
+              <p className="text-xs text-zinc-500 mt-2">
+                {formatDateTime(event.date, event.time)}
+              </p>
             </>
           )}
         </div>

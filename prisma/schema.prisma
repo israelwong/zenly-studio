@@ -2040,10 +2040,12 @@ model studio_agenda_subject_templates {
   text        String
   usage_count Int      @default(0)
   created_at  DateTime @default(now())
+  context     String?  // GLOBAL | COMMERCIAL | OPERATIONAL; null/legacy treated as GLOBAL
   studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, text])
   @@index([studio_id])
+  @@index([studio_id, context])
 }
 
 model studio_agenda_tipos {

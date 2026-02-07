@@ -58,6 +58,13 @@ export function useAgendaCount({
         }
     }, [loadCount, initialCount]);
 
+    // Sincronizar con initialCount cuando el padre lo actualiza (p. ej. HeaderDataLoader)
+    useEffect(() => {
+        if (initialCount !== undefined) {
+            setCount(initialCount);
+        }
+    }, [initialCount]);
+
     // Siempre escuchar agenda-updated para actualizar el conteo (crear/cancelar cita, etc.)
     useEffect(() => {
         const handleAgendaUpdate = () => {

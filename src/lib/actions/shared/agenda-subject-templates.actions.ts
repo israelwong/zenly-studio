@@ -9,13 +9,16 @@ export interface AgendaSubjectTemplate {
   text: string;
   usage_count: number;
   created_at: Date;
+  context: string | null;
 }
 
 /**
- * Listar plantillas de asunto del estudio, ordenadas por uso y texto
+ * Listar plantillas de asunto del estudio por contexto (incluye GLOBAL).
+ * context: 'COMMERCIAL' | 'OPERATIONAL' | 'GLOBAL'
  */
 export async function getAgendaSubjectTemplates(
-  studioSlug: string
+  studioSlug: string,
+  context: string
 ): Promise<{ success: true; data: AgendaSubjectTemplate[] } | { success: false; error: string }> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -27,7 +30,10 @@ export async function getAgendaSubjectTemplates(
     }
 
     const templates = await prisma.studio_agenda_subject_templates.findMany({
-      where: { studio_id: studio.id },
+      where: {
+        studio_id: studio.id,
+        OR: [{ context }, { context: 'GLOBAL' }, { context: null }],
+      },
       orderBy: [{ usage_count: 'desc' }, { text: 'asc' }],
       select: {
         id: true,
@@ -35,6 +41,7 @@ export async function getAgendaSubjectTemplates(
         text: true,
         usage_count: true,
         created_at: true,
+        context: true,
       },
     });
 
@@ -52,11 +59,13 @@ export async function getAgendaSubjectTemplates(
 }
 
 /**
- * Crear plantilla de asunto (o devolver la existente si ya existe el mismo texto)
+ * Crear plantilla de asunto (o devolver la existente si ya existe el mismo texto).
+ * context: 'COMMERCIAL' | 'OPERATIONAL' | 'GLOBAL' (opcional; para "agregar como plantilla" desde Promise = COMMERCIAL).
  */
 export async function createAgendaSubjectTemplate(
   studioSlug: string,
-  text: string
+  text: string,
+  context?: string | null
 ): Promise<{ success: true; data: AgendaSubjectTemplate } | { success: false; error: string }> {
   try {
     const trimmed = text.trim();
@@ -83,10 +92,12 @@ export async function createAgendaSubjectTemplate(
       return { success: true, data: existing as AgendaSubjectTemplate };
     }
 
+    // Never default to 'GLOBAL': only set context when explicitly provided (OPERATIONAL/COMMERCIAL).
     const template = await prisma.studio_agenda_subject_templates.create({
       data: {
         studio_id: studio.id,
         text: trimmed,
+        ...(context != null && context !== '' ? { context } : {}),
       },
       select: {
         id: true,
@@ -94,6 +105,7 @@ export async function createAgendaSubjectTemplate(
         text: true,
         usage_count: true,
         created_at: true,
+        context: true,
       },
     });
 
@@ -155,6 +167,7 @@ export async function updateAgendaSubjectTemplate(
         text: true,
         usage_count: true,
         created_at: true,
+        context: true,
       },
     });
 

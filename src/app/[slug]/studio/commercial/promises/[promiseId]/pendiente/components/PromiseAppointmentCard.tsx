@@ -4,6 +4,7 @@ import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, MapPin, Video, CalendarClock, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
+import { AgendaSubjectInput } from '@/components/shared/agenda';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenCalendar } from '@/components/ui/zen';
 import {
@@ -318,15 +319,14 @@ export function PromiseAppointmentCard({
                 </button>
               </div>
             </div>
-            <div className="space-y-0.5">
-              <label className="text-xs text-zinc-500">Asunto</label>
-              <ZenInput
-                value={concept}
-                onChange={(e) => setConcept(e.target.value)}
-                placeholder="Nombre o descripción"
-                className="h-8 text-xs border-zinc-700 bg-zinc-900"
-              />
-            </div>
+            <AgendaSubjectInput
+              context="COMMERCIAL"
+              studioSlug={studioSlug}
+              value={concept}
+              onChange={setConcept}
+              label="Asunto"
+              placeholder="Nombre o descripción"
+            />
             {typeScheduling === 'virtual' && (
               <div className="space-y-0.5">
                 <label className="text-xs text-zinc-500 flex items-center gap-1">
