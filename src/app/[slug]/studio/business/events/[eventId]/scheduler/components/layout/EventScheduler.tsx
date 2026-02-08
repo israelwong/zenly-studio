@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { type DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import { STAGE_ORDER } from '../../utils/scheduler-section-stages';
 import { SchedulerPanel } from './SchedulerPanel';
 import { actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
@@ -71,6 +72,24 @@ export const EventScheduler = React.memo(function EventScheduler({
     itemId: string;
     skipPayment: boolean;
   } | null>(null);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => new Set(secciones.map((s) => s.id)));
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(() =>
+    new Set(secciones.flatMap((s) => STAGE_ORDER.map((st) => `${s.id}-${st}`)))
+  );
+
+  useEffect(() => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      secciones.forEach((s) => next.add(s.id));
+      return next;
+    });
+    setExpandedStages((prev) => {
+      const next = new Set(prev);
+      secciones.forEach((s) => STAGE_ORDER.forEach((st) => next.add(`${s.id}-${st}`)));
+      return next;
+    });
+  }, [secciones]);
 
   // Sincronizar localEventData solo cuando eventData cambia desde el padre
   // Usar referencia para evitar actualizaciones innecesarias
@@ -444,6 +463,49 @@ export const EventScheduler = React.memo(function EventScheduler({
       }
     },
     [studioSlug, eventId, router, onDataChange]
+  );
+
+  const handleDeleteStage = useCallback(
+    async (sectionId: string, stageCategory: string, taskIds: string[]) => {
+      try {
+        for (const taskId of taskIds) {
+          const result = await eliminarSchedulerTask(studioSlug, eventId, taskId);
+          if (!result.success) {
+            toast.error(result.error || 'Error al eliminar tarea');
+            return;
+          }
+        }
+        if (taskIds.length > 0) {
+          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+          const idsSet = new Set(taskIds);
+          setLocalEventData((prev) => {
+            const updatedData: EventoDetalle = {
+              ...prev,
+              cotizaciones: prev.cotizaciones?.map((cotizacion) => ({
+                ...cotizacion,
+                cotizacion_items: cotizacion.cotizacion_items?.map((item) =>
+                  item.scheduler_task && idsSet.has(item.scheduler_task.id)
+                    ? {
+                        ...item,
+                        scheduler_task_id: null,
+                        scheduler_task: null,
+                        assigned_to_crew_member_id: null,
+                        assigned_to_crew_member: null,
+                      }
+                    : item
+                ),
+              })),
+            };
+            if (onDataChange) queueMicrotask(() => onDataChange(updatedData));
+            return updatedData;
+          });
+        }
+        toast.success(taskIds.length > 0 ? 'Etapa y tareas eliminadas' : 'Etapa actualizada');
+      } catch (error) {
+        toast.error('Error al eliminar etapa');
+      }
+    },
+    [studioSlug, eventId, onDataChange]
   );
 
   // Manejar toggle de completado desde TaskBar
@@ -962,6 +1024,11 @@ export const EventScheduler = React.memo(function EventScheduler({
         onTaskToggleComplete={handleTaskToggleComplete}
         renderSidebarItem={renderSidebarItem}
         onItemUpdate={handleItemUpdate}
+        onDeleteStage={handleDeleteStage}
+        expandedSections={expandedSections}
+        expandedStages={expandedStages}
+        onExpandedSectionsChange={setExpandedSections}
+        onExpandedStagesChange={setExpandedStages}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

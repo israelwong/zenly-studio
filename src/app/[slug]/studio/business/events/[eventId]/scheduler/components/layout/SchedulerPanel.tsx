@@ -28,6 +28,12 @@ interface SchedulerPanelProps {
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   renderSidebarItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onAddManualTask?: (sectionId: string, stageCategory: string) => void;
+  onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
+  expandedSections?: Set<string>;
+  expandedStages?: Set<string>;
+  onExpandedSectionsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 /**
@@ -48,6 +54,12 @@ export const SchedulerPanel = React.memo(({
   onTaskToggleComplete,
   renderSidebarItem,
   onItemUpdate,
+  onAddManualTask,
+  onDeleteStage,
+  expandedSections = new Set(),
+  expandedStages = new Set(),
+  onExpandedSectionsChange,
+  onExpandedStagesChange,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +108,12 @@ export const SchedulerPanel = React.memo(({
             renderItem={renderSidebarItem}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            onAddManualTask={onAddManualTask}
+            onDeleteStage={onDeleteStage}
+            expandedSections={expandedSections}
+            expandedStages={expandedStages}
+            onExpandedSectionsChange={onExpandedSectionsChange}
+            onExpandedStagesChange={onExpandedStagesChange}
           />
         </div>
 
@@ -112,6 +130,8 @@ export const SchedulerPanel = React.memo(({
             onTaskDelete={onTaskDelete}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            expandedSections={expandedSections}
+            expandedStages={expandedStages}
           />
         </div>
       </div>
@@ -127,8 +147,10 @@ export const SchedulerPanel = React.memo(({
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
+  const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
+  const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
 
-  return datesEqual && itemsEqual && seccionesEqual;
+  return datesEqual && itemsEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

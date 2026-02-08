@@ -21,6 +21,8 @@ interface SchedulerTimelineProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  expandedSections?: Set<string>;
+  expandedStages?: Set<string>;
 }
 
 export const SchedulerTimeline = React.memo(({
@@ -34,6 +36,8 @@ export const SchedulerTimeline = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  expandedSections = new Set(),
+  expandedStages = new Set(),
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
   const todayPosition = getTodayPosition(dateRange);
@@ -55,6 +59,8 @@ export const SchedulerTimeline = React.memo(({
         onTaskDelete={onTaskDelete}
         onTaskToggleComplete={onTaskToggleComplete}
         onItemUpdate={onItemUpdate}
+        expandedSections={expandedSections}
+        expandedStages={expandedStages}
       />
 
       {/* Línea vertical "HOY" */}
@@ -67,7 +73,6 @@ export const SchedulerTimeline = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Comparación personalizada: solo re-renderizar si cambian fechas o items
   const prevFrom = prevProps.dateRange?.from?.getTime();
   const prevTo = prevProps.dateRange?.to?.getTime();
   const nextFrom = nextProps.dateRange?.from?.getTime();
@@ -76,8 +81,10 @@ export const SchedulerTimeline = React.memo(({
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
+  const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
+  const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
 
-  return datesEqual && itemsEqual && seccionesEqual;
+  return datesEqual && itemsEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

@@ -186,6 +186,7 @@ export interface EventoDetalle extends EventoBasico {
         sync_status: 'DRAFT' | 'PUBLISHED' | 'INVITED';
         invitation_status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
         google_event_id: string | null;
+        category: string;
       } | null;
     }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
@@ -1026,6 +1027,7 @@ export async function obtenerEventoDetalle(
                     sync_status: true,
                     invitation_status: true,
                     google_event_id: true,
+                    category: true,
                   },
                 },
               },
@@ -1247,6 +1249,7 @@ export async function obtenerEventoDetalle(
                   sync_status: true,
                   invitation_status: true,
                   google_event_id: true,
+                  category: true,
                 },
               },
             },
@@ -3635,7 +3638,7 @@ export async function sincronizarTareasEvento(
       return idx === -1 ? 0 : idx;
     };
 
-    const items = cotizacion.cotizacion_items
+    const itemsRaw = cotizacion.cotizacion_items
       .map((ci) => {
         const catalog = ci.items;
         const opCat = catalog?.operational_category ?? null;
@@ -3646,40 +3649,124 @@ export async function sincronizarTareasEvento(
           ci.name ?? ci.name_snapshot ?? catalog?.name ?? 'Tarea';
         return {
           cotizacionItemId: ci.id,
+          itemId: ci.item_id,
           name,
           taskCategory,
           durationDays,
         };
       })
-      .filter((t) => !existingItemIds.has(t.cotizacionItemId))
-      .sort((a, b) => sortKey(a.taskCategory) - sortKey(b.taskCategory));
+      .filter((t) => !existingItemIds.has(t.cotizacionItemId));
 
-    let cursor = new Date(event.event_date);
-    cursor.setHours(0, 0, 0, 0);
-    let created = 0;
-
-    for (const it of items) {
-      const startDate = new Date(cursor);
-      const endDate = new Date(cursor);
-      endDate.setDate(endDate.getDate() + Math.max(1, it.durationDays) - 1);
-
-      await prisma.studio_scheduler_event_tasks.create({
-        data: {
-          scheduler_instance_id: schedulerInstanceId,
-          cotizacion_item_id: it.cotizacionItemId,
-          name: it.name,
-          start_date: startDate,
-          end_date: endDate,
-          duration_days: Math.max(1, it.durationDays),
-          category: it.taskCategory,
-          priority: 'MEDIUM',
-          status: 'PENDING',
-          progress_percent: 0,
-          sync_status: 'DRAFT',
+    const itemIds = itemsRaw.map((t) => t.itemId).filter(Boolean) as string[];
+    const itemToSection: Map<string, { sectionOrder: number }> = new Map();
+    if (itemIds.length > 0) {
+      const itemsWithSection = await prisma.studio_items.findMany({
+        where: { id: { in: itemIds } },
+        select: {
+          id: true,
+          service_categories: {
+            select: {
+              section_categories: {
+                select: {
+                  service_sections: { select: { order: true } },
+                },
+              },
+            },
+          },
         },
       });
-      created++;
-      cursor.setDate(cursor.getDate() + Math.max(1, it.durationDays));
+      for (const item of itemsWithSection) {
+        const sectionOrder =
+          item.service_categories?.section_categories?.service_sections?.order ?? 0;
+        itemToSection.set(item.id, { sectionOrder });
+      }
+    }
+
+    const eventDate = new Date(event.event_date);
+    eventDate.setHours(0, 0, 0, 0);
+
+    /** Auto-posicionamiento para la primera tarea de la sección */
+    const getStartDateForCategory = (
+      category: (typeof categoryOrder)[number],
+      durationDays: number
+    ): { start: Date; end: Date } => {
+      const d = Math.max(1, durationDays);
+      const start = new Date(eventDate);
+      const end = new Date(eventDate);
+      switch (category) {
+        case 'PLANNING':
+          start.setDate(start.getDate() - d);
+          end.setDate(end.getDate() - 1);
+          break;
+        case 'PRODUCTION':
+          end.setDate(end.getDate() + d - 1);
+          break;
+        case 'POST_PRODUCTION':
+          start.setDate(start.getDate() + 1);
+          end.setDate(end.getDate() + 1 + d - 1);
+          break;
+        case 'DELIVERY':
+          start.setDate(start.getDate() + 2);
+          end.setDate(end.getDate() + 2 + d - 1);
+          break;
+        default:
+          end.setDate(end.getDate() + d - 1);
+      }
+      return { start, end };
+    };
+
+    const bySection = new Map<number, typeof itemsRaw>();
+    for (const it of itemsRaw) {
+      const sectionOrder = it.itemId ? (itemToSection.get(it.itemId)?.sectionOrder ?? 0) : 0;
+      const list = bySection.get(sectionOrder) ?? [];
+      list.push(it);
+      bySection.set(sectionOrder, list);
+    }
+    const sectionOrders = Array.from(bySection.keys()).sort((a, b) => a - b);
+
+    let created = 0;
+    for (const order of sectionOrders) {
+      const sectionItems = bySection.get(order)!;
+      sectionItems.sort((a, b) => sortKey(a.taskCategory) - sortKey(b.taskCategory));
+
+      let cursor: Date | null = null;
+      for (let i = 0; i < sectionItems.length; i++) {
+        const it = sectionItems[i];
+        const durationDays = Math.max(1, it.durationDays);
+        let startDate: Date;
+        let endDate: Date;
+        if (i === 0) {
+          const range = getStartDateForCategory(
+            it.taskCategory as (typeof categoryOrder)[number],
+            it.durationDays
+          );
+          startDate = range.start;
+          endDate = range.end;
+        } else {
+          cursor!.setDate(cursor!.getDate() + 1);
+          startDate = new Date(cursor!);
+          endDate = new Date(cursor!);
+          endDate.setDate(endDate.getDate() + durationDays - 1);
+        }
+        cursor = new Date(endDate);
+
+        await prisma.studio_scheduler_event_tasks.create({
+          data: {
+            scheduler_instance_id: schedulerInstanceId,
+            cotizacion_item_id: it.cotizacionItemId,
+            name: it.name,
+            start_date: startDate,
+            end_date: endDate,
+            duration_days: durationDays,
+            category: it.taskCategory,
+            priority: 'MEDIUM',
+            status: 'PENDING',
+            progress_percent: 0,
+            sync_status: 'DRAFT',
+          },
+        });
+        created++;
+      }
     }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);

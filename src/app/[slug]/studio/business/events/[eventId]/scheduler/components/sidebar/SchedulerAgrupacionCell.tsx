@@ -52,7 +52,7 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
     };
 
     return (
-        <div className="flex items-center gap-2 flex-1 min-w-0 pl-4">
+        <div className="flex items-center gap-2 flex-1 min-w-0 pl-2">
             {/* Avatar */}
             <ZenAvatar className="h-7 w-7 shrink-0">
                 {hasAssigned && assignedCrewMember ? (

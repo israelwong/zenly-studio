@@ -98,7 +98,29 @@ export async function actualizarSchedulerTaskFechas(
     const updatedTask = await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
       data: updateData,
+      select: {
+        id: true,
+        start_date: true,
+        end_date: true,
+        scheduler_instance_id: true,
+      },
     });
+
+    // Smart Dates: si el nuevo end_date supera el de la instancia, expandir el rango
+    const instance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { id: updatedTask.scheduler_instance_id },
+      select: { id: true, end_date: true },
+    });
+    if (instance) {
+      const taskEndOnly = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+      const instanceEndOnly = new Date(Date.UTC(instance.end_date.getUTCFullYear(), instance.end_date.getUTCMonth(), instance.end_date.getUTCDate()));
+      if (taskEndOnly > instanceEndOnly) {
+        await prisma.studio_scheduler_event_instances.update({
+          where: { id: instance.id },
+          data: { end_date: taskEndOnly },
+        });
+      }
+    }
 
     // Revalidar la página para reflejar cambios
     revalidatePath(`/[slug]/studio/business/events/[eventId]/scheduler`, 'page');
