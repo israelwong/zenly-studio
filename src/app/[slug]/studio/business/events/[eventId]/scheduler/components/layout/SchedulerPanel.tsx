@@ -144,6 +144,7 @@ export const SchedulerPanel = React.memo(({
             onTaskDelete={onTaskDelete}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            onManualTaskPatch={onManualTaskPatch}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
           />

@@ -23,6 +23,7 @@ interface SchedulerTimelineProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
 }
@@ -39,6 +40,7 @@ export const SchedulerTimeline = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  onManualTaskPatch,
   expandedSections = new Set(),
   expandedStages = new Set(),
 }: SchedulerTimelineProps) => {
@@ -63,6 +65,7 @@ export const SchedulerTimeline = React.memo(({
         onTaskDelete={onTaskDelete}
         onTaskToggleComplete={onTaskToggleComplete}
         onItemUpdate={onItemUpdate}
+        onManualTaskPatch={onManualTaskPatch}
         expandedSections={expandedSections}
         expandedStages={expandedStages}
       />

@@ -24,7 +24,7 @@ import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
 import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
-import { ChevronRight, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Trash2, User } from 'lucide-react';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -68,7 +68,7 @@ function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-/** Fila manual: misma capa de sincronización que SchedulerItem (useSchedulerItemSync → localItem). */
+/** Fila manual: mismo aspecto que ítems de cotización (avatar + nombre en una línea, sin nombre del asignado). */
 function ManualTaskRow({
   task,
   studioSlug,
@@ -84,6 +84,7 @@ function ManualTaskRow({
 }) {
   const { localTask } = useSchedulerManualTaskSync(task);
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
+  const hasCrew = !!localTask.assigned_to_crew_member;
   return (
     <SchedulerManualTaskPopover
       task={localTask}
@@ -99,8 +100,19 @@ function ManualTaskRow({
         onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLDivElement).click()}
       >
         <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-        <div className="flex-1 min-w-0 flex items-center pl-10 pr-4">
-          <p className={`text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-300'}`}>
+        <div className="flex-1 min-w-0 flex items-center gap-2 pl-10 pr-4">
+          <ZenAvatar className="h-5 w-5 flex-shrink-0">
+            {hasCrew ? (
+              <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+                {getInitials(localTask.assigned_to_crew_member!.name)}
+              </ZenAvatarFallback>
+            ) : (
+              <ZenAvatarFallback className="bg-zinc-700 text-zinc-500">
+                <User className="h-2.5 w-2.5" />
+              </ZenAvatarFallback>
+            )}
+          </ZenAvatar>
+          <p className={`flex-1 min-w-0 text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
             {localTask.name}
           </p>
         </div>

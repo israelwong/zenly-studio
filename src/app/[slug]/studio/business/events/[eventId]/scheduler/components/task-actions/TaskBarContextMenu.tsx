@@ -13,9 +13,12 @@ import { es } from 'date-fns/locale';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { asignarCrewAItem, obtenerCrewMembers } from '@/lib/actions/studio/business/events';
+import { asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
+import type { ManualTaskPatch } from '../sidebar/SchedulerManualTaskPopover';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -29,10 +32,13 @@ interface TaskBarContextMenuProps {
   studioSlug?: string;
   eventId?: string;
   item?: CotizacionItem;
+  /** Tarea manual (cuando no hay item de cotización). Si existe, las acciones usan asignarCrewATareaScheduler y onManualTaskPatch. */
+  manualTask?: ManualTaskPayload;
   children: React.ReactNode;
   onDelete: (taskId: string) => Promise<void>;
   onToggleComplete: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onManualTaskPatch?: (taskId: string, patch: ManualTaskPatch) => void;
 }
 
 export function TaskBarContextMenu({
@@ -45,10 +51,12 @@ export function TaskBarContextMenu({
   studioSlug,
   eventId,
   item,
+  manualTask,
   children,
   onDelete,
   onToggleComplete,
   onItemUpdate,
+  onManualTaskPatch,
 }: TaskBarContextMenuProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingComplete, setIsTogglingComplete] = useState(false);
@@ -57,26 +65,30 @@ export function TaskBarContextMenu({
   const [isRemovingCrew, setIsRemovingCrew] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const isManualTask = !!manualTask && !item;
+
   // Crear item mínimo válido si no tenemos item (para evitar hooks condicionales)
-  // El hook necesita un item válido, pero si no tenemos onItemUpdate, no usaremos updateCrewMember
   const minimalItem: CotizacionItem = item || ({
-    id: itemId || '',
-    assigned_to_crew_member_id: null,
-    assigned_to_crew_member: null,
+    id: itemId || taskId,
+    assigned_to_crew_member_id: manualTask?.assigned_to_crew_member_id ?? null,
+    assigned_to_crew_member: manualTask?.assigned_to_crew_member ?? null,
   } as CotizacionItem);
 
-  // Siempre llamar al hook (regla de React)
   const { localItem, updateCrewMember } = useSchedulerItemSync(
     minimalItem,
     onItemUpdate
   );
 
-  // Usar el item real si existe, sino usar el localItem del hook
   const effectiveItem = item || localItem;
-  const hasCrewMember = !!effectiveItem?.assigned_to_crew_member_id;
+  const hasCrewMember = isManualTask
+    ? !!manualTask?.assigned_to_crew_member_id
+    : !!effectiveItem?.assigned_to_crew_member_id;
+  const displayCrewMember = isManualTask
+    ? manualTask?.assigned_to_crew_member
+    : effectiveItem?.assigned_to_crew_member;
 
-  // Solo usar updateCrewMember si tenemos onItemUpdate (actualización optimista)
   const canUseOptimisticUpdate = !!onItemUpdate && !!item;
+  const canAssignCrew = (studioSlug && itemId) || (isManualTask && studioSlug && eventId);
 
   // Validar antes de eliminar
   const handleDeleteClick = () => {
@@ -114,49 +126,66 @@ export function TaskBarContextMenu({
   };
 
   const handleAssignCrew = async (crewMemberId: string | null) => {
-    if (!itemId || !studioSlug || !effectiveItem) return;
+    if (!studioSlug) return;
+    if (isManualTask) {
+      if (!eventId || !onManualTaskPatch) return;
+      const snapshot = {
+        assigned_to_crew_member_id: manualTask?.assigned_to_crew_member_id ?? null,
+        assigned_to_crew_member: manualTask?.assigned_to_crew_member ?? null,
+      };
+      const membersResult = await obtenerCrewMembers(studioSlug);
+      const selectedMember = crewMemberId && membersResult.success && membersResult.data
+        ? membersResult.data.find(m => m.id === crewMemberId)
+        : null;
+      const optimisticPatch = {
+        assigned_to_crew_member_id: crewMemberId,
+        assigned_to_crew_member: selectedMember
+          ? { id: selectedMember.id, name: selectedMember.name, email: selectedMember.email, tipo: selectedMember.tipo }
+          : null,
+      };
+      onManualTaskPatch(taskId, optimisticPatch);
+      setSelectCrewModalOpen(false);
+      try {
+        const result = await asignarCrewATareaScheduler(studioSlug, eventId, taskId, crewMemberId);
+        if (!result.success) {
+          onManualTaskPatch(taskId, snapshot);
+          throw new Error(result.error || 'Error al asignar personal');
+        }
+        toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
+      }
+      return;
+    }
+    if (!itemId || !effectiveItem) return;
 
-    // Si tenemos onItemUpdate y item, usar actualización optimista
     if (canUseOptimisticUpdate && updateCrewMember) {
       try {
-        // Cargar miembros para obtener datos del seleccionado
         const membersResult = await obtenerCrewMembers(studioSlug);
         const selectedMember = crewMemberId && membersResult.success && membersResult.data
           ? membersResult.data.find(m => m.id === crewMemberId)
           : null;
-
         await updateCrewMember(
           crewMemberId,
-          selectedMember ? {
-            id: selectedMember.id,
-            name: selectedMember.name,
-            tipo: selectedMember.tipo,
-          } : null,
+          selectedMember ? { id: selectedMember.id, name: selectedMember.name, tipo: selectedMember.tipo } : null,
           async () => {
-            const result = await asignarCrewAItem(studioSlug, itemId, crewMemberId);
-            if (!result.success) {
-              throw new Error(result.error || 'Error al asignar personal');
-            }
+            const result = await asignarCrewAItem(studioSlug, itemId!, crewMemberId);
+            if (!result.success) throw new Error(result.error || 'Error al asignar personal');
           }
         );
-
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
         setSelectCrewModalOpen(false);
-        // Disparar evento para actualizar PublicationBar
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
       }
     } else {
-      // Fallback sin actualización optimista
       try {
-        const result = await asignarCrewAItem(studioSlug, itemId, crewMemberId);
-        if (!result.success) {
-          throw new Error(result.error || 'Error al asignar personal');
-        }
+        const result = await asignarCrewAItem(studioSlug, itemId!, crewMemberId);
+        if (!result.success) throw new Error(result.error || 'Error al asignar personal');
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
         setSelectCrewModalOpen(false);
-        // Disparar evento para actualizar PublicationBar
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
@@ -165,8 +194,10 @@ export function TaskBarContextMenu({
   };
 
   const handleRemoveCrew = async () => {
-    if (!itemId || !studioSlug || !effectiveItem) return;
-    
+    if (!studioSlug) return;
+    if (isManualTask && (!eventId || !onManualTaskPatch)) return;
+    if (!isManualTask && (!itemId || !effectiveItem)) return;
+
     setIsRemovingCrew(true);
     try {
       await handleAssignCrew(null);
@@ -230,7 +261,7 @@ export function TaskBarContextMenu({
             </ContextMenuItem>
 
             {/* Asignar personal */}
-            {itemId && studioSlug && !hasCrewMember && (
+            {canAssignCrew && !hasCrewMember && (
               <ContextMenuItem
                 onClick={() => setSelectCrewModalOpen(true)}
                 className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
@@ -241,7 +272,7 @@ export function TaskBarContextMenu({
             )}
 
             {/* Cambiar personal (si ya tiene asignado) */}
-            {itemId && studioSlug && hasCrewMember && (
+            {canAssignCrew && hasCrewMember && (
               <ContextMenuItem
                 onClick={() => setSelectCrewModalOpen(true)}
                 className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
@@ -252,7 +283,7 @@ export function TaskBarContextMenu({
             )}
 
             {/* Quitar personal (si ya tiene asignado) */}
-            {itemId && studioSlug && hasCrewMember && (
+            {canAssignCrew && hasCrewMember && (
               <ContextMenuItem
                 onClick={() => setShowRemoveCrewConfirm(true)}
                 className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-red-500/10 focus:text-red-300 text-red-400"
@@ -276,13 +307,13 @@ export function TaskBarContextMenu({
       </ContextMenu>
 
       {/* Modal para seleccionar/crear personal */}
-      {itemId && studioSlug && (
+      {canAssignCrew && (
         <SelectCrewModal
           isOpen={selectCrewModalOpen}
           onClose={() => setSelectCrewModalOpen(false)}
           onSelect={handleAssignCrew}
           studioSlug={studioSlug}
-          currentMemberId={effectiveItem?.assigned_to_crew_member_id || null}
+          currentMemberId={(isManualTask ? manualTask?.assigned_to_crew_member_id : effectiveItem?.assigned_to_crew_member_id) ?? null}
           title={hasCrewMember ? 'Cambiar asignación de personal' : 'Asignar personal'}
           description={hasCrewMember
             ? 'Selecciona un nuevo miembro del equipo para esta tarea.'
@@ -305,9 +336,9 @@ export function TaskBarContextMenu({
             <p className="text-sm text-zinc-300">
               Se quitará la asignación de personal de esta tarea.
             </p>
-            {effectiveItem?.assigned_to_crew_member && (
+            {displayCrewMember && (
               <p className="text-sm text-zinc-400">
-                Personal actual: <strong className="text-zinc-200">{effectiveItem.assigned_to_crew_member.name}</strong>
+                Personal actual: <strong className="text-zinc-200">{displayCrewMember.name}</strong>
               </p>
             )}
             <p className="text-xs text-zinc-500 mt-2">
@@ -343,9 +374,9 @@ export function TaskBarContextMenu({
                       Esta tarea tiene personal asignado. ¿Aún así deseas eliminarla?
                     </p>
                   )}
-                  {effectiveItem?.assigned_to_crew_member && (
+                  {displayCrewMember && (
                     <p className="text-sm text-zinc-400">
-                      Personal asignado: <strong className="text-zinc-200">{effectiveItem.assigned_to_crew_member.name}</strong>
+                      Personal asignado: <strong className="text-zinc-200">{displayCrewMember.name}</strong>
                     </p>
                   )}
                   {(hasInvitation || isInvited) && (

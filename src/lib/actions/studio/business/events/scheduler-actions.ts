@@ -1109,9 +1109,10 @@ export async function asignarCrewATareaScheduler(
         return { success: false, error: 'Colaborador no encontrado' };
       }
     }
+    const data = { assigned_to_crew_member_id: crewMemberId };
     await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
-      data: { assigned_to_crew_member_id: crewMemberId },
+      data,
     });
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);

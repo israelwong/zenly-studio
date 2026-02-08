@@ -214,31 +214,28 @@ export function SelectCrewModal({
         description={description}
         maxWidth="md"
         closeOnClickOutside={false}
+        zIndex={100010}
         onCancel={onClose}
         cancelLabel="Cancelar"
-        zIndex={100010}
+        cancelVariant="secondary"
+        cancelAlignRight
+        footerLeftContent={
+          <ZenButton variant="ghost" size="sm" onClick={() => setShowQuickAddModal(true)} className="gap-2">
+            <UserPlus className="h-3.5 w-3.5" />
+            Registrar personal
+          </ZenButton>
+        }
       >
         <div className="space-y-4">
           {/* Selector de personal o opciones cuando no hay crew */}
           {hasNoCrew ? (
-            <div className="space-y-3">
-              <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg p-4">
-                <p className="text-sm text-amber-300 mb-2">
-                  <strong>No tienes personal registrado</strong>
-                </p>
-                <p className="text-xs text-amber-300/80">
-                  Agrega personal ahora para asignarlo a esta tarea.
-                </p>
-              </div>
-
-              <ZenButton
-                onClick={() => setShowQuickAddModal(true)}
-                className="w-full gap-2"
-                variant="secondary"
-              >
-                <UserPlus className="h-4 w-4" />
-                Agregar personal rápidamente
-              </ZenButton>
+            <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg p-4">
+              <p className="text-sm text-amber-300 mb-2">
+                <strong>No tienes personal registrado</strong>
+              </p>
+              <p className="text-xs text-amber-300/80">
+                Usa &quot;Registrar personal&quot; en el footer para agregar personal.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -325,6 +322,28 @@ export function SelectCrewModal({
                 </div>
               )}
 
+              {/* Botón Asignar personal debajo de la lista */}
+              <ZenButton
+                className="w-full mt-2"
+                size="sm"
+                onClick={handleSelect}
+                disabled={selectedMemberId === currentMemberId || isAssigning}
+                loading={isAssigning}
+              >
+                {currentMemberId ? 'Cambiar asignación' : 'Asignar personal'}
+              </ZenButton>
+              {currentMemberId && (
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRemove}
+                  disabled={isAssigning}
+                >
+                  Quitar asignación
+                </ZenButton>
+              )}
+
               {/* Aviso de conflictos */}
               {selectedMemberId && conflictCount !== null && conflictCount > 0 && (
                 <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg p-3 mt-2">
@@ -341,45 +360,8 @@ export function SelectCrewModal({
                   </div>
                 </div>
               )}
-
-              {/* Botón para agregar personal adicional */}
-              <ZenButton
-                onClick={() => setShowQuickAddModal(true)}
-                variant="outline"
-                className="w-full gap-2 mt-2"
-                size="sm"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Agregar personal adicional
-              </ZenButton>
             </div>
           )}
-
-          {/* Botones de acción */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800">
-            {!hasNoCrew && (
-              <>
-                <ZenButton
-                  onClick={handleSelect}
-                  disabled={selectedMemberId === currentMemberId || isAssigning}
-                  loading={isAssigning}
-                  className="w-full"
-                >
-                  {currentMemberId ? 'Cambiar asignación' : 'Asignar personal'}
-                </ZenButton>
-                {currentMemberId && (
-                  <ZenButton
-                    onClick={handleRemove}
-                    variant="outline"
-                    className="w-full"
-                    disabled={isAssigning}
-                  >
-                    Quitar asignación
-                  </ZenButton>
-                )}
-              </>
-            )}
-          </div>
         </div>
       </ZenDialog>
 

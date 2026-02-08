@@ -1402,13 +1402,22 @@ export async function obtenerEventoDetalle(
         payment_date: pago.payment_date || pago.created_at,
         concept: pago.concept,
       })),
-      // Serializar scheduler.tasks para que Decimal (budget_amount) sea number en el cliente
+      // Serializar scheduler.tasks: budget_amount como number y assigned_to_crew_member como objeto plano (persistencia en cliente)
       scheduler: evento.scheduler
         ? {
             ...evento.scheduler,
             tasks: evento.scheduler.tasks?.map((t) => ({
               ...t,
               budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+              assigned_to_crew_member_id: t.assigned_to_crew_member_id,
+              assigned_to_crew_member: t.assigned_to_crew_member
+                ? {
+                    id: t.assigned_to_crew_member.id,
+                    name: t.assigned_to_crew_member.name,
+                    email: t.assigned_to_crew_member.email ?? null,
+                    tipo: t.assigned_to_crew_member.tipo,
+                  }
+                : null,
             })),
           }
         : null,
@@ -3005,6 +3014,7 @@ export async function actualizarSchedulerTask(
       progress_percent?: number;
       notes?: string | null;
       completed_at?: Date | null;
+      assigned_to_crew_member_id?: string | null;
       sync_status?: 'DRAFT';
       checklist_items?: unknown;
     } = {};
@@ -3013,6 +3023,7 @@ export async function actualizarSchedulerTask(
     if (data.description !== undefined) updateData.description = data.description || null;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
     if (data.checklist_items !== undefined) updateData.checklist_items = data.checklist_items;
+    if (data.assignedToCrewMemberId !== undefined) updateData.assigned_to_crew_member_id = data.assignedToCrewMemberId;
 
     const finalStartDate = data.startDate || task.start_date;
     const finalEndDate = data.endDate || task.end_date;

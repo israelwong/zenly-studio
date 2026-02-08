@@ -597,55 +597,52 @@ export const EventScheduler = React.memo(function EventScheduler({
   // Manejar toggle de completado desde TaskBar
   const handleTaskToggleComplete = useCallback(
     async (taskId: string, isCompleted: boolean) => {
-      // Si se está desmarcando, proceder normalmente
+      // Si se está desmarcando (marcar como pendiente)
       if (!isCompleted) {
         try {
           const result = await actualizarSchedulerTask(studioSlug, eventId, taskId, {
             isCompleted: false,
           });
-
-          // Disparar evento para actualizar PublicationBar
           if (result.success) {
             window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
           }
-
           if (!result.success) {
             toast.error(result.error || 'Error al actualizar el estado');
             return;
           }
-
-          // Actualización optimista
-          let updatedDataUncomplete: EventoDetalle;
-          setLocalEventData(prev => {
-            const newData = {
-              ...prev,
-              cotizaciones: prev.cotizaciones?.map(cotizacion => ({
-                ...cotizacion,
-                cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-                  if (item.scheduler_task?.id === taskId) {
-                    return {
-                      ...item,
-                      scheduler_task: item.scheduler_task ? {
-                        ...item.scheduler_task,
-                        completed_at: null,
-                      } : null,
-                    };
-                  }
-                  return item;
-                }),
-              })),
-            };
-            updatedDataUncomplete = newData;
-            return newData;
-          });
-
-          // Notificar al padre para actualizar stats
-          if (updatedDataUncomplete! && onDataChange) {
-            onDataChange(updatedDataUncomplete);
+          const isManual = localEventData.scheduler?.tasks?.some(
+            (t) => t.id === taskId && t.cotizacion_item_id == null
+          );
+          if (isManual) {
+            handleManualTaskPatch(taskId, { status: 'PENDING', completed_at: null });
+          } else {
+            let updatedDataUncomplete: EventoDetalle;
+            setLocalEventData(prev => {
+              const newData = {
+                ...prev,
+                cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+                  ...cotizacion,
+                  cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+                    if (item.scheduler_task?.id === taskId) {
+                      return {
+                        ...item,
+                        scheduler_task: item.scheduler_task ? {
+                          ...item.scheduler_task,
+                          completed_at: null,
+                        } : null,
+                      };
+                    }
+                    return item;
+                  }),
+                })),
+              };
+              updatedDataUncomplete = newData;
+              return newData;
+            });
+            if (updatedDataUncomplete! && onDataChange) onDataChange(updatedDataUncomplete);
           }
-
           toast.success('Tarea marcada como pendiente');
-        } catch (error) {
+        } catch {
           toast.error('Error al actualizar el estado');
         }
         return;
@@ -661,6 +658,31 @@ export const EventScheduler = React.memo(function EventScheduler({
       }
 
       if (!itemFound) {
+        const manualTask = localEventData.scheduler?.tasks?.find(
+          (t) => t.id === taskId && t.cotizacion_item_id == null
+        );
+        if (manualTask) {
+          try {
+            const result = await actualizarSchedulerTask(studioSlug, eventId, taskId, {
+              isCompleted: true,
+            });
+            if (result.success) {
+              window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+            }
+            if (!result.success) {
+              toast.error(result.error || 'Error al actualizar el estado');
+              return;
+            }
+            handleManualTaskPatch(taskId, {
+              status: 'COMPLETED',
+              completed_at: new Date().toISOString(),
+            });
+            toast.success('Tarea completada');
+          } catch {
+            toast.error('Error al completar la tarea');
+          }
+          return;
+        }
         toast.error('No se encontró el item asociado a la tarea');
         return;
       }
@@ -770,7 +792,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       // Si hay personal o no tiene costo, proceder normalmente (sin verificar sueldo fijo aquí, ya se verificó arriba)
       await completeTaskWithSkipPayment(taskId, false);
     },
-    [studioSlug, eventId, router, onDataChange, localEventData]
+    [studioSlug, eventId, router, onDataChange, localEventData, handleManualTaskPatch]
   );
 
   // Función helper para completar tarea con opción de omitir nómina
@@ -860,11 +882,8 @@ export const EventScheduler = React.memo(function EventScheduler({
           throw new Error(errorMessage);
         }
 
-        // Si la asignación fue exitosa pero hay un error en payrollResult, solo loguear (no crítico)
-        // La nómina se creará cuando se complete la tarea
-        if (assignResult.payrollResult && !assignResult.payrollResult.success) {
-          console.warn('Advertencia al asignar personal (nómina):', assignResult.payrollResult.error);
-        }
+        // Si la asignación fue exitosa pero hay un error en payrollResult (no crítico):
+        // la nómina se creará cuando se complete la tarea
 
         // Obtener el crew member completo para actualizar el item
         const { obtenerCrewMembers } = await import('@/lib/actions/studio/business/events');
@@ -959,10 +978,8 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (updatedData! && onDataChange) {
             onDataChange(updatedData);
           }
-        } catch (dataChangeError) {
-          // Error en onDataChange no es crítico, solo loguear
-          // No afecta la operación principal que ya se completó exitosamente
-          console.warn('Error al notificar cambio de datos (no crítico):', dataChangeError);
+        } catch {
+          // Error en onDataChange no es crítico; no afecta la operación principal
         }
 
         setAssignCrewModalOpen(false);

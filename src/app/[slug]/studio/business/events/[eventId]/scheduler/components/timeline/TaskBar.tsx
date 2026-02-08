@@ -19,6 +19,7 @@ import {
 import { TaskBarContextMenu } from '../task-actions/TaskBarContextMenu';
 import { ZenBadge } from '@/components/ui/zen';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -34,10 +35,12 @@ interface TaskBarProps {
   studioSlug?: string;
   eventId?: string;
   item?: CotizacionItem;
+  manualTask?: ManualTaskPayload;
   onUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
   onToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -53,10 +56,12 @@ export const TaskBar = React.memo(({
   studioSlug,
   eventId,
   item,
+  manualTask,
   onUpdate,
   onDelete,
   onToggleComplete,
   onItemUpdate,
+  onManualTaskPatch,
   onClick,
 }: TaskBarProps) => {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -231,9 +236,11 @@ export const TaskBar = React.memo(({
       studioSlug={studioSlug}
       eventId={eventId}
       item={item}
+      manualTask={manualTask}
       onDelete={handleDelete}
       onToggleComplete={handleToggleComplete}
       onItemUpdate={onItemUpdate}
+      onManualTaskPatch={onManualTaskPatch}
     >
       <Rnd
         key={`${taskId}-${itemId}`}

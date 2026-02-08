@@ -55,6 +55,8 @@ export function SchedulerManualTaskPopover({
   const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAssigningCrew, setIsAssigningCrew] = useState(false);
+  const [isUpdatingCompletion, setIsUpdatingCompletion] = useState(false);
 
   const initialName = task.name ?? '';
   const initialBudget = task.budget_amount != null ? Number(task.budget_amount) : null;
@@ -86,9 +88,7 @@ export function SchedulerManualTaskPopover({
   })();
   const nameChanged = (taskName.trim() || 'Tarea manual') !== (initialName.trim() || 'Tarea manual');
   const costChanged = parsedCost !== (initialBudget ?? 0);
-  const completedChanged = localCompleted !== initialCompleted;
-  const crewChanged = localCrewId !== initialCrewId;
-  const hasChanges = nameChanged || costChanged || completedChanged || crewChanged;
+  const hasChangesNameOrCost = nameChanged || costChanged;
 
   const taskStartDate = task.start_date ? new Date(task.start_date) : null;
   const taskEndDate = task.end_date ? new Date(task.end_date) : null;
@@ -114,24 +114,22 @@ export function SchedulerManualTaskPopover({
   const displayCrew = localCrewMember ?? (localCrewId ? members.find((m) => m.id === localCrewId) : null);
 
   const handleSave = async () => {
-    if (!hasChanges) return;
+    if (!hasChangesNameOrCost) return;
 
     const newName = (taskName.trim() || 'Tarea manual');
     const snapshot: ManualTaskPatch = {
       name: initialName,
       budget_amount: initialBudget,
-      assigned_to_crew_member_id: initialCrewId,
-      assigned_to_crew_member: task.assigned_to_crew_member ?? null,
-      status: initialCompleted ? 'COMPLETED' : 'PENDING',
-      completed_at: initialCompleted ? task.completed_at ?? new Date() : null,
     };
-
-    const optimisticCrew = localCrewMember ?? (displayCrew ? { id: displayCrew.id, name: displayCrew.name, email: displayCrew.email, tipo: displayCrew.tipo } : null);
+    const resolvedCrew = localCrewMember ?? (localCrewId ? members.find((m) => m.id === localCrewId) : null);
+    const assigned_to_crew_member = resolvedCrew
+      ? { id: resolvedCrew.id, name: resolvedCrew.name, email: resolvedCrew.email ?? null, tipo: resolvedCrew.tipo }
+      : null;
     const optimistic: ManualTaskPatch = {
       name: newName,
       budget_amount: parsedCost,
       assigned_to_crew_member_id: localCrewId,
-      assigned_to_crew_member: optimisticCrew,
+      assigned_to_crew_member,
       status: localCompleted ? 'COMPLETED' : 'PENDING',
       completed_at: localCompleted ? new Date() : null,
     };
@@ -141,49 +139,96 @@ export function SchedulerManualTaskPopover({
 
     try {
       const promises: Promise<{ success: boolean; error?: string }>[] = [];
-      if (nameChanged) {
-        promises.push(actualizarNombreTareaManual(studioSlug, eventId, task.id, newName));
-      }
-      if (costChanged) {
-        promises.push(actualizarCostoTareaManual(studioSlug, eventId, task.id, parsedCost));
-      }
-      if (crewChanged) {
-        promises.push(asignarCrewATareaScheduler(studioSlug, eventId, task.id, localCrewId));
-      }
-      if (completedChanged) {
-        promises.push(
-          actualizarSchedulerTask(studioSlug, eventId, task.id, {
-            isCompleted: localCompleted,
-            assignedToCrewMemberId: localCrewId ?? undefined,
-          })
-        );
-      }
+      if (nameChanged) promises.push(actualizarNombreTareaManual(studioSlug, eventId, task.id, newName));
+      if (costChanged) promises.push(actualizarCostoTareaManual(studioSlug, eventId, task.id, parsedCost));
 
       const results = await Promise.all(promises);
       const failed = results.find((r) => !r.success);
-
       if (failed && !failed.success) {
-        onManualTaskPatch?.(task.id, snapshot);
+        onManualTaskPatch?.(task.id, { ...snapshot, assigned_to_crew_member_id: initialCrewId, assigned_to_crew_member: task.assigned_to_crew_member ?? null, status: initialCompleted ? 'COMPLETED' : 'PENDING', completed_at: initialCompleted ? task.completed_at ?? null : null });
         toast.error(failed.error ?? 'Error al guardar');
         return;
       }
-
       toast.success('Cambios guardados');
       setOpen(false);
-    } catch {
-      onManualTaskPatch?.(task.id, snapshot);
+    } catch (err) {
+      onManualTaskPatch?.(task.id, { ...snapshot, assigned_to_crew_member_id: initialCrewId, assigned_to_crew_member: task.assigned_to_crew_member ?? null, status: initialCompleted ? 'COMPLETED' : 'PENDING', completed_at: initialCompleted ? task.completed_at ?? null : null });
       toast.error('Error al guardar');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSelectCrewFromModal = (memberId: string | null) => {
+  const handleSelectCrewFromModal = useCallback(async (memberId: string | null) => {
+    const snapshot: ManualTaskPatch = {
+      assigned_to_crew_member_id: initialCrewId,
+      assigned_to_crew_member: task.assigned_to_crew_member ?? null,
+    };
+    const resolvedMember = memberId ? (members.find((m) => m.id === memberId) ?? localCrewMember) : null;
+    const assigned_to_crew_member = resolvedMember
+      ? { id: resolvedMember.id, name: resolvedMember.name, email: resolvedMember.email ?? null, tipo: resolvedMember.tipo }
+      : null;
+    const optimistic: ManualTaskPatch = {
+      assigned_to_crew_member_id: memberId,
+      assigned_to_crew_member,
+    };
+    onManualTaskPatch?.(task.id, optimistic);
     setLocalCrewId(memberId);
-    const member = memberId ? members.find((m) => m.id === memberId) : null;
-    setLocalCrewMember(member ? { id: member.id, name: member.name, email: member.email, tipo: member.tipo } : null);
+    setLocalCrewMember(assigned_to_crew_member ?? null);
     setSelectCrewModalOpen(false);
-  };
+
+    setIsAssigningCrew(true);
+    try {
+      const result = await asignarCrewATareaScheduler(studioSlug, eventId, task.id, memberId);
+      if (!result.success) {
+        onManualTaskPatch?.(task.id, snapshot);
+        setLocalCrewId(initialCrewId);
+        setLocalCrewMember(task.assigned_to_crew_member ?? null);
+        toast.error(result.error ?? 'Error al asignar personal');
+        return;
+      }
+      toast.success(memberId ? 'Personal asignado' : 'Asignación removida');
+      if (!memberId) setOpen(false);
+    } catch (err) {
+      onManualTaskPatch?.(task.id, snapshot);
+      setLocalCrewId(initialCrewId);
+      setLocalCrewMember(task.assigned_to_crew_member ?? null);
+      toast.error('Error al asignar personal');
+    } finally {
+      setIsAssigningCrew(false);
+    }
+  }, [task.id, task.assigned_to_crew_member, initialCrewId, members, localCrewMember, studioSlug, eventId, onManualTaskPatch]);
+
+  const handleCompletedChange = useCallback(async (checked: boolean) => {
+    setLocalCompleted(checked);
+    const snapshot: ManualTaskPatch = {
+      status: initialCompleted ? 'COMPLETED' : 'PENDING',
+      completed_at: initialCompleted ? task.completed_at ?? null : null,
+    };
+    const optimistic: ManualTaskPatch = {
+      status: checked ? 'COMPLETED' : 'PENDING',
+      completed_at: checked ? new Date() : null,
+    };
+    onManualTaskPatch?.(task.id, optimistic);
+    setIsUpdatingCompletion(true);
+    try {
+      const result = await actualizarSchedulerTask(studioSlug, eventId, task.id, {
+        isCompleted: checked,
+        assignedToCrewMemberId: localCrewId ?? undefined,
+      });
+      if (!result.success) {
+        onManualTaskPatch?.(task.id, snapshot);
+        setLocalCompleted(initialCompleted);
+        toast.error('Error al actualizar estado');
+      }
+    } catch {
+      onManualTaskPatch?.(task.id, snapshot);
+      setLocalCompleted(initialCompleted);
+      toast.error('Error al actualizar estado');
+    } finally {
+      setIsUpdatingCompletion(false);
+    }
+  }, [task.id, task.completed_at, initialCompleted, localCrewId, studioSlug, eventId, onManualTaskPatch]);
 
   const handleConfirmDelete = async () => {
     setDeleteConfirmOpen(false);
@@ -195,11 +240,24 @@ export function SchedulerManualTaskPopover({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>{children}</PopoverTrigger>
-        <PopoverContent className="w-80 p-4 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4}>
-          <div className="space-y-4">
-            <p className="text-[10px] font-light text-zinc-500 uppercase tracking-wide">Tarea manual</p>
+        <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-light text-zinc-500 uppercase tracking-wide">Tarea manual</p>
+              {onManualTaskDelete && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={isSaving}
+                  className="p-1.5 rounded-md text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors disabled:opacity-50"
+                  aria-label="Eliminar tarea"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-zinc-400">Nombre</label>
                 <input
@@ -241,7 +299,8 @@ export function SchedulerManualTaskPopover({
                 <Checkbox
                   id={`manual-completed-${task.id}`}
                   checked={localCompleted}
-                  onCheckedChange={(c) => setLocalCompleted(c === true)}
+                  onCheckedChange={(c) => handleCompletedChange(c === true)}
+                  disabled={isUpdatingCompletion}
                   className="border-zinc-700 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
                 />
                 <label
@@ -281,8 +340,9 @@ export function SchedulerManualTaskPopover({
                 )}
                 <button
                   type="button"
-                  onClick={() => handleSelectCrewFromModal(null)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-zinc-800 rounded transition-colors text-zinc-400 hover:text-zinc-300"
+                  onClick={() => void handleSelectCrewFromModal(null)}
+                  disabled={isAssigningCrew}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-zinc-800 rounded transition-colors text-zinc-400 hover:text-zinc-300 disabled:opacity-50"
                 >
                   <X className="h-3 w-3" />
                   Quitar asignación
@@ -294,10 +354,8 @@ export function SchedulerManualTaskPopover({
                 <ZenButton
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setOpen(false);
-                    setTimeout(() => setSelectCrewModalOpen(true), 150);
-                  }}
+                  onClick={() => setSelectCrewModalOpen(true)}
+                  disabled={isAssigningCrew}
                   className="w-full gap-1.5 h-8 text-xs"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
@@ -306,28 +364,19 @@ export function SchedulerManualTaskPopover({
               </div>
             )}
 
-            <div className="border-t border-zinc-800 pt-3 flex flex-col gap-2">
+            <div className="border-t border-zinc-800 pt-2.5 flex items-center gap-2">
+              <ZenButton variant="ghost" size="sm" className="flex-1" onClick={() => setOpen(false)}>
+                Cerrar
+              </ZenButton>
               <ZenButton
-                className="w-full"
                 size="sm"
+                className="flex-1"
                 onClick={handleSave}
-                disabled={!hasChanges || isSaving}
+                disabled={!hasChangesNameOrCost || isSaving}
                 loading={isSaving}
               >
                 Guardar cambios
               </ZenButton>
-              {onManualTaskDelete && (
-                <ZenButton
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-red-400 border-red-500/40 hover:bg-red-950/30 hover:text-red-300"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={isSaving}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Eliminar tarea
-                </ZenButton>
-              )}
             </div>
           </div>
         </PopoverContent>

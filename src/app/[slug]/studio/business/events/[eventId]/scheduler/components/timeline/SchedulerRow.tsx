@@ -3,6 +3,7 @@
 import React, { useCallback } from 'react';
 import type { DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { TaskBar } from './TaskBar';
 import { getTotalGridWidth, getDateFromPosition } from '../../utils/coordinate-utils';
 
@@ -10,7 +11,7 @@ type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0][
 
 interface SchedulerRowProps {
   itemId: string;
-  catalogItemId: string; // item_id del catálogo para indexar en el map
+  catalogItemId: string;
   itemName: string;
   tasks: Array<{
     id: string;
@@ -24,11 +25,13 @@ interface SchedulerRowProps {
   studioSlug?: string;
   eventId?: string;
   item?: CotizacionItem;
+  manualTask?: ManualTaskPayload;
   onTaskUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onTaskCreate?: (itemId: string, catalogItemId: string, itemName: string, startDate: Date) => Promise<void>;
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -41,11 +44,13 @@ export const SchedulerRow = React.memo(({
   studioSlug,
   eventId,
   item,
+  manualTask,
   onTaskUpdate,
   onTaskCreate,
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  onManualTaskPatch,
   onClick,
 }: SchedulerRowProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
@@ -116,8 +121,10 @@ export const SchedulerRow = React.memo(({
             studioSlug={studioSlug}
             eventId={eventId}
             item={item}
+            manualTask={manualTask}
             onUpdate={handleTaskUpdate}
             onDelete={onTaskDelete}
+            onManualTaskPatch={onManualTaskPatch}
             onToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
           />

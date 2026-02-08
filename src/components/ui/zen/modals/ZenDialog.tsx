@@ -38,6 +38,8 @@ export interface ZenDialogProps {
   allowOverflow?: boolean;
   /** Si true y solo hay botón Cancelar (sin Guardar), alinea Cancelar a la derecha */
   cancelAlignRight?: boolean;
+  /** Variante del botón Cancelar (default: ghost) */
+  cancelVariant?: 'primary' | 'secondary' | 'outline' | 'ghost';
 }
 
 const maxWidthClasses = {
@@ -79,6 +81,7 @@ export function ZenDialog({
   footerRightContent,
   allowOverflow = false,
   cancelAlignRight = false,
+  cancelVariant = 'ghost',
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
   const [isAnimating, setIsAnimating] = React.useState(false);
@@ -212,8 +215,8 @@ export function ZenDialog({
           </ZenCardContent>
 
           {/* Footer */}
-          {(onSave || onCancel || showDeleteButton || footerLeftContent) && (
-            footerLeftContent && !onSave && !(showDeleteButton && onDelete && deleteOnRight) ? (
+          {(onSave || onCancel || showDeleteButton || footerLeftContent || footerRightContent) && (
+            footerLeftContent && !onSave && !(showDeleteButton && onDelete && deleteOnRight) && !footerRightContent && (!onCancel || !cancelAlignRight) ? (
               <div className="w-full px-6 py-4 border-t border-zinc-700">
                 {footerLeftContent}
               </div>
@@ -224,7 +227,7 @@ export function ZenDialog({
                 {footerLeftContent}
                 {!footerLeftContent && onCancel && !cancelAlignRight && (
                   <ZenButton
-                    variant="ghost"
+                    variant={cancelVariant}
                     onClick={onClose}
                     disabled={isLoading}
                   >
@@ -246,7 +249,7 @@ export function ZenDialog({
               <div className="flex items-center gap-2 ml-auto">
                 {onCancel && cancelAlignRight && (
                   <ZenButton
-                    variant="ghost"
+                    variant={cancelVariant}
                     onClick={onClose}
                     disabled={isLoading}
                   >

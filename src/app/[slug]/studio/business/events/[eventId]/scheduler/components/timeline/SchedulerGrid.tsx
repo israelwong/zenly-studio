@@ -22,6 +22,7 @@ interface SchedulerGridProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
 }
@@ -38,6 +39,7 @@ export const SchedulerGrid = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  onManualTaskPatch,
   expandedSections = new Set(),
   expandedStages = new Set(),
 }: SchedulerGridProps) => {
@@ -94,7 +96,7 @@ export const SchedulerGrid = React.memo(({
               start_date: new Date(t.start_date),
               end_date: new Date(t.end_date),
               is_completed: !!(t.completed_at ?? (t.status === 'COMPLETED')),
-              has_crew_member: false,
+              has_crew_member: !!t.assigned_to_crew_member_id,
             },
           ];
           return (
@@ -107,10 +109,12 @@ export const SchedulerGrid = React.memo(({
               dateRange={dateRange}
               studioSlug={studioSlug}
               eventId={eventId}
+              manualTask={t}
               onTaskUpdate={onTaskUpdate}
               onTaskDelete={onTaskDelete}
               onTaskToggleComplete={onTaskToggleComplete}
               onItemUpdate={onItemUpdate}
+              onManualTaskPatch={onManualTaskPatch}
             />
           );
         }
