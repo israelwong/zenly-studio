@@ -65,10 +65,7 @@ export function EventPanel({
           )}
         </div>
 
-        {/* Columna 2: (reservada / futuros widgets) */}
-        <div className="lg:col-span-1 space-y-6" />
-
-        {/* Columna 3: Agenda + Entregables + TODO */}
+        {/* Columna 2: Agenda + Entregables */}
         <div className="lg:col-span-1 space-y-6">
           <EventAgendamiento
             studioSlug={studioSlug}
@@ -76,17 +73,19 @@ export function EventPanel({
             eventDate={eventData.promise?.event_date || eventData.event_date || null}
             onAgendaUpdated={onEventUpdated}
           />
+          <EventDeliverablesCard
+            studioSlug={studioSlug}
+            eventId={eventId}
+            onUpdated={onEventUpdated}
+          />
+        </div>
 
+        {/* Columna 3: Cronograma + TODO */}
+        <div className="lg:col-span-1 space-y-6">
           <EventCronogramaCard
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}
-            onUpdated={onEventUpdated}
-          />
-
-          <EventDeliverablesCard
-            studioSlug={studioSlug}
-            eventId={eventId}
             onUpdated={onEventUpdated}
           />
 

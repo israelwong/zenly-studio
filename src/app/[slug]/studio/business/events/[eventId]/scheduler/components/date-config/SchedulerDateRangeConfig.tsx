@@ -86,7 +86,11 @@ export function SchedulerDateRangeConfig({
           )}
         </ZenButton>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="end">
+      <PopoverContent
+        className="w-auto p-0 bg-zinc-900 border-zinc-800"
+        align="end"
+        onInteractOutside={() => setOpen(false)}
+      >
         <div className="p-3">
           <ZenCalendar
             mode="range"
