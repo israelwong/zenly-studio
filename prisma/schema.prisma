@@ -1866,47 +1866,50 @@ model studio_scheduler_event_instances {
 }
 
 model studio_scheduler_event_tasks {
-  id                    String                           @id @default(cuid())
-  scheduler_instance_id String
-  cotizacion_item_id    String?                          @unique
-  name                  String
-  description           String?
-  start_date            DateTime
-  end_date              DateTime
-  duration_days         Int                              @default(1)
-  category              TaskCategory
-  priority              TaskPriority                     @default(MEDIUM)
-  assigned_to_user_id   String?
-  assigned_at           DateTime?
-  status                TaskStatus                       @default(PENDING)
-  progress_percent      Int                              @default(0)
-  completed_at          DateTime?
-  completed_by_user_id  String?
-  depends_on_task_id    String?
-  checklist_items       Json?
-  order                 Int                              @default(0)
-  notes                 String?
-  budget_amount         Decimal?
-  actual_cost           Decimal?
-  created_at            DateTime                         @default(now())
-  updated_at            DateTime                         @updatedAt
-  google_calendar_id    String?
-  google_event_id       String?
-  sync_status           SyncStatus                       @default(DRAFT)
-  invitation_status     InvitationStatus?
-  assigned_to           user_studio_roles?               @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
-  completed_by          user_studio_roles?               @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
-  cotizacion_item       studio_cotizacion_items?         @relation("CotizacionItemSchedulerTask", fields: [cotizacion_item_id], references: [id])
-  depends_on            studio_scheduler_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
-  dependent_tasks       studio_scheduler_event_tasks[]   @relation("EventTaskDependency")
-  scheduler_instance    studio_scheduler_event_instances @relation(fields: [scheduler_instance_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  activity_log          studio_scheduler_task_activity[]
-  external_service_sale studio_external_service_sales?
+  id                         String                           @id @default(cuid())
+  scheduler_instance_id      String
+  cotizacion_item_id         String?                          @unique
+  name                       String
+  description                String?
+  start_date                 DateTime
+  end_date                   DateTime
+  duration_days              Int                              @default(1)
+  category                   TaskCategory
+  priority                   TaskPriority                     @default(MEDIUM)
+  assigned_to_user_id        String?
+  assigned_to_crew_member_id String?
+  assigned_at                DateTime?
+  status                     TaskStatus                       @default(PENDING)
+  progress_percent            Int                              @default(0)
+  completed_at               DateTime?
+  completed_by_user_id        String?
+  depends_on_task_id         String?
+  checklist_items            Json?
+  order                      Int                              @default(0)
+  notes                      String?
+  budget_amount              Decimal?
+  actual_cost                Decimal?
+  created_at                 DateTime                         @default(now())
+  updated_at                 DateTime                         @updatedAt
+  google_calendar_id         String?
+  google_event_id            String?
+  sync_status                SyncStatus                       @default(DRAFT)
+  invitation_status          InvitationStatus?
+  assigned_to                user_studio_roles?                @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
+  assigned_to_crew_member    studio_crew_members?             @relation("SchedulerTaskAssignedCrew", fields: [assigned_to_crew_member_id], references: [id], onDelete: SetNull)
+  completed_by               user_studio_roles?               @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
+  cotizacion_item            studio_cotizacion_items?         @relation("CotizacionItemSchedulerTask", fields: [cotizacion_item_id], references: [id])
+  depends_on                 studio_scheduler_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
+  dependent_tasks            studio_scheduler_event_tasks[]   @relation("EventTaskDependency")
+  scheduler_instance         studio_scheduler_event_instances @relation(fields: [scheduler_instance_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  activity_log               studio_scheduler_task_activity[]
+  external_service_sale      studio_external_service_sales?
 
   @@index([scheduler_instance_id, status])
   @@index([sync_status])
   @@index([invitation_status])
   @@index([assigned_to_user_id])
+  @@index([assigned_to_crew_member_id])
   @@index([start_date, end_date])
   @@index([status])
   @@index([cotizacion_item_id])
@@ -1962,12 +1965,13 @@ model studio_crew_members {
   phone            String?
   variable_salary  Float?
   salary_frequency String?
-  cotizacion_items studio_cotizacion_items[]
-  account          studio_crew_member_account?
-  skills           studio_crew_member_skills[]
-  studio           studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  gastos           studio_gastos[]
-  nominas          studio_nominas[]
+  cotizacion_items         studio_cotizacion_items[]
+  scheduler_tasks_assigned studio_scheduler_event_tasks[] @relation("SchedulerTaskAssignedCrew")
+  account                  studio_crew_member_account?
+  skills                   studio_crew_member_skills[]
+  studio                   studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  gastos                   studio_gastos[]
+  nominas                  studio_nominas[]
 
   @@index([studio_id])
   @@index([status])

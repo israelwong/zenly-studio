@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { type DateRange } from 'react-day-picker';
 import { CheckCircle2, AlertCircle, Clock, Users } from 'lucide-react';
+import { calculateTaskStatus } from '../../utils/task-status-utils';
 import { EventSchedulerView } from './EventSchedulerView';
 import { SchedulerDateRangeConfig } from '../date-config/SchedulerDateRangeConfig';
 import { DateRangeConflictModal } from '../date-config/DateRangeConflictModal';
@@ -16,6 +17,7 @@ interface SchedulerWrapperProps {
   eventData: EventoDetalle;
   initialDateRange?: DateRange;
   onDataChange?: (data: EventoDetalle) => void;
+  onRefetchEvent?: () => Promise<void>;
   cotizacionId?: string;
 }
 
@@ -28,6 +30,7 @@ export function SchedulerWrapper({
   eventData,
   initialDateRange,
   onDataChange,
+  onRefetchEvent,
   cotizacionId,
 }: SchedulerWrapperProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
@@ -57,6 +60,7 @@ export function SchedulerWrapper({
   }, [
     eventData?.id,
     eventData?.scheduler?.id,
+    eventData?.scheduler?.tasks,
     cotizacionesIds,
   ]);
 
@@ -118,63 +122,56 @@ export function SchedulerWrapper({
     setDateRange(newRange);
   }, []);
 
-  // Calcular progreso y estadísticas de tareas
+  // Resumen reactivo: mismo calculateTaskStatus que el Grid; se recalcula al actualizar eventData (p. ej. drag)
   const taskStats = useMemo(() => {
-    if (!filteredCotizaciones) {
-      return {
-        completed: 0,
-        total: 0,
-        percentage: 0,
-        delayed: 0,
-        inProcess: 0,
-        pending: 0,
-        unassigned: 0,
-        withoutCrew: 0
-      };
-    }
-
-    const allItems = filteredCotizaciones.flatMap(cot => cot.cotizacion_items || []);
-    const total = allItems.length;
+    const allItems = filteredCotizaciones?.flatMap(cot => cot.cotizacion_items || []) ?? [];
     const itemsWithTasks = allItems.filter(item => item.scheduler_task);
-    const unassigned = total - itemsWithTasks.length;
+    const manualTasks = eventData.scheduler?.tasks?.filter(t => t.cotizacion_item_id == null) ?? [];
+    const total = itemsWithTasks.length + manualTasks.length;
+    const unassigned = allItems.length - itemsWithTasks.length;
 
-    const completed = itemsWithTasks.filter(item => !!item.scheduler_task?.completed_at).length;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    let completed = 0;
     let delayed = 0;
     let inProcess = 0;
     let pending = 0;
-    let withoutCrew = 0; // Todas las tareas activas (no completadas) sin personal asignado
+    let withoutCrew = 0;
 
     itemsWithTasks.forEach(item => {
-      if (item.scheduler_task?.completed_at) return;
-
-      const startDate = new Date(item.scheduler_task!.start_date);
-      const endDate = new Date(item.scheduler_task!.end_date);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(0, 0, 0, 0);
-
-      const hasCrew = !!item.assigned_to_crew_member_id;
-
-      // Contar tareas sin crew (activas)
-      if (!hasCrew) {
-        withoutCrew++;
-      }
-
-      if (today > endDate) {
-        delayed++;
-      } else if (today >= startDate && today <= endDate) {
-        inProcess++;
-      } else if (today < startDate) {
-        pending++;
+      if (!item.scheduler_task) return;
+      const isCompleted = !!item.scheduler_task.completed_at;
+      if (isCompleted) completed++;
+      else {
+        const status = calculateTaskStatus({
+          startDate: new Date(item.scheduler_task.start_date),
+          endDate: new Date(item.scheduler_task.end_date),
+          isCompleted: false,
+        });
+        if (status === 'DELAYED') delayed++;
+        else if (status === 'IN_PROCESS') inProcess++;
+        else pending++;
+        if (!item.assigned_to_crew_member_id) withoutCrew++;
       }
     });
 
+    manualTasks.forEach(t => {
+      const isCompleted = t.status === 'COMPLETED';
+      if (isCompleted) completed++;
+      else {
+        const status = calculateTaskStatus({
+          startDate: new Date(t.start_date),
+          endDate: new Date(t.end_date),
+          isCompleted: false,
+        });
+        if (status === 'DELAYED') delayed++;
+        else if (status === 'IN_PROCESS') inProcess++;
+        else pending++;
+        if (!t.assigned_to_crew_member_id) withoutCrew++;
+      }
+    });
+
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { completed, total, percentage, delayed, inProcess, pending, unassigned, withoutCrew };
-  }, [filteredCotizaciones]);
+  }, [filteredCotizaciones, eventData.scheduler?.tasks, eventData.cotizaciones]);
 
   return (
     <>
@@ -258,6 +255,7 @@ export function SchedulerWrapper({
         schedulerInstance={eventData.scheduler || undefined}
         dateRange={dateRange}
         onDataChange={onDataChange}
+        onRefetchEvent={onRefetchEvent}
       />
 
       {/* Modal de conflicto de rango */}

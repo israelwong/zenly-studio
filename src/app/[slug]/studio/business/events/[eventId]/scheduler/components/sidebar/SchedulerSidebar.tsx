@@ -12,14 +12,18 @@ import {
   isStageRow,
   isTaskRow,
   isAddPhantomRow,
+  isManualTaskRow,
   STAGE_COLORS,
   STAGE_LABELS,
   type SchedulerRowDescriptor,
   type TaskCategoryStage,
+  type ManualTaskPayload,
 } from '../../utils/scheduler-section-stages';
 import { SchedulerItemPopover } from './SchedulerItemPopover';
+import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
 import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
+import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
 import { ChevronRight, ChevronDown, Plus, Trash2 } from 'lucide-react';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -33,19 +37,26 @@ interface ItemMetadata {
 
 interface StageBlock {
   stageRow: { id: string; category: TaskCategoryStage; sectionId: string; label: string };
-  taskRows: Array<{ type: 'task'; item: CotizacionItem; servicioNombre: string; categoriaNombre: string; seccionNombre: string; catalogItemId: string }>;
+  taskRows: Array<
+    | { type: 'task'; item: CotizacionItem; servicioNombre: string; categoriaNombre: string; seccionNombre: string; catalogItemId: string }
+    | { type: 'manual_task'; task: ManualTaskPayload }
+  >;
   phantomRow: { id: string };
 }
 
 interface SchedulerSidebarProps {
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
+  manualTasks?: ManualTaskPayload[];
   studioSlug: string;
   eventId: string;
   renderItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onAddManualTask?: (sectionId: string, stageCategory: string) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
+  onManualTaskDelete?: (taskId: string) => Promise<void>;
+  onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
@@ -55,6 +66,47 @@ interface SchedulerSidebarProps {
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+/** Fila manual: misma capa de sincronización que SchedulerItem (useSchedulerItemSync → localItem). */
+function ManualTaskRow({
+  task,
+  studioSlug,
+  eventId,
+  onManualTaskPatch,
+  onManualTaskDelete,
+}: {
+  task: ManualTaskPayload;
+  studioSlug: string;
+  eventId: string;
+  onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
+  onManualTaskDelete?: (taskId: string) => Promise<void>;
+}) {
+  const { localTask } = useSchedulerManualTaskSync(task);
+  const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
+  return (
+    <SchedulerManualTaskPopover
+      task={localTask}
+      studioSlug={studioSlug}
+      eventId={eventId}
+      onManualTaskPatch={onManualTaskPatch}
+      onManualTaskDelete={onManualTaskDelete}
+    >
+      <div
+        className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLDivElement).click()}
+      >
+        <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
+        <div className="flex-1 min-w-0 flex items-center pl-10 pr-4">
+          <p className={`text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-300'}`}>
+            {localTask.name}
+          </p>
+        </div>
+      </div>
+    </SchedulerManualTaskPopover>
+  );
 }
 
 function SchedulerItem({
@@ -138,6 +190,8 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
             seccionNombre: rows[i].seccionNombre,
             catalogItemId: rows[i].catalogItemId,
           });
+        } else if (isManualTaskRow(rows[i])) {
+          taskRows.push({ type: 'manual_task', task: rows[i].task });
         } else if (isAddPhantomRow(rows[i])) {
           phantomRow = { id: rows[i].id };
         }
@@ -162,6 +216,7 @@ function rowHeight(r: SchedulerRowDescriptor): number {
   if (isSectionRow(r)) return 40;
   if (isStageRow(r)) return 32;
   if (isTaskRow(r)) return 60;
+  if (isManualTaskRow(r)) return 60;
   if (isAddPhantomRow(r)) return 40;
   return 0;
 }
@@ -169,19 +224,26 @@ function rowHeight(r: SchedulerRowDescriptor): number {
 export const SchedulerSidebar = React.memo(({
   secciones,
   itemsMap,
+  manualTasks = [],
   studioSlug,
   eventId,
   renderItem,
   onTaskToggleComplete,
   onItemUpdate,
   onAddManualTask,
+  onManualTaskPatch,
+  onManualTaskDelete,
+  onManualTaskUpdate,
   onDeleteStage,
   expandedSections = new Set(),
   expandedStages = new Set(),
   onExpandedSectionsChange,
   onExpandedStagesChange,
 }: SchedulerSidebarProps) => {
-  const rows = useMemo(() => buildSchedulerRows(secciones, itemsMap), [secciones, itemsMap]);
+  const rows = useMemo(
+    () => buildSchedulerRows(secciones, itemsMap, manualTasks),
+    [secciones, itemsMap, manualTasks] // manualTasks incl. nombre/cambios de tarea manual
+  );
   const sectionTaskCounts = useMemo(() => getSectionTaskCounts(rows), [rows]);
   const filteredRows = useMemo(
     () =>
@@ -283,7 +345,7 @@ export const SchedulerSidebar = React.memo(({
         const { stageRow, taskRows, phantomRow } = block.block;
         const isExpanded = expandedStages.has(stageRow.id);
         const colors = STAGE_COLORS[stageRow.category];
-        const taskIds = taskRows.map((t) => t.item.scheduler_task?.id).filter(Boolean) as string[];
+        const taskIds = taskRows.map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id)).filter(Boolean) as string[];
 
         return (
           <React.Fragment key={stageRow.id}>
@@ -322,30 +384,41 @@ export const SchedulerSidebar = React.memo(({
 
             {isExpanded ? (
               <>
-                {taskRows.map((tr) => (
-                  <div
-                    key={tr.item.id}
-                    className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
-                  >
-                    <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                    <div className="flex-1 min-w-0 flex items-center pl-8 pr-4">
-                      <SchedulerItem
-                      item={tr.item}
-                      metadata={{
-                        seccionNombre: tr.seccionNombre,
-                        categoriaNombre: tr.categoriaNombre,
-                        servicioNombre: tr.servicioNombre,
-                        servicioId: tr.catalogItemId,
-                      }}
+                {taskRows.map((tr) =>
+                  tr.type === 'manual_task' ? (
+                    <ManualTaskRow
+                      key={tr.task.id}
+                      task={tr.task}
                       studioSlug={studioSlug}
                       eventId={eventId}
-                      renderItem={renderItem}
-                      onItemUpdate={onItemUpdate}
-                      onTaskToggleComplete={onTaskToggleComplete}
+                      onManualTaskPatch={onManualTaskPatch}
+                      onManualTaskDelete={onManualTaskDelete}
                     />
+                  ) : (
+                    <div
+                      key={tr.item.id}
+                      className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
+                    >
+                      <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
+                      <div className="flex-1 min-w-0 flex items-center pl-8 pr-4">
+                        <SchedulerItem
+                          item={tr.item}
+                          metadata={{
+                            seccionNombre: tr.seccionNombre,
+                            categoriaNombre: tr.categoriaNombre,
+                            servicioNombre: tr.servicioNombre,
+                            servicioId: tr.catalogItemId,
+                          }}
+                          studioSlug={studioSlug}
+                          eventId={eventId}
+                          renderItem={renderItem}
+                          onItemUpdate={onItemUpdate}
+                          onTaskToggleComplete={onTaskToggleComplete}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                )}
                 <button
                   type="button"
                   onClick={() => onAddManualTask?.(stageRow.sectionId, stageRow.category)}

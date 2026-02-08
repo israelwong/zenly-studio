@@ -4,6 +4,7 @@ import React, { useCallback, useRef } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
+import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { SchedulerSidebar } from '../sidebar/SchedulerSidebar';
 import { SchedulerTimeline } from '../timeline/SchedulerTimeline';
 
@@ -19,6 +20,7 @@ interface ItemMetadata {
 interface SchedulerPanelProps {
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
+  manualTasks?: ManualTaskPayload[];
   studioSlug: string;
   eventId: string;
   dateRange?: DateRange;
@@ -29,6 +31,9 @@ interface SchedulerPanelProps {
   renderSidebarItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onAddManualTask?: (sectionId: string, stageCategory: string) => void;
+  onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
+  onManualTaskDelete?: (taskId: string) => Promise<void>;
+  onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
@@ -45,6 +50,7 @@ interface SchedulerPanelProps {
 export const SchedulerPanel = React.memo(({
   secciones,
   itemsMap,
+  manualTasks = [],
   studioSlug,
   eventId,
   dateRange,
@@ -55,6 +61,9 @@ export const SchedulerPanel = React.memo(({
   renderSidebarItem,
   onItemUpdate,
   onAddManualTask,
+  onManualTaskPatch,
+  onManualTaskDelete,
+  onManualTaskUpdate,
   onDeleteStage,
   expandedSections = new Set(),
   expandedStages = new Set(),
@@ -103,12 +112,16 @@ export const SchedulerPanel = React.memo(({
           <SchedulerSidebar
             secciones={secciones}
             itemsMap={itemsMap}
+            manualTasks={manualTasks}
             studioSlug={studioSlug}
             eventId={eventId}
             renderItem={renderSidebarItem}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
             onAddManualTask={onAddManualTask}
+            onManualTaskPatch={onManualTaskPatch}
+            onManualTaskDelete={onManualTaskDelete}
+            onManualTaskUpdate={onManualTaskUpdate}
             onDeleteStage={onDeleteStage}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
@@ -122,6 +135,7 @@ export const SchedulerPanel = React.memo(({
           <SchedulerTimeline
             secciones={secciones}
             itemsMap={itemsMap}
+            manualTasks={manualTasks}
             dateRange={dateRange}
             studioSlug={studioSlug}
             eventId={eventId}
@@ -138,7 +152,7 @@ export const SchedulerPanel = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Comparación personalizada: solo re-renderizar si cambian fechas o items
+  // Comparación personalizada: re-renderizar si cambian fechas, items o tareas manuales (nombre/completado)
   const prevFrom = prevProps.dateRange?.from?.getTime();
   const prevTo = prevProps.dateRange?.to?.getTime();
   const nextFrom = nextProps.dateRange?.from?.getTime();
@@ -146,11 +160,12 @@ export const SchedulerPanel = React.memo(({
 
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
+  const manualTasksEqual = prevProps.manualTasks === nextProps.manualTasks;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
 
-  return datesEqual && itemsEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Plus, UserPlus } from 'lucide-react';
+import { getTodayLocalDateOnly, toLocalDateOnly } from '../../utils/coordinate-utils';
 import { TaskCard } from './TaskCard';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
@@ -34,19 +35,9 @@ interface DayCellHeaderProps {
 }
 
 function DayCellHeader({ date, showMonth = false }: DayCellHeaderProps) {
-    // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
-    const todayUtc = new Date();
-    const todayDateOnly = new Date(Date.UTC(
-      todayUtc.getUTCFullYear(),
-      todayUtc.getUTCMonth(),
-      todayUtc.getUTCDate()
-    ));
-    const cellDateOnly = new Date(Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate()
-    ));
-    const isTodayCell = cellDateOnly.getTime() === todayDateOnly.getTime();
+    const todayLocal = getTodayLocalDateOnly();
+    const cellLocal = toLocalDateOnly(date);
+    const isTodayCell = cellLocal.getTime() === todayLocal.getTime();
 
     return (
         <div className="w-[60px] flex-shrink-0 h-full flex flex-col items-center justify-center border-r border-zinc-800/50 bg-zinc-900/50 relative">
@@ -106,38 +97,15 @@ export function DayCell({
         }
     };
 
-    // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
-    const todayUtc = new Date();
-    const todayDateOnly = new Date(Date.UTC(
-        todayUtc.getUTCFullYear(),
-        todayUtc.getUTCMonth(),
-        todayUtc.getUTCDate(),
-        12, 0, 0
-    ));
-    const cellDateUtc = new Date(Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        12, 0, 0
-    ));
-    const isTodayCell = cellDateUtc.getTime() === todayDateOnly.getTime();
+    const todayLocal = getTodayLocalDateOnly();
+    const cellLocal = toLocalDateOnly(date);
+    const isTodayCell = cellLocal.getTime() === todayLocal.getTime();
 
     const tasksThisDay = tasks.filter(task => {
-        // Normalizar fechas usando métodos UTC
-        const normalizeDate = (d: Date) => {
-            return new Date(Date.UTC(
-                d.getUTCFullYear(),
-                d.getUTCMonth(),
-                d.getUTCDate(),
-                12, 0, 0
-            ));
-        };
-
-        const normalizedDay = normalizeDate(date);
-        const normalizedStart = normalizeDate(task.start_date);
-        const normalizedEnd = normalizeDate(task.end_date);
-
-        return normalizedDay.getTime() >= normalizedStart.getTime() && normalizedDay.getTime() <= normalizedEnd.getTime();
+        const dayOnly = toLocalDateOnly(date);
+        const startOnly = toLocalDateOnly(task.start_date);
+        const endOnly = toLocalDateOnly(task.end_date);
+        return dayOnly.getTime() >= startOnly.getTime() && dayOnly.getTime() <= endOnly.getTime();
     });
 
 

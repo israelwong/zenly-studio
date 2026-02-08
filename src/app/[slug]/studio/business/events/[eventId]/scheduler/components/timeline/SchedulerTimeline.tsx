@@ -4,6 +4,7 @@ import React from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
+import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { SchedulerHeader } from './SchedulerHeader';
 import { SchedulerGrid } from './SchedulerGrid';
 import { getTodayPosition } from '../../utils/coordinate-utils';
@@ -13,6 +14,7 @@ type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0][
 interface SchedulerTimelineProps {
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
+  manualTasks?: ManualTaskPayload[];
   dateRange: DateRange;
   studioSlug?: string;
   eventId?: string;
@@ -28,6 +30,7 @@ interface SchedulerTimelineProps {
 export const SchedulerTimeline = React.memo(({
   secciones,
   itemsMap,
+  manualTasks = [],
   dateRange,
   studioSlug,
   eventId,
@@ -51,6 +54,7 @@ export const SchedulerTimeline = React.memo(({
       <SchedulerGrid
         secciones={secciones}
         itemsMap={itemsMap}
+        manualTasks={manualTasks}
         dateRange={dateRange}
         studioSlug={studioSlug}
         eventId={eventId}
@@ -80,11 +84,12 @@ export const SchedulerTimeline = React.memo(({
 
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
+  const manualTasksEqual = prevProps.manualTasks === nextProps.manualTasks;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
 
-  return datesEqual && itemsEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

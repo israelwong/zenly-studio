@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
+import { Users } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenConfirmModal, ZenButton } from '@/components/ui/zen';
 import { cancelarEvento, obtenerCotizacionesAutorizadasCount, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { EventPanel } from '../../components/EventPanel';
 import { EventDetailHeader } from './EventDetailHeader';
 import { EventDetailToolbar } from './EventDetailToolbar';
 import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
+import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
 import { getAllEventContracts } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { toast } from 'sonner';
 
@@ -38,6 +40,7 @@ export function EventLayoutClient({
   const [cotizacionesCount, setCotizacionesCount] = useState(0);
   const [contratosCount, setContratosCount] = useState(0);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
 
   useEffect(() => {
@@ -120,6 +123,17 @@ export function EventLayoutClient({
           contactId={eventData?.promise?.contact?.id || null}
           contactPhone={eventData?.promise?.contact?.phone || null}
           contactName={eventData?.promise?.contact?.name || null}
+          rightContent={
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setCrewManagerOpen(true)}
+              className="gap-2"
+            >
+              <Users className="h-4 w-4" />
+              Personal
+            </ZenButton>
+          }
         />
         <ZenCardContent className="p-6">
           {isBaseRoute ? (
@@ -210,6 +224,13 @@ export function EventLayoutClient({
         onClose={() => setTemplatesModalOpen(false)}
         studioSlug={studioSlug}
         eventTypeId={eventData?.promise?.event_type_id || undefined}
+      />
+
+      <CrewMembersManager
+        studioSlug={studioSlug}
+        mode="manage"
+        isOpen={crewManagerOpen}
+        onClose={() => setCrewManagerOpen(false)}
       />
     </div>
   );

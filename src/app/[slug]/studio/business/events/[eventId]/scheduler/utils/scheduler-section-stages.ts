@@ -75,15 +75,46 @@ export interface SchedulerAddPhantomRow {
   stageCategory: TaskCategoryStage;
 }
 
+/** Tarea manual (sin ítem de cotización); viene de scheduler.tasks con cotizacion_item_id null */
+export interface ManualTaskPayload {
+  id: string;
+  name: string;
+  start_date: Date;
+  end_date: Date;
+  category: string;
+  cotizacion_item_id: string | null;
+  status?: string;
+  progress_percent?: number;
+  completed_at?: Date | null;
+  /** Costo estimado (budget_amount en BD) */
+  budget_amount?: number | null;
+  assigned_to_crew_member_id?: string | null;
+  assigned_to_crew_member?: {
+    id: string;
+    name: string;
+    email: string | null;
+    tipo: string;
+  } | null;
+}
+
+export interface SchedulerManualTaskRow {
+  type: 'manual_task';
+  task: ManualTaskPayload;
+  sectionId: string;
+  stageCategory: TaskCategoryStage;
+}
+
 export type SchedulerRowDescriptor =
   | SchedulerSectionRow
   | SchedulerStageRow
   | SchedulerTaskRow
+  | SchedulerManualTaskRow
   | SchedulerAddPhantomRow;
 
 export function buildSchedulerRows(
   secciones: SeccionData[],
-  itemsMap: Map<string, CotizacionItem>
+  itemsMap: Map<string, CotizacionItem>,
+  manualTasks: ManualTaskPayload[] = []
 ): SchedulerRowDescriptor[] {
   const rows: SchedulerRowDescriptor[] = [];
 
@@ -116,6 +147,7 @@ export function buildSchedulerRows(
 
     rows.push({ type: 'section', id: seccion.id, name: seccion.nombre });
 
+    const isFirstSection = seccion.id === secciones[0]?.id;
     for (const stage of STAGE_ORDER) {
       const stageItems = byStage.get(stage) ?? [];
       rows.push({
@@ -136,6 +168,16 @@ export function buildSchedulerRows(
           seccionNombre: seccion.nombre,
           catalogItemId,
         });
+      }
+      if (isFirstSection) {
+        for (const task of manualTasks.filter((t) => normalizeCategory(t.category) === stage)) {
+          rows.push({
+            type: 'manual_task',
+            task,
+            sectionId: seccion.id,
+            stageCategory: stage,
+          });
+        }
       }
       rows.push({
         type: 'add_phantom',
@@ -163,6 +205,10 @@ export function isTaskRow(r: SchedulerRowDescriptor): r is SchedulerTaskRow {
 
 export function isAddPhantomRow(r: SchedulerRowDescriptor): r is SchedulerAddPhantomRow {
   return r.type === 'add_phantom';
+}
+
+export function isManualTaskRow(r: SchedulerRowDescriptor): r is SchedulerManualTaskRow {
+  return r.type === 'manual_task';
 }
 
 /**
@@ -232,7 +278,7 @@ export function getSectionTaskCounts(rows: SchedulerRowDescriptor[]): Map<string
       currentSectionId = row.id;
       continue;
     }
-    if (isTaskRow(row) && currentSectionId) {
+    if ((isTaskRow(row) || isManualTaskRow(row)) && currentSectionId) {
       counts.set(currentSectionId, (counts.get(currentSectionId) ?? 0) + 1);
     }
   }

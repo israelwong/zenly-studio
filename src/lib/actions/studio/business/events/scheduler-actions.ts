@@ -851,3 +851,276 @@ export async function verificarConflictosColaborador(
     };
   }
 }
+
+/** Categorías de tarea válidas para tareas manuales (sin ítem de cotización) */
+const MANUAL_TASK_CATEGORIES = [
+  'PLANNING',
+  'PRODUCTION',
+  'POST_PRODUCTION',
+  'REVIEW',
+  'DELIVERY',
+  'WARRANTY',
+] as const;
+
+/**
+ * Crea una tarea manual en el Scheduler (sin cotizacion_item_id).
+ * La fecha de inicio se determina por cascada: última tarea de esa categoría en la instancia.
+ */
+export async function crearTareaManualScheduler(
+  studioSlug: string,
+  eventId: string,
+  params: {
+    sectionId: string;
+    stage: string;
+    name: string;
+    durationDays: number;
+  }
+): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const category =
+      MANUAL_TASK_CATEGORIES.includes(params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
+        ? (params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
+        : 'PLANNING';
+
+    const durationDays = Math.max(1, Math.min(365, Math.round(params.durationDays) || 1));
+
+    let instance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { event_id: eventId },
+      select: { id: true, start_date: true, end_date: true },
+    });
+
+    if (!instance) {
+      const event = await prisma.studio_events.findUnique({
+        where: { id: eventId },
+        select: { event_date: true },
+      });
+      if (!event) {
+        return { success: false, error: 'Evento no encontrado' };
+      }
+      const startDate = new Date(event.event_date);
+      const endDate = new Date(event.event_date);
+      endDate.setUTCDate(endDate.getUTCDate() + 30);
+      instance = await prisma.studio_scheduler_event_instances.create({
+        data: {
+          event_id: eventId,
+          event_date: event.event_date,
+          start_date: startDate,
+          end_date: endDate,
+        },
+        select: { id: true, start_date: true, end_date: true },
+      });
+    }
+
+    const lastTaskInCategory = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        scheduler_instance_id: instance.id,
+        category,
+      },
+      orderBy: { end_date: 'desc' },
+      select: { end_date: true },
+    });
+
+    const toUTCNoon = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+
+    const startDate = lastTaskInCategory
+      ? (() => {
+          const next = new Date(lastTaskInCategory.end_date);
+          next.setUTCDate(next.getUTCDate() + 1);
+          return toUTCNoon(next);
+        })()
+      : toUTCNoon(instance.start_date);
+
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + durationDays - 1);
+
+    const task = await prisma.studio_scheduler_event_tasks.create({
+      data: {
+        scheduler_instance_id: instance.id,
+        cotizacion_item_id: null,
+        name: params.name.trim() || 'Tarea manual',
+        duration_days: durationDays,
+        category,
+        start_date: startDate,
+        end_date: toUTCNoon(endDate),
+        sync_status: 'DRAFT',
+      },
+      select: { id: true },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+
+    return { success: true, data: { id: task.id } };
+  } catch (error) {
+    console.error('[crearTareaManualScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al crear la tarea',
+    };
+  }
+}
+
+/**
+ * Actualiza el costo estimado (budget_amount) de una tarea manual del scheduler.
+ */
+export async function actualizarCostoTareaManual(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  amount: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId, event: { studio: { slug: studioSlug } } },
+      },
+      select: { id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea manual no encontrada' };
+    }
+    const value = amount < 0 ? 0 : amount;
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { budget_amount: value },
+    });
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[actualizarCostoTareaManual] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar costo',
+    };
+  }
+}
+
+/**
+ * Elimina una tarea manual del scheduler (cotizacion_item_id null).
+ * No revalida path para permitir actualización optimista en cliente.
+ */
+export async function eliminarTareaManual(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId, event: { studio: { slug: studioSlug } } },
+      },
+      select: { id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea manual no encontrada' };
+    }
+    await prisma.studio_scheduler_event_tasks.delete({
+      where: { id: taskId },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[eliminarTareaManual] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar la tarea',
+    };
+  }
+}
+
+/**
+ * Actualiza el nombre de una tarea manual del scheduler.
+ */
+export async function actualizarNombreTareaManual(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId, event: { studio: { slug: studioSlug } } },
+      },
+      select: { id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea manual no encontrada' };
+    }
+    const trimmed = (name ?? '').trim() || 'Tarea manual';
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { name: trimmed },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[actualizarNombreTareaManual] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar el nombre',
+    };
+  }
+}
+
+/**
+ * Asigna o quita personal (crew) en una tarea del scheduler (para tareas manuales).
+ */
+export async function asignarCrewATareaScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  crewMemberId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, scheduler_instance_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+    if (crewMemberId) {
+      const member = await prisma.studio_crew_members.findFirst({
+        where: {
+          id: crewMemberId,
+          studio: { slug: studioSlug },
+        },
+        select: { id: true },
+      });
+      if (!member) {
+        return { success: false, error: 'Colaborador no encontrado' };
+      }
+    }
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { assigned_to_crew_member_id: crewMemberId },
+    });
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[asignarCrewATareaScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al asignar personal',
+    };
+  }
+}

@@ -13,6 +13,8 @@ interface EventDetailToolbarProps {
   contactId: string | null;
   contactPhone: string | null;
   contactName: string | null;
+  /** Contenido a la derecha del toolbar (ej. botón Personal) */
+  rightContent?: React.ReactNode;
 }
 
 export function EventDetailToolbar({
@@ -22,6 +24,7 @@ export function EventDetailToolbar({
   contactId,
   contactPhone,
   contactName,
+  rightContent,
 }: EventDetailToolbarProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
@@ -65,14 +68,14 @@ export function EventDetailToolbar({
     window.open(`${window.location.origin}${portalUrl}`, '_blank');
   };
 
-  if (!hasContactData && !promiseId) {
+  if (!hasContactData && !promiseId && !rightContent) {
     return null;
   }
 
   return (
     <>
       <div className="flex items-center justify-between gap-1.5 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
-        {/* Izquierda: Portal + Contrato + Contactar */}
+        {/* Izquierda: Portal + Contrato */}
         <div className="flex items-center gap-3">
           {hasContactData && (
             <div className="flex items-center gap-1.5">
@@ -122,6 +125,7 @@ export function EventDetailToolbar({
             </>
           )}
         </div>
+        {rightContent && <div className="flex items-center gap-2">{rightContent}</div>}
       </div>
 
       {/* Sheet de bitácora */}

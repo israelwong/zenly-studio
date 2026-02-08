@@ -14,6 +14,7 @@ interface EventSchedulerViewProps {
   schedulerInstance?: EventoDetalle['scheduler'];
   dateRange?: DateRange;
   onDataChange?: (data: EventoDetalle) => void;
+  onRefetchEvent?: () => Promise<void>;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -23,6 +24,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   schedulerInstance,
   dateRange: propDateRange,
   onDataChange,
+  onRefetchEvent,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>([]);
   const [loadingSecciones, setLoadingSecciones] = useState(true);
@@ -134,6 +136,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         dateRange={defaultDateRange}
         secciones={secciones}
         onDataChange={onDataChange}
+        onRefetchEvent={onRefetchEvent}
       />
     );
   }

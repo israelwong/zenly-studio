@@ -206,11 +206,13 @@ export interface EventoDetalle extends EventoBasico {
       category: string;
       priority: string;
       assigned_to_user_id: string | null;
+      assigned_to_crew_member_id: string | null;
       status: string;
       progress_percent: number;
       cotizacion_item_id: string | null;
       depends_on_task_id: string | null;
       checklist_items: unknown;
+      budget_amount: number | null;
       assigned_to: {
         id: string;
         user: {
@@ -218,6 +220,12 @@ export interface EventoDetalle extends EventoBasico {
           full_name: string | null;
           email: string;
         };
+      } | null;
+      assigned_to_crew_member: {
+        id: string;
+        name: string;
+        email: string | null;
+        tipo: string;
       } | null;
     }>;
   } | null;
@@ -1058,11 +1066,13 @@ export async function obtenerEventoDetalle(
                 category: true,
                 priority: true,
                 assigned_to_user_id: true,
+                assigned_to_crew_member_id: true,
                 status: true,
                 progress_percent: true,
                 cotizacion_item_id: true,
                 depends_on_task_id: true,
                 checklist_items: true,
+                budget_amount: true,
                 assigned_to: {
                   select: {
                     id: true,
@@ -1073,6 +1083,14 @@ export async function obtenerEventoDetalle(
                         email: true,
                       },
                     },
+                  },
+                },
+                assigned_to_crew_member: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    tipo: true,
                   },
                 },
               },
@@ -1384,6 +1402,16 @@ export async function obtenerEventoDetalle(
         payment_date: pago.payment_date || pago.created_at,
         concept: pago.concept,
       })),
+      // Serializar scheduler.tasks para que Decimal (budget_amount) sea number en el cliente
+      scheduler: evento.scheduler
+        ? {
+            ...evento.scheduler,
+            tasks: evento.scheduler.tasks?.map((t) => ({
+              ...t,
+              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+            })),
+          }
+        : null,
     } as EventoDetalle;
 
     return {

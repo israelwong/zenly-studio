@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
-import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isTaskRow, isAddPhantomRow } from '../../utils/scheduler-section-stages';
+import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isTaskRow, isAddPhantomRow, isManualTaskRow, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth } from '../../utils/coordinate-utils';
 
@@ -13,6 +13,7 @@ type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0][
 interface SchedulerGridProps {
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
+  manualTasks?: ManualTaskPayload[];
   dateRange: DateRange;
   studioSlug?: string;
   eventId?: string;
@@ -28,6 +29,7 @@ interface SchedulerGridProps {
 export const SchedulerGrid = React.memo(({
   secciones,
   itemsMap,
+  manualTasks = [],
   dateRange,
   studioSlug,
   eventId,
@@ -40,7 +42,10 @@ export const SchedulerGrid = React.memo(({
   expandedStages = new Set(),
 }: SchedulerGridProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
-  const rows = useMemo(() => buildSchedulerRows(secciones, itemsMap), [secciones, itemsMap]);
+  const rows = useMemo(
+    () => buildSchedulerRows(secciones, itemsMap, manualTasks),
+    [secciones, itemsMap, manualTasks] // manualTasks incl. nombre/cambios de tarea manual
+  );
   const filteredRows = useMemo(
     () =>
       filterRowsByExpandedStages(
@@ -49,10 +54,6 @@ export const SchedulerGrid = React.memo(({
       ),
     [rows, expandedSections, expandedStages]
   );
-
-  if (typeof window !== 'undefined') {
-    console.log('[SchedulerGrid] filteredRows.length', filteredRows.length, { expandedSections: expandedSections?.size, expandedStages: expandedStages?.size });
-  }
 
   return (
     <div
@@ -81,6 +82,35 @@ export const SchedulerGrid = React.memo(({
             <div
               key={row.id}
               className="h-[40px] border-b border-zinc-800/30 flex-shrink-0"
+            />
+          );
+        }
+        if (isManualTaskRow(row)) {
+          const t = row.task;
+          const tasks = [
+            {
+              id: t.id,
+              name: t.name,
+              start_date: new Date(t.start_date),
+              end_date: new Date(t.end_date),
+              is_completed: !!(t.completed_at ?? (t.status === 'COMPLETED')),
+              has_crew_member: false,
+            },
+          ];
+          return (
+            <SchedulerRow
+              key={t.id}
+              itemId={t.id}
+              catalogItemId={t.id}
+              itemName={t.name}
+              tasks={tasks}
+              dateRange={dateRange}
+              studioSlug={studioSlug}
+              eventId={eventId}
+              onTaskUpdate={onTaskUpdate}
+              onTaskDelete={onTaskDelete}
+              onTaskToggleComplete={onTaskToggleComplete}
+              onItemUpdate={onItemUpdate}
             />
           );
         }
@@ -127,6 +157,7 @@ export const SchedulerGrid = React.memo(({
   const nextTo = nextProps.dateRange?.to?.getTime();
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
+  const manualTasksEqual = prevProps.manualTasks === nextProps.manualTasks;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual =
     prevProps.expandedSections === nextProps.expandedSections ||
@@ -140,7 +171,7 @@ export const SchedulerGrid = React.memo(({
       prevProps.expandedStages &&
       nextProps.expandedStages &&
       [...prevProps.expandedStages].every((id) => nextProps.expandedStages!.has(id)));
-  return datesEqual && itemsEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
 });
 
 SchedulerGrid.displayName = 'SchedulerGrid';

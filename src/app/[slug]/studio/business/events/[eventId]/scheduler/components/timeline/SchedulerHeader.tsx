@@ -4,7 +4,7 @@ import React from 'react';
 import { format, isSameMonth, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
-import { getTotalGridWidth } from '../../utils/coordinate-utils';
+import { getTotalGridWidth, getTodayLocalDateOnly, toLocalDateOnly } from '../../utils/coordinate-utils';
 
 interface SchedulerHeaderProps {
   dateRange: DateRange;
@@ -19,10 +19,9 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
     );
   }
 
-  const days = eachDayOfInterval({
-    start: dateRange.from,
-    end: dateRange.to,
-  });
+  const fromLocal = toLocalDateOnly(dateRange.from);
+  const toLocal = toLocalDateOnly(dateRange.to);
+  const days = eachDayOfInterval({ start: fromLocal, end: toLocal });
 
   const shouldShowMonth = (day: Date, index: number) => {
     if (index === 0) return true;
@@ -38,19 +37,9 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
       style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px` }}
     >
       {days.map((day, index) => {
-        // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
-        const todayUtc = new Date();
-        const todayDateOnly = new Date(Date.UTC(
-          todayUtc.getUTCFullYear(),
-          todayUtc.getUTCMonth(),
-          todayUtc.getUTCDate()
-        ));
-        const cellDateOnly = new Date(Date.UTC(
-          day.getUTCFullYear(),
-          day.getUTCMonth(),
-          day.getUTCDate()
-        ));
-        const isToday = cellDateOnly.getTime() === todayDateOnly.getTime();
+        const todayLocal = getTodayLocalDateOnly();
+        const cellLocal = toLocalDateOnly(day);
+        const isToday = cellLocal.getTime() === todayLocal.getTime();
 
         return (
           <div

@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
-import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
 import { type DateRange } from 'react-day-picker';
 
 export default function EventSchedulerPage() {
@@ -20,58 +19,43 @@ export default function EventSchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [eventData, setEventData] = useState<EventoDetalle | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Scheduler';
   }, []);
 
-  // Cargar evento solo una vez al montar o cuando cambia eventId/studioSlug
+  const loadEvent = React.useCallback(async () => {
+    if (!eventId || !studioSlug) return;
+    try {
+      setLoading(true);
+      const result = await obtenerEventoDetalle(studioSlug, eventId);
+      if (result.success && result.data) {
+        setEventData(result.data);
+        setDateRange(prev => {
+          if (!prev && result.data?.scheduler?.start_date && result.data?.scheduler?.end_date) {
+            return {
+              from: result.data.scheduler.start_date,
+              to: result.data.scheduler.end_date,
+            };
+          }
+          return prev;
+        });
+      } else {
+        toast.error(result.error || 'Evento no encontrado');
+        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+      }
+    } catch (error) {
+      toast.error('Error al cargar el evento');
+      router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, studioSlug, router]);
+
   useEffect(() => {
     if (!eventId || !studioSlug) return;
-
-    let isMounted = true;
-
-    const loadEvent = async () => {
-      try {
-        setLoading(true);
-        const result = await obtenerEventoDetalle(studioSlug, eventId);
-
-        if (!isMounted) return;
-
-        if (result.success && result.data) {
-          setEventData(result.data);
-          // Inicializar dateRange si existe scheduler configurado (solo la primera vez)
-          setDateRange(prev => {
-            if (!prev && result.data?.scheduler?.start_date && result.data?.scheduler?.end_date) {
-              return {
-                from: result.data.scheduler.start_date,
-                to: result.data.scheduler.end_date,
-              };
-            }
-            return prev;
-          });
-        } else {
-          toast.error(result.error || 'Evento no encontrado');
-          router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-        }
-      } catch (error) {
-        if (!isMounted) return;
-        toast.error('Error al cargar el evento');
-        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
     loadEvent();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [eventId, studioSlug, router]);
+  }, [eventId, studioSlug, loadEvent]);
 
   if (loading) {
     return (
@@ -86,9 +70,7 @@ export default function EventSchedulerPage() {
                   <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse" />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse" />
-              </div>
+              <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse" />
             </div>
           </ZenCardHeader>
           <ZenCardContent className="p-6">
@@ -234,45 +216,25 @@ export default function EventSchedulerPage() {
                 </ZenCardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setCrewManagerOpen(true)}
-                className="gap-2"
-              >
-                <Users className="h-4 w-4" />
-                Personal
-              </ZenButton>
-            </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
           {/* Scheduler con Stats integrados */}
-          <SchedulerWrapper
+<SchedulerWrapper
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}
             initialDateRange={dateRange}
             onDataChange={(newData) => {
-              // Solo actualizar si realmente cambió el ID o scheduler
-              if (!eventData || 
-                  eventData.id !== newData.id || 
-                  eventData.scheduler?.id !== newData.scheduler?.id) {
+              if (newData && (!eventData || eventData.id === newData.id)) {
                 setEventData(newData);
               }
             }}
+            onRefetchEvent={loadEvent}
             cotizacionId={cotizacionId || undefined}
           />
         </ZenCardContent>
       </ZenCard>
-
-      <CrewMembersManager
-        studioSlug={studioSlug}
-        mode="manage"
-        isOpen={crewManagerOpen}
-        onClose={() => setCrewManagerOpen(false)}
-      />
     </div>
   );
 }

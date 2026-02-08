@@ -1,4 +1,4 @@
-import { normalizeDate } from './coordinate-utils';
+import { getTodayLocalDateOnly, toLocalDateOnly } from './coordinate-utils';
 
 export type TaskStatus = 'PENDING' | 'IN_PROCESS' | 'DELAYED' | 'COMPLETED';
 
@@ -10,8 +10,8 @@ interface TaskStatusContext {
 }
 
 /**
- * Calcula el estado visual de una tarea basado en las fechas
- * @returns Estado calculado ('PENDING' | 'IN_PROCESS' | 'DELAYED' | 'COMPLETED')
+ * Estado visual de la tarea. Todo en días locales (00:00:00 vía toLocalDateOnly).
+ * DELAYED: (isCompleted === false) Y (endDateLocal < todayLocal).
  */
 export function calculateTaskStatus(context: TaskStatusContext): TaskStatus {
   const { startDate, endDate, isCompleted } = context;
@@ -20,23 +20,17 @@ export function calculateTaskStatus(context: TaskStatusContext): TaskStatus {
     return 'COMPLETED';
   }
 
-  const today = normalizeDate(new Date());
-  const start = normalizeDate(startDate);
-  const end = normalizeDate(endDate);
+  const todayLocal = getTodayLocalDateOnly();
+  const startLocal = toLocalDateOnly(startDate);
+  const endDateLocal = toLocalDateOnly(endDate);
 
-  if (today < start) {
-    return 'PENDING';
-  }
-
-  if (today >= start && today <= end) {
-    return 'IN_PROCESS';
-  }
-
-  if (today > end) {
+  if (endDateLocal.getTime() < todayLocal.getTime()) {
     return 'DELAYED';
   }
-
-  return 'PENDING';
+  if (todayLocal.getTime() < startLocal.getTime()) {
+    return 'PENDING';
+  }
+  return 'IN_PROCESS';
 }
 
 /**
