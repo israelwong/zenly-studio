@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Phone } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
-import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { BitacoraSheet } from '@/components/shared/bitacora';
-import { logWhatsAppSent, logCallMade } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 
 interface EventDetailToolbarProps {
@@ -30,7 +28,6 @@ export function EventDetailToolbar({
 
   const hasContactData = !!contactPhone;
 
-  // Abrir bitácora desde QuickNoteCard u otros (mismo patrón que PromiseLayoutClient)
   useEffect(() => {
     const handler = () => setLogsSheetOpen(true);
     window.addEventListener('open-bitacora-sheet', handler);
@@ -66,34 +63,6 @@ export function EventDetailToolbar({
       return;
     }
     window.open(`${window.location.origin}${portalUrl}`, '_blank');
-  };
-
-  const handleWhatsApp = async () => {
-    if (!contactPhone || !contactName) return;
-    
-    const cleanPhone = contactPhone.replace(/\D/g, '');
-    const message = encodeURIComponent(`Hola ${contactName}`);
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
-
-    if (promiseId) {
-      logWhatsAppSent(studioSlug, promiseId, contactName, contactPhone).catch((error) => {
-        console.error('Error registrando WhatsApp:', error);
-      });
-    }
-
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const handleCall = async () => {
-    if (!contactPhone || !contactName) return;
-
-    if (promiseId) {
-      logCallMade(studioSlug, promiseId, contactName, contactPhone).catch((error) => {
-        console.error('Error registrando llamada:', error);
-      });
-    }
-
-    window.open(`tel:${contactPhone}`, '_self');
   };
 
   if (!hasContactData && !promiseId) {
@@ -153,31 +122,6 @@ export function EventDetailToolbar({
             </>
           )}
         </div>
-
-        {/* Derecha: Contactar */}
-        {hasContactData && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-500 font-medium">Contactar</span>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleWhatsApp}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-emerald-500/10 hover:text-emerald-400"
-            >
-              <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-              <span>WhatsApp</span>
-            </ZenButton>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleCall}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-blue-500/10 hover:text-blue-400"
-            >
-              <Phone className="h-3.5 w-3.5" />
-              <span>Llamar</span>
-            </ZenButton>
-          </div>
-        )}
       </div>
 
       {/* Sheet de bitácora */}
@@ -187,6 +131,7 @@ export function EventDetailToolbar({
           onOpenChange={setLogsSheetOpen}
           studioSlug={studioSlug}
           promiseId={promiseId}
+          context="EVENT"
           contactId={contactId}
         />
       )}

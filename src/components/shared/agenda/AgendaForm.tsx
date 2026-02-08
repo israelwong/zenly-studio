@@ -318,186 +318,9 @@ export function AgendaForm({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Fecha y Hora */}
-            <div className="grid grid-cols-4 gap-4">
-                {/* Columna 1-3: Fecha */}
-                <div className="space-y-2 col-span-3">
-                    <label className="text-sm font-medium text-zinc-300">Fecha *</label>
-                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                        <PopoverTrigger asChild>
-                            <ZenButton
-                                type="button"
-                                variant="outline"
-                                icon={CalendarIcon}
-                                iconPosition="left"
-                                className="w-full justify-start"
-                            >
-                                {date ? new Intl.DateTimeFormat('es-MX', {
-                                    weekday: 'long',
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                }).format(date) : 'Seleccionar fecha'}
-                            </ZenButton>
-                        </PopoverTrigger>
-                        <PopoverContent
-                            className="w-auto p-0 bg-zinc-900 border-zinc-700"
-                            align="start"
-                            side="bottom"
-                            sideOffset={4}
-                            style={{ zIndex: 100000 } as React.CSSProperties}
-                        >
-                            <ZenCalendar
-                                mode="single"
-                                selected={date}
-                                onSelect={(selectedDate: Date | undefined) => {
-                                    if (selectedDate) {
-                                        // Normalizar fecha seleccionada usando métodos UTC con mediodía como buffer
-                                        const normalizedDate = new Date(Date.UTC(
-                                            selectedDate.getUTCFullYear(),
-                                            selectedDate.getUTCMonth(),
-                                            selectedDate.getUTCDate(),
-                                            12, 0, 0
-                                        ));
-                                        setDate(normalizedDate);
-                                        setCalendarOpen(false);
-                                        setHasUserModified(true);
-                                    }
-                                }}
-                                locale={es}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-
-                {/* Columna 2: Hora */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-300 pb-0">Hora</label>
-                    <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
-                        <ZenInput
-                            type="time"
-                            value={time}
-                            onChange={(e) => {
-                                setTime(e.target.value);
-                                setHasUserModified(true);
-                            }}
-                            placeholder="HH:MM"
-                            className="w-full pl-3 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none text-center"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Errores y validaciones */}
-            {errors.date && (
-                <p className="text-xs text-red-400">{errors.date}</p>
-            )}
-            {date && (() => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const selectedDate = new Date(date);
-                selectedDate.setHours(0, 0, 0, 0);
-                return selectedDate < today;
-            })() && (
-                    <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
-                        <ZenCardContent className="p-3">
-                            <div className="flex items-start gap-2">
-                                <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
-                                <div className="flex-1">
-                                    <p className="text-xs font-medium text-orange-300">
-                                        Has seleccionado una fecha que ya ha pasado: {formatDisplayDate(date)}
-                                    </p>
-                                </div>
-                            </div>
-                        </ZenCardContent>
-                    </ZenCard>
-                )}
-            {conflictos.length > 0 && (
-                <ZenCard variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
-                    <ZenCardContent className="p-3">
-                        <div className="flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-                            <div className="space-y-1.5 flex-1">
-                                <p className="text-xs font-medium text-amber-300">
-                                    Esta fecha ya está programada:
-                                </p>
-                                {conflictos.map((conflicto) => (
-                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
-                                        {conflicto.contexto === 'promise' ? (
-                                            <>
-                                                <p className="font-medium">
-                                                    Promesa: {conflicto.contact_name || 'Sin nombre'}
-                                                </p>
-                                                {conflicto.time && (
-                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
-                                                )}
-                                                {conflicto.concept && (
-                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <p className="font-medium">
-                                                    Evento: {conflicto.event_name || 'Sin nombre'}
-                                                </p>
-                                                {conflicto.time && (
-                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
-                                                )}
-                                                {conflicto.concept && (
-                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
-            )}
-
-            {/* Tipo de cita */}
+            {/* Asunto (arriba) */}
             <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300">Tipo de cita *</label>
-                <div className="flex gap-2">
-                    <ZenButton
-                        type="button"
-                        variant={eventType === 'presencial' ? 'primary' : 'outline'}
-                        onClick={() => {
-                            setEventType('presencial');
-                            setHasUserModified(true);
-                        }}
-                        className={`flex-1 transition-all ${eventType === 'presencial'
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
-                            }`}
-                    >
-                        Presencial
-                    </ZenButton>
-                    <ZenButton
-                        type="button"
-                        variant={eventType === 'virtual' ? 'primary' : 'outline'}
-                        onClick={() => {
-                            setEventType('virtual');
-                            setHasUserModified(true);
-                        }}
-                        className={`flex-1 transition-all ${eventType === 'virtual'
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
-                            }`}
-                    >
-                        Virtual
-                    </ZenButton>
-                </div>
-                {errors.eventType && (
-                    <p className="text-xs text-red-400">{errors.eventType}</p>
-                )}
-            </div>
-
-            {/* Asunto (con plantillas tipo QuickNote) */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300">Asunto</label>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">Asunto</label>
                 <div className="relative" ref={subjectSuggestionsRef}>
                     <ZenInput
                         value={subject}
@@ -558,44 +381,210 @@ export function AgendaForm({
                 </div>
             </div>
 
-            {/* Nombre o descripción */}
+            {/* Tipo de cita (arriba de Fecha) */}
             <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Nombre o descripción
-                </label>
-                <textarea
-                    value={description}
-                    onChange={(e) => {
-                        setDescription(e.target.value);
-                        setHasUserModified(true);
-                    }}
-                    placeholder="Notas adicionales sobre el agendamiento"
-                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                />
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">Tipo de cita *</label>
+                <div className="flex gap-2">
+                    <ZenButton
+                        type="button"
+                        variant={eventType === 'presencial' ? 'primary' : 'outline'}
+                        onClick={() => {
+                            setEventType('presencial');
+                            setHasUserModified(true);
+                        }}
+                        className={`flex-1 transition-all ${eventType === 'presencial'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                            }`}
+                    >
+                        Presencial
+                    </ZenButton>
+                    <ZenButton
+                        type="button"
+                        variant={eventType === 'virtual' ? 'primary' : 'outline'}
+                        onClick={() => {
+                            setEventType('virtual');
+                            setHasUserModified(true);
+                        }}
+                        className={`flex-1 transition-all ${eventType === 'virtual'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                            }`}
+                    >
+                        Virtual
+                    </ZenButton>
+                </div>
+                {errors.eventType && (
+                    <p className="text-xs text-red-400">{errors.eventType}</p>
+                )}
             </div>
 
-            {/* Campos condicionales según tipo */}
+            {/* Fecha y Hora */}
+            <div className="grid grid-cols-4 gap-4">
+                {/* Columna 1-3: Fecha */}
+                <div className="space-y-2 col-span-3">
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">Fecha *</label>
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <PopoverTrigger asChild>
+                            <ZenButton
+                                type="button"
+                                variant="outline"
+                                icon={CalendarIcon}
+                                iconPosition="left"
+                                className="w-full justify-start"
+                            >
+                                {date ? new Intl.DateTimeFormat('es-MX', {
+                                    weekday: 'long',
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                }).format(date) : 'Seleccionar fecha'}
+                            </ZenButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                            className="w-auto p-0 bg-zinc-900 border-zinc-700"
+                            align="start"
+                            side="bottom"
+                            sideOffset={4}
+                            style={{ zIndex: 100000 } as React.CSSProperties}
+                        >
+                            <ZenCalendar
+                                mode="single"
+                                selected={date}
+                                onSelect={(selectedDate: Date | undefined) => {
+                                    if (selectedDate) {
+                                        // Normalizar fecha seleccionada usando métodos UTC con mediodía como buffer
+                                        const normalizedDate = new Date(Date.UTC(
+                                            selectedDate.getUTCFullYear(),
+                                            selectedDate.getUTCMonth(),
+                                            selectedDate.getUTCDate(),
+                                            12, 0, 0
+                                        ));
+                                        setDate(normalizedDate);
+                                        setCalendarOpen(false);
+                                        setHasUserModified(true);
+                                    }
+                                }}
+                                locale={es}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                {/* Columna 2: Hora */}
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">Hora</label>
+                    <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
+                        <ZenInput
+                            type="time"
+                            value={time}
+                            onChange={(e) => {
+                                setTime(e.target.value);
+                                setHasUserModified(true);
+                            }}
+                            placeholder="HH:MM"
+                            className="w-full pl-3 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none text-center"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Aviso fecha pasada: ancho completo, justo debajo de Fecha */}
+            {date && (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const selectedDate = new Date(date);
+                selectedDate.setHours(0, 0, 0, 0);
+                return selectedDate < today;
+            })() && (
+                <ZenCard variant="outlined" className="w-full bg-orange-900/20 border-orange-700/50 mt-2">
+                    <ZenCardContent className="p-3">
+                        <div className="flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-orange-300">
+                                    Has seleccionado una fecha que ya ha pasado: {formatDisplayDate(date)}
+                                </p>
+                            </div>
+                        </div>
+                    </ZenCardContent>
+                </ZenCard>
+            )}
+
+            {/* Nombre del lugar (abajo de Fecha, solo presencial) */}
+            {eventType === 'presencial' && (
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Nombre del lugar
+                    </label>
+                    <ZenInput
+                        value={locationName}
+                        onChange={(e) => {
+                            setLocationName(e.target.value);
+                            setHasUserModified(true);
+                        }}
+                        placeholder="Ej: Hacienda del Bosque"
+                    />
+                </div>
+            )}
+
+            {/* Errores y validaciones */}
+            {errors.date && (
+                <p className="text-xs text-red-400">{errors.date}</p>
+            )}
+            {conflictos.length > 0 && (
+                <ZenCard variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
+                    <ZenCardContent className="p-3">
+                        <div className="flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                            <div className="space-y-1.5 flex-1">
+                                <p className="text-xs font-medium text-amber-300">
+                                    Esta fecha ya está programada:
+                                </p>
+                                {conflictos.map((conflicto) => (
+                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
+                                        {conflicto.contexto === 'promise' ? (
+                                            <>
+                                                <p className="font-medium">
+                                                    Promesa: {conflicto.contact_name || 'Sin nombre'}
+                                                </p>
+                                                {conflicto.time && (
+                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
+                                                )}
+                                                {conflicto.concept && (
+                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="font-medium">
+                                                    Evento: {conflicto.event_name || 'Sin nombre'}
+                                                </p>
+                                                {conflicto.time && (
+                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
+                                                )}
+                                                {conflicto.concept && (
+                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </ZenCardContent>
+                </ZenCard>
+            )}
+
+            {/* Campos condicionales según tipo (presencial: dirección y link) */}
             {eventType === 'presencial' && (
                 <>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                        <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                             <MapPin className="h-4 w-4" />
-                            Nombre del lugar
-                        </label>
-                        <ZenInput
-                            value={locationName}
-                            onChange={(e) => {
-                                setLocationName(e.target.value);
-                                setHasUserModified(true);
-                            }}
-                            placeholder="Ej: Hacienda del Bosque"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            Dirección del evento
+                            Dirección
                         </label>
                         <textarea
                             value={address}
@@ -608,7 +597,7 @@ export function AgendaForm({
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                        <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                             <LinkIcon className="h-4 w-4" />
                             Link de Google Maps
                         </label>
@@ -627,7 +616,7 @@ export function AgendaForm({
 
             {eventType === 'virtual' && (
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                         <Video className="h-4 w-4" />
                         Link de reunión virtual
                     </label>
@@ -643,33 +632,26 @@ export function AgendaForm({
                 </div>
             )}
 
-            {/* Información del contexto */}
-            {contexto && (
-                <ZenCard variant="outlined" className="bg-blue-900/20 border-blue-700/50">
-                    <ZenCardContent className="p-3">
-                        <p className="text-xs text-blue-300 font-medium">
-                            {contexto === 'promise' && 'Agendamiento asociado a una promesa'}
-                            {contexto === 'evento' && 'Agendamiento asociado a un evento'}
-                        </p>
-                    </ZenCardContent>
-                </ZenCard>
-            )}
+            {/* Nombre o descripción (abajo) */}
+            <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Comentarios
+                </label>
+                <textarea
+                    value={description}
+                    onChange={(e) => {
+                        setDescription(e.target.value);
+                        setHasUserModified(true);
+                    }}
+                    placeholder="Notas adicionales sobre el agendamiento"
+                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                />
+            </div>
 
             {/* Botones */}
             <div className={`flex gap-2 pt-2 ${initialData && onCancelCita ? 'flex-col' : ''}`}>
                 <div className="flex gap-2 w-full">
-                    {initialData && onDelete && (
-                        <ZenButton
-                            type="button"
-                            variant="destructive"
-                            onClick={onDelete}
-                            disabled={loading}
-                            className="shrink-0"
-                            title="Eliminar agendamiento"
-                        >
-                            Eliminar
-                        </ZenButton>
-                    )}
                     <ZenButton
                         type="submit"
                         disabled={loading || !date || !eventType}

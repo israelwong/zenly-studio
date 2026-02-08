@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, MapPin, Clock, Edit, Plus, Video, Link as LinkIcon, Copy, Check, Star, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Copy, Star } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -13,8 +13,9 @@ import {
 import { AgendaFormModal } from '@/components/shared/agenda';
 import { obtenerAgendamientosPorEvento, eliminarAgendamiento } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
-import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { formatDisplayDate, formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface EventAgendamientoProps {
   studioSlug: string;
@@ -32,7 +33,7 @@ export function EventAgendamiento({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [expandedAgendamientoId, setExpandedAgendamientoId] = useState<string | null>(null);
   const [agendamientos, setAgendamientos] = useState<AgendaItem[]>([]);
   const [editingAgendamiento, setEditingAgendamiento] = useState<AgendaItem | null>(null);
   const [deletingAgendamientoId, setDeletingAgendamientoId] = useState<string | null>(null);
@@ -145,213 +146,171 @@ export function EventAgendamiento({
     }
   };
 
-  const renderAgendamientoCard = (agendamiento: AgendaItem, isMainDate = false) => (
-    <div
-      key={agendamiento.id}
-      className={`p-4 rounded-lg border relative ${isMainDate
-        ? 'bg-emerald-950/20 border-emerald-500/30'
-        : 'bg-zinc-800/50 border-zinc-700/50'
-        }`}
-    >
-      {isMainDate && (
-        <div className="flex items-center gap-1.5 mb-3">
-          <Star className="h-3.5 w-3.5 text-emerald-400 fill-emerald-400" />
-          <span className="text-xs font-semibold text-emerald-400">Fecha Principal del Evento</span>
-        </div>
-      )}
+  const renderAgendamientoRow = (agendamiento: AgendaItem, isMainDate = false, isLast = true) => {
+    const isExpanded = expandedAgendamientoId === agendamiento.id;
+    const address = agendamiento.location_address ?? agendamiento.address ?? '';
+    const linkUrl = agendamiento.location_url ?? agendamiento.link_meeting_url ?? '';
 
-      <div className="space-y-3">
-        {/* Fecha y Hora */}
-        {!isMainDate && (
-          <div className="flex items-start gap-2.5">
-            <Calendar className="h-4 w-4 text-zinc-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-zinc-400 mb-0.5">Fecha y Hora</p>
-              <p className="text-sm font-semibold text-zinc-200">
-                {formatDisplayDate(agendamiento.date)}
-              </p>
-              {agendamiento.time && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Clock className="h-3.5 w-3.5 text-zinc-500" />
-                  <p className="text-xs text-zinc-300 font-medium">{agendamiento.time}</p>
-                </div>
-              )}
-            </div>
-          </div>
+    return (
+      <div
+        key={agendamiento.id}
+        className={cn(
+          'rounded-lg overflow-hidden',
+          !isLast && 'border-b border-zinc-800/60'
         )}
-        {isMainDate && (
-          <div className="flex items-start gap-2.5">
-            <Calendar className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-emerald-200">
-                {formatDisplayDate(agendamiento.date)}
-              </p>
-              {agendamiento.time && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Clock className="h-3.5 w-3.5 text-emerald-500" />
-                  <p className="text-xs text-zinc-300 font-medium">{agendamiento.time}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Encabezado: Asunto | icono editar | icono eliminar */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-zinc-400 mb-0.5">Asunto</p>
-            <p className="text-xs text-zinc-200 leading-relaxed">
-              {agendamiento.concept || '—'}
-            </p>
-          </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => handleEdit(agendamiento)}
-              className="h-7 w-7 p-0 text-zinc-400 hover:text-emerald-400"
-              title="Editar agendamiento"
-              aria-label="Editar"
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </ZenButton>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDeleteClick(agendamiento.id)}
-              disabled={isDeleting}
-              className="h-7 w-7 p-0 text-zinc-400 hover:text-red-400"
-              title="Eliminar agendamiento"
-              aria-label="Eliminar"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </ZenButton>
-          </div>
-        </div>
-
-        {/* Tipo de reunión */}
-        <div className="flex items-center gap-2">
-          {agendamiento.type_scheduling === 'presencial' ? (
-            <MapPin className="h-4 w-4 text-blue-400 flex-shrink-0" />
-          ) : (
-            <Video className="h-4 w-4 text-purple-400 flex-shrink-0" />
+      >
+        {/* Fila resumen (header con fondo sutil, rounded-t-lg al expandir) */}
+        <div
+          className={cn(
+            'flex items-center gap-2 w-full py-3 px-2 rounded-lg cursor-pointer select-none transition-colors duration-200 bg-zinc-900/60 hover:bg-zinc-800/40',
+            isExpanded && 'rounded-b-none rounded-t-lg'
           )}
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-zinc-400 mb-0.5">Tipo de reunión</p>
-            <p className="text-xs font-semibold text-zinc-200 capitalize">
-              {agendamiento.type_scheduling || '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Descripción */}
-        <div className="flex items-start gap-2.5">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-zinc-400 mb-0.5">Descripción</p>
-            <p className="text-xs text-zinc-300 leading-relaxed line-clamp-4">
-              {agendamiento.description || '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Nombre del lugar */}
-        {(agendamiento.location_name || agendamiento.type_scheduling === 'presencial') && (
-          <div className="flex items-start gap-2.5">
-            <MapPin className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-zinc-400 mb-0.5">Nombre del lugar</p>
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                {agendamiento.location_name || '—'}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Dirección: valor o badge Pendiente */}
-        <div className="flex items-start gap-2.5">
-          <MapPin className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-zinc-400 mb-0.5">Dirección</p>
-            {(agendamiento.location_address ?? agendamiento.address) ? (
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                {agendamiento.type_scheduling === 'presencial'
-                  ? (agendamiento.location_address ?? agendamiento.address)
-                  : '—'}
-              </p>
-            ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                Pendiente
-              </span>
+          onClick={() => setExpandedAgendamientoId((id) => (id === agendamiento.id ? null : agendamiento.id))}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setExpandedAgendamientoId((id) => (id === agendamiento.id ? null : agendamiento.id)))}
+          role="button"
+          tabIndex={0}
+        >
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 shrink-0 transition-transform duration-300',
+              isMainDate ? 'text-emerald-400' : 'text-amber-500',
+              isExpanded && 'rotate-180'
             )}
-          </div>
+          />
+          <span className="text-xs text-zinc-400 shrink-0 w-20">
+            {formatDisplayDateShort(agendamiento.date)}
+          </span>
+          <span className={cn('flex items-center gap-1 min-w-0 flex-1', isMainDate ? 'text-emerald-400' : 'text-amber-500')}>
+            {isMainDate && <Star className="h-3 w-3 shrink-0 text-emerald-400 fill-emerald-400" />}
+            <span className="text-sm font-medium truncate">{agendamiento.concept || '—'}</span>
+          </span>
         </div>
 
-        {/* Link Google Maps / Link reunión virtual: valor o badge Pendiente */}
-        <div className="flex items-start gap-2.5">
-          <LinkIcon
-            className={`h-4 w-4 mt-0.5 flex-shrink-0 ${agendamiento.type_scheduling === 'presencial' ? 'text-blue-400' : 'text-purple-400'}`}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-zinc-400 mb-0.5">
-              {agendamiento.type_scheduling === 'presencial'
-                ? 'Link de Google Maps'
-                : 'Link de reunión virtual'}
-            </p>
-            {(agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
-              <div className="flex items-center gap-2">
+        {/* Contenido expandido (seamless, sin líneas divisorias) */}
+        <div
+          className={cn(
+            'grid transition-all duration-300 ease-in-out overflow-hidden',
+            isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          )}
+        >
+          <div className="min-h-0 overflow-hidden px-2 pt-2 pb-2 space-y-2">
+            {/* Tipo de reunión */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">Tipo de reunión</span>
+              <span className="text-sm text-zinc-200 capitalize text-right break-words min-w-0">
+                {agendamiento.type_scheduling || 'No definido'}
+              </span>
+            </div>
+
+            {/* Fecha */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">Fecha</span>
+              <span className="text-sm text-zinc-200 text-right">
+                {agendamiento.date ? formatDisplayDate(agendamiento.date) : 'No definido'}
+              </span>
+            </div>
+
+            {/* Horario */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">Horario</span>
+              <span className="text-sm text-zinc-200 text-right">
+                {agendamiento.time || 'No definido'}
+              </span>
+            </div>
+
+            {/* Nombre del lugar */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">Nombre del lugar</span>
+              <span className="text-sm text-zinc-200 text-right break-words min-w-0">
+                {agendamiento.location_name || 'No definido'}
+              </span>
+            </div>
+
+            {/* Dirección */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">Dirección</span>
+              <span className="text-sm text-zinc-200 truncate min-w-0 flex-1 text-right">{address || 'No definido'}</span>
+            </div>
+
+            {/* Link de Google Maps / Link reunión + Copiar */}
+            <div className="flex items-center justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0">
+                {agendamiento.type_scheduling === 'presencial' ? 'Link de Google Maps' : 'Link de ubicación'}
+              </span>
+              {linkUrl ? (
                 <a
-                  href={agendamiento.location_url ?? agendamiento.link_meeting_url ?? ''}
+                  href={linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-emerald-400 hover:text-emerald-300 underline truncate flex-1"
+                  className="text-sm text-emerald-400 hover:text-emerald-300 underline truncate min-w-0 flex-1 text-right mx-1"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {agendamiento.location_url ?? agendamiento.link_meeting_url}
+                  {linkUrl}
                 </a>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const url = agendamiento.location_url ?? agendamiento.link_meeting_url ?? '';
-                      await navigator.clipboard.writeText(url);
-                      setCopiedLink(url || null);
-                      toast.success('Link copiado al portapapeles');
-                      setTimeout(() => setCopiedLink(null), 2000);
-                    } catch (error) {
-                      console.error('Error copying to clipboard:', error);
-                      toast.error('Error al copiar link');
-                    }
-                  }}
-                  className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors flex-shrink-0"
-                  title="Copiar link"
-                >
-                  {copiedLink === (agendamiento.location_url ?? agendamiento.link_meeting_url) ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-            ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                Pendiente
+              ) : (
+                <span className="text-sm text-zinc-200 flex-1 text-right">No definido</span>
+              )}
+              <button
+                type="button"
+                title="Copiar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (linkUrl) navigator.clipboard.writeText(linkUrl).then(
+                    () => toast.success(agendamiento.type_scheduling === 'presencial' ? 'Link de Google Maps copiado' : 'Link copiado'),
+                    () => {}
+                  );
+                }}
+                className="shrink-0 p-1.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors focus:outline-none disabled:opacity-50"
+                disabled={!linkUrl}
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Comentarios (mismo orden que modal) */}
+            <div className="flex items-start justify-between gap-3 w-full min-w-0 rounded-lg px-3 py-2.5 bg-zinc-900/40 border border-zinc-800/50">
+              <span className="text-sm text-zinc-500 shrink-0 pt-0.5">Comentarios</span>
+              <span className="text-sm text-zinc-200 leading-relaxed text-right break-words min-w-0 flex-1">
+                {(agendamiento.description?.length ?? 0) > 0 ? agendamiento.description : 'No definido'}
               </span>
-            )}
+            </div>
+
+            {/* Botones de acción: Editar protagónico (2:1), Eliminar compacto */}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={(e) => (e.stopPropagation(), handleEdit(agendamiento))}
+                className="flex-[2] min-w-0 px-4 py-1.5 rounded-md text-xs font-medium transition-colors bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700/60 focus:outline-none text-center"
+              >
+                Editar
+              </button>
+              <button
+                type="button"
+                onClick={(e) => (e.stopPropagation(), handleDeleteClick(agendamiento.id))}
+                disabled={isDeleting}
+                className="flex-1 min-w-0 px-4 py-1.5 rounded-md text-xs font-medium transition-colors bg-red-950/20 text-red-500/80 hover:bg-red-900/30 focus:outline-none disabled:opacity-50 text-center"
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  // Verificar si hay un agendamiento con la fecha principal usando métodos UTC
-  const mainDateAgendamiento = agendamientos.find((a) => {
-    if (!a.date) return false;
-    if (!eventDate) return false;
-    
-    // Asegurar que eventDate sea un objeto Date
+  // Orden cronológico ascendente: la fecha más antigua arriba
+  const sortedAgenda = [...agendamientos].sort((a, b) => {
+    const ta = a.date ? new Date(a.date).getTime() : 0;
+    const tb = b.date ? new Date(b.date).getTime() : 0;
+    return ta - tb;
+  });
+
+  // Saber si un agendamiento coincide con la fecha principal del evento (para color Esmeralda)
+  const isMainDate = (a: AgendaItem) => {
+    if (!a.date || !eventDate) return false;
     const eventDateObj = eventDate instanceof Date ? eventDate : new Date(eventDate);
     if (isNaN(eventDateObj.getTime())) return false;
-    
-    // Comparar solo fechas (sin hora) usando métodos UTC
     const agendaDateOnly = new Date(Date.UTC(
       new Date(a.date).getUTCFullYear(),
       new Date(a.date).getUTCMonth(),
@@ -363,12 +322,7 @@ export function EventAgendamiento({
       eventDateObj.getUTCDate()
     ));
     return agendaDateOnly.getTime() === eventDateOnly.getTime();
-  });
-
-  // Agendamientos adicionales (excluyendo el principal si existe)
-  const additionalAgendamientos = agendamientos.filter(
-    (a) => !mainDateAgendamiento || a.id !== mainDateAgendamiento.id
-  );
+  };
 
   return (
     <>
@@ -396,48 +350,23 @@ export function EventAgendamiento({
               <div className="h-32 w-full bg-zinc-800 rounded animate-pulse" />
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Fecha Principal del Evento */}
-              {mainDateAgendamiento ? (
-                renderAgendamientoCard(mainDateAgendamiento, true)
-              ) : (
-                <div className="p-4 rounded-lg border bg-emerald-950/20 border-emerald-500/30">
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <Star className="h-3.5 w-3.5 text-emerald-400 fill-emerald-400" />
-                    <span className="text-xs font-semibold text-emerald-400">Fecha Principal del Evento</span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <Calendar className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-emerald-200">
-                        {formatDisplayDate(eventDate)}
-                      </p>
-                    </div>
-                  </div>
+            <div className="flex flex-col gap-1.5">
+              {sortedAgenda.map((a, i) =>
+                renderAgendamientoRow(a, isMainDate(a), i === sortedAgenda.length - 1)
+              )}
+
+              {eventDate && !sortedAgenda.some(isMainDate) && (
+                <div className="flex items-center gap-2 py-2 px-2 rounded-lg text-zinc-500">
+                  <Star className="h-3.5 w-3.5 text-emerald-400 fill-emerald-400 shrink-0" />
+                  <span className="text-xs font-medium text-emerald-400">Fecha Principal</span>
+                  <span className="text-xs text-zinc-400">{formatDisplayDateShort(eventDate)}</span>
                 </div>
               )}
 
-              {/* Agendamientos Adicionales */}
-              {additionalAgendamientos.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
-                    <p className="text-xs font-semibold text-zinc-400">Agendamientos Adicionales</p>
-                  </div>
-                  {additionalAgendamientos.map((agendamiento) =>
-                    renderAgendamientoCard(agendamiento, false)
-                  )}
-                </div>
-              )}
-
-              {/* Mensaje cuando no hay agendamientos adicionales */}
-              {additionalAgendamientos.length === 0 && !mainDateAgendamiento && (
+              {agendamientos.length === 0 && (
                 <div className="text-center py-4">
-                  <p className="text-xs text-zinc-500 mb-2">
-                    No hay agendamientos adicionales
-                  </p>
-                  <p className="text-xs text-zinc-600">
-                    Puedes agregar citas virtuales, presenciales o sesiones previas
-                  </p>
+                  <p className="text-xs text-zinc-500 mb-2">No hay agendamientos</p>
+                  <p className="text-xs text-zinc-600">Agrega citas virtuales, presenciales o sesiones</p>
                 </div>
               )}
             </div>

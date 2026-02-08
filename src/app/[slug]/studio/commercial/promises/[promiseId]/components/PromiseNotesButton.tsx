@@ -78,6 +78,7 @@ export function PromiseNotesButton({
         onOpenChange={setIsSheetOpen}
         studioSlug={studioSlug}
         promiseId={promiseId}
+        context="PROMISE"
         contactId={contactId}
         onLogAdded={(newLog) => {
           if (newLog) {

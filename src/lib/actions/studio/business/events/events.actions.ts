@@ -796,7 +796,6 @@ export async function obtenerEventoDetalle(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    console.log('[DEBUG: EventQuery] Iniciando búsqueda en DB para evento:', eventoId);
     const evento = await prisma.studio_events.findFirst({
       where: {
         id: eventoId,
@@ -1103,12 +1102,6 @@ export async function obtenerEventoDetalle(
     if (!evento) {
       return { success: false, error: 'Evento no encontrado' };
     }
-
-    const contactForLog = evento.contact ?? evento.promise?.contact ?? null;
-    const valorContacto = contactForLog
-      ? { name: contactForLog.name, phone: contactForLog.phone, email: contactForLog.email }
-      : 'sin contacto';
-    console.log('[DEBUG: EventQuery] Cargando datos frescos del servidor para el evento:', eventoId, 'Valor de contacto actual:', valorContacto);
 
     if (!evento.promise_id) {
       return { success: false, error: 'Evento sin promesa asociada' };

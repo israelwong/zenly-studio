@@ -323,6 +323,7 @@ export function PromiseLayoutClient({
               onOpenChange={setLogsSheetOpen}
               studioSlug={studioSlug}
               promiseId={promiseId}
+              context="PROMISE"
             />
           </>
         )}

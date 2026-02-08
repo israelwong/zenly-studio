@@ -457,9 +457,6 @@ export async function updateContact(
     const camposActualizados = Object.keys(validatedData).filter(
       (k) => k !== 'id' && k !== 'event_id' && validatedData[k as keyof UpdateContactData] !== undefined
     );
-    const valoresLog = camposActualizados.map((c) => `${c}=${String((validatedData as Record<string, unknown>)[c])}`).join(', ');
-    console.log('[DEBUG: updateContact] Recibido ID:', validatedData.id, 'Campos:', camposActualizados.join(', ') || '—', 'Valores:', valoresLog || '—');
-
     // Si se actualiza el teléfono, verificar que no exista otro contacto con ese teléfono
     if (validatedData.phone && validatedData.phone !== existingContact.phone) {
       const phoneExists = await prisma.studio_contacts.findFirst({
@@ -543,17 +540,13 @@ export async function updateContact(
       }
     });
 
-    console.log('[DEBUG: updateContact] DB actualizada. Contacto id:', contact.id);
-
     const revalidateRuta = `/${studioSlug}/studio/business/events`;
     revalidatePath(revalidateRuta, 'layout');
-    console.log('[DEBUG: updateContact] Revalidación disparada para la ruta:', revalidateRuta, '(layout)');
 
     const eventId = validatedData.event_id;
     if (eventId) {
       revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
       revalidateTag(`evento-${eventId}`);
-      console.log('[DEBUG: updateContact] Revalidación disparada para detalle del evento:', eventId);
     }
     revalidateTag('evento-detalle');
 

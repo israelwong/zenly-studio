@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
-import { Loader2, Pencil } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenDialog } from '@/components/ui/zen';
+import { ChevronDown, Copy, Loader2, Mail, Pencil, Phone, PhoneCall, Smartphone } from 'lucide-react';
+import { ZenCard, ZenButton, ZenDialog } from '@/components/ui/zen';
+import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { GoogleContactsConnectionModal } from '@/components/shared/integrations/GoogleContactsConnectionModal';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { cn } from '@/lib/utils';
@@ -15,6 +16,7 @@ import { ResumenCotizacionAutorizada } from './ResumenCotizacionAutorizada';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import { logCallMade, logWhatsAppSent } from '@/lib/actions/studio/commercial/promises';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 
@@ -81,6 +83,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [showGoogleContactsModal, setShowGoogleContactsModal] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const contactSynced = !!(contact?.google_contact_id ?? eventData.promise?.contact?.google_contact_id);
@@ -221,18 +224,18 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
 
   const saveField = async (field: ContactField, value: string) => {
     if (!contactId) return;
-    const trimmed = value.trim();
-    const current = getDisplayValue(field);
-    if (trimmed === current && field !== 'email') {
+    const newVal = String(value ?? '').trim();
+    const currentVal = (contact?.[field] ?? '').toString().trim();
+    if (newVal === currentVal) {
       setEditingField(null);
       return;
     }
-    if (field === 'name' && !trimmed) {
+    if (field === 'name' && !newVal) {
       setEditingField(null);
-      setEditValue(current);
+      setEditValue(currentVal || '');
       return;
     }
-    if (field === 'phone' && trimmed.length < 10) {
+    if (field === 'phone' && newVal.length < 10) {
       toast.error('El teléfono debe tener al menos 10 dígitos');
       return;
     }
@@ -241,12 +244,12 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
       const { updateContact } = await import('@/lib/actions/studio/commercial/contacts/contacts.actions');
       const payload = {
         id: contactId,
-        [field]: field === 'email' ? (trimmed || '') : trimmed,
+        [field]: field === 'email' ? (newVal || '') : newVal,
         event_id: eventId,
       };
       const result = await updateContact(studioSlug, payload);
       if (result.success) {
-        setLocalContactOverrides((prev) => ({ ...prev, [field]: trimmed }));
+        setLocalContactOverrides((prev) => ({ ...prev, [field]: newVal }));
         setPendingConfirmField(field);
         setEditingField(null);
         setSavingField(null);
@@ -256,7 +259,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
         if (currentPromiseId) {
           const fieldLabel =
             field === 'name' ? 'Nombre del contacto' : field === 'phone' ? 'Teléfono del contacto' : 'Correo del contacto';
-          const content = `${fieldLabel} actualizado: '${current}' ➔ '${trimmed}'`;
+          const content = `${fieldLabel} actualizado: '${currentVal || ''}' ➔ '${newVal}'`;
           if (typeof window !== 'undefined') {
             window.dispatchEvent(
               new CustomEvent('promise-logs-optimistic-add', {
@@ -321,6 +324,29 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
     if (googleContactsStatus === 'ACTIVE' && contactId) {
       syncContactWithGoogle();
     }
+  };
+
+  const contactPhone = getDisplayValue('phone') || (contact?.phone ?? null);
+  const contactName = getDisplayValue('name') || (contact?.name ?? null);
+  const promiseId = eventData.promise_id ?? eventData.promise?.id ?? null;
+
+  const handleWhatsApp = () => {
+    if (!contactPhone || !contactName || contactPhone === '—') return;
+    const cleanPhone = String(contactPhone).replace(/\D/g, '');
+    const message = encodeURIComponent(`Hola ${contactName}`);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
+    if (promiseId) {
+      logWhatsAppSent(studioSlug, promiseId, contactName, String(contactPhone)).catch((e) => console.error(e));
+    }
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleCall = () => {
+    if (!contactPhone || contactPhone === '—') return;
+    if (promiseId && contactName) {
+      logCallMade(studioSlug, promiseId, contactName, String(contactPhone)).catch((e) => console.error(e));
+    }
+    window.open(`tel:${contactPhone}`, '_self');
   };
 
   const handleConfirmConnectGoogle = async () => {
@@ -488,187 +514,226 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
   return (
     <>
       <ZenCard>
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-          <div className="flex items-center justify-between w-full">
-            <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-              Contacto Principal
-            </ZenCardTitle>
-            <button
-              type="button"
-              onClick={handleGoogleIconClick}
-              disabled={syncingGoogle}
-              title={
-                googleContactsStatus === 'EXPIRED' || googleContactsStatus === 'DISCONNECTED'
-                  ? 'Conectar o reconectar Google Contacts'
-                  : contactSynced
-                    ? 'Sincronizado con Google'
-                    : 'Sincronizar con Google'
-              }
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity shrink-0',
-                'hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60 disabled:cursor-not-allowed',
-                googleContactsStatus === 'ACTIVE' && [
-                  'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20',
-                ],
-                googleContactsStatus === 'EXPIRED' && [
-                  'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20',
-                ],
-                googleContactsStatus === 'DISCONNECTED' && [
-                  'bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20',
-                ]
-              )}
-            >
-              {syncingGoogle ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-              ) : (
+        <div className="p-2">
+          <div
+            className={cn(
+              'flex items-center gap-2 w-full py-2.5 px-2 rounded-lg cursor-pointer select-none transition-colors duration-200 hover:bg-zinc-800/30',
+              isExpanded && 'bg-zinc-800/20'
+            )}
+            onClick={() => setIsExpanded((v) => !v)}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setIsExpanded((v) => !v))}
+            role="button"
+            tabIndex={0}
+          >
+            <ChevronDown
+              className={cn('h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-300', isExpanded && 'rotate-180')}
+            />
+            <span className="text-base font-bold text-zinc-200 truncate min-w-0 flex-1">
+              {getDisplayValue('name')}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={handleGoogleIconClick}
+                disabled={syncingGoogle}
+                title={
+                  googleContactsStatus === 'EXPIRED' || googleContactsStatus === 'DISCONNECTED'
+                    ? 'Conectar o reconectar Google Contacts'
+                    : contactSynced
+                      ? 'Sincronizado con Google'
+                      : 'Sincronizar con Google'
+                }
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity shrink-0',
+                  'hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60 disabled:cursor-not-allowed',
+                  googleContactsStatus === 'ACTIVE' && [
+                    'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20',
+                  ],
+                  googleContactsStatus === 'EXPIRED' && [
+                    'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20',
+                  ],
+                  googleContactsStatus === 'DISCONNECTED' && [
+                    'bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20',
+                  ]
+                )}
+              >
+                {syncingGoogle ? (
+                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                ) : (
+                  <>
+                    <GoogleLogoIcon
+                      className={cn(
+                        'h-3 w-3 shrink-0',
+                        googleContactsStatus === 'DISCONNECTED' && 'grayscale opacity-90'
+                      )}
+                    />
+                    {googleContactsStatus === 'ACTIVE'
+                      ? contactSynced
+                        ? 'Sincronizado'
+                        : 'Google'
+                      : googleContactsStatus === 'EXPIRED'
+                        ? 'Reconectar'
+                        : 'Conectar'}
+                  </>
+                )}
+              </button>
+              <span className="text-zinc-500 text-xs font-light shrink-0 opacity-20 flex items-center" aria-hidden>|</span>
+              {contactPhone && contactPhone !== '—' && (
                 <>
-                  <GoogleLogoIcon
-                    className={cn(
-                      'h-[14px] w-[14px] shrink-0',
-                      googleContactsStatus === 'DISCONNECTED' && 'grayscale opacity-90'
-                    )}
-                  />
-                  {googleContactsStatus === 'ACTIVE'
-                    ? contactSynced
-                      ? 'Sincronizado'
-                      : 'Google Contacts'
-                    : googleContactsStatus === 'EXPIRED'
-                      ? 'Reconectar Google'
-                      : 'Conectar Google'}
+                  <button
+                    type="button"
+                    onClick={handleWhatsApp}
+                    title="WhatsApp"
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-[#25D366]/20 hover:text-[#25D366] transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-500 shrink-0"
+                  >
+                    <WhatsAppIcon className="h-4 w-4" size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCall}
+                    title="Llamar"
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-500 shrink-0"
+                  >
+                    <PhoneCall className="h-4 w-4" />
+                  </button>
                 </>
               )}
-            </button>
-          </div>
-        </ZenCardHeader>
-        <ZenCardContent className="p-4">
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium text-zinc-400 mb-0.5">Cliente</p>
-              {editingField === 'name' ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => handleBlur('name')}
-                    onKeyDown={(e) => handleKeyDown('name', e)}
-                    disabled={savingField === 'name'}
-                    className={cn(
-                      'flex-1 min-w-0 rounded px-1.5 py-0.5 text-sm text-zinc-200',
-                      'bg-zinc-800/80 border border-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
-                      'disabled:opacity-60'
-                    )}
-                  />
-                  {savingField === 'name' && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />}
-                </div>
-              ) : (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => contactId && startEdit('name')}
-                  onKeyDown={(e) => contactId && (e.key === 'Enter' || e.key === ' ') && startEdit('name')}
-                  className={cn(
-                    'group flex items-center gap-1.5 rounded px-1.5 py-0.5 text-sm text-zinc-200 min-h-[22px] transition-opacity',
-                    contactId && 'cursor-pointer hover:bg-zinc-800/50',
-                    (savingField === 'name' || pendingConfirmField === 'name') && 'opacity-70'
-                  )}
-                >
-                  <span>
-                    {getDisplayValue('name')}
-                  </span>
-                  {contactId && (
-                    <Pencil className="h-3 w-3 shrink-0 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="text-xs font-medium text-zinc-400 mb-0.5">Teléfono</p>
-              {editingField === 'phone' ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="tel"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => handleBlur('phone')}
-                    onKeyDown={(e) => handleKeyDown('phone', e)}
-                    disabled={savingField === 'phone'}
-                    className={cn(
-                      'flex-1 min-w-0 rounded px-1.5 py-0.5 text-sm text-zinc-200',
-                      'bg-zinc-800/80 border border-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
-                      'disabled:opacity-60'
-                    )}
-                  />
-                  {savingField === 'phone' && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />}
-                </div>
-              ) : (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => contactId && startEdit('phone')}
-                  onKeyDown={(e) => contactId && (e.key === 'Enter' || e.key === ' ') && startEdit('phone')}
-                  className={cn(
-                    'group flex items-center gap-1.5 rounded px-1.5 py-0.5 text-sm text-zinc-200 min-h-[22px] transition-opacity',
-                    contactId && 'cursor-pointer hover:bg-zinc-800/50',
-                    (savingField === 'phone' || pendingConfirmField === 'phone') && 'opacity-70'
-                  )}
-                >
-                  <span>
-                    {getDisplayValue('phone')}
-                  </span>
-                  {contactId && (
-                    <Pencil className="h-3 w-3 shrink-0 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="text-xs font-medium text-zinc-400 mb-0.5">Correo</p>
-              {editingField === 'email' ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="email"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => handleBlur('email')}
-                    onKeyDown={(e) => handleKeyDown('email', e)}
-                    disabled={savingField === 'email'}
-                    className={cn(
-                      'flex-1 min-w-0 rounded px-1.5 py-0.5 text-sm text-zinc-200',
-                      'bg-zinc-800/80 border border-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
-                      'disabled:opacity-60'
-                    )}
-                  />
-                  {savingField === 'email' && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />}
-                </div>
-              ) : (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => contactId && startEdit('email')}
-                  onKeyDown={(e) => contactId && (e.key === 'Enter' || e.key === ' ') && startEdit('email')}
-                  className={cn(
-                    'group flex items-center gap-1.5 rounded px-1.5 py-0.5 text-sm text-zinc-200 min-h-[22px] transition-opacity',
-                    contactId && 'cursor-pointer hover:bg-zinc-800/50',
-                    (savingField === 'email' || pendingConfirmField === 'email') && 'opacity-70'
-                  )}
-                >
-                  <span>
-                    {getDisplayValue('email')}
-                  </span>
-                  {contactId && (
-                    <Pencil className="h-3 w-3 shrink-0 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  )}
-                </div>
-              )}
             </div>
           </div>
-        </ZenCardContent>
+
+          <div
+            className={cn(
+              'grid transition-all duration-300 ease-in-out overflow-hidden',
+              isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            )}
+          >
+            <div className={cn('min-h-0 overflow-hidden space-y-2', isExpanded && 'pt-2')}>
+              {/* Fila Teléfono */}
+              <div
+                className={cn(
+                  'flex items-center gap-2 w-full min-w-0 rounded-lg px-2 py-1.5 bg-zinc-900/40 border border-zinc-800/50 transition-colors',
+                  contactId && 'hover:bg-zinc-800/50'
+                )}
+              >
+                <Smartphone className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                {editingField === 'phone' ? (
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2">
+                    <input
+                      ref={inputRef}
+                      type="tel"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => handleBlur('phone')}
+                      onKeyDown={(e) => handleKeyDown('phone', e)}
+                      disabled={savingField === 'phone'}
+                      className={cn(
+                        'flex-1 min-w-0 rounded px-2 py-0.5 text-xs text-zinc-200',
+                        'bg-zinc-800/80 border border-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
+                        'disabled:opacity-60'
+                      )}
+                    />
+                    {savingField === 'phone' && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-zinc-400" />}
+                  </div>
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => contactId && startEdit('phone')}
+                    onKeyDown={(e) => contactId && (e.key === 'Enter' || e.key === ' ') && startEdit('phone')}
+                    className={cn(
+                      'group flex-1 min-w-0 flex items-center gap-1 text-xs text-zinc-200 min-h-[20px] transition-opacity overflow-hidden px-2 cursor-pointer',
+                      (savingField === 'phone' || pendingConfirmField === 'phone') && 'opacity-70'
+                    )}
+                  >
+                    <span className="truncate">{getDisplayValue('phone')}</span>
+                    {contactId && (
+                      <Pencil className="h-3 w-3 shrink-0 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  title="Copiar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const val = getDisplayValue('phone');
+                    if (val && val !== '—') {
+                      navigator.clipboard.writeText(val).then(
+                        () => toast.success('Teléfono copiado'),
+                        () => {}
+                      );
+                    }
+                  }}
+                  className="shrink-0 p-1.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Fila Correo */}
+              <div
+                className={cn(
+                  'flex items-center gap-2 w-full min-w-0 rounded-lg px-2 py-1.5 bg-zinc-900/40 border border-zinc-800/50 transition-colors',
+                  contactId && 'hover:bg-zinc-800/50'
+                )}
+              >
+                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                {editingField === 'email' ? (
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2">
+                    <input
+                      ref={inputRef}
+                      type="email"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => handleBlur('email')}
+                      onKeyDown={(e) => handleKeyDown('email', e)}
+                      disabled={savingField === 'email'}
+                      className={cn(
+                        'flex-1 min-w-0 rounded px-2 py-0.5 text-xs text-zinc-200',
+                        'bg-zinc-800/80 border border-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
+                        'disabled:opacity-60'
+                      )}
+                    />
+                    {savingField === 'email' && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-zinc-400" />}
+                  </div>
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => contactId && startEdit('email')}
+                    onKeyDown={(e) => contactId && (e.key === 'Enter' || e.key === ' ') && startEdit('email')}
+                    className={cn(
+                      'group flex-1 min-w-0 flex items-center gap-1 text-xs text-zinc-200 min-h-[20px] transition-opacity overflow-hidden px-2 cursor-pointer',
+                      (savingField === 'email' || pendingConfirmField === 'email') && 'opacity-70'
+                    )}
+                  >
+                    <span className="truncate">{getDisplayValue('email')}</span>
+                    {contactId && (
+                      <Pencil className="h-3 w-3 shrink-0 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  title="Copiar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const val = getDisplayValue('email');
+                    if (val && val !== '—') {
+                      navigator.clipboard.writeText(val).then(
+                        () => toast.success('Correo copiado'),
+                        () => {}
+                      );
+                    }
+                  }}
+                  className="shrink-0 p-1.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </ZenCard>
 
       {/* Modal Preview Cotización */}

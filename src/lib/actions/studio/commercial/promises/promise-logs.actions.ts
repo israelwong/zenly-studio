@@ -532,8 +532,6 @@ export async function getPromiseLogs({
   /** Filtrar logs por contexto (EVENT vs PROMISE); si no se pasa, se devuelven todos */
   context?: PromiseLogOriginContext;
 }): Promise<PromiseLogsResponse> {
-  console.log('[DEBUG: getPromiseLogs] ID:', promiseId, 'Bust:', bust || 'ninguno', 'Context:', context || 'todos');
-
   if (bust) {
     return await fetchPromiseLogsFromDb(promiseId, context);
   }
@@ -552,7 +550,6 @@ export async function createPromiseLog(
   studioSlug: string,
   data: CreatePromiseLogData
 ): Promise<ActionResponse<PromiseLog>> {
-  console.log('[DEBUG: createPromiseLog] Intentando crear log para PromiseID:', data.promise_id);
   try {
     const validatedData = createPromiseLogSchema.parse(data);
 
@@ -651,32 +648,12 @@ export async function createPromiseLog(
     revalidateTag(`logs-${validatedData.promise_id}`);
     revalidatePath('/', 'layout');
 
-    const verified = await prisma.studio_promise_logs.findUnique({
-      where: { id: log.id },
-      select: { id: true },
-    });
-    if (!verified) {
-      console.error('[DEBUG: createPromiseLog] ERROR DB: insert reportó éxito pero el registro no existe en DB', {
-        logId: log.id,
-        promise_id: validatedData.promise_id,
-        origin_context: originContext,
-      });
-    }
-
-    console.log('[DEBUG: createPromiseLog] Log insertado correctamente en DB con ID:', log.id);
     return {
       success: true,
       data: promiseLog,
     };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    console.error('[DEBUG: createPromiseLog] FALLO al insertar log:', {
-      message: err.message,
-      name: err.name,
-      stack: err.stack,
-      data: data?.promise_id,
-      origin_context: data?.origin_context,
-    });
     return {
       success: false,
       error: err.message || 'Error al crear log',
