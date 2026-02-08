@@ -14,7 +14,15 @@ export const getEventsSchema = z.object({
 
 export const moveEventSchema = z.object({
   event_id: z.string().cuid(),
-  new_stage_id: z.string().cuid(),
+  // Aceptar CUID o UUID (etapas pueden venir de distintos orígenes)
+  new_stage_id: z.string().min(1).refine(
+    (val) => {
+      const cuidPattern = /^[cC][^\s-]{8,}$/;
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      return cuidPattern.test(val) || uuidPattern.test(val);
+    },
+    { message: 'El ID de etapa debe ser un CUID o UUID válido' }
+  ),
 });
 
 export const updateEventDateSchema = z.object({
