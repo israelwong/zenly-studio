@@ -83,6 +83,7 @@ interface Item {
     description?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
+    operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -110,6 +111,7 @@ interface CatalogoClientProps {
                 costo: number;
                 tipo_utilidad: string;
                 billing_type: string;
+                operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
                 orden: number;
                 status: string;
                 gastos: Array<{
@@ -191,6 +193,7 @@ export function CatalogoClient({
                         cost: servicio.costo,
                         tipoUtilidad,
                         billing_type: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        operational_category: servicio.operational_category ?? undefined,
                         order: servicio.orden,
                         status: servicio.status || "active",
                         isNew: false,
@@ -752,6 +755,7 @@ export function CatalogoClient({
                                 cost: data.cost,
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
                                 billing_type: data.billing_type || item.billing_type || 'SERVICE',
+                                operational_category: data.operational_category ?? item.operational_category ?? undefined,
                                 status: (data as unknown as { status?: string }).status || item.status || 'active',
                                 gastos: data.gastos || [],
                             } : item
@@ -766,6 +770,7 @@ export function CatalogoClient({
                     cost: data.cost,
                     tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
                     billing_type: data.billing_type || prev.billing_type || 'SERVICE',
+                    operational_category: data.operational_category ?? prev.operational_category ?? undefined,
                     status: (data as unknown as { status?: string }).status || prev.status || 'active',
                     gastos: data.gastos || [],
                 } : null);
@@ -785,6 +790,7 @@ export function CatalogoClient({
                         cost: response.data.cost,
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
                         billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        operational_category: response.data.operational_category ?? undefined,
                         order: response.data.order,
                         status: response.data.status || 'active',
                         isNew: false,
@@ -1820,6 +1826,7 @@ export function CatalogoClient({
                         cost: itemToEdit.cost,
                         tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
                         billing_type: itemToEdit.billing_type || 'SERVICE',
+                        operational_category: itemToEdit.operational_category ?? null,
                         description: '',
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'

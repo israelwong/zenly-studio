@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/shadcn/sheet";
 import { toast } from "sonner";
-import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash, Sparkles } from "lucide-react";
+import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash, Sparkles, Lock } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/catalogo/utilidad.actions";
 import { useConfiguracionPreciosUpdateListener } from "@/hooks/useConfiguracionPreciosRefresh";
@@ -21,6 +22,9 @@ interface Gasto {
     costo: number;
 }
 
+/** Categoría operativa para Workflows Inteligentes (cronograma/checklists) */
+export type OperationalCategoryForm = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
+
 export interface ItemFormData {
     id?: string;
     name: string;
@@ -29,6 +33,7 @@ export interface ItemFormData {
     categoriaeId?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
+    operational_category?: OperationalCategoryForm;
     gastos?: Gasto[];
     status?: string;
 }
@@ -71,6 +76,8 @@ export function ItemEditorModal({
     showOverlay = true,
     context = 'catalogo',
 }: ItemEditorModalProps) {
+    const router = useRouter();
+
     // Estados del formulario
     const [formData, setFormData] = useState<ItemFormData>({
         name: "",
@@ -79,6 +86,7 @@ export function ItemEditorModal({
         categoriaeId: categoriaId,
         tipoUtilidad: "servicio",
         billing_type: "SERVICE",
+        operational_category: null,
         gastos: [],
     });
 
@@ -261,6 +269,7 @@ export function ItemEditorModal({
                     categoriaeId: categoriaId,
                     tipoUtilidad: (item.tipoUtilidad || "servicio") as 'servicio' | 'producto',
                     billing_type: (item.billing_type || "SERVICE") as 'HOUR' | 'SERVICE' | 'UNIT',
+                    operational_category: (item as ItemFormData).operational_category ?? null,
                     gastos: gastosDelItem,
                     status: item.status || "active",
                 };
@@ -278,6 +287,7 @@ export function ItemEditorModal({
                     categoriaeId: categoriaId,
                     tipoUtilidad: "servicio" as const,
                     billing_type: "SERVICE" as const,
+                    operational_category: null as OperationalCategoryForm,
                     gastos: [] as Gasto[],
                     status: "active",
                 } satisfies ItemFormData;
@@ -290,7 +300,7 @@ export function ItemEditorModal({
         }
     }, [isOpen, item, categoriaId]);
 
-    const handleInputChange = (field: keyof ItemFormData, value: string | number) => {
+    const handleInputChange = (field: keyof ItemFormData, value: string | number | null) => {
         setFormData(prev => {
             const newData = {
                 ...prev,
@@ -416,6 +426,7 @@ export function ItemEditorModal({
                         cost: formDataConGastos.cost,
                         tipoUtilidad: formDataConGastos.tipoUtilidad,
                         billing_type: formDataConGastos.billing_type,
+                        operational_category: formDataConGastos.operational_category ?? undefined,
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status,
                     });
@@ -429,10 +440,12 @@ export function ItemEditorModal({
                 } else {
                     const result = await crearItem({
                         categoriaeId: categoriaId,
+                        studioSlug,
                         name: formDataConGastos.name,
                         cost: formDataConGastos.cost,
                         tipoUtilidad: formDataConGastos.tipoUtilidad,
                         billing_type: formDataConGastos.billing_type || (formDataConGastos.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
+                        operational_category: formDataConGastos.operational_category ?? undefined,
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status || 'active',
                     });
@@ -451,6 +464,7 @@ export function ItemEditorModal({
             setInitialFormData({ ...formDataConGastos });
             setInitialGastos([...gastos]);
 
+            router.refresh();
             setLocalIsOpen(false);
             onClose();
         } catch (error) {
@@ -745,6 +759,54 @@ export function ItemEditorModal({
                                         </p>
                                     </div>
                                 )}
+
+                                {/* Flujo de trabajo interno (categoría operativa) - solo estudio */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <label className="text-sm font-medium text-zinc-200">
+                                            Flujo de Trabajo Interno
+                                        </label>
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-700/60 text-zinc-400 border border-zinc-600/50">
+                                            <Lock className="h-2.5 w-2.5" />
+                                            Solo Estudio
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mb-2">
+                                        Configuración interna: No visible para el cliente ni afecta cotizaciones. Define la generación automática de tareas y checklists.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { value: "", label: "Sin definir" },
+                                            { value: "PRODUCTION", label: "Producción" },
+                                            { value: "POST_PRODUCTION", label: "Postproducción" },
+                                            { value: "DELIVERY", label: "Entregable" },
+                                        ].map(({ value, label }) => {
+                                            const current = formData.operational_category ?? "";
+                                            const selected = current === value;
+                                            const base = "inline-flex items-center px-2.5 py-1 text-xs font-light rounded-sm border transition-all duration-150 disabled:opacity-50";
+                                            const unselected = "bg-zinc-500/5 border-zinc-500/20 text-zinc-500 hover:bg-zinc-500/10";
+                                            const selectedStyles =
+                                                value === ""
+                                                    ? "bg-zinc-500/10 border-zinc-500/50 text-zinc-400"
+                                                    : value === "PRODUCTION"
+                                                        ? "bg-indigo-500/10 border-indigo-500/50 text-indigo-400"
+                                                        : value === "POST_PRODUCTION"
+                                                            ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
+                                                            : "bg-emerald-500/10 border-emerald-500/50 text-emerald-400";
+                                            return (
+                                                <button
+                                                    key={value || "none"}
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() => handleInputChange("operational_category", value || null)}
+                                                    className={`${base} ${selected ? selectedStyles : unselected} ${selected ? "ring-1 ring-white/10" : "hover:scale-[1.02] active:scale-[0.98]"}`}
+                                                >
+                                                    {label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
 
                                 {/* Gastos Asociados */}
                                 <ZenCard className="p-4 bg-zinc-800/30 border-zinc-700">

@@ -27,6 +27,16 @@ export {
 } from './scheduler-actions';
 
 export {
+  getChecklistTemplates,
+  importChecklistToTask,
+} from './checklist-actions';
+export type {
+  GetChecklistTemplatesResult,
+  ImportChecklistToTaskResult,
+  ChecklistTemplateRow,
+} from './checklist-actions';
+
+export {
   getEventPipelineStages,
   updateEventPipelineStage,
   reorderEventPipelineStages,

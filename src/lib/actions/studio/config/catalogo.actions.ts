@@ -80,6 +80,7 @@ export async function getCatalogShell(
                                         cost: true,
                                         utility_type: true,
                                         billing_type: true,
+                                        operational_category: true,
                                         order: true,
                                         status: true,
                                         // Solo cargar gastos necesarios para cálculo de margen
@@ -126,6 +127,7 @@ export async function getCatalogShell(
                     tipo_utilidad: s.utility_type,
                     type: 'service' as const,
                     billing_type: s.billing_type,
+                    operational_category: s.operational_category ?? undefined,
                     orden: s.order,
                     status: s.status,
                     createdAt: new Date(),
@@ -192,6 +194,7 @@ export async function obtenerCatalogo(
                                         cost: true,
                                         utility_type: true,
                                         billing_type: true,
+                                        operational_category: true,
                                         order: true,
                                         status: true,
                                         // Solo cargar gastos si es necesario para cálculo de margen
@@ -238,6 +241,7 @@ export async function obtenerCatalogo(
                     tipo_utilidad: s.utility_type,
                     type: 'service' as const, // Valor por defecto
                     billing_type: s.billing_type,
+                    operational_category: s.operational_category ?? undefined,
                     orden: s.order,
                     status: s.status,
                     createdAt: new Date(),

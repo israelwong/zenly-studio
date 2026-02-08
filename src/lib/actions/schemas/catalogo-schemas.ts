@@ -155,6 +155,9 @@ export interface GastoServicioData {
 /**
  * Tipo para datos de Servicio
  */
+/** Categoría operativa para cronograma (Workflows Inteligentes) */
+export type OperationalCategoryCatalog = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS';
+
 export interface ServicioData {
     id: string;
     studioId: string;
@@ -167,6 +170,7 @@ export interface ServicioData {
     tipo_utilidad: string;
     type: string; // Agregar campo type del enum
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación dinámica
+    operational_category?: OperationalCategoryCatalog | null;
     orden: number;
     status: string;
     createdAt: Date;

@@ -6,3 +6,10 @@ export interface ActionResponse<T = unknown> {
   error?: string;
 }
 
+export type {
+  SchedulerChecklistItem,
+  SchedulerChecklistItems,
+  SchedulerChecklistTemplateItem,
+  SchedulerChecklistTemplateItems,
+} from './scheduler-checklist';
+

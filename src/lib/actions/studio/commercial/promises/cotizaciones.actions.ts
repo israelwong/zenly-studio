@@ -1,8 +1,21 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import type { CotizacionItemType, OperationalCategory } from '@prisma/client';
 import { withRetry } from '@/lib/database/retry-helper';
 import { revalidatePath, revalidateTag } from 'next/cache';
+
+/** Snapshot: mapeo operational_category (catálogo) → task_type (cotización) para Workflows Inteligentes */
+function operationalCategoryToTaskType(oc: OperationalCategory | null): CotizacionItemType | undefined {
+  if (!oc) return undefined;
+  switch (oc) {
+    case 'PRODUCTION': return 'OPERATION';
+    case 'POST_PRODUCTION': return 'EDITING';
+    case 'DELIVERY': return 'DELIVERY';
+    case 'LOGISTICS': return 'CUSTOM';
+    default: return undefined;
+  }
+}
 import {
   createCotizacionSchema,
   updateCotizacionSchema,
@@ -167,6 +180,22 @@ export async function createCotizacion(
       });
     }
 
+    // Snapshot operational_category → task_type (Fase 1.5 Integridad de la Raíz)
+    const catalogItemIds = Object.entries(validatedData.items || {})
+      .filter(([, q]) => q > 0)
+      .map(([id]) => id);
+    const catalogItemsWithCategory = catalogItemIds.length > 0
+      ? await prisma.studio_items.findMany({
+          where: { id: { in: catalogItemIds } },
+          select: { id: true, operational_category: true },
+        })
+      : [];
+    const taskTypeMap = new Map<string, CotizacionItemType>();
+    catalogItemsWithCategory.forEach((i) => {
+      const tt = operationalCategoryToTaskType(i.operational_category);
+      if (tt) taskTypeMap.set(i.id, tt);
+    });
+
     // Crear items de la cotizaciรณn (del catálogo)
     const catalogItemsToCreate = Object.entries(validatedData.items || {})
       .filter(([, quantity]) => quantity > 0)
@@ -176,6 +205,7 @@ export async function createCotizacion(
         quantity,
         order: index,
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
+        task_type: taskTypeMap.get(itemId) ?? undefined,
       }));
 
     // Obtener nombres de categoría y sección para custom items
@@ -1688,6 +1718,22 @@ export async function updateCotizacion(
     // Obtener duration_hours para calcular cantidad efectiva de custom items
     const durationHours = cotizacion.event_duration ?? null;
 
+    // Snapshot operational_category → task_type (Fase 1.5 Integridad de la Raíz)
+    const catalogItemIdsUpdate = Object.entries(validatedData.items || {})
+      .filter(([, q]) => q > 0)
+      .map(([id]) => id);
+    const catalogItemsWithCategoryUpdate = catalogItemIdsUpdate.length > 0
+      ? await prisma.studio_items.findMany({
+          where: { id: { in: catalogItemIdsUpdate } },
+          select: { id: true, operational_category: true },
+        })
+      : [];
+    const taskTypeMapUpdate = new Map<string, CotizacionItemType>();
+    catalogItemsWithCategoryUpdate.forEach((i) => {
+      const tt = operationalCategoryToTaskType(i.operational_category);
+      if (tt) taskTypeMapUpdate.set(i.id, tt);
+    });
+
     // Preparar items del catálogo antes de la transacciรณn
     const catalogItemsToCreate = Object.entries(validatedData.items || {})
       .filter(([, quantity]) => quantity > 0)
@@ -1697,6 +1743,7 @@ export async function updateCotizacion(
         quantity,
         order: index,
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
+        task_type: taskTypeMapUpdate.get(itemId) ?? undefined,
       }));
 
     // Obtener nombres de categoría y sección para custom items

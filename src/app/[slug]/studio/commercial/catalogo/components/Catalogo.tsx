@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash, ListMinus } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -72,6 +72,8 @@ interface Categoria {
     items?: number;
 }
 
+type OperationalCategoryItem = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS';
+
 interface Item {
     id: string;
     name: string;
@@ -79,6 +81,7 @@ interface Item {
     description?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
+    operational_category?: OperationalCategoryItem | null;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -205,6 +208,7 @@ export default function Catalogo() {
                                 cost: servicio.costo,
                                 tipoUtilidad,
                                 billing_type: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                                operational_category: servicio.operational_category ?? undefined,
                                 order: servicio.orden,
                                 status: servicio.status || "active",
                                 isNew: false,
@@ -1032,6 +1036,24 @@ export default function Catalogo() {
                             >
                                 {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
                             </ZenBadge>
+                            {/* Badge categoría operativa (cronograma) - siempre visible; gris si sin definir */}
+                            <ZenBadge
+                                variant="outline"
+                                size="sm"
+                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${isInactive
+                                    ? 'border-zinc-500 text-zinc-500'
+                                    : !item.operational_category || item.operational_category === 'LOGISTICS'
+                                        ? 'bg-zinc-500/10 border-zinc-500/50 text-zinc-400'
+                                        : item.operational_category === 'PRODUCTION'
+                                            ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400'
+                                            : item.operational_category === 'POST_PRODUCTION'
+                                                ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
+                                                : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                    }`}
+                            >
+                                <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />
+                                {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : 'Entregable'}
+                            </ZenBadge>
                             {/* Badge de tipo de facturación (solo para servicios, productos siempre son UNIT) */}
                             {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
                                 <ZenBadge
@@ -1435,7 +1457,7 @@ export default function Catalogo() {
                 const response = await actualizarItem(data);
                 if (!response.success) throw new Error(response.error);
 
-                // Actualizar en el estado local
+                // Actualizar en el estado local (incluir operational_category)
                 setItemsData(prev => {
                     const newData = { ...prev };
                     Object.keys(newData).forEach(categoriaId => {
@@ -1446,8 +1468,9 @@ export default function Catalogo() {
                                 cost: data.cost,
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
                                 billing_type: data.billing_type || item.billing_type || 'SERVICE',
+                                operational_category: data.operational_category ?? item.operational_category ?? undefined,
                                 status: (data as unknown as { status?: string }).status || item.status || 'active',
-                                gastos: data.gastos || [], // Incluir gastos actualizados
+                                gastos: data.gastos || [],
                             } : item
                         );
                     });
@@ -1461,10 +1484,12 @@ export default function Catalogo() {
                     cost: data.cost,
                     tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
                     billing_type: data.billing_type || prev.billing_type || 'SERVICE',
+                    operational_category: data.operational_category ?? prev.operational_category ?? undefined,
                     status: (data as unknown as { status?: string }).status || prev.status || 'active',
-                    gastos: data.gastos || [], // Incluir gastos actualizados
+                    gastos: data.gastos || [],
                 } : null);
-                toast.success("Item actualizado");
+                    toast.success("Item actualizado");
+                await loadData();
             } else {
                 const response = await crearItem({
                     ...data,
@@ -1480,6 +1505,7 @@ export default function Catalogo() {
                         cost: response.data.cost,
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
                         billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        operational_category: response.data.operational_category ?? undefined,
                         order: response.data.order,
                         status: response.data.status || 'active',
                         isNew: false,
@@ -1509,6 +1535,7 @@ export default function Catalogo() {
 
                     toast.success("Item creado");
                 }
+                await loadData();
             }
 
             setIsItemModalOpen(false);
@@ -1704,6 +1731,7 @@ export default function Catalogo() {
                         cost: itemToEdit.cost,
                         tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
                         billing_type: itemToEdit.billing_type || 'SERVICE',
+                        operational_category: itemToEdit.operational_category ?? null,
                         description: '',
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'

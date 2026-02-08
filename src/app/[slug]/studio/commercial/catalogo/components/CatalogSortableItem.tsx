@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash } from 'lucide-react';
+import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash, ListMinus } from 'lucide-react';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
 
+export type OperationalCategoryCatalogItem = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS';
+
 export interface CatalogItem {
     id: string;
     name: string;
@@ -24,6 +26,7 @@ export interface CatalogItem {
     description?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
+    operational_category?: OperationalCategoryCatalogItem | null;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -187,6 +190,23 @@ export function CatalogSortableItem({
                                 }`}
                         >
                             {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
+                        </ZenBadge>
+                        <ZenBadge
+                            variant="outline"
+                            size="sm"
+                            className={`px-1 py-0 text-[10px] font-light rounded-sm ${isInactive
+                                ? 'border-zinc-500 text-zinc-500'
+                                : !item.operational_category || item.operational_category === 'LOGISTICS'
+                                    ? 'bg-zinc-500/10 border-zinc-500/50 text-zinc-400'
+                                    : item.operational_category === 'PRODUCTION'
+                                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400'
+                                        : item.operational_category === 'POST_PRODUCTION'
+                                            ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
+                                            : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                }`}
+                        >
+                            <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />
+                            {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : 'Entregable'}
                         </ZenBadge>
                         {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
                             <ZenBadge

@@ -2922,6 +2922,7 @@ export async function actualizarSchedulerTask(
     notes?: string;
     isCompleted?: boolean;
     skipPayroll?: boolean; // Si es true, no crear nómina automáticamente
+    checklist_items?: unknown; // SchedulerChecklistItem[] (Workflows Inteligentes)
     itemData?: {
       itemId: string;
       personalId: string;
@@ -2974,11 +2975,13 @@ export async function actualizarSchedulerTask(
       notes?: string | null;
       completed_at?: Date | null;
       sync_status?: 'DRAFT';
+      checklist_items?: unknown;
     } = {};
 
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description || null;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
+    if (data.checklist_items !== undefined) updateData.checklist_items = data.checklist_items;
 
     const finalStartDate = data.startDate || task.start_date;
     const finalEndDate = data.endDate || task.end_date;

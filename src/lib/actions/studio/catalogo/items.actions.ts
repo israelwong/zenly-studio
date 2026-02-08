@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { revalidatePath, revalidateTag } from "next/cache";
+import type { OperationalCategory } from "@prisma/client";
 
 // Types
 export interface ItemData {
@@ -12,6 +13,7 @@ export interface ItemData {
     description?: string | null;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
+    operational_category?: OperationalCategory | null;
     order: number;
     status: string;
     createdAt: Date;
@@ -36,6 +38,8 @@ const GastoSchema = z.object({
     costo: z.number().min(0, "El costo no puede ser negativo"),
 });
 
+const OperationalCategorySchema = z.enum(['PRODUCTION', 'POST_PRODUCTION', 'DELIVERY', 'LOGISTICS']).nullable().optional();
+
 const CreateItemSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
     cost: z.number().min(0, "El costo no puede ser negativo"),
@@ -45,6 +49,7 @@ const CreateItemSchema = z.object({
     gastos: z.array(GastoSchema).optional().default([]),
     status: z.enum(['active', 'inactive']).optional().default('active'),
     billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional().default('SERVICE'),
+    operational_category: OperationalCategorySchema,
 });
 
 const UpdateItemSchema = z.object({
@@ -56,6 +61,7 @@ const UpdateItemSchema = z.object({
     billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional(),
     gastos: z.array(GastoSchema).optional(),
     status: z.enum(['active', 'inactive']).optional(),
+    operational_category: OperationalCategorySchema,
 });
 
 /**
@@ -79,6 +85,7 @@ export async function obtenerItemsConStats(
                 cost: true,
                 utility_type: true,
                 billing_type: true,
+                operational_category: true,
                 order: true,
                 status: true,
                 created_at: true,
@@ -114,6 +121,7 @@ export async function obtenerItemsConStats(
                 description: null,
                 tipoUtilidad: item.utility_type === 'service' ? 'servicio' : 'producto',
                 billing_type: item.billing_type || 'SERVICE',
+                operational_category: item.operational_category ?? undefined,
                 order: item.order,
                 status: item.status,
                 createdAt: item.created_at,
@@ -197,6 +205,7 @@ export async function crearItem(
                 status: validated.status || "active",
                 studio_id: studio.id,
                 billing_type: validated.billing_type || 'SERVICE',
+                operational_category: validated.operational_category ?? undefined,
                 item_expenses: {
                     create: validated.gastos?.map(gasto => ({
                         name: gasto.nombre,
@@ -244,8 +253,8 @@ export async function crearItem(
             })),
         };
 
-        // Invalidar caché del catálogo
-        revalidatePath(`/${validated.studioSlug}/studio/commercial/catalogo`);
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
+        revalidatePath(`/${validated.studioSlug}/studio/commercial/catalogo`, 'page');
         revalidateTag(`catalog-shell-${validated.studioSlug}`);
 
         console.log(`[ITEMS] Item creado: ${item.id} - ${item.name} - Gastos: ${JSON.stringify(item.item_expenses)}`);
@@ -324,6 +333,10 @@ export async function actualizarItem(
                 ...(validated.status !== undefined && {
                     status: validated.status
                 }),
+                // Categoría operativa (Workflows Inteligentes)
+                ...(validated.operational_category !== undefined && {
+                    operational_category: validated.operational_category
+                }),
                 // Actualizar gastos si se proporcionan
                 ...(validated.gastos !== undefined && {
                     item_expenses: {
@@ -370,6 +383,7 @@ export async function actualizarItem(
             description: null,
             tipoUtilidad,
             billing_type: item.billing_type || 'SERVICE',
+            operational_category: item.operational_category ?? undefined,
             order: item.order,
             status: item.status,
             createdAt: item.created_at,
@@ -384,8 +398,8 @@ export async function actualizarItem(
 
         console.log(`[ITEMS] Item actualizado exitosamente: ${item.id} - ${item.name} - Costo: ${item.cost} - Gastos: ${JSON.stringify(item.item_expenses)}`);
 
-        // Invalidar caché del catálogo
-        revalidatePath(`/${existente.studio.slug}/studio/commercial/catalogo`);
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
+        revalidatePath(`/${existente.studio.slug}/studio/commercial/catalogo`, 'page');
         revalidateTag(`catalog-shell-${existente.studio.slug}`);
 
         return {
@@ -454,8 +468,8 @@ export async function eliminarItem(
             where: { id: itemId },
         });
 
-        // Invalidar caché del catálogo
-        revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
+        revalidatePath(`/${studioSlug}/studio/commercial/catalogo`, 'page');
         revalidateTag(`catalog-shell-${studioSlug}`);
 
         console.log(`[ITEMS] Item eliminado: ${itemId} - ${item.name}`);
@@ -552,9 +566,9 @@ export async function reordenarItems(
             )
         );
 
-        // Invalidar caché del catálogo
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         if (firstItem?.studio?.slug) {
-            revalidatePath(`/${firstItem.studio.slug}/studio/commercial/catalogo`);
+            revalidatePath(`/${firstItem.studio.slug}/studio/commercial/catalogo`, 'page');
             revalidateTag(`catalog-shell-${firstItem.studio.slug}`);
         }
 
@@ -649,9 +663,9 @@ export async function moverItemACategoria(
             });
         });
 
-        // Invalidar caché del catálogo
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         if (item?.studio?.slug) {
-            revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`);
+            revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`, 'page');
             revalidateTag(`catalog-shell-${item.studio.slug}`);
         }
 
@@ -747,8 +761,8 @@ export async function toggleItemPublish(
             })),
         };
 
-        // Invalidar caché del catálogo
-        revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`);
+        // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
+        revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`, 'page');
         revalidateTag(`catalog-shell-${item.studio.slug}`);
 
         return {
