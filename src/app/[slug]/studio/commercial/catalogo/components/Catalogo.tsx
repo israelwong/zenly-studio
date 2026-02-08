@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash, ListMinus } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash, ListMinus, Cloud } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -72,7 +72,7 @@ interface Categoria {
     items?: number;
 }
 
-type OperationalCategoryItem = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS';
+type OperationalCategoryItem = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS';
 
 interface Item {
     id: string;
@@ -1040,7 +1040,7 @@ export default function Catalogo() {
                             <ZenBadge
                                 variant="outline"
                                 size="sm"
-                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${isInactive
+                                className={`px-1 py-0 text-[10px] font-light rounded-sm inline-flex items-center gap-0.5 ${isInactive
                                     ? 'border-zinc-500 text-zinc-500'
                                     : !item.operational_category || item.operational_category === 'LOGISTICS'
                                         ? 'bg-zinc-500/10 border-zinc-500/50 text-zinc-400'
@@ -1048,11 +1048,13 @@ export default function Catalogo() {
                                             ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400'
                                             : item.operational_category === 'POST_PRODUCTION'
                                                 ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
-                                                : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                                : item.operational_category === 'PHYSICAL_DELIVERY'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                                    : 'bg-sky-500/10 border-sky-500/50 text-sky-400'
                                     }`}
                             >
-                                <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />
-                                {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : 'Entregable'}
+                                {(!item.operational_category || item.operational_category === 'LOGISTICS') ? <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : (item.operational_category === 'DIGITAL_DELIVERY' || item.operational_category === 'DELIVERY') ? <Cloud className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : item.operational_category === 'PHYSICAL_DELIVERY' ? <Package className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />}
+                                {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : item.operational_category === 'PHYSICAL_DELIVERY' ? 'Entregable Físico' : 'Entregable Digital'}
                             </ZenBadge>
                             {/* Badge de tipo de facturación (solo para servicios, productos siempre son UNIT) */}
                             {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (

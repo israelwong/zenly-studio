@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch, ZenDialog } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/shadcn/sheet";
 import { toast } from "sonner";
-import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash, Sparkles, Lock } from "lucide-react";
+import { Loader2, X, Calculator, Clock, Package, DollarSign, Hash, Sparkles, Lock, ChevronDown } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/catalogo/utilidad.actions";
 import { useConfiguracionPreciosUpdateListener } from "@/hooks/useConfiguracionPreciosRefresh";
@@ -23,7 +23,7 @@ interface Gasto {
 }
 
 /** Categoría operativa para Workflows Inteligentes (cronograma/checklists) */
-export type OperationalCategoryForm = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
+export type OperationalCategoryForm = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS' | null;
 
 export interface ItemFormData {
     id?: string;
@@ -107,6 +107,9 @@ export function ItemEditorModal({
     
     // Estados para contexto de cotizaciones
     const [saveToCatalog, setSaveToCatalog] = useState(false);
+
+    // Modal guía de flujos de trabajo
+    const [showWorkflowGuide, setShowWorkflowGuide] = useState(false);
 
     // Cargar configuración de precios del estudio
     useEffect(() => {
@@ -261,6 +264,7 @@ export function ItemEditorModal({
                     ? item.gastos
                     : [];
 
+                const rawCategory = (item as ItemFormData).operational_category ?? null;
                 const initialData: ItemFormData = {
                     id: item.id,
                     name: item.name,
@@ -269,7 +273,7 @@ export function ItemEditorModal({
                     categoriaeId: categoriaId,
                     tipoUtilidad: (item.tipoUtilidad || "servicio") as 'servicio' | 'producto',
                     billing_type: (item.billing_type || "SERVICE") as 'HOUR' | 'SERVICE' | 'UNIT',
-                    operational_category: (item as ItemFormData).operational_category ?? null,
+                    operational_category: rawCategory === "DELIVERY" ? "DIGITAL_DELIVERY" : rawCategory,
                     gastos: gastosDelItem,
                     status: item.status || "active",
                 };
@@ -764,25 +768,33 @@ export function ItemEditorModal({
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
                                         <label className="text-sm font-medium text-zinc-200">
-                                            Flujo de Trabajo Interno
+                                            Configuración interna
                                         </label>
                                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-700/60 text-zinc-400 border border-zinc-600/50">
                                             <Lock className="h-2.5 w-2.5" />
                                             Solo Estudio
                                         </span>
                                     </div>
-                                    <p className="text-xs text-zinc-500 mb-2">
-                                        Configuración interna: No visible para el cliente ni afecta cotizaciones. Define la generación automática de tareas y checklists.
+                                    <p className="text-xs text-zinc-500 mb-2 pb-2">
+                                        Esta categorización sirve para la generación automática de tareas.{" "}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowWorkflowGuide(true)}
+                                            className="inline-flex items-center text-sky-400 hover:text-sky-300 hover:underline underline-offset-1 transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500 rounded"
+                                        >
+                                            Más información
+                                        </button>
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {[
                                             { value: "", label: "Sin definir" },
                                             { value: "PRODUCTION", label: "Producción" },
                                             { value: "POST_PRODUCTION", label: "Postproducción" },
-                                            { value: "DELIVERY", label: "Entregable" },
+                                            { value: "DIGITAL_DELIVERY", label: "Entregable Digital" },
+                                            { value: "PHYSICAL_DELIVERY", label: "Entregable Físico" },
                                         ].map(({ value, label }) => {
                                             const current = formData.operational_category ?? "";
-                                            const selected = current === value;
+                                            const selected = current === value || (current === "DELIVERY" && value === "DIGITAL_DELIVERY");
                                             const base = "inline-flex items-center px-2.5 py-1 text-xs font-light rounded-sm border transition-all duration-150 disabled:opacity-50";
                                             const unselected = "bg-zinc-500/5 border-zinc-500/20 text-zinc-500 hover:bg-zinc-500/10";
                                             const selectedStyles =
@@ -792,7 +804,9 @@ export function ItemEditorModal({
                                                         ? "bg-indigo-500/10 border-indigo-500/50 text-indigo-400"
                                                         : value === "POST_PRODUCTION"
                                                             ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
-                                                            : "bg-emerald-500/10 border-emerald-500/50 text-emerald-400";
+                                                            : value === "DIGITAL_DELIVERY"
+                                                                ? "bg-sky-500/10 border-sky-500/50 text-sky-400"
+                                                                : "bg-emerald-500/10 border-emerald-500/50 text-emerald-400";
                                             return (
                                                 <button
                                                     key={value || "none"}
@@ -882,21 +896,16 @@ export function ItemEditorModal({
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between mb-3">
-                                            <label className="block text-sm font-medium text-zinc-200">
-                                                Desglose de Precios
-                                            </label>
-                                            <ZenButton
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setShowDesglosePrecios(!showDesglosePrecios)}
-                                                className="gap-2"
-                                            >
-                                                <Calculator className="w-4 h-4" />
-                                                {showDesglosePrecios ? "Ocultar" : "Mostrar"}
-                                            </ZenButton>
-                                        </div>
+                                        <ZenButton
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowDesglosePrecios(!showDesglosePrecios)}
+                                            className="w-full justify-between mb-3 gap-2"
+                                        >
+                                            <span className="text-sm font-medium text-zinc-200">Desglose de Precios</span>
+                                            <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${showDesglosePrecios ? "rotate-180" : ""}`} />
+                                        </ZenButton>
 
                                         {showDesglosePrecios && (
                                             <PrecioDesglose
@@ -972,11 +981,7 @@ export function ItemEditorModal({
                                             disabled={isSaving || !formData.name.trim()}
                                             className="gap-2 flex-1"
                                         >
-                                            {isSaving ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <Save className="w-4 h-4" />
-                                            )}
+                                            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                                             {item ? "Actualizar" : "Crear"} Item
                                         </ZenButton>
                                     </div>
@@ -985,6 +990,61 @@ export function ItemEditorModal({
                     </div>
                 </SheetContent>
             </Sheet>
+
+            {/* Guía de Flujos de Trabajo (modal informativo) */}
+            <ZenDialog
+                isOpen={showWorkflowGuide}
+                onClose={() => setShowWorkflowGuide(false)}
+                title="Guía de Flujos de Trabajo"
+                description="Configuración interna: No visible para el cliente ni afecta cotizaciones. Aquí puedes ver cómo cada categoría impacta en el cronograma y ejemplos de tareas."
+                onCancel={() => setShowWorkflowGuide(false)}
+                cancelLabel="Cerrar"
+                cancelAlignRight
+                maxWidth="2xl"
+                closeOnClickOutside
+            >
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                        <thead>
+                            <tr className="border-b border-zinc-700">
+                                <th className="text-left py-3 px-4 font-medium text-zinc-300">Categoría</th>
+                                <th className="text-left py-3 px-4 font-medium text-zinc-300">Impacto en el Cronograma</th>
+                                <th className="text-left py-3 px-4 font-medium text-zinc-300">Ejemplos de Tareas</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-zinc-400">
+                            <tr className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                                <td className="py-3 px-4">
+                                    <span className="font-medium text-indigo-400">Producción</span>
+                                </td>
+                                <td className="py-3 px-4">Tareas presenciales y de equipo.</td>
+                                <td className="py-3 px-4">Limpiar lentes, Shooting, Ingesta.</td>
+                            </tr>
+                            <tr className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                                <td className="py-3 px-4">
+                                    <span className="font-medium text-amber-400">Post-producción</span>
+                                </td>
+                                <td className="py-3 px-4">Tareas de escritorio y software.</td>
+                                <td className="py-3 px-4">Selección (Culling), Retoque, Color.</td>
+                            </tr>
+                            <tr className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                                <td className="py-3 px-4">
+                                    <span className="font-medium text-sky-400">Entregable Digital</span>
+                                </td>
+                                <td className="py-3 px-4">Tareas de nube y gestión de links.</td>
+                                <td className="py-3 px-4">Subir a Drive, Generar galería.</td>
+                            </tr>
+                            <tr className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                                <td className="py-3 px-4">
+                                    <span className="font-medium text-emerald-400">Entregable Físico</span>
+                                </td>
+                                <td className="py-3 px-4">Tareas de laboratorio y logística.</td>
+                                <td className="py-3 px-4">Pedido a lab, Empaque, Cita de entrega.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </ZenDialog>
 
             {/* Modal de confirmación para cambios sin guardar */}
             <ZenConfirmModal

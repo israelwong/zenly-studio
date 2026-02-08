@@ -11,7 +11,9 @@ function operationalCategoryToTaskType(oc: OperationalCategory | null): Cotizaci
   switch (oc) {
     case 'PRODUCTION': return 'OPERATION';
     case 'POST_PRODUCTION': return 'EDITING';
-    case 'DELIVERY': return 'DELIVERY';
+    case 'DELIVERY':
+    case 'DIGITAL_DELIVERY':
+    case 'PHYSICAL_DELIVERY': return 'DELIVERY';
     case 'LOGISTICS': return 'CUSTOM';
     default: return undefined;
   }

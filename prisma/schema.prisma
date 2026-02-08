@@ -3604,11 +3604,13 @@ enum ItemType {
   SERVICIO
 }
 
-/// Categoría operativa del ítem para workflows (Producción, Postproducción, Entrega, Logística)
+/// Categoría operativa del ítem para workflows (Producción, Postproducción, Entregas, Logística)
 enum OperationalCategory {
   PRODUCTION
   POST_PRODUCTION
   DELIVERY
+  DIGITAL_DELIVERY
+  PHYSICAL_DELIVERY
   LOGISTICS
 }
 

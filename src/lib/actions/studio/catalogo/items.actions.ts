@@ -38,7 +38,7 @@ const GastoSchema = z.object({
     costo: z.number().min(0, "El costo no puede ser negativo"),
 });
 
-const OperationalCategorySchema = z.enum(['PRODUCTION', 'POST_PRODUCTION', 'DELIVERY', 'LOGISTICS']).nullable().optional();
+const OperationalCategorySchema = z.enum(['PRODUCTION', 'POST_PRODUCTION', 'DELIVERY', 'DIGITAL_DELIVERY', 'PHYSICAL_DELIVERY', 'LOGISTICS']).nullable().optional();
 
 const CreateItemSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),

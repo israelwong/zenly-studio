@@ -83,7 +83,7 @@ interface Item {
     description?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
-    operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
+    operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS' | null;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -111,7 +111,7 @@ interface CatalogoClientProps {
                 costo: number;
                 tipo_utilidad: string;
                 billing_type: string;
-                operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS' | null;
+                operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS' | null;
                 orden: number;
                 status: string;
                 gastos: Array<{

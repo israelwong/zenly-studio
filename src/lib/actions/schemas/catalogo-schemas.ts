@@ -156,7 +156,7 @@ export interface GastoServicioData {
  * Tipo para datos de Servicio
  */
 /** Categoría operativa para cronograma (Workflows Inteligentes) */
-export type OperationalCategoryCatalog = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'LOGISTICS';
+export type OperationalCategoryCatalog = 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS';
 
 export interface ServicioData {
     id: string;
