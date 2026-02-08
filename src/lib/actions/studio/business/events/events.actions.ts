@@ -1073,6 +1073,7 @@ export async function obtenerEventoDetalle(
                 depends_on_task_id: true,
                 checklist_items: true,
                 budget_amount: true,
+                order: true,
                 assigned_to: {
                   select: {
                     id: true,
@@ -1094,9 +1095,7 @@ export async function obtenerEventoDetalle(
                   },
                 },
               },
-              orderBy: {
-                start_date: 'asc',
-              },
+              orderBy: [{ category: 'asc' }, { order: 'asc' }, { start_date: 'asc' }],
             },
           },
         },
@@ -1409,6 +1408,7 @@ export async function obtenerEventoDetalle(
             tasks: evento.scheduler.tasks?.map((t) => ({
               ...t,
               budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+              order: t.order ?? 0,
               assigned_to_crew_member_id: t.assigned_to_crew_member_id,
               assigned_to_crew_member: t.assigned_to_crew_member
                 ? {
@@ -2650,7 +2650,6 @@ export async function asignarCrewAItem(
                     task.google_calendar_id,
                     task.google_event_id
                   );
-                  console.log('[Scheduler] ✅ Invitación cancelada en Google Calendar al quitar personal');
                 }
               } catch (error) {
                 // Log error pero no bloquear la operación principal
@@ -2674,7 +2673,6 @@ export async function asignarCrewAItem(
                     task.google_calendar_id,
                     task.google_event_id
                   );
-                  console.log('[Scheduler] ✅ Invitación anterior cancelada en Google Calendar al cambiar personal');
                 }
               } catch (error) {
                 // Log error pero no bloquear la operación principal

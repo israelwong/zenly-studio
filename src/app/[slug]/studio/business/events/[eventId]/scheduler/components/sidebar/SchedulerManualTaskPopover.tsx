@@ -10,11 +10,12 @@ import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { X, UserPlus, Loader2, CheckCircle2, Trash2 } from 'lucide-react';
+import { X, UserPlus, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
+import type { TaskCategoryStage } from '../../utils/scheduler-section-stages';
 
 interface CrewMember {
   id: string;
@@ -35,6 +36,14 @@ interface SchedulerManualTaskPopoverProps {
   children: React.ReactNode;
   onManualTaskPatch?: (taskId: string, patch: ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
+  /** Control externo del popover (p. ej. desde menú "Editar") */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Control externo del modal de confirmar eliminar (desde menú "Eliminar") */
+  deleteConfirmOpen?: boolean;
+  onDeleteConfirmOpenChange?: (open: boolean) => void;
+  /** Contenido a la derecha de la fila (p. ej. menú de acciones). Cuando se usa, el popover envuelve trigger + rightSlot en la fila. */
+  rightSlot?: React.ReactNode;
 }
 
 function getInitials(name: string) {
@@ -48,12 +57,22 @@ export function SchedulerManualTaskPopover({
   children,
   onManualTaskPatch,
   onManualTaskDelete,
+  open: openProp,
+  onOpenChange,
+  deleteConfirmOpen: deleteConfirmOpenProp,
+  onDeleteConfirmOpenChange,
+  rightSlot,
 }: SchedulerManualTaskPopoverProps) {
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const [deleteConfirmOpenInternal, setDeleteConfirmOpenInternal] = useState(false);
+  const open = openProp !== undefined ? openProp : openInternal;
+  const setOpen = onOpenChange ?? setOpenInternal;
+  const deleteConfirmOpen = deleteConfirmOpenProp !== undefined ? deleteConfirmOpenProp : deleteConfirmOpenInternal;
+  const setDeleteConfirmOpen = onDeleteConfirmOpenChange ?? setDeleteConfirmOpenInternal;
+
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAssigningCrew, setIsAssigningCrew] = useState(false);
   const [isUpdatingCompletion, setIsUpdatingCompletion] = useState(false);
@@ -236,26 +255,25 @@ export function SchedulerManualTaskPopover({
     await onManualTaskDelete?.(task.id);
   };
 
+  const triggerContent = rightSlot != null ? (
+    <div className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative cursor-pointer group">
+      <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
+      <PopoverTrigger asChild>
+        <div className="flex-1 min-w-0 flex items-center cursor-pointer outline-none">{children}</div>
+      </PopoverTrigger>
+      {rightSlot}
+    </div>
+  ) : (
+    <PopoverTrigger asChild>{children}</PopoverTrigger>
+  );
+
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>{children}</PopoverTrigger>
+        {triggerContent}
         <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4}>
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-light text-zinc-500 uppercase tracking-wide">Tarea manual</p>
-              {onManualTaskDelete && (
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={isSaving}
-                  className="p-1.5 rounded-md text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors disabled:opacity-50"
-                  aria-label="Eliminar tarea"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <p className="text-[10px] font-medium text-emerald-400 uppercase tracking-wide" data-scheduler-label="manual-task">Tarea manual</p>
 
             <div className="space-y-2.5">
               <div className="space-y-2">

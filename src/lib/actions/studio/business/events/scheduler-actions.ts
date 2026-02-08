@@ -1125,3 +1125,229 @@ export async function asignarCrewATareaScheduler(
     };
   }
 }
+
+/**
+ * Reordena una tarea manual (subir o bajar) dentro de su misma categoría.
+ */
+export async function reordenarTareaManualScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  direction: 'up' | 'down'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, category: true, order: true, scheduler_instance_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+
+    const siblings = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        cotizacion_item_id: null,
+        category: task.category,
+      },
+      select: { id: true, order: true },
+      orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
+    });
+
+    const idx = siblings.findIndex((s) => s.id === taskId);
+    if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
+    if (direction === 'up' && idx === 0) return { success: true };
+    if (direction === 'down' && idx === siblings.length - 1) return { success: true };
+
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const other = siblings[swapIdx]!;
+    await prisma.$transaction([
+      prisma.studio_scheduler_event_tasks.update({
+        where: { id: taskId },
+        data: { order: other.order },
+      }),
+      prisma.studio_scheduler_event_tasks.update({
+        where: { id: other.id },
+        data: { order: task.order },
+      }),
+    ]);
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[reordenarTareaManualScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al reordenar',
+    };
+  }
+}
+
+/**
+ * Mueve una tarea manual a otra categoría/etapa.
+ */
+export async function moverTareaManualCategoria(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  category: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const validCategory = MANUAL_TASK_CATEGORIES.includes(category as (typeof MANUAL_TASK_CATEGORIES)[number])
+      ? (category as (typeof MANUAL_TASK_CATEGORIES)[number])
+      : 'PLANNING';
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, scheduler_instance_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+
+    const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
+      where: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        cotizacion_item_id: null,
+        category: validCategory,
+      },
+      _max: { order: true },
+    });
+    const newOrder = (maxOrder._max.order ?? -1) + 1;
+
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { category: validCategory, order: newOrder },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[moverTareaManualCategoria] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al mover la tarea',
+    };
+  }
+}
+
+/**
+ * Duplica una tarea manual (misma sección/etapa, nombre, costo, duración; estado PENDING).
+ */
+export async function duplicarTareaManualScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{
+  success: boolean;
+  data?: { id: string; task: { id: string; name: string; start_date: Date; end_date: Date; category: string; order: number; budget_amount: number | null; status: string } };
+  error?: string;
+}> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: null,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: {
+        id: true,
+        scheduler_instance_id: true,
+        name: true,
+        start_date: true,
+        end_date: true,
+        duration_days: true,
+        category: true,
+        order: true,
+        budget_amount: true,
+      },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+
+    const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
+      where: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        cotizacion_item_id: null,
+        category: task.category,
+      },
+      _max: { order: true },
+    });
+    const newOrder = (maxOrder._max.order ?? -1) + 1;
+
+    const lastInCategory = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        category: task.category,
+      },
+      orderBy: { end_date: 'desc' },
+      select: { end_date: true },
+    });
+    const toUTCNoon = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+    const startDate = lastInCategory
+      ? (() => {
+          const next = new Date(lastInCategory.end_date);
+          next.setUTCDate(next.getUTCDate() + 1);
+          return toUTCNoon(next);
+        })()
+      : task.start_date;
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + (task.duration_days || 1) - 1);
+
+    const created = await prisma.studio_scheduler_event_tasks.create({
+      data: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        cotizacion_item_id: null,
+        name: `${task.name} (copia)`,
+        duration_days: task.duration_days || 1,
+        category: task.category,
+        start_date: startDate,
+        end_date: toUTCNoon(endDate),
+        sync_status: 'DRAFT',
+        status: 'PENDING',
+        progress_percent: 0,
+        order: newOrder,
+        budget_amount: task.budget_amount,
+      },
+      select: { id: true, name: true, start_date: true, end_date: true, category: true, order: true, budget_amount: true, status: true },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+
+    return {
+      success: true,
+      data: {
+        id: created.id,
+        task: {
+          id: created.id,
+          name: created.name,
+          start_date: created.start_date,
+          end_date: created.end_date,
+          category: created.category,
+          order: created.order,
+          budget_amount: created.budget_amount != null ? Number(created.budget_amount) : null,
+          status: created.status,
+        },
+      },
+    };
+  } catch (error) {
+    console.error('[duplicarTareaManualScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al duplicar la tarea',
+    };
+  }
+}

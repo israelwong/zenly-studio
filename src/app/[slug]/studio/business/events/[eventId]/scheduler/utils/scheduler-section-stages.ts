@@ -88,6 +88,8 @@ export interface ManualTaskPayload {
   completed_at?: Date | null;
   /** Costo estimado (budget_amount en BD) */
   budget_amount?: number | null;
+  /** Orden dentro de la misma categoría/etapa */
+  order?: number;
   assigned_to_crew_member_id?: string | null;
   assigned_to_crew_member?: {
     id: string;

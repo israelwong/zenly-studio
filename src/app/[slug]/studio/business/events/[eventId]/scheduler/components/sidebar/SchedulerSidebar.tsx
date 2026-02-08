@@ -14,7 +14,6 @@ import {
   isAddPhantomRow,
   isManualTaskRow,
   STAGE_COLORS,
-  STAGE_LABELS,
   type SchedulerRowDescriptor,
   type TaskCategoryStage,
   type ManualTaskPayload,
@@ -24,7 +23,26 @@ import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
 import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
-import { ChevronRight, ChevronDown, Plus, Trash2, User } from 'lucide-react';
+import {
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Trash2,
+  User,
+  MoreHorizontal,
+  Pencil,
+  Copy,
+  FolderInput,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
+import { MoveTaskModal } from './MoveTaskModal';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -56,6 +74,9 @@ interface SchedulerSidebarProps {
   onAddManualTask?: (sectionId: string, stageCategory: string) => void;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
+  onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
+  onManualTaskMoveStage?: (taskId: string, category: TaskCategoryStage) => void;
+  onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
@@ -68,47 +89,139 @@ function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-/** Fila manual: mismo aspecto que ítems de cotización (avatar + nombre en una línea, sin nombre del asignado). */
+/** Fila manual: avatar + nombre + botones orden (↑↓) + menú acciones; botones y menú visibles solo al hover. */
 function ManualTaskRow({
   task,
   studioSlug,
   eventId,
+  stageCategory,
+  secciones,
+  canMoveUp = false,
+  canMoveDown = false,
   onManualTaskPatch,
   onManualTaskDelete,
+  onReorderUp,
+  onReorderDown,
+  onMoveToStage,
+  onDuplicate,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
   eventId: string;
+  stageCategory?: TaskCategoryStage;
+  secciones: SeccionData[];
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
+  onReorderUp?: (taskId: string) => void;
+  onReorderDown?: (taskId: string) => void;
+  onMoveToStage?: (taskId: string, category: TaskCategoryStage) => void;
+  onDuplicate?: (taskId: string) => void;
 }) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
   const { localTask } = useSchedulerManualTaskSync(task);
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
   const hasCrew = !!localTask.assigned_to_crew_member;
+
+  const actionsSlot = (
+    <div className="flex items-center gap-0.5 shrink-0 pl-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {onReorderUp != null && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onReorderUp(localTask.id); }}
+          disabled={!canMoveUp}
+          className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
+          aria-label="Subir"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </button>
+      )}
+      {onReorderDown != null && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onReorderDown(localTask.id); }}
+          disabled={!canMoveDown}
+          className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
+          aria-label="Bajar"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="p-1.5 rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors focus:opacity-100 focus:outline-none"
+            aria-label="Acciones"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
+        <DropdownMenuItem onClick={() => setPopoverOpen(true)} className="gap-2">
+          <Pencil className="h-3.5 w-3.5" />
+          Editar
+        </DropdownMenuItem>
+        {onDuplicate && (
+          <DropdownMenuItem onClick={() => onDuplicate(localTask.id)} className="gap-2">
+            <Copy className="h-3.5 w-3.5" />
+            Duplicar
+          </DropdownMenuItem>
+        )}
+        {onMoveToStage && stageCategory != null && (
+          <DropdownMenuItem onClick={() => setMoveModalOpen(true)} className="gap-2">
+            <FolderInput className="h-3.5 w-3.5" />
+            Mover a…
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        {onManualTaskDelete && (
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => setDeleteConfirmOpen(true)}
+            className="gap-2"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Eliminar
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+    </div>
+  );
+
   return (
-    <SchedulerManualTaskPopover
-      task={localTask}
-      studioSlug={studioSlug}
-      eventId={eventId}
-      onManualTaskPatch={onManualTaskPatch}
-      onManualTaskDelete={onManualTaskDelete}
-    >
-      <div
-        className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative cursor-pointer"
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLDivElement).click()}
+    <>
+      <SchedulerManualTaskPopover
+        task={localTask}
+        studioSlug={studioSlug}
+        eventId={eventId}
+        onManualTaskPatch={onManualTaskPatch}
+        onManualTaskDelete={onManualTaskDelete}
+        open={popoverOpen}
+        onOpenChange={setPopoverOpen}
+        deleteConfirmOpen={deleteConfirmOpen}
+        onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+        rightSlot={actionsSlot}
       >
-        <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-        <div className="flex-1 min-w-0 flex items-center gap-2 pl-10 pr-4">
-          <ZenAvatar className="h-5 w-5 flex-shrink-0">
+        <div
+          className="flex items-center gap-2 pl-10 pr-4 min-h-[60px]"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
+        >
+          <ZenAvatar className="h-8 w-8 shrink-0">
             {hasCrew ? (
               <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
                 {getInitials(localTask.assigned_to_crew_member!.name)}
               </ZenAvatarFallback>
             ) : (
-              <ZenAvatarFallback className="bg-zinc-700 text-zinc-500">
-                <User className="h-2.5 w-2.5" />
+              <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+                <User className="h-3.5 w-3.5" />
               </ZenAvatarFallback>
             )}
           </ZenAvatar>
@@ -116,8 +229,18 @@ function ManualTaskRow({
             {localTask.name}
           </p>
         </div>
-      </div>
-    </SchedulerManualTaskPopover>
+      </SchedulerManualTaskPopover>
+      {onMoveToStage && stageCategory != null && (
+        <MoveTaskModal
+          open={moveModalOpen}
+          onOpenChange={setMoveModalOpen}
+          taskName={localTask.name}
+          currentCategory={stageCategory}
+          secciones={secciones}
+          onConfirm={(category) => onMoveToStage(localTask.id, category)}
+        />
+      )}
+    </>
   );
 }
 
@@ -245,6 +368,9 @@ export const SchedulerSidebar = React.memo(({
   onAddManualTask,
   onManualTaskPatch,
   onManualTaskDelete,
+  onManualTaskReorder,
+  onManualTaskMoveStage,
+  onManualTaskDuplicate,
   onManualTaskUpdate,
   onDeleteStage,
   expandedSections = new Set(),
@@ -396,17 +522,32 @@ export const SchedulerSidebar = React.memo(({
 
             {isExpanded ? (
               <>
-                {taskRows.map((tr) =>
-                  tr.type === 'manual_task' ? (
-                    <ManualTaskRow
-                      key={tr.task.id}
-                      task={tr.task}
-                      studioSlug={studioSlug}
-                      eventId={eventId}
-                      onManualTaskPatch={onManualTaskPatch}
-                      onManualTaskDelete={onManualTaskDelete}
-                    />
-                  ) : (
+                {(() => {
+                  const manualInStage = taskRows.filter((r): r is { type: 'manual_task'; task: ManualTaskPayload } => r.type === 'manual_task');
+                  return taskRows.map((tr) =>
+                    tr.type === 'manual_task' ? (
+                      (() => {
+                        const idx = manualInStage.findIndex((m) => m.task.id === tr.task.id);
+                        return (
+                          <ManualTaskRow
+                            key={tr.task.id}
+                            task={tr.task}
+                            studioSlug={studioSlug}
+                            eventId={eventId}
+                            stageCategory={stageRow.category}
+                            secciones={secciones}
+                            canMoveUp={idx > 0}
+                            canMoveDown={idx >= 0 && idx < manualInStage.length - 1}
+                            onManualTaskPatch={onManualTaskPatch}
+                            onManualTaskDelete={onManualTaskDelete}
+                            onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
+                            onReorderDown={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'down') : undefined}
+                            onMoveToStage={onManualTaskMoveStage}
+                            onDuplicate={onManualTaskDuplicate}
+                          />
+                        );
+                      })()
+                    ) : (
                     <div
                       key={tr.item.id}
                       className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
@@ -430,7 +571,8 @@ export const SchedulerSidebar = React.memo(({
                       </div>
                     </div>
                   )
-                )}
+                );
+                })()}
                 <button
                   type="button"
                   onClick={() => onAddManualTask?.(stageRow.sectionId, stageRow.category)}

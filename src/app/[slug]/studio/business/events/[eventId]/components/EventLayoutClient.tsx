@@ -4,7 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenConfirmModal, ZenButton } from '@/components/ui/zen';
-import { cancelarEvento, obtenerCotizacionesAutorizadasCount, type EventoDetalle } from '@/lib/actions/studio/business/events';
+import {
+  cancelarEvento,
+  obtenerCotizacionesAutorizadasCount,
+  type EventoDetalle,
+} from '@/lib/actions/studio/business/events/events.actions';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { EventPanel } from '../../components/EventPanel';
 import { EventDetailHeader } from './EventDetailHeader';

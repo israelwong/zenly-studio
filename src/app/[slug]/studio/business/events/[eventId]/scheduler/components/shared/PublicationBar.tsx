@@ -28,7 +28,6 @@ export function PublicationBar({ studioSlug, eventId, onPublished }: Publication
       const result = await obtenerConteoTareasDraft(studioSlug, eventId);
       if (result.success && result.count !== undefined && isMountedRef.current) {
         setDraftCount(result.count);
-        console.log(`[PublicationBar] Tareas DRAFT encontradas: ${result.count}`);
       } else if (result.error) {
         console.error('[PublicationBar] Error obteniendo conteo:', result.error);
       }

@@ -28,7 +28,8 @@ interface AssignCrewBeforeCompleteModalProps {
   onCompleteWithoutPayment: () => void;
   onAssignAndComplete: (crewMemberId: string, skipPayment?: boolean) => Promise<void>;
   studioSlug: string;
-  itemId: string;
+  /** Solo presente para ítems de cotización; ausente para tareas manuales */
+  itemId?: string;
   itemName: string;
   costoTotal: number;
 }
@@ -204,14 +205,22 @@ export function AssignCrewBeforeCompleteModal({
         title={hasNoCrew ? "¿Deseas agregar personal?" : "Asignar personal para generar pago"}
         description={
           hasNoCrew
-            ? "No tienes personal registrado. Puedes agregarlo ahora o completar la tarea sin asignar personal."
+            ? "No tienes personal registrado. Usa «Registrar personal» en el footer o completa sin asignar."
             : "Para generar el pago en nómina, asigna un miembro del equipo a esta tarea."
         }
         maxWidth="md"
         closeOnClickOutside={false}
         onCancel={onClose}
         cancelLabel="Cancelar"
+        cancelVariant="secondary"
+        cancelAlignRight
         zIndex={100010}
+        footerLeftContent={
+          <ZenButton variant="ghost" size="sm" onClick={() => setShowQuickAddModal(true)} className="gap-2">
+            <UserPlus className="h-3.5 w-3.5" />
+            Registrar personal
+          </ZenButton>
+        }
       >
         <div className="space-y-4">
           {/* Información del item */}
@@ -233,24 +242,34 @@ export function AssignCrewBeforeCompleteModal({
                   <strong>No tienes personal registrado</strong>
                 </p>
                 <p className="text-xs text-amber-300/80">
-                  Puedes agregar personal ahora para asignarlo a esta tarea, o completar la tarea sin asignar personal.
+                  Usa &quot;Registrar personal&quot; en el footer para agregar personal, o completa la tarea sin asignar.
                 </p>
               </div>
 
+              {/* Completar sin pago en su posición */}
               <ZenButton
-                onClick={() => setShowQuickAddModal(true)}
-                className="w-full gap-2"
-                variant="default"
+                onClick={handleCompleteWithoutPayment}
+                variant="outline"
+                className="w-full"
               >
-                <UserPlus className="h-4 w-4" />
-                Agregar personal rápidamente
+                Completar sin pago
               </ZenButton>
+
+              {/* Checkbox para recordar preferencia cuando no hay crew */}
+              <div className="flex items-center gap-2 pt-1">
+                <ZenSwitch
+                  checked={rememberPreference}
+                  onCheckedChange={setRememberPreference}
+                />
+                <label className="text-xs text-zinc-400 cursor-pointer">
+                  Recordar que no tengo personal aún
+                </label>
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-400">Seleccionar miembro del equipo:</label>
 
-              {/* Input de búsqueda */}
               <ZenInput
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -258,22 +277,15 @@ export function AssignCrewBeforeCompleteModal({
                 className="w-full"
               />
 
-              {/* Lista de miembros */}
               {loadingMembers ? (
                 <div className="space-y-1 border border-zinc-800 rounded-lg p-2">
-                  {/* Skeleton: mostrar 5 items placeholder */}
                   {Array.from({ length: 5 }).map((_, index) => (
                     <div
                       key={index}
                       className="w-full flex items-center gap-2 px-2 py-2 animate-pulse"
                     >
-                      {/* Avatar skeleton */}
                       <div className="h-6 w-6 shrink-0 rounded-full bg-zinc-800" />
-
-                      {/* Check indicator skeleton */}
                       <div className="h-3 w-3 shrink-0 bg-zinc-800 rounded" />
-
-                      {/* Información skeleton */}
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="h-3 bg-zinc-800 rounded w-3/4" />
                         <div className="h-2 bg-zinc-800/50 rounded w-1/2" />
@@ -297,21 +309,16 @@ export function AssignCrewBeforeCompleteModal({
                           selectedMemberId === member.id && 'bg-zinc-800'
                         )}
                       >
-                        {/* Avatar */}
                         <ZenAvatar className="h-6 w-6 shrink-0">
                           <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[10px]">
                             {getInitials(member.name)}
                           </ZenAvatarFallback>
                         </ZenAvatar>
-
-                        {/* Check indicator */}
                         <div className="h-3 w-3 flex items-center justify-center shrink-0">
                           {selectedMemberId === member.id && (
                             <Check className="h-3 w-3 text-emerald-400" />
                           )}
                         </div>
-
-                        {/* Información */}
                         <div className="flex-1 min-w-0">
                           <div className="text-zinc-300 truncate">{member.name}</div>
                           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 truncate">
@@ -331,52 +338,28 @@ export function AssignCrewBeforeCompleteModal({
                 </div>
               )}
 
-              {/* Botón para agregar personal adicional */}
+              {/* Asignar y completar debajo de la lista (como SelectCrewModal) */}
               <ZenButton
-                onClick={() => setShowQuickAddModal(true)}
-                variant="outline"
-                className="w-full gap-2 mt-2"
+                className="w-full mt-2"
                 size="sm"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Agregar personal adicional
-              </ZenButton>
-            </div>
-          )}
-
-          {/* Botones de acción */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800">
-            {!hasNoCrew && (
-              <ZenButton
                 onClick={handleAssignAndComplete}
                 disabled={!selectedMemberId || isAssigning}
                 loading={isAssigning}
-                className="w-full"
               >
                 Asignar y completar
               </ZenButton>
-            )}
-            <ZenButton
-              onClick={handleCompleteWithoutPayment}
-              variant="outline"
-              className="w-full"
-            >
-              Completar sin pago
-            </ZenButton>
 
-            {/* Checkbox para recordar preferencia cuando no hay crew */}
-            {hasNoCrew && (
-              <div className="flex items-center gap-2 pt-2">
-                <ZenSwitch
-                  checked={rememberPreference}
-                  onCheckedChange={setRememberPreference}
-                />
-                <label className="text-xs text-zinc-400 cursor-pointer">
-                  Recordar que no tengo personal aún
-                </label>
-              </div>
-            )}
-          </div>
+              {/* Completar sin pago en su posición */}
+              <ZenButton
+                onClick={handleCompleteWithoutPayment}
+                variant="outline"
+                className="w-full"
+                size="sm"
+              >
+                Completar sin pago
+              </ZenButton>
+            </div>
+          )}
         </div>
       </ZenDialog>
 

@@ -33,6 +33,9 @@ interface SchedulerPanelProps {
   onAddManualTask?: (sectionId: string, stageCategory: string) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
+  onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
+  onManualTaskMoveStage?: (taskId: string, category: import('../utils/scheduler-section-stages').TaskCategoryStage) => void;
+  onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
@@ -63,6 +66,9 @@ export const SchedulerPanel = React.memo(({
   onAddManualTask,
   onManualTaskPatch,
   onManualTaskDelete,
+  onManualTaskReorder,
+  onManualTaskMoveStage,
+  onManualTaskDuplicate,
   onManualTaskUpdate,
   onDeleteStage,
   expandedSections = new Set(),
@@ -121,6 +127,9 @@ export const SchedulerPanel = React.memo(({
             onAddManualTask={onAddManualTask}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
+            onManualTaskReorder={onManualTaskReorder}
+            onManualTaskMoveStage={onManualTaskMoveStage}
+            onManualTaskDuplicate={onManualTaskDuplicate}
             onManualTaskUpdate={onManualTaskUpdate}
             onDeleteStage={onDeleteStage}
             expandedSections={expandedSections}

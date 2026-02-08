@@ -6,7 +6,13 @@ import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { STAGE_ORDER } from '../../utils/scheduler-section-stages';
 import { SchedulerPanel } from './SchedulerPanel';
-import { actualizarSchedulerTaskFechas, eliminarTareaManual } from '@/lib/actions/studio/business/events/scheduler-actions';
+import {
+  actualizarSchedulerTaskFechas,
+  eliminarTareaManual,
+  reordenarTareaManualScheduler,
+  moverTareaManualCategoria,
+  duplicarTareaManualScheduler,
+} from '@/lib/actions/studio/business/events/scheduler-actions';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -65,9 +71,10 @@ export const EventScheduler = React.memo(function EventScheduler({
   const [hasCrewPreference, setHasCrewPreference] = useState<boolean | null>(null);
   const [pendingTaskCompletion, setPendingTaskCompletion] = useState<{
     taskId: string;
-    itemId: string;
+    itemId?: string;
     itemName: string;
     costoTotal: number;
+    isManual?: boolean;
   } | null>(null);
   const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
   const [pendingFixedSalaryTask, setPendingFixedSalaryTask] = useState<{
@@ -249,6 +256,85 @@ export const EventScheduler = React.memo(function EventScheduler({
       toast.success('Tarea eliminada');
     }
   }, [localEventData, studioSlug, eventId]);
+
+  const handleManualTaskReorder = useCallback(
+    async (taskId: string, direction: 'up' | 'down') => {
+      const tasks = localEventData.scheduler?.tasks ?? [];
+      const current = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null) as (typeof tasks[0]) & { category?: string; order?: number } | undefined;
+      if (!current) return;
+      const category = current.category ?? 'PLANNING';
+      const manualInCategory = tasks.filter((t) => t.cotizacion_item_id == null && (t as { category?: string }).category === category) as Array<typeof tasks[0] & { category: string; order?: number }>;
+      const sorted = [...manualInCategory].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const idx = sorted.findIndex((t) => t.id === taskId);
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return;
+      const other = sorted[swapIdx]!;
+      const result = await reordenarTareaManualScheduler(studioSlug, eventId, taskId, direction);
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al reordenar');
+        return;
+      }
+      const newTasks = tasks.map((t) => {
+        if (t.id === taskId) return { ...t, order: other.order ?? 0 };
+        if (t.id === other.id) return { ...t, order: current.order ?? 0 };
+        return t;
+      });
+      setLocalEventData((prev) => ({
+        ...prev,
+        scheduler: prev.scheduler ? { ...prev.scheduler, tasks: newTasks } : prev.scheduler,
+      }));
+      onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: newTasks } });
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+    },
+    [studioSlug, eventId, localEventData, onDataChange]
+  );
+
+  const handleManualTaskMoveStage = useCallback(
+    async (taskId: string, category: import('../../utils/scheduler-section-stages').TaskCategoryStage) => {
+      const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category);
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al mover la tarea');
+        return;
+      }
+      handleManualTaskPatch(taskId, { category });
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+    },
+    [studioSlug, eventId, handleManualTaskPatch]
+  );
+
+  const handleManualTaskDuplicate = useCallback(
+    async (taskId: string) => {
+      const result = await duplicarTareaManualScheduler(studioSlug, eventId, taskId);
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al duplicar');
+        return;
+      }
+      if (!result.data) return;
+      const newTask = {
+        id: result.data.id,
+        name: result.data.task.name,
+        start_date: result.data.task.start_date,
+        end_date: result.data.task.end_date,
+        category: result.data.task.category,
+        cotizacion_item_id: null,
+        status: result.data.task.status,
+        order: result.data.task.order,
+        budget_amount: result.data.task.budget_amount,
+        assigned_to_crew_member_id: null,
+        assigned_to_crew_member: null,
+      };
+      setLocalEventData((prev) => ({
+        ...prev,
+        scheduler: prev.scheduler
+          ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
+          : prev.scheduler,
+      }));
+      onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: [...(localEventData.scheduler?.tasks ?? []), newTask] } });
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      toast.success('Tarea duplicada');
+    },
+    [studioSlug, eventId, localEventData, onDataChange]
+  );
 
   // Construir map de items desde cotizaciones aprobadas
   // Usar localEventData para reflejar cambios inmediatamente
@@ -662,6 +748,16 @@ export const EventScheduler = React.memo(function EventScheduler({
           (t) => t.id === taskId && t.cotizacion_item_id == null
         );
         if (manualTask) {
+          if (!manualTask.assigned_to_crew_member_id) {
+            setPendingTaskCompletion({
+              taskId,
+              itemName: manualTask.name ?? 'Tarea manual',
+              costoTotal: Number(manualTask.budget_amount ?? 0),
+              isManual: true,
+            });
+            setAssignCrewModalOpen(true);
+            return;
+          }
           try {
             const result = await actualizarSchedulerTask(studioSlug, eventId, taskId, {
               isCompleted: true,
@@ -862,17 +958,92 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, onDataChange]
   );
 
-  // Handler para asignar y completar desde el modal
+  // Handler para asignar y completar desde el modal (ítem de cotización o tarea manual)
   const handleAssignAndComplete = useCallback(
     async (crewMemberId: string, skipPayment: boolean = false) => {
       if (!pendingTaskCompletion) return;
 
+      const isManual = pendingTaskCompletion.isManual === true;
+
       try {
-        // Asignar personal
+        if (isManual) {
+          const { asignarCrewATareaScheduler } = await import('@/lib/actions/studio/business/events/scheduler-actions');
+          const assignResult = await asignarCrewATareaScheduler(
+            studioSlug,
+            eventId,
+            pendingTaskCompletion.taskId,
+            crewMemberId
+          );
+          if (!assignResult.success) {
+            toast.error(assignResult.error ?? 'Error al asignar personal');
+            throw new Error(assignResult.error);
+          }
+          const result = await actualizarSchedulerTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
+            isCompleted: true,
+            skipPayroll: skipPayment,
+          });
+          if (result.success) {
+            window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+          }
+          if (!result.success) {
+            toast.error(result.error ?? 'Error al completar la tarea');
+            throw new Error(result.error);
+          }
+          const { obtenerCrewMembers } = await import('@/lib/actions/studio/business/events');
+          const crewResult = await obtenerCrewMembers(studioSlug);
+          const crewMember = crewResult.success && crewResult.data
+            ? crewResult.data.find(m => m.id === crewMemberId)
+            : null;
+          const assigned_to_crew_member = crewMember
+            ? { id: crewMember.id, name: crewMember.name, email: crewMember.email ?? null, tipo: crewMember.tipo }
+            : null;
+          handleManualTaskPatch(pendingTaskCompletion.taskId, {
+            status: 'COMPLETED',
+            completed_at: new Date(),
+            assigned_to_crew_member_id: crewMemberId,
+            assigned_to_crew_member,
+          });
+          let updatedData: EventoDetalle;
+          setLocalEventData(prev => {
+            const newData: EventoDetalle = {
+              ...prev,
+              scheduler: prev.scheduler
+                ? {
+                    ...prev.scheduler,
+                    tasks: prev.scheduler.tasks.map(t =>
+                      t.id === pendingTaskCompletion.taskId
+                        ? {
+                            ...t,
+                            status: 'COMPLETED',
+                            completed_at: new Date().toISOString(),
+                            assigned_to_crew_member_id: crewMemberId,
+                            assigned_to_crew_member,
+                          }
+                        : t
+                    ),
+                  }
+                : prev.scheduler,
+            };
+            updatedData = newData;
+            return newData;
+          });
+          if (updatedData! && onDataChange) onDataChange(updatedData);
+          if (skipPayment) {
+            toast.success('Personal asignado y tarea completada (sin generar pago de nómina)');
+          } else {
+            toast.success('Personal asignado y tarea completada');
+          }
+          setAssignCrewModalOpen(false);
+          setPendingTaskCompletion(null);
+          setHasCrewPreference(true);
+          return;
+        }
+
+        // Flujo ítem de cotización
         const { asignarCrewAItem } = await import('@/lib/actions/studio/business/events');
         const assignResult = await asignarCrewAItem(
           studioSlug,
-          pendingTaskCompletion.itemId,
+          pendingTaskCompletion.itemId!,
           crewMemberId
         );
 
@@ -882,17 +1053,12 @@ export const EventScheduler = React.memo(function EventScheduler({
           throw new Error(errorMessage);
         }
 
-        // Si la asignación fue exitosa pero hay un error en payrollResult (no crítico):
-        // la nómina se creará cuando se complete la tarea
-
-        // Obtener el crew member completo para actualizar el item
         const { obtenerCrewMembers } = await import('@/lib/actions/studio/business/events');
         const crewResult = await obtenerCrewMembers(studioSlug);
         const crewMember = crewResult.success && crewResult.data
           ? crewResult.data.find(m => m.id === crewMemberId)
           : null;
 
-        // Actualizar estado local del item con crew member completo
         setLocalEventData(prev => ({
           ...prev,
           cotizaciones: prev.cotizaciones?.map(cotizacion => ({
@@ -911,27 +1077,23 @@ export const EventScheduler = React.memo(function EventScheduler({
               }
               return item;
             }),
-          })),
+          })) ?? [],
         }));
 
-        // Completar la tarea (creará nómina automáticamente a menos que skipPayment sea true)
         const result = await actualizarSchedulerTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
           isCompleted: true,
           skipPayroll: skipPayment,
         });
 
-        // Disparar evento para actualizar PublicationBar
         if (result.success) {
           window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         }
 
         if (!result.success) {
-          const errorMessage = result.error || 'Error al completar la tarea';
-          toast.error(errorMessage);
-          throw new Error(errorMessage);
+          toast.error(result.error || 'Error al completar la tarea');
+          throw new Error(result.error);
         }
 
-        // Actualización optimista
         let updatedData: EventoDetalle;
         setLocalEventData(prev => {
           const newData = {
@@ -958,63 +1120,50 @@ export const EventScheduler = React.memo(function EventScheduler({
           return newData;
         });
 
-        // Mostrar toast con información de nómina ANTES de notificar al padre
-        // Esto evita que errores en onDataChange afecten el feedback al usuario
         if (skipPayment) {
           toast.success('Personal asignado y tarea completada (sin generar pago de nómina)');
         } else if (result.payrollResult?.success && result.payrollResult.personalNombre) {
           toast.success(`Personal asignado y tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
         } else if (result.payrollResult?.error) {
-          // Solo mostrar warning si hay un error específico de nómina
           toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult.error}`);
         } else {
-          // Si no hay información de nómina, asumir éxito
           toast.success('Personal asignado y tarea completada');
         }
 
-        // Notificar al padre (puede lanzar error, pero no es crítico)
-        // Hacerlo después de mostrar el toast para que el usuario vea el éxito
         try {
-          if (updatedData! && onDataChange) {
-            onDataChange(updatedData);
-          }
+          if (updatedData! && onDataChange) onDataChange(updatedData);
         } catch {
-          // Error en onDataChange no es crítico; no afecta la operación principal
+          // no crítico
         }
 
         setAssignCrewModalOpen(false);
         setPendingTaskCompletion(null);
-
-        // Actualizar preferencia a true cuando se asigna personal
         setHasCrewPreference(true);
       } catch (error) {
-        // Solo mostrar error si es un error crítico que no se manejó anteriormente
         const errorMessage = error instanceof Error ? error.message : '';
-        // Si el error ya fue manejado con un toast específico, no mostrar otro
-        // Los errores de asignar personal y completar tarea ya muestran su propio toast
         if (errorMessage &&
           !errorMessage.includes('Error al asignar personal') &&
           !errorMessage.includes('Error al completar la tarea')) {
           toast.error('Error al asignar y completar');
         }
-        console.error('Error en handleAssignAndComplete:', error);
-        // Re-lanzar el error para que el modal pueda manejarlo si es necesario
         throw error;
       }
     },
-    [studioSlug, eventId, router, onDataChange, pendingTaskCompletion]
+    [studioSlug, eventId, onDataChange, pendingTaskCompletion, handleManualTaskPatch]
   );
 
-  // Handler para completar sin pago desde el modal
+  // Handler para completar sin pago desde el modal (ítem o tarea manual)
   const handleCompleteWithoutPayment = useCallback(async () => {
     if (!pendingTaskCompletion) return;
+
+    const isManual = pendingTaskCompletion.isManual === true;
 
     try {
       const result = await actualizarSchedulerTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
         isCompleted: true,
+        skipPayroll: true,
       });
 
-      // Disparar evento para actualizar PublicationBar
       if (result.success) {
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       }
@@ -1024,52 +1173,71 @@ export const EventScheduler = React.memo(function EventScheduler({
         return;
       }
 
-      // Actualización optimista
       let updatedData: EventoDetalle;
-      setLocalEventData(prev => {
-        const newData = {
-          ...prev,
-          cotizaciones: prev.cotizaciones?.map(cotizacion => ({
-            ...cotizacion,
-            cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-              if (item.scheduler_task?.id === pendingTaskCompletion.taskId) {
-                return {
-                  ...item,
-                  scheduler_task: item.scheduler_task ? {
-                    ...item.scheduler_task,
-                    completed_at: new Date().toISOString(),
-                    status: 'COMPLETED',
-                    progress_percent: 100,
-                  } : null,
-                };
-              }
-              return item;
-            }),
-          })),
-        };
-        updatedData = newData;
-        return newData;
-      });
-
-      // Notificar al padre para actualizar stats
-      if (updatedData! && onDataChange) {
-        onDataChange(updatedData);
+      if (isManual) {
+        handleManualTaskPatch(pendingTaskCompletion.taskId, {
+          status: 'COMPLETED',
+          completed_at: new Date(),
+        });
+        setLocalEventData(prev => {
+          const newData: EventoDetalle = {
+            ...prev,
+            scheduler: prev.scheduler
+              ? {
+                  ...prev.scheduler,
+                  tasks: prev.scheduler.tasks.map(t =>
+                    t.id === pendingTaskCompletion!.taskId
+                      ? { ...t, status: 'COMPLETED', completed_at: new Date().toISOString() }
+                      : t
+                  ),
+                }
+              : prev.scheduler,
+          };
+          updatedData = newData;
+          return newData;
+        });
+      } else {
+        setLocalEventData(prev => {
+          const newData = {
+            ...prev,
+            cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+              ...cotizacion,
+              cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+                if (item.scheduler_task?.id === pendingTaskCompletion.taskId) {
+                  return {
+                    ...item,
+                    scheduler_task: item.scheduler_task ? {
+                      ...item.scheduler_task,
+                      completed_at: new Date().toISOString(),
+                      status: 'COMPLETED',
+                      progress_percent: 100,
+                    } : null,
+                  };
+                }
+                return item;
+              }),
+            })),
+          };
+          updatedData = newData;
+          return newData;
+        });
       }
 
-      toast.warning('Tarea completada. No se generó pago porque no hay personal asignado.');
+      if (updatedData! && onDataChange) onDataChange(updatedData);
+
+      toast.success(isManual ? 'Tarea completada (sin generar pago de nómina)' : 'Tarea completada. No se generó pago porque no hay personal asignado.');
       setAssignCrewModalOpen(false);
       setPendingTaskCompletion(null);
 
-      // Recargar preferencia de crew por si cambió
       const { obtenerPreferenciaCrew } = await import('@/lib/actions/studio/crew/crew.actions');
       const prefResult = await obtenerPreferenciaCrew(studioSlug);
       if (prefResult.success) {
         setHasCrewPreference(prefResult.has_crew);
       }
-    } catch (error) {
+    } catch {
       toast.error('Error al completar la tarea');
     }
-  }, [studioSlug, eventId, router, onDataChange, pendingTaskCompletion]);
+  }, [studioSlug, eventId, onDataChange, pendingTaskCompletion, handleManualTaskPatch]);
 
   // Renderizar item en sidebar
   const renderSidebarItem = (item: CotizacionItem, metadata: ItemMetadata) => {
@@ -1131,6 +1299,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         onAddManualTask={(sectionId, stageCategory) => setAddManualTaskModal({ sectionId, stage: stageCategory })}
         onManualTaskPatch={handleManualTaskPatch}
         onManualTaskDelete={handleManualTaskDelete}
+        onManualTaskReorder={handleManualTaskReorder}
+        onManualTaskMoveStage={handleManualTaskMoveStage}
+        onManualTaskDuplicate={handleManualTaskDuplicate}
         onManualTaskUpdate={() => onRefetchEvent?.()}
         onDeleteStage={handleDeleteStage}
         expandedSections={expandedSections}
@@ -1167,6 +1338,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           itemId={pendingTaskCompletion.itemId}
           itemName={pendingTaskCompletion.itemName}
           costoTotal={pendingTaskCompletion.costoTotal}
+          key={pendingTaskCompletion.taskId}
         />
       )}
 
