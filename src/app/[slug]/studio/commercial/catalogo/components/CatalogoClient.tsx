@@ -84,6 +84,7 @@ interface Item {
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     operational_category?: 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' | 'LOGISTICS' | null;
+    defaultDurationDays?: number;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -187,6 +188,7 @@ export function CatalogoClient({
                         servicio.tipo_utilidad === 'service' ? 'servicio'
                             : servicio.tipo_utilidad === 'product' ? 'producto'
                                 : 'servicio';
+                    const serv = servicio as { default_duration_days?: number };
                     return {
                         id: servicio.id,
                         name: servicio.nombre,
@@ -194,6 +196,7 @@ export function CatalogoClient({
                         tipoUtilidad,
                         billing_type: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         operational_category: servicio.operational_category ?? undefined,
+                        defaultDurationDays: serv.default_duration_days ?? 1,
                         order: servicio.orden,
                         status: servicio.status || "active",
                         isNew: false,
@@ -693,6 +696,8 @@ export function CatalogoClient({
                 description: item.description,
                 categoriaeId: item.categoriaId || '',
                 billing_type: item.billing_type || 'SERVICE',
+                operational_category: item.operational_category ?? undefined,
+                defaultDurationDays: item.defaultDurationDays ?? 1,
                 gastos: item.gastos || [],
                 studioSlug: studioSlug,
             });
@@ -703,6 +708,8 @@ export function CatalogoClient({
                     cost: response.data.cost,
                     tipoUtilidad: response.data.tipoUtilidad,
                     billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                    operational_category: response.data.operational_category ?? item.operational_category ?? undefined,
+                    defaultDurationDays: response.data.defaultDurationDays ?? item.defaultDurationDays ?? 1,
                     order: response.data.order,
                     status: response.data.status,
                     isNew: false,
@@ -756,6 +763,7 @@ export function CatalogoClient({
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
                                 billing_type: data.billing_type || item.billing_type || 'SERVICE',
                                 operational_category: data.operational_category ?? item.operational_category ?? undefined,
+                                defaultDurationDays: data.defaultDurationDays ?? item.defaultDurationDays ?? 1,
                                 status: (data as unknown as { status?: string }).status || item.status || 'active',
                                 gastos: data.gastos || [],
                             } : item
@@ -771,6 +779,7 @@ export function CatalogoClient({
                     tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
                     billing_type: data.billing_type || prev.billing_type || 'SERVICE',
                     operational_category: data.operational_category ?? prev.operational_category ?? undefined,
+                    defaultDurationDays: data.defaultDurationDays ?? prev.defaultDurationDays ?? 1,
                     status: (data as unknown as { status?: string }).status || prev.status || 'active',
                     gastos: data.gastos || [],
                 } : null);
@@ -791,6 +800,7 @@ export function CatalogoClient({
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
                         billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         operational_category: response.data.operational_category ?? undefined,
+                        defaultDurationDays: response.data.defaultDurationDays ?? 1,
                         order: response.data.order,
                         status: response.data.status || 'active',
                         isNew: false,
@@ -1827,6 +1837,7 @@ export function CatalogoClient({
                         tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
                         billing_type: itemToEdit.billing_type || 'SERVICE',
                         operational_category: itemToEdit.operational_category ?? null,
+                        defaultDurationDays: itemToEdit.defaultDurationDays ?? 1,
                         description: '',
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'

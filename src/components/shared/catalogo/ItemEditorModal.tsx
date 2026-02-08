@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch, ZenDialog } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/actions/studio/catalogo";
 import { toggleItemPublish } from "@/lib/actions/studio/catalogo/items.actions";
 import { PrecioDesglose } from "@/components/shared/precio";
+import { cn } from "@/lib/utils";
 
 interface Gasto {
     nombre: string;
@@ -34,6 +35,7 @@ export interface ItemFormData {
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     operational_category?: OperationalCategoryForm;
+    defaultDurationDays?: number;
     gastos?: Gasto[];
     status?: string;
 }
@@ -87,6 +89,7 @@ export function ItemEditorModal({
         tipoUtilidad: "servicio",
         billing_type: "SERVICE",
         operational_category: null,
+        defaultDurationDays: 1,
         gastos: [],
     });
 
@@ -110,6 +113,10 @@ export function ItemEditorModal({
 
     // Modal guía de flujos de trabajo
     const [showWorkflowGuide, setShowWorkflowGuide] = useState(false);
+
+    // Duración: flash al auto-actualizar por categoría
+    const [durationFlash, setDurationFlash] = useState(false);
+    const categoryClickRef = useRef(false);
 
     // Cargar configuración de precios del estudio
     useEffect(() => {
@@ -274,6 +281,7 @@ export function ItemEditorModal({
                     tipoUtilidad: (item.tipoUtilidad || "servicio") as 'servicio' | 'producto',
                     billing_type: (item.billing_type || "SERVICE") as 'HOUR' | 'SERVICE' | 'UNIT',
                     operational_category: rawCategory === "DELIVERY" ? "DIGITAL_DELIVERY" : rawCategory,
+                    defaultDurationDays: (item as ItemFormData & { defaultDurationDays?: number }).defaultDurationDays ?? 1,
                     gastos: gastosDelItem,
                     status: item.status || "active",
                 };
@@ -292,6 +300,7 @@ export function ItemEditorModal({
                     tipoUtilidad: "servicio" as const,
                     billing_type: "SERVICE" as const,
                     operational_category: null as OperationalCategoryForm,
+                    defaultDurationDays: 1,
                     gastos: [] as Gasto[],
                     status: "active",
                 } satisfies ItemFormData;
@@ -319,10 +328,23 @@ export function ItemEditorModal({
             if (field === 'tipoUtilidad' && value === 'servicio' && !prev.billing_type) {
                 newData.billing_type = 'SERVICE';
             }
+            // Al cambiar categoría operativa: siempre actualizar duración sugerida
+            if (field === 'operational_category') {
+                newData.defaultDurationDays = value === 'POST_PRODUCTION' ? 3 : 1;
+            }
             
             return newData;
         });
     };
+
+    // Flash en input de duración cuando se auto-actualiza por cambio de categoría
+    useEffect(() => {
+        if (!categoryClickRef.current) return;
+        categoryClickRef.current = false;
+        setDurationFlash(true);
+        const t = setTimeout(() => setDurationFlash(false), 600);
+        return () => clearTimeout(t);
+    }, [formData.operational_category, formData.defaultDurationDays]);
 
     // Funciones para manejar gastos
     const parsearGastos = (input: string): Gasto[] => {
@@ -431,6 +453,7 @@ export function ItemEditorModal({
                         tipoUtilidad: formDataConGastos.tipoUtilidad,
                         billing_type: formDataConGastos.billing_type,
                         operational_category: formDataConGastos.operational_category ?? undefined,
+                        defaultDurationDays: formDataConGastos.defaultDurationDays ?? 1,
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status,
                     });
@@ -450,6 +473,7 @@ export function ItemEditorModal({
                         tipoUtilidad: formDataConGastos.tipoUtilidad,
                         billing_type: formDataConGastos.billing_type || (formDataConGastos.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
                         operational_category: formDataConGastos.operational_category ?? undefined,
+                        defaultDurationDays: formDataConGastos.defaultDurationDays ?? 1,
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status || 'active',
                     });
@@ -812,13 +836,44 @@ export function ItemEditorModal({
                                                     key={value || "none"}
                                                     type="button"
                                                     disabled={isSaving}
-                                                    onClick={() => handleInputChange("operational_category", value || null)}
+                                                    onClick={() => {
+                                                        categoryClickRef.current = true;
+                                                        handleInputChange("operational_category", value || null);
+                                                    }}
                                                     className={`${base} ${selected ? selectedStyles : unselected} ${selected ? "ring-1 ring-white/10" : "hover:scale-[1.02] active:scale-[0.98]"}`}
                                                 >
                                                     {label}
                                                 </button>
                                             );
                                         })}
+                                    </div>
+                                    <div className="mt-3">
+                                        <label className="block text-sm font-medium text-zinc-200 mb-1">
+                                            Duración estimada (días)
+                                        </label>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <ZenInput
+                                                type="number"
+                                                min={1}
+                                                value={formData.defaultDurationDays ?? 1}
+                                                onChange={(e) => {
+                                                    const v = parseInt(e.target.value, 10);
+                                                    handleInputChange("defaultDurationDays", Number.isNaN(v) || v < 1 ? 1 : v);
+                                                }}
+                                                disabled={isSaving}
+                                                className={cn(
+                                                    "max-w-[6rem] transition-all duration-300",
+                                                    durationFlash && "ring-2 ring-amber-400/70 ring-offset-2 ring-offset-zinc-900"
+                                                )}
+                                            />
+                                            {(formData.defaultDurationDays ?? 1) ===
+                                             (formData.operational_category === 'POST_PRODUCTION' ? 3 : 1) && (
+                                                <span className="text-xs text-zinc-500">Sugerido</span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-zinc-500 mt-1">
+                                            Días sugeridos para completar este ítem en el cronograma.
+                                        </p>
                                     </div>
                                 </div>
 

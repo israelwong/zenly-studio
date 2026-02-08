@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash, ListMinus, Cloud, Package } from 'lucide-react';
+import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash, ListMinus, Cloud, Package, Timer } from 'lucide-react';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -27,6 +27,7 @@ export interface CatalogItem {
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     operational_category?: OperationalCategoryCatalogItem | null;
+    defaultDurationDays?: number;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -210,6 +211,19 @@ export function CatalogSortableItem({
                             {(!item.operational_category || item.operational_category === 'LOGISTICS') ? <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : (item.operational_category === 'DIGITAL_DELIVERY' || item.operational_category === 'DELIVERY') ? <Cloud className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : item.operational_category === 'PHYSICAL_DELIVERY' ? <Package className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />}
                             {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : item.operational_category === 'PHYSICAL_DELIVERY' ? 'Entregable Físico' : 'Entregable Digital'}
                         </ZenBadge>
+                        {item.operational_category && item.operational_category !== 'LOGISTICS' && (
+                            <ZenBadge
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                    'px-1 py-0 text-[10px] font-light rounded-sm inline-flex items-center gap-0.5 bg-zinc-800/40 border-zinc-700/50',
+                                    isInactive ? 'text-zinc-500' : item.operational_category === 'POST_PRODUCTION' && (item.defaultDurationDays ?? 1) === 1 ? 'text-amber-500/70' : 'text-zinc-400'
+                                )}
+                            >
+                                <Timer className="h-3 w-3 shrink-0" />
+                                {(item.defaultDurationDays ?? 1) === 1 ? '1 día' : `${item.defaultDurationDays ?? 1} días`}
+                            </ZenBadge>
+                        )}
                         {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
                             <ZenBadge
                                 variant="outline"

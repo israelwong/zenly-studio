@@ -14,6 +14,7 @@ export interface ItemData {
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     operational_category?: OperationalCategory | null;
+    defaultDurationDays: number;
     order: number;
     status: string;
     createdAt: Date;
@@ -50,6 +51,7 @@ const CreateItemSchema = z.object({
     status: z.enum(['active', 'inactive']).optional().default('active'),
     billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional().default('SERVICE'),
     operational_category: OperationalCategorySchema,
+    defaultDurationDays: z.number().int().min(1).optional().default(1),
 });
 
 const UpdateItemSchema = z.object({
@@ -62,6 +64,7 @@ const UpdateItemSchema = z.object({
     gastos: z.array(GastoSchema).optional(),
     status: z.enum(['active', 'inactive']).optional(),
     operational_category: OperationalCategorySchema,
+    defaultDurationDays: z.number().int().min(1).optional(),
 });
 
 /**
@@ -86,6 +89,7 @@ export async function obtenerItemsConStats(
                 utility_type: true,
                 billing_type: true,
                 operational_category: true,
+                default_duration_days: true,
                 order: true,
                 status: true,
                 created_at: true,
@@ -122,6 +126,7 @@ export async function obtenerItemsConStats(
                 tipoUtilidad: item.utility_type === 'service' ? 'servicio' : 'producto',
                 billing_type: item.billing_type || 'SERVICE',
                 operational_category: item.operational_category ?? undefined,
+                defaultDurationDays: item.default_duration_days,
                 order: item.order,
                 status: item.status,
                 createdAt: item.created_at,
@@ -206,6 +211,7 @@ export async function crearItem(
                 studio_id: studio.id,
                 billing_type: validated.billing_type || 'SERVICE',
                 operational_category: validated.operational_category ?? undefined,
+                default_duration_days: validated.defaultDurationDays ?? 1,
                 item_expenses: {
                     create: validated.gastos?.map(gasto => ({
                         name: gasto.nombre,
@@ -241,6 +247,7 @@ export async function crearItem(
             cost: item.cost,
             description: null,
             billing_type: item.billing_type || 'SERVICE',
+            defaultDurationDays: item.default_duration_days,
             order: item.order,
             status: item.status,
             createdAt: item.created_at,
@@ -337,6 +344,9 @@ export async function actualizarItem(
                 ...(validated.operational_category !== undefined && {
                     operational_category: validated.operational_category
                 }),
+                ...(validated.defaultDurationDays !== undefined && {
+                    default_duration_days: validated.defaultDurationDays
+                }),
                 // Actualizar gastos si se proporcionan
                 ...(validated.gastos !== undefined && {
                     item_expenses: {
@@ -384,6 +394,7 @@ export async function actualizarItem(
             tipoUtilidad,
             billing_type: item.billing_type || 'SERVICE',
             operational_category: item.operational_category ?? undefined,
+            defaultDurationDays: item.default_duration_days,
             order: item.order,
             status: item.status,
             createdAt: item.created_at,
@@ -420,6 +431,38 @@ export async function actualizarItem(
         return {
             success: false,
             error: error instanceof Error ? error.message : "Error al actualizar item",
+        };
+    }
+}
+
+/**
+ * Normaliza default_duration_days de todos los ítems del catálogo (script único).
+ * POST_PRODUCTION → 3 días; cualquier otra categoría → 1 día.
+ */
+export async function normalizarDuracionItemsCatalog(): Promise<ActionResponse<{ updated: number }>> {
+    try {
+        const [postProd, rest] = await Promise.all([
+            prisma.studio_items.updateMany({
+                where: { operational_category: 'POST_PRODUCTION' },
+                data: { default_duration_days: 3 },
+            }),
+            prisma.studio_items.updateMany({
+                where: {
+                    OR: [
+                        { operational_category: null },
+                        { operational_category: { not: 'POST_PRODUCTION' } },
+                    ],
+                },
+                data: { default_duration_days: 1 },
+            }),
+        ]);
+        const updated = postProd.count + rest.count;
+        return { success: true, data: { updated } };
+    } catch (error) {
+        console.error("[ITEMS] Error normalizando duración:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Error al normalizar duración",
         };
     }
 }

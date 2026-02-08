@@ -6,8 +6,8 @@ import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancia
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
 import { EventCronogramaCard } from '../[eventId]/components/EventCronogramaCard';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
+import { EventTodoList } from '../[eventId]/components/EventTodoList';
 import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/QuickNoteCard';
-// import { EventTodoCard } from '../[eventId]/components/EventTodoCard';
 // import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
@@ -88,13 +88,7 @@ export function EventPanel({
             eventData={eventData}
             onUpdated={onEventUpdated}
           />
-
-          {/* TODO: Funcionalidad futura - EventTodoCard
-          <EventTodoCard
-            studioSlug={studioSlug}
-            eventId={eventId}
-          />
-          */}
+          <EventTodoList studioSlug={studioSlug} eventId={eventId} />
 
           {/* TODO: Funcionalidad futura - EventItinerarioCard
           <EventItinerarioCard

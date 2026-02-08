@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash, ListMinus, Cloud } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash, ListMinus, Cloud, Timer } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -82,6 +82,7 @@ interface Item {
     tipoUtilidad?: 'servicio' | 'producto';
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     operational_category?: OperationalCategoryItem | null;
+    defaultDurationDays?: number;
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
@@ -202,6 +203,7 @@ export default function Catalogo() {
                                 servicio.tipo_utilidad === 'service' ? 'servicio'
                                     : servicio.tipo_utilidad === 'product' ? 'producto'
                                         : 'servicio';
+                            const serv = servicio as { default_duration_days?: number };
                             return {
                                 id: servicio.id,
                                 name: servicio.nombre,
@@ -209,6 +211,7 @@ export default function Catalogo() {
                                 tipoUtilidad,
                                 billing_type: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                                 operational_category: servicio.operational_category ?? undefined,
+                                defaultDurationDays: serv.default_duration_days ?? 1,
                                 order: servicio.orden,
                                 status: servicio.status || "active",
                                 isNew: false,
@@ -1056,6 +1059,16 @@ export default function Catalogo() {
                                 {(!item.operational_category || item.operational_category === 'LOGISTICS') ? <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : (item.operational_category === 'DIGITAL_DELIVERY' || item.operational_category === 'DELIVERY') ? <Cloud className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : item.operational_category === 'PHYSICAL_DELIVERY' ? <Package className="h-2.5 w-2.5 shrink-0 pr-0.5" /> : <ListMinus className="h-2.5 w-2.5 shrink-0 pr-0.5" />}
                                 {(!item.operational_category || item.operational_category === 'LOGISTICS') ? 'Sin definir' : item.operational_category === 'PRODUCTION' ? 'Producción' : item.operational_category === 'POST_PRODUCTION' ? 'Posproducción' : item.operational_category === 'PHYSICAL_DELIVERY' ? 'Entregable Físico' : 'Entregable Digital'}
                             </ZenBadge>
+                            {item.operational_category && item.operational_category !== 'LOGISTICS' && (
+                                <ZenBadge
+                                    variant="outline"
+                                    size="sm"
+                                    className={`px-1 py-0 text-[10px] font-light rounded-sm inline-flex items-center gap-0.5 bg-zinc-800/40 border-zinc-700/50 ${isInactive ? 'text-zinc-500' : item.operational_category === 'POST_PRODUCTION' && (item.defaultDurationDays ?? 1) === 1 ? 'text-amber-500/70' : 'text-zinc-400'}`}
+                                >
+                                    <Timer className="h-3 w-3 shrink-0" />
+                                    {(item.defaultDurationDays ?? 1) === 1 ? '1 día' : `${item.defaultDurationDays ?? 1} días`}
+                                </ZenBadge>
+                            )}
                             {/* Badge de tipo de facturación (solo para servicios, productos siempre son UNIT) */}
                             {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
                                 <ZenBadge
@@ -1361,6 +1374,8 @@ export default function Catalogo() {
                 description: item.description,
                 categoriaeId: item.categoriaId || '',
                 billing_type: item.billing_type || 'SERVICE',
+                operational_category: item.operational_category ?? undefined,
+                defaultDurationDays: item.defaultDurationDays ?? 1,
                 gastos: item.gastos || [],
                 studioSlug: studioSlug,
             };
@@ -1375,6 +1390,7 @@ export default function Catalogo() {
                     cost: response.data.cost,
                     tipoUtilidad: response.data.tipoUtilidad,
                     billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                    defaultDurationDays: response.data.defaultDurationDays ?? 1,
                     order: response.data.order,
                     status: response.data.status,
                     isNew: false,
@@ -1459,7 +1475,7 @@ export default function Catalogo() {
                 const response = await actualizarItem(data);
                 if (!response.success) throw new Error(response.error);
 
-                // Actualizar en el estado local (incluir operational_category)
+                // Actualizar en el estado local (incluir operational_category y defaultDurationDays)
                 setItemsData(prev => {
                     const newData = { ...prev };
                     Object.keys(newData).forEach(categoriaId => {
@@ -1471,6 +1487,7 @@ export default function Catalogo() {
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
                                 billing_type: data.billing_type || item.billing_type || 'SERVICE',
                                 operational_category: data.operational_category ?? item.operational_category ?? undefined,
+                                defaultDurationDays: data.defaultDurationDays ?? item.defaultDurationDays ?? 1,
                                 status: (data as unknown as { status?: string }).status || item.status || 'active',
                                 gastos: data.gastos || [],
                             } : item
@@ -1487,6 +1504,7 @@ export default function Catalogo() {
                     tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
                     billing_type: data.billing_type || prev.billing_type || 'SERVICE',
                     operational_category: data.operational_category ?? prev.operational_category ?? undefined,
+                    defaultDurationDays: data.defaultDurationDays ?? prev.defaultDurationDays ?? 1,
                     status: (data as unknown as { status?: string }).status || prev.status || 'active',
                     gastos: data.gastos || [],
                 } : null);
@@ -1508,6 +1526,7 @@ export default function Catalogo() {
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
                         billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         operational_category: response.data.operational_category ?? undefined,
+                        defaultDurationDays: response.data.defaultDurationDays ?? 1,
                         order: response.data.order,
                         status: response.data.status || 'active',
                         isNew: false,
@@ -1734,6 +1753,7 @@ export default function Catalogo() {
                         tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
                         billing_type: itemToEdit.billing_type || 'SERVICE',
                         operational_category: itemToEdit.operational_category ?? null,
+                        defaultDurationDays: itemToEdit.defaultDurationDays ?? 1,
                         description: '',
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'

@@ -117,21 +117,31 @@ export async function actualizarSchedulerTaskFechas(
 }
 
 /**
- * Obtiene todas las tareas de un evento
+ * Obtiene todas las tareas de un evento (por instancia del scheduler vinculada al evento)
  */
 export async function obtenerSchedulerTareas(studioSlug: string, eventId: string) {
   try {
     const tareas = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
-        cotizacion_item: {
-          cotizaciones: {
-            evento_id: eventId,
-          },
+        scheduler_instance: {
+          event_id: eventId,
         },
       },
-      include: {
-        cotizacion_item: true,
+      select: {
+        id: true,
+        name: true,
+        duration_days: true,
+        category: true,
+        status: true,
+        progress_percent: true,
+        start_date: true,
+        end_date: true,
+        cotizacion_item_id: true,
+        cotizacion_item: {
+          select: { internal_delivery_days: true },
+        },
       },
+      orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
     });
 
     return {

@@ -14,6 +14,7 @@ export {
   actualizarSchedulerTask,
   eliminarSchedulerTask,
   obtenerSchedulerTask,
+  sincronizarTareasEvento,
 } from './events.actions';
 
 export {

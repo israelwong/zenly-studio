@@ -1091,7 +1091,8 @@ model studio_items {
   service_category_id   String
   name                  String
   type                  ItemType                  @default(SERVICIO)
-  operational_category  OperationalCategory?
+  operational_category   OperationalCategory?
+  default_duration_days  Int                       @default(1)
   cost                  Float                     @default(0)
   expense               Float                     @default(0)
   utility_type          String                    @default("service")

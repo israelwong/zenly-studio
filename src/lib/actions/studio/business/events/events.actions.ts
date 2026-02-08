@@ -3538,3 +3538,163 @@ export async function obtenerEventosConSchedulers(
     };
   }
 }
+
+/** Mapeo de categoría operativa (catálogo) a TaskCategory (scheduler) */
+const OPERATIONAL_TO_TASK_CATEGORY: Record<string, 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = {
+  PRODUCTION: 'PRODUCTION',
+  POST_PRODUCTION: 'POST_PRODUCTION',
+  DELIVERY: 'DELIVERY',
+  DIGITAL_DELIVERY: 'DELIVERY',
+  PHYSICAL_DELIVERY: 'DELIVERY',
+};
+
+/**
+ * Sincroniza tareas del scheduler con los ítems de la cotización autorizada del evento.
+ * Crea una tarea por ítem con duración y etapa según catálogo; no duplica si ya existe.
+ */
+export async function sincronizarTareasEvento(
+  studioSlug: string,
+  eventId: string
+): Promise<{ success: boolean; created?: number; skipped?: number; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const event = await prisma.studio_events.findUnique({
+      where: { id: eventId },
+      select: { id: true, cotizacion_id: true, event_date: true },
+    });
+    if (!event) {
+      return { success: false, error: 'Evento no encontrado' };
+    }
+    if (!event.cotizacion_id) {
+      return { success: false, error: 'El evento no tiene cotización asociada' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: event.cotizacion_id,
+        studio_id: studio.id,
+        status: { in: ['autorizada', 'aprobada', 'approved'] },
+      },
+      select: {
+        id: true,
+        cotizacion_items: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            name_snapshot: true,
+            item_id: true,
+            items: {
+              select: {
+                operational_category: true,
+                default_duration_days: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'No se encontró cotización autorizada para este evento' };
+    }
+
+    const instanceResult = await obtenerOCrearSchedulerInstance(studioSlug, eventId);
+    if (!instanceResult.success || !instanceResult.data) {
+      return { success: false, error: instanceResult.error ?? 'Error al obtener instancia del cronograma' };
+    }
+    const schedulerInstanceId = instanceResult.data.id;
+
+    const existingByItem = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: schedulerInstanceId,
+        cotizacion_item_id: { not: null },
+      },
+      select: { cotizacion_item_id: true },
+    });
+    const existingItemIds = new Set(
+      existingByItem.map((t) => t.cotizacion_item_id).filter(Boolean) as string[]
+    );
+
+    const categoryOrder: Array<'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = [
+      'PLANNING',
+      'PRODUCTION',
+      'POST_PRODUCTION',
+      'DELIVERY',
+    ];
+    const sortKey = (cat: string) => {
+      const idx = categoryOrder.indexOf(cat as typeof categoryOrder[number]);
+      return idx === -1 ? 0 : idx;
+    };
+
+    const items = cotizacion.cotizacion_items
+      .map((ci) => {
+        const catalog = ci.items;
+        const opCat = catalog?.operational_category ?? null;
+        const taskCategory =
+          (opCat && OPERATIONAL_TO_TASK_CATEGORY[opCat]) || 'PLANNING';
+        const durationDays = catalog?.default_duration_days ?? 1;
+        const name =
+          ci.name ?? ci.name_snapshot ?? catalog?.name ?? 'Tarea';
+        return {
+          cotizacionItemId: ci.id,
+          name,
+          taskCategory,
+          durationDays,
+        };
+      })
+      .filter((t) => !existingItemIds.has(t.cotizacionItemId))
+      .sort((a, b) => sortKey(a.taskCategory) - sortKey(b.taskCategory));
+
+    let cursor = new Date(event.event_date);
+    cursor.setHours(0, 0, 0, 0);
+    let created = 0;
+
+    for (const it of items) {
+      const startDate = new Date(cursor);
+      const endDate = new Date(cursor);
+      endDate.setDate(endDate.getDate() + Math.max(1, it.durationDays) - 1);
+
+      await prisma.studio_scheduler_event_tasks.create({
+        data: {
+          scheduler_instance_id: schedulerInstanceId,
+          cotizacion_item_id: it.cotizacionItemId,
+          name: it.name,
+          start_date: startDate,
+          end_date: endDate,
+          duration_days: Math.max(1, it.durationDays),
+          category: it.taskCategory,
+          priority: 'MEDIUM',
+          status: 'PENDING',
+          progress_percent: 0,
+          sync_status: 'DRAFT',
+        },
+      });
+      created++;
+      cursor.setDate(cursor.getDate() + Math.max(1, it.durationDays));
+    }
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+
+    return {
+      success: true,
+      created,
+      skipped: existingItemIds.size,
+    };
+  } catch (err) {
+    console.error('[SYNC] Error sincronizando tareas:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Error al sincronizar tareas',
+    };
+  }
+}
