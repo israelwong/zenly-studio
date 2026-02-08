@@ -29,25 +29,13 @@ export function EventPanel({
     <div className="space-y-6">
       {/* Layout de 3 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna 1: Resumen del Evento + Bitácora heredada */}
+        {/* Columna 1: Contacto + Resumen financiero + Bitácora heredada */}
         <div className="lg:col-span-1 space-y-6">
           <ResumenEvento
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}
           />
-          {eventData.promise_id && (
-            <QuickNoteCard
-              studioSlug={studioSlug}
-              promiseId={eventData.promise_id}
-              context="EVENT"
-              onLogAdded={onEventUpdated}
-            />
-          )}
-        </div>
-
-        {/* Columna 2: Hub financiero */}
-        <div className="lg:col-span-1 space-y-6">
           <EventFinancialSummaryCard
             initialQuote={
               eventData.cotizaciones?.length
@@ -67,7 +55,18 @@ export function EventPanel({
             cotizacionId={eventData.cotizacion?.id ?? null}
             onPaymentAdded={onEventUpdated}
           />
+          {eventData.promise_id && (
+            <QuickNoteCard
+              studioSlug={studioSlug}
+              promiseId={eventData.promise_id}
+              context="EVENT"
+              onLogAdded={onEventUpdated}
+            />
+          )}
         </div>
+
+        {/* Columna 2: (reservada / futuros widgets) */}
+        <div className="lg:col-span-1 space-y-6" />
 
         {/* Columna 3: Agenda + Entregables + TODO */}
         <div className="lg:col-span-1 space-y-6">
