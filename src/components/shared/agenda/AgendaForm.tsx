@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, MapPin, Plus, Settings, Trash2 } from 'lucide-react';
+import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, MapPin, Plus, Settings, Trash2, Copy, DollarSign } from 'lucide-react';
 import { ZenInput, ZenButton, ZenCard, ZenCardContent, ZenDialog, ZenConfirmModal } from '@/components/ui/zen';
 import { ZenCalendar } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -15,6 +15,7 @@ import {
   deleteAgendaSubjectTemplate,
   type AgendaSubjectTemplate,
 } from '@/lib/actions/shared/agenda-subject-templates.actions';
+import { LocationSelector, type LocationOption } from '@/components/shared/agenda/LocationSelector';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +40,6 @@ interface AgendaFormProps {
     }) => Promise<void>;
     onCancel?: () => void;
     onCancelCita?: () => Promise<void>;
-    onDelete?: () => void;
     loading?: boolean;
 }
 
@@ -52,7 +52,6 @@ export function AgendaForm({
     onSubmit,
     onCancel,
     onCancelCita,
-    onDelete,
     loading = false,
 }: AgendaFormProps) {
     const subjectContext = contexto === 'promise' ? 'COMMERCIAL' : contexto === 'evento' ? 'OPERATIONAL' : 'GLOBAL';
@@ -97,6 +96,7 @@ export function AgendaForm({
     const [conflictos, setConflictos] = useState<AgendaItem[]>([]);
     const [initialDataId, setInitialDataId] = useState<string | undefined>(initialData?.id);
     const [hasUserModified, setHasUserModified] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState<LocationOption | null>(null);
 
     // Resetear hasUserModified cuando cambia el id del initialData (nuevo agendamiento o modal reabierto)
     useEffect(() => {
@@ -125,6 +125,7 @@ export function AgendaForm({
             setSubject(initialData?.concept || '');
             setLocationName(initialData?.location_name || '');
             setAddress(initialData?.location_address ?? initialData?.address ?? '');
+            setSelectedLocation(null);
             setDescription(initialData?.description || '');
             setLinkMeetingUrl(
                 initialData?.type_scheduling === 'presencial' ? initialData?.link_meeting_url || '' : ''
@@ -144,6 +145,7 @@ export function AgendaForm({
                 setSubject('');
                 setLocationName('');
                 setAddress('');
+                setSelectedLocation(null);
                 setDescription('');
                 setLinkMeetingUrl('');
                 setVirtualLink('');
@@ -512,20 +514,54 @@ export function AgendaForm({
                 </ZenCard>
             )}
 
-            {/* Nombre del lugar (abajo de Fecha, solo presencial) */}
+            {/* Locación (solo presencial): selector con búsqueda y registro rápido */}
             {eventType === 'presencial' && (
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
-                        Nombre del lugar
+                        Locación
                     </label>
-                    <ZenInput
+                    <LocationSelector
+                        studioSlug={studioSlug}
                         value={locationName}
-                        onChange={(e) => {
-                            setLocationName(e.target.value);
+                        onValueChange={(name) => {
+                            setLocationName(name);
                             setHasUserModified(true);
                         }}
+                        selectedLocation={selectedLocation}
+                        onSelect={(loc) => {
+                            setSelectedLocation(loc);
+                            setLocationName(loc.name);
+                            setAddress(loc.address ?? '');
+                            setLinkMeetingUrl(loc.maps_link ?? '');
+                            setHasUserModified(true);
+                        }}
+                        onClear={() => {
+                            setSelectedLocation(null);
+                            setLocationName('');
+                            setAddress('');
+                            setLinkMeetingUrl('');
+                            setHasUserModified(true);
+                        }}
+                        onLocationUpdated={(loc) => {
+                            if (selectedLocation?.id === loc.id) {
+                                setSelectedLocation(loc);
+                                setLocationName(loc.name);
+                                setAddress(loc.address ?? '');
+                                setLinkMeetingUrl(loc.maps_link ?? '');
+                            }
+                        }}
+                        onLocationDeleted={(locationId) => {
+                            if (selectedLocation?.id === locationId) {
+                                setSelectedLocation(null);
+                                setLocationName('');
+                                setAddress('');
+                                setLinkMeetingUrl('');
+                                setHasUserModified(true);
+                            }
+                        }}
                         placeholder="Ej: Hacienda del Bosque"
+                        disabled={loading}
                     />
                 </div>
             )}
@@ -578,39 +614,81 @@ export function AgendaForm({
                 </ZenCard>
             )}
 
-            {/* Campos condicionales según tipo (presencial: dirección y link) */}
-            {eventType === 'presencial' && (
+            {/* Dirección y Link (presencial): solo visibles cuando hay locación seleccionada; cápsulas de solo lectura + Copiar */}
+            {eventType === 'presencial' && selectedLocation && (
                 <>
                     <div className="space-y-2">
                         <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                             <MapPin className="h-4 w-4" />
                             Dirección
                         </label>
-                        <textarea
-                            value={address}
-                            onChange={(e) => {
-                                setAddress(e.target.value);
-                                setHasUserModified(true);
-                            }}
-                            placeholder="Dirección del evento"
-                            className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                        />
+                        <div className="flex items-start gap-2 rounded-lg bg-zinc-900/40 border border-zinc-700/60 px-3 py-2.5">
+                            <p className="flex-1 min-w-0 text-sm text-zinc-300 break-words">
+                                {address || '—'}
+                            </p>
+                            {address && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void navigator.clipboard.writeText(address);
+                                        toast.success('Dirección copiada');
+                                    }}
+                                    className="shrink-0 p-1.5 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors"
+                                    title="Copiar"
+                                >
+                                    <Copy className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
                             <LinkIcon className="h-4 w-4" />
                             Link de Google Maps
                         </label>
-                        <ZenInput
-                            type="url"
-                            value={linkMeetingUrl}
-                            onChange={(e) => {
-                                setLinkMeetingUrl(e.target.value);
-                                setHasUserModified(true);
-                            }}
-                            placeholder="https://maps.google.com/..."
-                        />
+                        <div className="flex items-center gap-2 rounded-lg bg-zinc-900/40 border border-zinc-700/60 px-3 py-2.5">
+                            <p className="flex-1 min-w-0 text-sm text-zinc-300 truncate">
+                                {linkMeetingUrl || '—'}
+                            </p>
+                            {linkMeetingUrl && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void navigator.clipboard.writeText(linkMeetingUrl);
+                                        toast.success('Link copiado');
+                                    }}
+                                    className="shrink-0 p-1.5 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors"
+                                    title="Copiar"
+                                >
+                                    <Copy className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
+                    {selectedLocation.permit_cost && (
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
+                                <DollarSign className="h-4 w-4" />
+                                Costo de permiso
+                            </label>
+                            <div className="flex items-center gap-2 rounded-lg bg-zinc-900/40 border border-zinc-700/60 px-3 py-2.5">
+                                <p className="flex-1 min-w-0 text-sm text-zinc-300">
+                                    {selectedLocation.permit_cost}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void navigator.clipboard.writeText(selectedLocation.permit_cost!);
+                                        toast.success('Costo copiado');
+                                    }}
+                                    className="shrink-0 p-1.5 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors"
+                                    title="Copiar"
+                                >
+                                    <Copy className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 

@@ -848,6 +848,8 @@ model studios {
   user_profiles                                   studio_user_profiles[]
   studio_users                                    studio_users[]
   zonas_trabajo                                   studio_zonas_trabajo[]
+  locations                                       studio_locations[]
+  location_media                                   studio_location_media[]         @relation("location_media")
   plan                                            platform_plans?                  @relation(fields: [plan_id], references: [id])
   subscriptions                                   subscriptions[]
   usage_tracking                                  usage_tracking[]
@@ -2889,6 +2891,7 @@ model studio_storage_usage {
   item_media_bytes      BigInt   @default(0)
   portfolio_media_bytes BigInt   @default(0)
   page_media_bytes      BigInt   @default(0)
+  location_media_bytes  BigInt   @default(0)
   quota_limit_bytes     BigInt
   last_calculated_at    DateTime @default(now())
   created_at            DateTime @default(now())
@@ -2897,6 +2900,50 @@ model studio_storage_usage {
 
   @@index([studio_id])
   @@index([total_storage_bytes])
+}
+
+model studio_locations {
+  id           String   @id @default(cuid())
+  studio_id    String
+  name         String
+  address      String?
+  maps_link    String?
+  phone        String?
+  permit_cost  String?
+  tags         String[]
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  studio       studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  location_media studio_location_media[]
+
+  @@index([studio_id])
+  @@index([studio_id, tags])
+}
+
+model studio_location_media {
+  id               String    @id @default(cuid())
+  location_id      String
+  studio_id        String
+  file_url        String
+  file_type       String
+  filename        String
+  storage_bytes   BigInt
+  mime_type       String
+  dimensions      Json?
+  duration_seconds Int?
+  display_order   Int       @default(0)
+  alt_text        String?
+  thumbnail_url   String?
+  storage_path    String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  location        studio_locations @relation(fields: [location_id], references: [id], onDelete: Cascade)
+  studio          studios   @relation("location_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([location_id])
+  @@index([studio_id])
+  @@index([display_order])
+  @@index([storage_bytes])
 }
 
 model studio_storage_log {
