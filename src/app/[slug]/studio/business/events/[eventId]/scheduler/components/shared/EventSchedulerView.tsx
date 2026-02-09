@@ -91,7 +91,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   // Mostrar skeleton interno mientras carga secciones (solo grid, sin stats)
   if (loadingSecciones) {
     return (
-      <div className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950">
+      <div className="overflow-hidden bg-zinc-950">
         <div className="flex">
           {/* Sidebar Skeleton */}
           <div className="w-[360px] border-r border-zinc-800 flex-shrink-0">
@@ -154,8 +154,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
 
   // Si no hay secciones o dateRange, mostrar mensaje
   return (
-    <div className="flex items-center justify-center h-[400px] border border-zinc-800 rounded-lg bg-zinc-900/20">
-      <p className="text-zinc-600">No hay datos para mostrar en el scheduler</p>
+    <div className="flex items-center justify-center h-[400px] bg-zinc-950/50">
+      <p className="text-zinc-500 text-sm">No hay datos para mostrar en el scheduler</p>
     </div>
   );
 }, (prevProps, nextProps) => {

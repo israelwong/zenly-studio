@@ -70,8 +70,8 @@ export function SchedulerDateRangeConfig({
       }}
     >
       <PopoverTrigger asChild>
-        <ZenButton variant="ghost" size="sm" className="gap-2">
-          <Calendar className="h-4 w-4" />
+        <ZenButton variant="ghost" size="sm" className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9">
+          <Calendar className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
           {dateRange?.from ? (
             dateRange.to ? (
               <>

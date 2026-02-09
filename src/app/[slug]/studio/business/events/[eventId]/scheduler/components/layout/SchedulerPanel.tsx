@@ -99,14 +99,14 @@ export const SchedulerPanel = React.memo(({
 
   if (!dateRange?.from || !dateRange?.to) {
     return (
-      <div className="flex items-center justify-center h-[400px] border border-zinc-800 rounded-lg bg-zinc-900/20">
-        <p className="text-zinc-600">Configura el rango de fechas del evento</p>
+      <div className="flex items-center justify-center h-[400px] bg-zinc-950/50">
+        <p className="text-zinc-500 text-sm">Configura el rango de fechas del evento</p>
       </div>
     );
   }
 
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+    <div className="overflow-hidden bg-zinc-950">
       {/* Contenedor principal con scroll unificado */}
       <div
         ref={timelineRef}

@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
+import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
 import {
   obtenerTareasScheduler,
   type TareasSchedulerPayload,
@@ -11,6 +11,9 @@ import {
 } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
 import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
+import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDateRangeConfig';
+import { DateRangeConflictModal } from './components/date-config/DateRangeConflictModal';
+import { useSchedulerHeaderData } from './hooks/useSchedulerHeaderData';
 import { type DateRange } from 'react-day-picker';
 
 export default function EventSchedulerPage() {
@@ -23,6 +26,15 @@ export default function EventSchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const eventDataForHook: SchedulerData | null = payload
+    ? { id: payload.id, name: payload.name, event_date: payload.event_date, promise: payload.promise, cotizaciones: payload.cotizaciones, scheduler: payload.scheduler }
+    : null;
+  const { taskStats, validateDateRangeChange, conflict } = useSchedulerHeaderData(eventDataForHook, cotizacionId);
+
+  const handleDateRangeChange = useCallback((newRange: DateRange | undefined) => {
+    setDateRange(newRange);
+  }, []);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Scheduler';
@@ -65,51 +77,27 @@ export default function EventSchedulerPage() {
     return (
       <div className="w-full max-w-7xl mx-auto">
         <ZenCard variant="default" padding="none">
-          <ZenCardHeader className="border-b border-zinc-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-zinc-800 rounded animate-pulse" />
-                <div className="space-y-2">
-                  <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse" />
-                </div>
+          <ZenCardHeader className="border-b border-zinc-800 py-2 px-4 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0 shrink-0">
+              <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse shrink-0" />
+              <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">
+              <div className="hidden sm:block w-px h-4 bg-zinc-800 shrink-0" />
+              <div className="hidden sm:flex items-center gap-x-2 sm:gap-x-3 shrink-0">
+                <div className="h-5 w-20 bg-zinc-800/80 rounded-md animate-pulse" />
+                <div className="h-5 w-16 bg-zinc-800/80 rounded-md animate-pulse" />
+                <div className="h-5 w-14 bg-zinc-800/80 rounded-md animate-pulse" />
+                <div className="h-5 w-20 bg-zinc-800/80 rounded-md animate-pulse" />
               </div>
-              <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse" />
+              <div className="hidden sm:block w-px h-4 bg-zinc-800 shrink-0" />
+              <div className="h-9 w-36 sm:w-44 bg-zinc-800/80 rounded-md animate-pulse shrink-0" />
             </div>
           </ZenCardHeader>
-          <ZenCardContent className="p-6">
-            {/* Barra unificada Skeleton: Progreso + Tareas + Rango */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 mb-4">
-              <div className="flex items-center justify-between gap-6">
-                {/* Progreso Skeleton */}
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-16 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-7 w-28 bg-zinc-800 rounded animate-pulse" />
-                </div>
-
-                {/* Separador */}
-                <div className="h-6 w-px bg-zinc-700" />
-
-                {/* Tareas Skeleton */}
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="h-3 w-12 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse" />
-                </div>
-
-                {/* Separador */}
-                <div className="h-6 w-px bg-zinc-700" />
-
-                {/* Rango de fechas Skeleton */}
-                <div className="h-8 w-40 bg-zinc-800 rounded animate-pulse" />
-              </div>
-            </div>
-
+          <ZenCardContent className="p-0 overflow-hidden">
             {/* Scheduler Skeleton */}
             <div>
-              <div className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950">
+              <div className="overflow-hidden bg-zinc-950">
                 <div className="flex">
                   {/* Sidebar Skeleton */}
                   <div className="w-[360px] border-r border-zinc-800 shrink-0">
@@ -204,39 +192,74 @@ export default function EventSchedulerPage() {
     scheduler: payload.scheduler,
   };
 
+  const cronogramaLabel = cotizacionId
+    ? payload.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
+    : 'Cronograma';
+
   return (
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
-        <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventId}`)}
-                className="p-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </ZenButton>
-              <div>
-                <ZenCardTitle>
-                  {cotizacionId
-                    ? payload.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
-                    : payload.promise?.name || payload.name || 'Evento sin nombre'}
-                </ZenCardTitle>
-                <ZenCardDescription>
-                  {cotizacionId ? 'Cronograma de cotización' : 'Cronograma'}
-                </ZenCardDescription>
-              </div>
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-4 flex items-center justify-between gap-2 flex-wrap">
+          {/* Izquierda: volver + label */}
+          <div className="flex items-center gap-2 min-w-0 shrink-0">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventId}`)}
+              className="p-2 shrink-0"
+              aria-label="Volver al evento"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </ZenButton>
+            <span className="text-sm font-medium text-zinc-200 truncate">{cronogramaLabel}</span>
+          </div>
+
+          {/* Derecha: Stats (desktop) + Fecha. Etiquetas con text-[10px] sm:text-xs; en móvil texto opcional (hidden sm:inline) */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">
+            <div className="w-px h-4 bg-zinc-800 shrink-0 hidden sm:block" aria-hidden />
+            <div className="hidden sm:flex items-center gap-x-2 sm:gap-x-3 shrink-0">
+              <ZenBadge variant="outline" className="gap-1 px-2 py-0.5 bg-emerald-950/30 text-emerald-400 border-emerald-800/50 text-[10px] sm:text-xs">
+                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                <span><span className="hidden sm:inline">Progreso </span>{taskStats.completed}/{taskStats.total} <span className="hidden sm:inline">({taskStats.percentage}%)</span></span>
+              </ZenBadge>
+              {taskStats.delayed > 0 && (
+                <ZenBadge variant="outline" className="gap-1 px-1.5 py-0.5 bg-red-950/30 text-red-400 border-red-800/50 text-[10px] sm:text-xs">
+                  <AlertCircle className="h-2.5 w-2.5 shrink-0" />
+                  <span>{taskStats.delayed} <span className="hidden sm:inline">Atrasadas</span></span>
+                </ZenBadge>
+              )}
+              {taskStats.withoutCrew > 0 && (
+                <ZenBadge variant="outline" className="gap-1 px-1.5 py-0.5 bg-amber-950/30 text-amber-400 border-amber-800/50 text-[10px] sm:text-xs">
+                  <Users className="h-2.5 w-2.5 shrink-0" />
+                  <span>{taskStats.withoutCrew} <span className="hidden sm:inline">Sin personal</span></span>
+                </ZenBadge>
+              )}
+              {taskStats.pending > 0 && taskStats.delayed === 0 && taskStats.withoutCrew === 0 && (
+                <ZenBadge variant="outline" className="gap-1 px-1.5 py-0.5 bg-zinc-800 text-zinc-400 border-zinc-700 text-[10px] sm:text-xs">
+                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                  <span>{taskStats.pending} <span className="hidden sm:inline">Programadas</span></span>
+                </ZenBadge>
+              )}
+            </div>
+            <div className="w-px h-4 bg-zinc-800 shrink-0 hidden sm:block" aria-hidden />
+            <div className="shrink-0">
+              <SchedulerDateRangeConfig
+                dateRange={dateRange}
+                onDateRangeChange={handleDateRangeChange}
+                onValidate={validateDateRangeChange}
+                studioSlug={studioSlug}
+                eventId={eventId}
+              />
             </div>
           </div>
         </ZenCardHeader>
-        <ZenCardContent className="p-6">
+
+        <ZenCardContent className="p-0 overflow-hidden">
           <SchedulerWrapper
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventDataForWrapper as EventoDetalle}
-            initialDateRange={dateRange}
+            dateRange={dateRange}
             initialSecciones={payload.secciones}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
@@ -256,6 +279,13 @@ export default function EventSchedulerPage() {
           />
         </ZenCardContent>
       </ZenCard>
+
+      <DateRangeConflictModal
+        isOpen={conflict.isOpen}
+        onClose={conflict.close}
+        conflictCount={conflict.count}
+        proposedRange={conflict.proposedRange ?? { from: new Date(), to: new Date() }}
+      />
     </div>
   );
 }

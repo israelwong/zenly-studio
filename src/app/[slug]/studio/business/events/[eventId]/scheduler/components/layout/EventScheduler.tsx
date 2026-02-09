@@ -1284,7 +1284,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   if (!dateRange?.from || !dateRange?.to) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] border border-zinc-800 rounded-lg bg-zinc-900/20">
+      <div className="flex flex-col items-center justify-center h-[400px] bg-zinc-950/50">
         <p className="text-zinc-400 text-lg font-medium">Define la fecha de inicio y término de tu proyecto</p>
         <p className="text-zinc-600 text-sm mt-2">Usa el botón de configuración de rango arriba</p>
       </div>
@@ -1293,7 +1293,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   if (itemsMap.size === 0 || seccionesFiltradasConItems.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[400px] border border-zinc-800 rounded-lg bg-zinc-900/20">
+      <div className="flex items-center justify-center h-[400px] bg-zinc-950/50">
         <p className="text-zinc-600">No hay items para mostrar en el scheduler</p>
       </div>
     );
