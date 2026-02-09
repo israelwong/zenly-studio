@@ -893,8 +893,30 @@ export async function crearTareaManualScheduler(
     stage: string;
     name: string;
     durationDays: number;
+    catalog_category_id?: string | null;
+    /** Costo estimado (budget_amount). Opcional. */
+    budget_amount?: number | null;
   }
-): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
+): Promise<{
+  success: boolean;
+  data?: {
+    id: string;
+    name: string;
+    start_date: Date;
+    end_date: Date;
+    category: string;
+    catalog_category_id: string | null;
+    catalog_category_nombre: string | null;
+    budget_amount: number | null;
+    status: string;
+    progress_percent: number;
+    completed_at: Date | null;
+    cotizacion_item_id: null;
+    assigned_to_crew_member_id: string | null;
+    assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
+  };
+  error?: string;
+}> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -971,14 +993,57 @@ export async function crearTareaManualScheduler(
         start_date: startDate,
         end_date: toUTCNoon(endDate),
         sync_status: 'DRAFT',
+        catalog_category_id: params.catalog_category_id ?? null,
+        budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        name: true,
+        start_date: true,
+        end_date: true,
+        category: true,
+        catalog_category_id: true,
+        budget_amount: true,
+        status: true,
+        progress_percent: true,
+        completed_at: true,
+        catalog_category: { select: { name: true } },
+        assigned_to_crew_member_id: true,
+        assigned_to_crew_member: {
+          select: { id: true, name: true, email: true, tipo: true },
+        },
+      },
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
-    return { success: true, data: { id: task.id } };
+    return {
+      success: true,
+      data: {
+        id: task.id,
+        name: task.name,
+        start_date: task.start_date,
+        end_date: task.end_date,
+        category: task.category,
+        catalog_category_id: task.catalog_category_id,
+        catalog_category_nombre: task.catalog_category?.name ?? null,
+        budget_amount: task.budget_amount != null ? Number(task.budget_amount) : null,
+        status: task.status,
+        progress_percent: task.progress_percent ?? 0,
+        completed_at: task.completed_at,
+        cotizacion_item_id: null,
+        assigned_to_crew_member_id: task.assigned_to_crew_member_id,
+        assigned_to_crew_member: task.assigned_to_crew_member
+          ? {
+              id: task.assigned_to_crew_member.id,
+              name: task.assigned_to_crew_member.name,
+              email: task.assigned_to_crew_member.email ?? null,
+              tipo: task.assigned_to_crew_member.tipo,
+            }
+          : null,
+      },
+    };
   } catch (error) {
     console.error('[crearTareaManualScheduler] Error:', error);
     return {
@@ -1174,8 +1239,13 @@ export async function reordenarTareaManualScheduler(
         scheduler_instance_id: task.scheduler_instance_id,
         category: task.category,
       },
-      select: { id: true, order: true, catalog_category_id: true, cotizacion_item_id: true },
-      include: { cotizacion_item: { select: { service_category_id: true } } },
+      select: {
+        id: true,
+        order: true,
+        catalog_category_id: true,
+        cotizacion_item_id: true,
+        cotizacion_item: { select: { service_category_id: true } },
+      },
       orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
     });
 
@@ -1764,7 +1834,7 @@ export async function obtenerTareasScheduler(
               catalog_category_nombre: t.catalog_category?.name ?? null,
               progress_percent: t.progress_percent,
               completed_at: t.completed_at,
-              budget_amount: t.budget_amount,
+              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
               assigned_to_crew_member: t.assigned_to_crew_member,
             })),
           }

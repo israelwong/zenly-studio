@@ -13,16 +13,20 @@ import {
   isCategoryRow,
   isTaskRow,
   isAddPhantomRow,
+  isAddCategoryPhantomRow,
   isManualTaskRow,
   rowHeight,
   STAGE_COLORS,
   ROW_HEIGHTS,
+  STAGE_LABELS,
   type SchedulerRowDescriptor,
   type TaskCategoryStage,
   type ManualTaskPayload,
 } from '../../utils/scheduler-section-stages';
 import { SchedulerItemPopover } from './SchedulerItemPopover';
 import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
+import { TaskForm } from './TaskForm';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
@@ -46,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { MoveTaskModal } from './MoveTaskModal';
+import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -71,7 +76,13 @@ interface SchedulerSidebarProps {
   renderItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
-  onAddManualTask?: (sectionId: string, stageCategory: string) => void;
+  /** Al hacer "+ Añadir tarea" se abre Popover con TaskForm; al crear se llama este callback (actualización optimista en padre). */
+  onAddManualTaskSubmit?: (
+    sectionId: string,
+    stage: string,
+    catalogCategoryId: string | null,
+    data: { name: string; durationDays: number; budgetAmount?: number }
+  ) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -83,11 +94,65 @@ interface SchedulerSidebarProps {
   expandedStages?: Set<string>;
   onExpandedSectionsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  stageIdsWithDataBySection?: Map<string, Set<string>>;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
+  onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
 }
 
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function AddCustomCategoryForm({
+  sectionId,
+  stage,
+  onAdd,
+  onCancel,
+}: {
+  sectionId: string;
+  stage: string;
+  onAdd: (name: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    try {
+      await onAdd(trimmed);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <label className="text-xs font-medium text-zinc-400 block">Nombre de la categoría</label>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Ej. Retratos"
+        className="w-full px-3 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+        autoFocus
+      />
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+          Cancelar
+        </button>
+        <button type="submit" disabled={loading || !name.trim()} className="px-3 py-1.5 text-sm bg-zinc-700 text-zinc-200 rounded-md hover:bg-zinc-600 disabled:opacity-50">
+          {loading ? 'Añadiendo…' : 'Añadir'}
+        </button>
+      </div>
+    </form>
+  );
 }
 
 /** Fila manual: avatar + nombre + botones orden (↑↓) + menú acciones; botones y menú visibles solo al hover. */
@@ -317,13 +382,11 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
     }
     if (isStageRow(r)) {
       const contentRows: StageBlock['contentRows'] = [];
-      let phantomRow: { id: string } | null = null;
       i++;
       while (i < rows.length && !isSectionRow(rows[i]) && !isStageRow(rows[i])) {
-        if (isCategoryRow(rows[i]) || isTaskRow(rows[i]) || isManualTaskRow(rows[i])) {
-          contentRows.push(rows[i]);
-        } else if (isAddPhantomRow(rows[i])) {
-          phantomRow = { id: rows[i].id };
+        const r = rows[i];
+        if (isCategoryRow(r) || isTaskRow(r) || isManualTaskRow(r) || isAddPhantomRow(r) || isAddCategoryPhantomRow(r)) {
+          contentRows.push(r);
         }
         i++;
       }
@@ -332,7 +395,7 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
         block: {
           stageRow: { id: r.id, category: r.category, sectionId: r.sectionId, label: r.label },
           contentRows,
-          phantomRow: phantomRow ?? { id: `${r.id}-add` },
+          phantomRow: { id: `${r.id}-add` },
         },
       });
       continue;
@@ -351,7 +414,7 @@ export const SchedulerSidebar = React.memo(({
   renderItem,
   onTaskToggleComplete,
   onItemUpdate,
-  onAddManualTask,
+  onAddManualTaskSubmit,
   onManualTaskPatch,
   onManualTaskDelete,
   onManualTaskReorder,
@@ -363,10 +426,25 @@ export const SchedulerSidebar = React.memo(({
   expandedStages = new Set(),
   onExpandedSectionsChange,
   onExpandedStagesChange,
+  activeSectionIds,
+  explicitlyActivatedStageIds = [],
+  stageIdsWithDataBySection = new Map(),
+  customCategoriesBySectionStage = new Map(),
+  onToggleStage,
+  onAddCustomCategory,
+  onRemoveEmptyStage,
 }: SchedulerSidebarProps) => {
   const rows = useMemo(
-    () => buildSchedulerRows(secciones, itemsMap, manualTasks),
-    [secciones, itemsMap, manualTasks] // manualTasks incl. nombre/cambios de tarea manual
+    () =>
+      buildSchedulerRows(
+        secciones,
+        itemsMap,
+        manualTasks,
+        activeSectionIds,
+        explicitlyActivatedStageIds,
+        customCategoriesBySectionStage
+      ),
+    [explicitlyActivatedStageIds, secciones, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
   );
   const sectionTaskCounts = useMemo(() => getSectionTaskCounts(rows), [rows]);
   const filteredRows = useMemo(
@@ -386,6 +464,12 @@ export const SchedulerSidebar = React.memo(({
     stageCategory: string;
     taskIds: string[];
   }>({ open: false, sectionId: '', stageCategory: '', taskIds: [] });
+
+  const [addPopoverContext, setAddPopoverContext] = useState<
+    | { type: 'add_task'; sectionId: string; stage: string; catalogCategoryId: string | null; sectionLabel: string }
+    | { type: 'add_category'; sectionId: string; stage: string }
+    | null
+  >(null);
 
   const toggleSection = useCallback(
     (sectionId: string) => {
@@ -443,27 +527,42 @@ export const SchedulerSidebar = React.memo(({
         if (block.type === 'section') {
           const sectionExpanded = isSectionExpanded(block.row.id);
           const taskCount = sectionTaskCounts.get(block.row.id) ?? 0;
+          const sectionData = secciones.find((s) => s.id === block.row.id);
+          const stageIdsWithData = stageIdsWithDataBySection.get(block.row.id) ?? new Set<string>();
           return (
-            <button
+            <div
               key={block.row.id}
-              type="button"
-              onClick={() => toggleSection(block.row.id)}
-              className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors"
+              className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 rounded-none"
               style={{ height: ROW_HEIGHTS.SECTION }}
-              aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
             >
-              {sectionExpanded ? (
-                <ChevronDown className="h-4 w-4 flex-shrink-0 text-zinc-400" />
-              ) : (
-                <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+              <button
+                type="button"
+                onClick={() => toggleSection(block.row.id)}
+                className="flex-1 min-w-0 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors py-0 h-full"
+                aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
+              >
+                {sectionExpanded ? (
+                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+                )}
+                <span className="text-base font-semibold text-zinc-300 truncate flex-1 min-w-0">{block.row.name}</span>
+                {!sectionExpanded && taskCount > 0 && (
+                  <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
+                    {taskCount} tarea{taskCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </button>
+              {sectionData && onToggleStage && (
+                <SchedulerSectionStagesConfigPopover
+                  sectionId={block.row.id}
+                  sectionName={block.row.name}
+                  stageIdsWithData={stageIdsWithData}
+                  explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+                  onToggleStage={onToggleStage}
+                />
               )}
-              <span className="text-base font-semibold text-zinc-300 truncate flex-1 min-w-0">{block.row.name}</span>
-              {!sectionExpanded && taskCount > 0 && (
-                <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                  {taskCount} tarea{taskCount !== 1 ? 's' : ''}
-                </span>
-              )}
-            </button>
+            </div>
           );
         }
 
@@ -577,18 +676,122 @@ export const SchedulerSidebar = React.memo(({
                       </div>
                     );
                   }
+                  if (isAddCategoryPhantomRow(row)) {
+                    const isThisAddCatOpen =
+                      addPopoverContext?.type === 'add_category' &&
+                      addPopoverContext.sectionId === row.sectionId &&
+                      addPopoverContext.stage === row.stageCategory;
+                    return (
+                      <div
+                        key={row.id}
+                        className="border-b border-zinc-800/30 flex items-center pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                        style={{ height: ROW_HEIGHTS.PHANTOM }}
+                      >
+                        {onAddCustomCategory ? (
+                          <Popover
+                            open={isThisAddCatOpen}
+                            onOpenChange={(open) => {
+                              if (!open) setAddPopoverContext(null);
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAddPopoverContext({
+                                    type: 'add_category',
+                                    sectionId: row.sectionId,
+                                    stage: row.stageCategory,
+                                  })
+                                }
+                                className="flex items-center gap-1.5 w-full text-left"
+                              >
+                                <Plus className="h-3.5 w-3.5 shrink-0" />
+                                <span>+ Añadir categoría personalizada</span>
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                              <AddCustomCategoryForm
+                                sectionId={row.sectionId}
+                                stage={row.stageCategory}
+                                onAdd={async (name) => {
+                                  await onAddCustomCategory(row.sectionId, row.stageCategory, name);
+                                  setAddPopoverContext(null);
+                                }}
+                                onCancel={() => setAddPopoverContext(null)}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className="flex items-center gap-1.5">
+                            <Plus className="h-3.5 w-3.5 shrink-0" />
+                            + Añadir categoría personalizada
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                  if (isAddPhantomRow(row)) {
+                    const sectionLabel = row.categoryLabel
+                      ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${row.categoryLabel}`
+                      : (STAGE_LABELS[stageRow.category] ?? stageRow.label);
+                    const isThisPopoverOpen =
+                      addPopoverContext?.type === 'add_task' &&
+                      addPopoverContext.sectionId === row.sectionId &&
+                      addPopoverContext.stage === row.stageCategory &&
+                      addPopoverContext.catalogCategoryId === row.catalogCategoryId;
+                    return (
+                      <Popover
+                        key={row.id}
+                        open={isThisPopoverOpen}
+                        onOpenChange={(open) => {
+                          if (!open) setAddPopoverContext(null);
+                        }}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAddPopoverContext({
+                                type: 'add_task',
+                                sectionId: row.sectionId,
+                                stage: row.stageCategory,
+                                catalogCategoryId: row.catalogCategoryId,
+                                sectionLabel,
+                              })
+                            }
+                            className="w-full border-b border-zinc-800/30 flex items-center gap-1.5 pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs relative"
+                            style={{ height: ROW_HEIGHTS.PHANTOM }}
+                          >
+                            <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
+                            <Plus className="h-3.5 w-3.5 shrink-0" />
+                            <span>+ Añadir tarea personalizada</span>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-80 p-3 bg-zinc-900 border-zinc-800"
+                          align="start"
+                          side="bottom"
+                          sideOffset={4}
+                        >
+                          <TaskForm
+                            mode="create"
+                            studioSlug={studioSlug}
+                            eventId={eventId}
+                            sectionLabel={sectionLabel}
+                            onClose={() => setAddPopoverContext(null)}
+                            onSubmit={async (data) => {
+                              if (!onAddManualTaskSubmit) return;
+                              await onAddManualTaskSubmit(row.sectionId, row.stageCategory, row.catalogCategoryId, data);
+                              setAddPopoverContext(null);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  }
                   return null;
                 })}
-                <button
-                  type="button"
-                  onClick={() => onAddManualTask?.(stageRow.sectionId, stageRow.category)}
-                  className="w-full border-b border-zinc-800/30 flex items-center gap-1.5 pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs relative"
-                  style={{ height: ROW_HEIGHTS.PHANTOM }}
-                >
-                  <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                  <Plus className="h-3.5 w-3.5 shrink-0" />
-                  <span>Añadir tarea</span>
-                </button>
               </>
             ) : null}
           </React.Fragment>

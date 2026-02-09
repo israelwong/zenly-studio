@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
@@ -14,6 +14,7 @@ import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
 import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDateRangeConfig';
 import { DateRangeConflictModal } from './components/date-config/DateRangeConflictModal';
 import { useSchedulerHeaderData } from './hooks/useSchedulerHeaderData';
+import { getSectionIdsWithDataFromEventData, getStageIdsWithDataBySectionFromEventData } from './utils/scheduler-section-stages';
 import { type DateRange } from 'react-day-picker';
 
 export default function EventSchedulerPage() {
@@ -26,6 +27,76 @@ export default function EventSchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
+  const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
+
+  const activeSectionIds = useMemo(() => {
+    if (!payload?.secciones?.length) return new Set<string>();
+    const withData = getSectionIdsWithDataFromEventData(payload, payload.secciones);
+    const out = new Set(withData);
+    const STAGES = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'] as const;
+    for (const sec of payload.secciones) {
+      if (STAGES.some((stage) => explicitlyActivatedStageIds.includes(`${sec.id}-${stage}`))) out.add(sec.id);
+    }
+    return out;
+  }, [payload, explicitlyActivatedStageIds]);
+
+  const stageIdsWithDataBySection = useMemo(() => {
+    if (!payload?.secciones?.length) return new Map<string, Set<string>>();
+    return getStageIdsWithDataBySectionFromEventData(payload, payload.secciones);
+  }, [payload]);
+
+  const handleToggleStage = useCallback((sectionId: string, stage: string, enabled: boolean) => {
+    const stageKey = `${sectionId}-${stage}`;
+    setExplicitlyActivatedStageIds((prev) =>
+      enabled ? [...prev, stageKey] : prev.filter((id) => id !== stageKey)
+    );
+    window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+  }, []);
+
+  const handleAddCustomCategory = useCallback(
+    async (sectionId: string, stage: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const key = `${sectionId}-${stage}`;
+      try {
+        const { crearCategoria } = await import('@/lib/actions/studio/config/catalogo.actions');
+        const uniqueName = `${trimmed} (${Date.now()})`;
+        const result = await crearCategoria(studioSlug, { nombre: uniqueName, orden: 0 }, sectionId);
+        if (result.success && result.data) {
+          setCustomCategoriesBySectionStage((prev) => {
+            const next = new Map(prev);
+            const list = next.get(key) ?? [];
+            next.set(key, [...list, { id: result.data!.id, name: trimmed }]);
+            return next;
+          });
+          window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        } else {
+          toast.error(result.error ?? 'Error al crear la categoría');
+        }
+      } catch {
+        setCustomCategoriesBySectionStage((prev) => {
+          const next = new Map(prev);
+          const list = next.get(key) ?? [];
+          next.set(key, [...list, { id: `custom-${key}-${Date.now()}`, name: trimmed }]);
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      }
+    },
+    [studioSlug]
+  );
+
+  const handleRemoveEmptyStage = useCallback((sectionId: string, stage: string) => {
+    const stageKey = `${sectionId}-${stage}`;
+    setExplicitlyActivatedStageIds((prev) => prev.filter((id) => id !== stageKey));
+    setCustomCategoriesBySectionStage((prev) => {
+      const next = new Map(prev);
+      next.delete(`${sectionId}-${stage}`);
+      return next;
+    });
+    window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+  }, []);
 
   const eventDataForHook: SchedulerData | null = payload
     ? { id: payload.id, name: payload.name, event_date: payload.event_date, promise: payload.promise, cotizaciones: payload.cotizaciones, scheduler: payload.scheduler }
@@ -261,6 +332,13 @@ export default function EventSchedulerPage() {
             eventData={eventDataForWrapper as EventoDetalle}
             dateRange={dateRange}
             initialSecciones={payload.secciones}
+            activeSectionIds={activeSectionIds}
+            explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+            stageIdsWithDataBySection={stageIdsWithDataBySection}
+            customCategoriesBySectionStage={customCategoriesBySectionStage}
+            onToggleStage={handleToggleStage}
+            onAddCustomCategory={handleAddCustomCategory}
+            onRemoveEmptyStage={handleRemoveEmptyStage}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
                 setPayload(prev =>

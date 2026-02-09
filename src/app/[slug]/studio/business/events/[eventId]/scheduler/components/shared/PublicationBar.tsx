@@ -53,11 +53,13 @@ export function PublicationBar({ studioSlug, eventId, onPublished }: Publication
 
     window.addEventListener('scheduler-task-updated', handleTaskUpdate);
     window.addEventListener('scheduler-task-created', handleTaskUpdate);
+    window.addEventListener('scheduler-structure-changed', handleTaskUpdate);
 
     return () => {
       isMountedRef.current = false;
       window.removeEventListener('scheduler-task-updated', handleTaskUpdate);
       window.removeEventListener('scheduler-task-created', handleTaskUpdate);
+      window.removeEventListener('scheduler-structure-changed', handleTaskUpdate);
     };
   }, [checkDraftCount]);
 

@@ -20,6 +20,14 @@ interface EventSchedulerViewProps {
   onRefetchEvent?: () => Promise<void>;
   /** Si se pasa, no se llama a obtenerCatalogo (carga atómica desde obtenerTareasScheduler). */
   initialSecciones?: SeccionData[];
+  /** Secciones activas (solo se muestran estas). */
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  stageIdsWithDataBySection?: Map<string, Set<string>>;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
+  onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -31,6 +39,13 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onDataChange,
   onRefetchEvent,
   initialSecciones,
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  stageIdsWithDataBySection,
+  customCategoriesBySectionStage,
+  onToggleStage,
+  onAddCustomCategory,
+  onRemoveEmptyStage,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -148,6 +163,13 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         secciones={secciones}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
+        activeSectionIds={activeSectionIds}
+        explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+        stageIdsWithDataBySection={stageIdsWithDataBySection}
+        customCategoriesBySectionStage={customCategoriesBySectionStage}
+        onToggleStage={onToggleStage}
+        onAddCustomCategory={onAddCustomCategory}
+        onRemoveEmptyStage={onRemoveEmptyStage}
       />
     );
   }
@@ -167,7 +189,10 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
 
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const eventDataEqual = prevProps.eventData === nextProps.eventData;
+  const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
+  const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
+  const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
 
-  return datesEqual && eventDataEqual;
+  return datesEqual && eventDataEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual;
 });
 

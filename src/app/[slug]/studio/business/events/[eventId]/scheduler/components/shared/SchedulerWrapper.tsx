@@ -18,6 +18,16 @@ interface SchedulerWrapperProps {
   onRefetchEvent?: () => Promise<void>;
   cotizacionId?: string;
   initialSecciones?: import('@/lib/actions/schemas/catalogo-schemas').SeccionData[];
+  /** Secciones activas (con datos o activadas por usuario). */
+  activeSectionIds?: Set<string>;
+  /** Keys `${sectionId}-${stage}`: etapas vacías activadas. */
+  explicitlyActivatedStageIds?: string[];
+  /** Por sectionId: stages con tareas (para popover). */
+  stageIdsWithDataBySection?: Map<string, Set<string>>;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
+  onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
 }
 
 /**
@@ -32,6 +42,13 @@ export function SchedulerWrapper({
   onRefetchEvent,
   cotizacionId,
   initialSecciones,
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  stageIdsWithDataBySection,
+  customCategoriesBySectionStage,
+  onToggleStage,
+  onAddCustomCategory,
+  onRemoveEmptyStage,
 }: SchedulerWrapperProps) {
   const filteredCotizaciones = useMemo(() => {
     if (!cotizacionId || !eventData.cotizaciones) return eventData.cotizaciones ?? [];
@@ -55,6 +72,13 @@ export function SchedulerWrapper({
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
         initialSecciones={initialSecciones}
+        activeSectionIds={activeSectionIds}
+        explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+        stageIdsWithDataBySection={stageIdsWithDataBySection}
+        customCategoriesBySectionStage={customCategoriesBySectionStage}
+        onToggleStage={onToggleStage}
+        onAddCustomCategory={onAddCustomCategory}
+        onRemoveEmptyStage={onRemoveEmptyStage}
       />
       <PublicationBar
         studioSlug={studioSlug}

@@ -30,7 +30,12 @@ interface SchedulerPanelProps {
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   renderSidebarItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
-  onAddManualTask?: (sectionId: string, stageCategory: string) => void;
+  onAddManualTaskSubmit?: (
+    sectionId: string,
+    stage: string,
+    catalogCategoryId: string | null,
+    data: { name: string; durationDays: number; budgetAmount?: number }
+  ) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -42,6 +47,14 @@ interface SchedulerPanelProps {
   expandedStages?: Set<string>;
   onExpandedSectionsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  /** Secciones activas (solo se muestran estas). */
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  stageIdsWithDataBySection?: Map<string, Set<string>>;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
+  onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
 }
 
 /**
@@ -63,7 +76,7 @@ export const SchedulerPanel = React.memo(({
   onTaskToggleComplete,
   renderSidebarItem,
   onItemUpdate,
-  onAddManualTask,
+  onAddManualTaskSubmit,
   onManualTaskPatch,
   onManualTaskDelete,
   onManualTaskReorder,
@@ -75,6 +88,13 @@ export const SchedulerPanel = React.memo(({
   expandedStages = new Set(),
   onExpandedSectionsChange,
   onExpandedStagesChange,
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  stageIdsWithDataBySection,
+  customCategoriesBySectionStage,
+  onToggleStage,
+  onAddCustomCategory,
+  onRemoveEmptyStage,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -124,7 +144,14 @@ export const SchedulerPanel = React.memo(({
             renderItem={renderSidebarItem}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
-            onAddManualTask={onAddManualTask}
+            activeSectionIds={activeSectionIds}
+            explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+            stageIdsWithDataBySection={stageIdsWithDataBySection}
+            customCategoriesBySectionStage={customCategoriesBySectionStage}
+            onToggleStage={onToggleStage}
+            onAddCustomCategory={onAddCustomCategory}
+            onRemoveEmptyStage={onRemoveEmptyStage}
+            onAddManualTaskSubmit={onAddManualTaskSubmit}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
             onManualTaskReorder={onManualTaskReorder}
@@ -136,6 +163,7 @@ export const SchedulerPanel = React.memo(({
             expandedStages={expandedStages}
             onExpandedSectionsChange={onExpandedSectionsChange}
             onExpandedStagesChange={onExpandedStagesChange}
+            customCategoriesBySectionStage={customCategoriesBySectionStage}
           />
         </div>
 
@@ -148,6 +176,9 @@ export const SchedulerPanel = React.memo(({
             dateRange={dateRange}
             studioSlug={studioSlug}
             eventId={eventId}
+            activeSectionIds={activeSectionIds}
+            explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+            customCategoriesBySectionStage={customCategoriesBySectionStage}
             onTaskUpdate={handleTaskUpdate}
             onTaskCreate={onTaskCreate}
             onTaskDelete={onTaskDelete}
@@ -174,8 +205,11 @@ export const SchedulerPanel = React.memo(({
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
+  const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
+  const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
+  const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

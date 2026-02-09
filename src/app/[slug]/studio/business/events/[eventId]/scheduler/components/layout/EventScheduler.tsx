@@ -14,13 +14,13 @@ import {
   reordenarTareaManualScheduler,
   moverTareaManualCategoria,
   duplicarTareaManualScheduler,
+  crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { SchedulerAgrupacionCell } from '../sidebar/SchedulerAgrupacionCell';
 import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeCompleteModal';
-import { AddManualTaskModal } from '../task-actions/AddManualTaskModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 
 /** Ítem de cotización en la vista; compatible con SchedulerViewData y SchedulerData. */
@@ -55,6 +55,14 @@ interface EventSchedulerProps {
   secciones: SeccionData[];
   onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
+  /** Secciones activas (solo se muestran estas). */
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  stageIdsWithDataBySection?: Map<string, Set<string>>;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
+  onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
 }
 
 export const EventScheduler = React.memo(function EventScheduler({
@@ -65,6 +73,13 @@ export const EventScheduler = React.memo(function EventScheduler({
   secciones,
   onDataChange,
   onRefetchEvent,
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  stageIdsWithDataBySection,
+  customCategoriesBySectionStage,
+  onToggleStage,
+  onAddCustomCategory,
+  onRemoveEmptyStage,
 }: EventSchedulerProps) {
   const router = useRouter();
 
@@ -85,11 +100,6 @@ export const EventScheduler = React.memo(function EventScheduler({
     itemId: string;
     skipPayment: boolean;
   } | null>(null);
-  const [addManualTaskModal, setAddManualTaskModal] = useState<{
-    sectionId: string;
-    stage: string;
-  } | null>(null);
-
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => new Set(secciones.map((s) => s.id)));
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() =>
     new Set(secciones.flatMap((s) => STAGE_ORDER.map((st) => `${s.id}-${st}`)))
@@ -349,6 +359,60 @@ export const EventScheduler = React.memo(function EventScheduler({
       onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: [...(localEventData.scheduler?.tasks ?? []), newTask] } });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       toast.success('Tarea duplicada');
+    },
+    [studioSlug, eventId, localEventData, onDataChange]
+  );
+
+  const handleAddManualTaskSubmit = useCallback(
+    async (
+      sectionId: string,
+      stage: string,
+      catalogCategoryId: string | null,
+      data: { name: string; durationDays: number; budgetAmount?: number }
+    ) => {
+      const result = await crearTareaManualScheduler(studioSlug, eventId, {
+        sectionId,
+        stage,
+        name: data.name,
+        durationDays: data.durationDays,
+        catalog_category_id: catalogCategoryId,
+        budget_amount: data.budgetAmount != null && data.budgetAmount >= 0 ? data.budgetAmount : null,
+      });
+      if (!result.success || !result.data) {
+        toast.error(result.error ?? 'Error al crear la tarea');
+        return;
+      }
+      const newTask = {
+        id: result.data.id,
+        name: result.data.name,
+        start_date: result.data.start_date,
+        end_date: result.data.end_date,
+        category: result.data.category,
+        cotizacion_item_id: null as const,
+        catalog_category_id: result.data.catalog_category_id,
+        catalog_category_nombre: result.data.catalog_category_nombre,
+        status: result.data.status,
+        progress_percent: result.data.progress_percent,
+        completed_at: result.data.completed_at,
+        budget_amount: result.data.budget_amount,
+        assigned_to_crew_member_id: result.data.assigned_to_crew_member_id,
+        assigned_to_crew_member: result.data.assigned_to_crew_member,
+      };
+      setLocalEventData((prev) => ({
+        ...prev,
+        scheduler: prev.scheduler
+          ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
+          : prev.scheduler,
+      }));
+      onDataChange?.({
+        ...localEventData,
+        scheduler: {
+          ...localEventData.scheduler!,
+          tasks: [...(localEventData.scheduler?.tasks ?? []), newTask],
+        },
+      });
+      window.dispatchEvent(new CustomEvent('scheduler-task-created'));
+      toast.success('Tarea creada');
     },
     [studioSlug, eventId, localEventData, onDataChange]
   );
@@ -1308,13 +1372,20 @@ export const EventScheduler = React.memo(function EventScheduler({
         studioSlug={studioSlug}
         eventId={eventId}
         dateRange={dateRange}
+        activeSectionIds={activeSectionIds}
+        explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+        stageIdsWithDataBySection={stageIdsWithDataBySection}
+        customCategoriesBySectionStage={customCategoriesBySectionStage}
+        onToggleStage={onToggleStage}
+        onAddCustomCategory={onAddCustomCategory}
+        onRemoveEmptyStage={onRemoveEmptyStage}
         onTaskUpdate={handleTaskUpdate}
         onTaskCreate={handleTaskCreate}
         onTaskDelete={handleTaskDelete}
         onTaskToggleComplete={handleTaskToggleComplete}
         renderSidebarItem={renderSidebarItem}
         onItemUpdate={handleItemUpdate}
-        onAddManualTask={(sectionId, stageCategory) => setAddManualTaskModal({ sectionId, stage: stageCategory })}
+        onAddManualTaskSubmit={handleAddManualTaskSubmit}
         onManualTaskPatch={handleManualTaskPatch}
         onManualTaskDelete={handleManualTaskDelete}
         onManualTaskReorder={handleManualTaskReorder}
@@ -1326,20 +1397,6 @@ export const EventScheduler = React.memo(function EventScheduler({
         expandedStages={expandedStages}
         onExpandedSectionsChange={setExpandedSections}
         onExpandedStagesChange={setExpandedStages}
-      />
-
-      {/* Modal añadir tarea manual (fila fantasma + Añadir tarea) */}
-      <AddManualTaskModal
-        isOpen={!!addManualTaskModal}
-        onClose={() => setAddManualTaskModal(null)}
-        onSuccess={async () => {
-          await onRefetchEvent?.();
-          router.refresh();
-        }}
-        studioSlug={studioSlug}
-        eventId={eventId}
-        sectionId={addManualTaskModal?.sectionId ?? ''}
-        stage={addManualTaskModal?.stage ?? 'PLANNING'}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}
@@ -1399,7 +1456,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Comparación personalizada: solo re-renderizar si cambian datos relevantes
+  // Comparación personalizada: re-renderizar si cambian datos o estado de etapas
   const prevFrom = prevProps.dateRange?.from?.getTime();
   const prevTo = prevProps.dateRange?.to?.getTime();
   const nextFrom = nextProps.dateRange?.from?.getTime();
@@ -1408,7 +1465,22 @@ export const EventScheduler = React.memo(function EventScheduler({
   const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
   const eventDataEqual = prevProps.eventData === nextProps.eventData;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
+  const explicitStagesEqual =
+    prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
+  const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
+  const stageIdsBySectionEqual =
+    prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
+  const customCatsEqual =
+    prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
 
-  return datesEqual && eventDataEqual && seccionesEqual;
+  return (
+    datesEqual &&
+    eventDataEqual &&
+    seccionesEqual &&
+    explicitStagesEqual &&
+    activeSectionIdsEqual &&
+    stageIdsBySectionEqual &&
+    customCatsEqual
+  );
 });
 

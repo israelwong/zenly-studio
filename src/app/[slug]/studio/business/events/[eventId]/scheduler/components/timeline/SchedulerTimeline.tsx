@@ -26,6 +26,9 @@ interface SchedulerTimelineProps {
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
 }
 
 export const SchedulerTimeline = React.memo(({
@@ -43,6 +46,9 @@ export const SchedulerTimeline = React.memo(({
   onManualTaskPatch,
   expandedSections = new Set(),
   expandedStages = new Set(),
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  customCategoriesBySectionStage,
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
   const todayPosition = getTodayPosition(dateRange);
@@ -60,6 +66,9 @@ export const SchedulerTimeline = React.memo(({
         dateRange={dateRange}
         studioSlug={studioSlug}
         eventId={eventId}
+        activeSectionIds={activeSectionIds}
+        explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+        customCategoriesBySectionStage={customCategoriesBySectionStage}
         onTaskUpdate={onTaskUpdate}
         onTaskCreate={onTaskCreate}
         onTaskDelete={onTaskDelete}
@@ -91,8 +100,11 @@ export const SchedulerTimeline = React.memo(({
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
+  const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
+  const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
+  const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

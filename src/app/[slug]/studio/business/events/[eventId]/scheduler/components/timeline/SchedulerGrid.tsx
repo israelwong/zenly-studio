@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
-import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isManualTaskRow, ROW_HEIGHTS, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
+import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isAddCategoryPhantomRow, isManualTaskRow, ROW_HEIGHTS, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth } from '../../utils/coordinate-utils';
 
@@ -25,6 +25,9 @@ interface SchedulerGridProps {
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
+  activeSectionIds?: Set<string>;
+  explicitlyActivatedStageIds?: string[];
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
 }
 
 export const SchedulerGrid = React.memo(({
@@ -42,11 +45,22 @@ export const SchedulerGrid = React.memo(({
   onManualTaskPatch,
   expandedSections = new Set(),
   expandedStages = new Set(),
+  activeSectionIds,
+  explicitlyActivatedStageIds,
+  customCategoriesBySectionStage,
 }: SchedulerGridProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
   const rows = useMemo(
-    () => buildSchedulerRows(secciones, itemsMap, manualTasks),
-    [secciones, itemsMap, manualTasks] // manualTasks incl. nombre/cambios de tarea manual
+    () =>
+      buildSchedulerRows(
+        secciones,
+        itemsMap,
+        manualTasks,
+        activeSectionIds,
+        explicitlyActivatedStageIds,
+        customCategoriesBySectionStage
+      ),
+    [explicitlyActivatedStageIds, secciones, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
   );
   const filteredRows = useMemo(
     () =>
@@ -91,12 +105,13 @@ export const SchedulerGrid = React.memo(({
             />
           );
         }
-        if (isAddPhantomRow(row)) {
+        if (isAddPhantomRow(row) || isAddCategoryPhantomRow(row)) {
           return (
             <div
               key={row.id}
               className="border-b border-zinc-800/30 flex-shrink-0"
               style={{ height: ROW_HEIGHTS.PHANTOM }}
+              aria-hidden
             />
           );
         }
@@ -188,7 +203,10 @@ export const SchedulerGrid = React.memo(({
       prevProps.expandedStages &&
       nextProps.expandedStages &&
       [...prevProps.expandedStages].every((id) => nextProps.expandedStages!.has(id)));
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual;
+  const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
+  const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
+  const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
 });
 
 SchedulerGrid.displayName = 'SchedulerGrid';
