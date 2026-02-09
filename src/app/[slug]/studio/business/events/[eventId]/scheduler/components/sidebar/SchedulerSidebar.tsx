@@ -707,7 +707,7 @@ export const SchedulerSidebar = React.memo(({
                                 className="flex items-center gap-1.5 w-full text-left"
                               >
                                 <Plus className="h-3.5 w-3.5 shrink-0" />
-                                <span>+ Añadir categoría personalizada</span>
+                                <span>Añadir categoría personalizada</span>
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
@@ -725,7 +725,7 @@ export const SchedulerSidebar = React.memo(({
                         ) : (
                           <span className="flex items-center gap-1.5">
                             <Plus className="h-3.5 w-3.5 shrink-0" />
-                            + Añadir categoría personalizada
+                            Añadir categoría personalizada
                           </span>
                         )}
                       </div>
@@ -765,7 +765,7 @@ export const SchedulerSidebar = React.memo(({
                           >
                             <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
                             <Plus className="h-3.5 w-3.5 shrink-0" />
-                            <span>+ Añadir tarea personalizada</span>
+                            <span>Añadir tarea personalizada</span>
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
