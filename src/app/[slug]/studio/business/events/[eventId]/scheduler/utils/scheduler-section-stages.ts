@@ -545,45 +545,34 @@ export function buildSchedulerRows(
         label: STAGE_LABELS[stage],
       });
 
+      const stageId = `${sectionId}-${stage}`;
       if (isEmptyStage) {
-        const stageId = stageKey;
         const customCats = customCategoriesBySectionStage?.get(stageKey) ?? [];
-        if (customCats.length === 0) {
+        for (const cat of customCats) {
           rows.push({
-            type: 'add_category_phantom',
-            id: `${stageId}-add-cat`,
+            type: 'category',
+            id: `${stageId}-cat-${cat.id}`,
+            label: cat.name,
             sectionId,
-            stageCategory: stage,
             stageId,
           });
-        } else {
-          for (const cat of customCats) {
-            rows.push({
-              type: 'category',
-              id: `${stageId}-cat-${cat.id}`,
-              label: cat.name,
-              sectionId,
-              stageId,
-            });
-            rows.push({
-              type: 'add_phantom',
-              id: `${stageId}-cat-${cat.id}-add`,
-              sectionId,
-              stageCategory: stage,
-              catalogCategoryId: cat.id,
-              categoryLabel: cat.name,
-            });
-          }
           rows.push({
-            type: 'add_category_phantom',
-            id: `${stageId}-add-cat`,
+            type: 'add_phantom',
+            id: `${stageId}-cat-${cat.id}-add`,
             sectionId,
             stageCategory: stage,
-            stageId,
+            catalogCategoryId: cat.id,
+            categoryLabel: cat.name,
           });
         }
+        rows.push({
+          type: 'add_category_phantom',
+          id: `${stageId}-add-cat`,
+          sectionId,
+          stageCategory: stage,
+          stageId,
+        });
       } else {
-        const stageId = `${sectionId}-${stage}`;
         for (const categoryKey of categoryKeys) {
           const list = byCat.get(categoryKey)!;
           rows.push({
@@ -605,6 +594,13 @@ export function buildSchedulerRows(
             categoryLabel: categoryKey,
           });
         }
+        rows.push({
+          type: 'add_category_phantom',
+          id: `${stageId}-add-cat`,
+          sectionId,
+          stageCategory: stage,
+          stageId,
+        });
       }
     }
   }

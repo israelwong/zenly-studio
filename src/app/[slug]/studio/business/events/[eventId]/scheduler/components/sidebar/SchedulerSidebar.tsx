@@ -108,6 +108,12 @@ function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
+/** Quita el sufijo " (timestamp)" del nombre de categoría para mostrar solo lo que escribió el usuario. */
+function formatCategoryLabel(label: string): string {
+  if (typeof label !== 'string' || !label) return label;
+  return label.replace(/\s*\(\d{10,}\)\s*$/, '').trim() || label;
+}
+
 function AddCustomCategoryForm({
   sectionId,
   stage,
@@ -620,13 +626,13 @@ export const SchedulerSidebar = React.memo(({
                     return (
                       <div
                         key={row.id}
-                        className="flex items-center pl-10 pr-4 border-b border-zinc-800/30 bg-zinc-900/30"
+                        className="flex items-center pl-8 pr-4 border-b border-zinc-800/30 bg-zinc-900/30"
                         style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
                         data-section-id={row.sectionId}
                         title={typeof row.sectionId === 'string' && row.sectionId ? `Sección: ${row.sectionId}` : undefined}
                       >
                         <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate">
-                          {row.label}
+                          {formatCategoryLabel(row.label)}
                         </span>
                         {process.env.NODE_ENV === 'development' && row.sectionId && (
                           <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
@@ -693,7 +699,7 @@ export const SchedulerSidebar = React.memo(({
                     return (
                       <div
                         key={row.id}
-                        className="border-b border-zinc-800/30 flex items-center pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                        className="border-b border-zinc-800/30 flex items-center pl-8 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
                         style={{ height: ROW_HEIGHTS.PHANTOM }}
                       >
                         {onAddCustomCategory && row.sectionId ? (
