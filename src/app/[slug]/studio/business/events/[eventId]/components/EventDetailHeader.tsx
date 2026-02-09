@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Loader2, Check } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
-import { moveEvent, obtenerEventoDetalle } from '@/lib/actions/studio/business/events';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
@@ -115,6 +114,7 @@ export const EventDetailHeader = function EventDetailHeader({
 
     setIsChangingStage(true);
     try {
+      const { moveEvent, obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events');
       const result = await moveEvent(studioSlug, {
         event_id: eventId,
         new_stage_id: newStageId,
@@ -122,7 +122,6 @@ export const EventDetailHeader = function EventDetailHeader({
 
       if (result.success) {
         toast.success('Etapa actualizada correctamente');
-        // Recargar datos del evento
         const eventResult = await obtenerEventoDetalle(studioSlug, eventId);
         if (eventResult.success && eventResult.data) {
           onEventUpdated(eventResult.data);

@@ -34,7 +34,7 @@ interface SchedulerPanelProps {
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
-  onManualTaskMoveStage?: (taskId: string, category: import('../utils/scheduler-section-stages').TaskCategoryStage) => void;
+  onManualTaskMoveStage?: (taskId: string, category: import('../utils/scheduler-section-stages').TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;

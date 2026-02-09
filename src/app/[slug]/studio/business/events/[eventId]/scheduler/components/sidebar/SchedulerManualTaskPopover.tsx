@@ -26,7 +26,7 @@ interface CrewMember {
 
 export type ManualTaskPatch = Partial<Pick<
   ManualTaskPayload,
-  'name' | 'budget_amount' | 'assigned_to_crew_member_id' | 'assigned_to_crew_member' | 'status' | 'completed_at'
+  'name' | 'budget_amount' | 'assigned_to_crew_member_id' | 'assigned_to_crew_member' | 'status' | 'completed_at' | 'category' | 'catalog_category_id' | 'catalog_category_nombre'
 >>;
 
 interface SchedulerManualTaskPopoverProps {

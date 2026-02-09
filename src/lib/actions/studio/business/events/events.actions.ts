@@ -18,6 +18,12 @@ import {
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import {
+  construirEstructuraJerarquicaCotizacion,
+  aplanarEstructuraAOrdenIds,
+  ordenarCotizacionItemsPorCatalogo,
+  type CotizacionItemInput,
+} from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 
 export interface EventoBasico {
   id: string;
@@ -980,6 +986,7 @@ export async function obtenerEventoDetalle(
                 items: {
                   select: {
                     id: true,
+                    order: true,
                     service_categories: {
                       select: {
                         id: true,
@@ -1036,6 +1043,11 @@ export async function obtenerEventoDetalle(
                     invitation_status: true,
                     google_event_id: true,
                     category: true,
+                    catalog_category_id: true,
+                    order: true,
+                    catalog_category: {
+                      select: { id: true, name: true },
+                    },
                   },
                 },
               },
@@ -1074,6 +1086,13 @@ export async function obtenerEventoDetalle(
                 checklist_items: true,
                 budget_amount: true,
                 order: true,
+                catalog_category_id: true,
+                catalog_category: {
+                  select: { id: true, name: true },
+                },
+                cotizacion_item: {
+                  select: { service_category_id: true, items: { select: { service_category_id: true } } },
+                },
                 assigned_to: {
                   select: {
                     id: true,
@@ -1215,6 +1234,7 @@ export async function obtenerEventoDetalle(
               order: true,
               items: {
                 select: {
+                  order: true,
                   service_categories: {
                     select: {
                       order: true,
@@ -1267,6 +1287,10 @@ export async function obtenerEventoDetalle(
                   invitation_status: true,
                   google_event_id: true,
                   category: true,
+                  catalog_category_id: true,
+                  catalog_category: {
+                    select: { id: true, name: true },
+                  },
                 },
               },
             },
@@ -1331,47 +1355,16 @@ export async function obtenerEventoDetalle(
         })),
       } : null,
       cotizaciones: todasLasCotizaciones.map(cot => {
-        // Ordenar items por orden de sección, categoría y order del item
-        const itemsOrdenados = cot.cotizacion_items
-          .map((item) => {
-            // Obtener orden de sección y categoría desde las relaciones
-            const seccionOrden =
-              item.items?.service_categories?.section_categories?.service_sections?.order ??
-              item.service_categories?.section_categories?.service_sections?.order ??
-              999;
-            const categoriaOrden =
-              item.items?.service_categories?.order ??
-              item.service_categories?.order ??
-              999;
-
-            return {
-              item: {
-                ...item,
-                unit_price: item.unit_price ? Number(item.unit_price) : 0,
-                subtotal: item.subtotal ? Number(item.subtotal) : 0,
-                cost: item.cost ? Number(item.cost) : 0,
-                cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
-                internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
-                client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
-              },
-              seccionOrden,
-              categoriaOrden,
-              itemOrder: item.order ?? 999,
-            };
-          })
-          .sort((a, b) => {
-            // Primero por orden de sección
-            if (a.seccionOrden !== b.seccionOrden) {
-              return a.seccionOrden - b.seccionOrden;
-            }
-            // Luego por orden de categoría
-            if (a.categoriaOrden !== b.categoriaOrden) {
-              return a.categoriaOrden - b.categoriaOrden;
-            }
-            // Finalmente por order (orden dentro de la cotización)
-            return a.itemOrder - b.itemOrder;
-          })
-          .map(({ item }) => item);
+        // Orden estándar: seccion > categoria (catálogo) > item_order (catálogo) > order (cotización)
+        const itemsOrdenados = ordenarCotizacionItemsPorCatalogo(cot.cotizacion_items).map((item) => ({
+          ...item,
+          unit_price: item.unit_price ? Number(item.unit_price) : 0,
+          subtotal: item.subtotal ? Number(item.subtotal) : 0,
+          cost: item.cost ? Number(item.cost) : 0,
+          cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
+          internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
+          client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
+        }));
 
         return {
           ...cot,
@@ -1405,20 +1398,30 @@ export async function obtenerEventoDetalle(
       scheduler: evento.scheduler
         ? {
             ...evento.scheduler,
-            tasks: evento.scheduler.tasks?.map((t) => ({
-              ...t,
-              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-              order: t.order ?? 0,
-              assigned_to_crew_member_id: t.assigned_to_crew_member_id,
-              assigned_to_crew_member: t.assigned_to_crew_member
-                ? {
-                    id: t.assigned_to_crew_member.id,
-                    name: t.assigned_to_crew_member.name,
-                    email: t.assigned_to_crew_member.email ?? null,
-                    tipo: t.assigned_to_crew_member.tipo,
-                  }
-                : null,
-            })),
+            tasks: evento.scheduler.tasks?.map((t) => {
+              const resolvedCatalogCategoryId =
+                t.catalog_category_id ??
+                (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
+                (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.items?.service_category_id ??
+                null;
+              const { catalog_category: _cat, cotizacion_item: _ci, ...rest } = t as typeof t & { cotizacion_item?: unknown };
+              return {
+                ...rest,
+                budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+                order: t.order ?? 0,
+                catalog_category_id: resolvedCatalogCategoryId,
+                catalog_category_nombre: t.catalog_category?.name ?? null,
+                assigned_to_crew_member_id: t.assigned_to_crew_member_id,
+                assigned_to_crew_member: t.assigned_to_crew_member
+                  ? {
+                      id: t.assigned_to_crew_member.id,
+                      name: t.assigned_to_crew_member.name,
+                      email: t.assigned_to_crew_member.email ?? null,
+                      tipo: t.assigned_to_crew_member.tipo,
+                    }
+                  : null,
+              };
+            }),
           }
         : null,
     } as EventoDetalle;
@@ -1685,9 +1688,8 @@ export async function cancelarEvento(
           where: {
             cotizacion_id: evento.cotizacion_id,
           },
-        }).catch((error) => {
+        }).catch((_error) => {
           // Ignorar error si no existe registro de cierre
-          console.log('[CANCELAR EVENTO] No se encontró registro de cierre para limpiar:', error);
         });
       }
 
@@ -2547,7 +2549,6 @@ export async function asignarCrewAItem(
 
       // Si la tarea está completada, crear/actualizar nómina
       if (task && task.completed_at && task.status === 'COMPLETED') {
-        console.log('[EVENTOS] ✅ Tarea completada detectada, creando/actualizando nómina...');
         try {
           // Importar dinámicamente para evitar dependencias circulares
           const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
@@ -2582,7 +2583,6 @@ export async function asignarCrewAItem(
           );
 
           if (result.success && result.data) {
-            console.log('[EVENTOS] ✅ Nómina creada/actualizada automáticamente:', result.data.nominaId);
             // Obtener nombre del personal
             const crewMember = await prisma.studio_crew_members.findUnique({
               where: { id: crewMemberId },
@@ -3001,7 +3001,7 @@ export async function actualizarSchedulerTask(
       return { success: false, error: 'Tarea no encontrada' };
     }
 
-    // Preparar datos de actualización
+    // Preparar datos de actualización. No incluir order: se preserva la posición en Sidebar/Grid.
     const updateData: {
       name?: string;
       description?: string | null;
@@ -3579,14 +3579,48 @@ export async function obtenerEventosConSchedulers(
   }
 }
 
-/** Mapeo de categoría operativa (catálogo) a TaskCategory (scheduler) */
+/** Mapeo de categoría operativa (catálogo) a TaskCategory (scheduler). */
 const OPERATIONAL_TO_TASK_CATEGORY: Record<string, 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = {
   PRODUCTION: 'PRODUCTION',
   POST_PRODUCTION: 'POST_PRODUCTION',
   DELIVERY: 'DELIVERY',
   DIGITAL_DELIVERY: 'DELIVERY',
   PHYSICAL_DELIVERY: 'DELIVERY',
+  LOGISTICS: 'PLANNING',
 };
+
+/** Nombre de categoría normalizado (trim + lowercase + sin tildes) → TaskCategory. Fuerza PRODUCTION para Producción. */
+const CATEGORY_NAME_NORMALIZED_TO_TASK: Record<string, 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = {
+  produccion: 'PRODUCTION',
+  planeacion: 'PLANNING',
+  preproduccion: 'PLANNING',
+  edicion: 'POST_PRODUCTION',
+  postproduccion: 'POST_PRODUCTION',
+  entrega: 'DELIVERY',
+};
+
+function taskCategoryFromCategoryName(name: string | null | undefined): 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | null {
+  if (!name || typeof name !== 'string') return null;
+  const normalized = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return CATEGORY_NAME_NORMALIZED_TO_TASK[normalized] ?? null;
+}
+
+/**
+ * Peso por nombre para desempate: ignora order_item de la cotización.
+ * Shooting/Sesión = primero (0), Asistencia = después (10000), resto = medio (5000).
+ */
+function pesoPorNombre(ci: { name?: string | null; name_snapshot?: string | null }): number {
+  const n = (ci.name ?? ci.name_snapshot ?? '').toLowerCase();
+  if (n.includes('shooting') || n.includes('sesión') || n.includes('sesion')) return 0;
+  if (n.includes('asistencia')) return 10000;
+  return 5000;
+}
+
+/** True si el ítem es el servicio principal (ej. Shooting) para categoría PRODUCTION. */
+function isServicioPrincipal(ci: { name?: string | null; name_snapshot?: string | null }): boolean {
+  const n = (ci.name ?? ci.name_snapshot ?? '').toLowerCase();
+  return n.includes('shooting') || n.includes('sesión') || n.includes('sesion');
+}
 
 /**
  * Sincroniza tareas del scheduler con los ítems de la cotización autorizada del evento.
@@ -3595,7 +3629,7 @@ const OPERATIONAL_TO_TASK_CATEGORY: Record<string, 'PLANNING' | 'PRODUCTION' | '
 export async function sincronizarTareasEvento(
   studioSlug: string,
   eventId: string
-): Promise<{ success: boolean; created?: number; skipped?: number; error?: string }> {
+): Promise<{ success: boolean; created?: number; updated?: number; skipped?: number; error?: string }> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -3628,14 +3662,42 @@ export async function sincronizarTareasEvento(
           orderBy: { order: 'asc' },
           select: {
             id: true,
+            order: true,
             name: true,
             name_snapshot: true,
             item_id: true,
+            service_category_id: true,
+            seccion_name: true,
+            quantity: true,
+            subtotal: true,
             items: {
               select: {
                 operational_category: true,
                 default_duration_days: true,
                 name: true,
+                order: true,
+                service_categories: {
+                  select: {
+                    name: true,
+                    order: true,
+                    section_categories: {
+                      select: {
+                        service_sections: { select: { order: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            service_categories: {
+              select: {
+                name: true,
+                order: true,
+                section_categories: {
+                  select: {
+                    service_sections: { select: { order: true } },
+                  },
+                },
               },
             },
           },
@@ -3647,24 +3709,92 @@ export async function sincronizarTareasEvento(
       return { success: false, error: 'No se encontró cotización autorizada para este evento' };
     }
 
+    // ─── Instrucción maestra: no copiar order de cotización. Scheduler = espejo del árbol jerárquico. ───
+    // 1) Pasar todos los ítems por la función maestra (misma que el Panel).
+    const itemsParaEstructura: CotizacionItemInput[] = cotizacion.cotizacion_items.map((ci) => {
+      const seccionOrden =
+        ci.items?.service_categories?.section_categories?.service_sections?.order ??
+        ci.service_categories?.section_categories?.service_sections?.order ??
+        999;
+      const categoriaOrden =
+        ci.items?.service_categories?.order ?? ci.service_categories?.order ?? 999;
+      const categoryName =
+        (ci.service_categories as { name?: string } | null)?.name ??
+        (ci.items?.service_categories as { name?: string } | null)?.name ??
+        null;
+      // Desempate por nombre dentro de categoría; no usar ci.order (cotización) para no heredar 17, etc.
+      const orderParaSort = pesoPorNombre(ci);
+      return {
+        id: ci.id,
+        item_id: ci.item_id,
+        quantity: ci.quantity,
+        subtotal: Number(ci.subtotal ?? 0),
+        name_snapshot: ci.name_snapshot,
+        name: ci.name,
+        seccion_name: ci.seccion_name,
+        category_name: categoryName,
+        seccion_orden: seccionOrden,
+        categoria_orden: categoriaOrden,
+        order: orderParaSort,
+      };
+    });
+    // 2) Construir árbol jerárquico (Sección > Categoría > Ítem) y aplanar a lista única.
+    const estructura = construirEstructuraJerarquicaCotizacion(itemsParaEstructura, { ordenarPor: 'catalogo' });
+    const orderedIds = aplanarEstructuraAOrdenIds(estructura);
+    // 3) Asignar order 0, 1, 2, ... por posición en esa lista. Si Shooting quedó primero → order 0.
+    const idToVisualIndex = new Map(orderedIds.map((id, i) => [id, i]));
+    const cotizacionItemsOrdenados = orderedIds
+      .map((id) => cotizacion.cotizacion_items.find((ci) => ci.id === id))
+      .filter(Boolean) as typeof cotizacion.cotizacion_items;
+
     const instanceResult = await obtenerOCrearSchedulerInstance(studioSlug, eventId);
     if (!instanceResult.success || !instanceResult.data) {
       return { success: false, error: instanceResult.error ?? 'Error al obtener instancia del cronograma' };
     }
     const schedulerInstanceId = instanceResult.data.id;
 
+    const currentCotizacionItemIds = new Set(cotizacion.cotizacion_items.map((ci) => ci.id));
+    // Solo eliminar tareas cuyo cotizacion_item_id ya no está en la cotización actual.
+    // Las tareas manuales (cotizacion_item_id = null) nunca se tocan.
+    const orphanTasks = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: schedulerInstanceId,
+        AND: [
+          { cotizacion_item_id: { not: null } },
+          { cotizacion_item_id: { notIn: Array.from(currentCotizacionItemIds) } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (orphanTasks.length > 0) {
+      await prisma.studio_scheduler_event_tasks.deleteMany({
+        where: { id: { in: orphanTasks.map((t) => t.id) } },
+      });
+    }
+
     const existingByItem = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
         scheduler_instance_id: schedulerInstanceId,
         cotizacion_item_id: { not: null },
       },
-      select: { cotizacion_item_id: true },
+      select: { id: true, cotizacion_item_id: true, category: true, catalog_category_id: true },
     });
     const existingItemIds = new Set(
       existingByItem.map((t) => t.cotizacion_item_id).filter(Boolean) as string[]
     );
+    const existingTaskIdByCotizacionItemId = new Map(
+      existingByItem
+        .filter((t) => t.cotizacion_item_id != null)
+        .map((t) => [t.cotizacion_item_id as string, t.id])
+    );
+    const existingTaskByCotizacionItemId = new Map(
+      existingByItem
+        .filter((t) => t.cotizacion_item_id != null)
+        .map((t) => [t.cotizacion_item_id as string, t])
+    );
 
-    const categoryOrder: Array<'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = [
+    const categoryOrder: Array<'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = [
+      'UNASSIGNED',
       'PLANNING',
       'PRODUCTION',
       'POST_PRODUCTION',
@@ -3675,24 +3805,105 @@ export async function sincronizarTareasEvento(
       return idx === -1 ? 0 : idx;
     };
 
-    const itemsRaw = cotizacion.cotizacion_items
-      .map((ci) => {
+    // Rescate solo si el ítem de cotización no tiene ya una categoría válida (p. ej. asignada por el usuario en el WorkflowCard).
+    const rescueItemIds = cotizacion.cotizacion_items
+      .filter((ci) => ci.item_id != null)
+      .filter((ci) => {
+        const hasCatId = (ci.service_category_id ?? null) != null;
+        if (hasCatId) return false;
         const catalog = ci.items;
-        const opCat = catalog?.operational_category ?? null;
-        const taskCategory =
-          (opCat && OPERATIONAL_TO_TASK_CATEGORY[opCat]) || 'PLANNING';
-        const durationDays = catalog?.default_duration_days ?? 1;
-        const name =
-          ci.name ?? ci.name_snapshot ?? catalog?.name ?? 'Tarea';
-        return {
-          cotizacionItemId: ci.id,
-          itemId: ci.item_id,
-          name,
-          taskCategory,
-          durationDays,
-        };
+        const hasOpCat = catalog?.operational_category != null;
+        return !hasOpCat;
       })
-      .filter((t) => !existingItemIds.has(t.cotizacionItemId));
+      .map((ci) => ci.item_id as string);
+    const rescuedItems =
+      rescueItemIds.length > 0
+        ? await prisma.studio_items.findMany({
+            where: { id: { in: rescueItemIds } },
+            select: {
+              id: true,
+              operational_category: true,
+              default_duration_days: true,
+              name: true,
+              service_category_id: true,
+            },
+          })
+        : [];
+    const rescuedByItemId = new Map(
+      rescuedItems.map((r) => [
+        r.id,
+        {
+          operational_category: r.operational_category,
+          default_duration_days: r.default_duration_days ?? 1,
+          name: r.name,
+          service_category_id: r.service_category_id,
+        },
+      ])
+    );
+
+    // Índice = posición en la lista aplanada (0, 1, 2...). No se usa cotizacion_items.order.
+    const itemsRawAll = cotizacionItemsOrdenados.map((ci) => {
+      const catalog = ci.items;
+      let opCat = catalog?.operational_category ?? null;
+      let serviceCategoryId = ci.service_category_id ?? null;
+      let durationDays = catalog?.default_duration_days ?? 1;
+      let catalogName = catalog?.name ?? null;
+      const categoryName =
+        (ci.service_categories as { name?: string } | null)?.name ??
+        (catalog?.service_categories as { name?: string } | null)?.name ??
+        null;
+      if (ci.item_id && (!opCat || !serviceCategoryId) && rescuedByItemId.has(ci.item_id)) {
+        const rescued = rescuedByItemId.get(ci.item_id)!;
+        if (!opCat) opCat = rescued.operational_category;
+        if (!serviceCategoryId) serviceCategoryId = rescued.service_category_id;
+        durationDays = rescued.default_duration_days;
+        catalogName = rescued.name;
+      }
+      let taskCategory: 'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' = 'UNASSIGNED';
+      if (opCat && OPERATIONAL_TO_TASK_CATEGORY[opCat]) {
+        taskCategory = OPERATIONAL_TO_TASK_CATEGORY[opCat];
+      } else {
+        const fromCategory = taskCategoryFromCategoryName(categoryName ?? null);
+        if (fromCategory) taskCategory = fromCategory;
+      }
+      const name = ci.name ?? ci.name_snapshot ?? catalogName ?? 'Tarea';
+      const visualIndex = idToVisualIndex.get(ci.id) ?? 999;
+      return {
+        cotizacionItemId: ci.id,
+        itemId: ci.item_id,
+        serviceCategoryId: serviceCategoryId ?? null,
+        name,
+        taskCategory,
+        durationDays,
+        visualIndex,
+      };
+    });
+
+    // Persistir order = índice en la lista aplanada (0, 1, 2...). Nunca el order de la tabla cotización.
+    let updated = 0;
+    for (let i = 0; i < itemsRawAll.length; i++) {
+      const it = itemsRawAll[i];
+      const existing = existingTaskByCotizacionItemId.get(it.cotizacionItemId);
+      if (!existing) continue;
+      const alreadyHasCategory =
+        existing.category != null &&
+        existing.category !== 'UNASSIGNED' &&
+        existing.catalog_category_id != null;
+      const data: { category?: string; catalog_category_id?: string | null; order?: number } = {
+        order: i, // índice del árbol aplanado; si Shooting está primero → 0
+      };
+      if (!alreadyHasCategory) {
+        data.category = it.taskCategory;
+        data.catalog_category_id = it.serviceCategoryId;
+      }
+      await prisma.studio_scheduler_event_tasks.update({
+        where: { id: existing.id },
+        data,
+      });
+      updated++;
+    }
+
+    const itemsRaw = itemsRawAll.filter((t) => !existingItemIds.has(t.cotizacionItemId));
 
     const itemIds = itemsRaw.map((t) => t.itemId).filter(Boolean) as string[];
     const itemToSection: Map<string, { sectionOrder: number }> = new Map();
@@ -3731,6 +3942,9 @@ export async function sincronizarTareasEvento(
       const start = new Date(eventDate);
       const end = new Date(eventDate);
       switch (category) {
+        case 'UNASSIGNED':
+          end.setDate(end.getDate() + d - 1);
+          break;
         case 'PLANNING':
           start.setDate(start.getDate() - d);
           end.setDate(end.getDate() - 1);
@@ -3791,11 +4005,13 @@ export async function sincronizarTareasEvento(
           data: {
             scheduler_instance_id: schedulerInstanceId,
             cotizacion_item_id: it.cotizacionItemId,
+            catalog_category_id: it.serviceCategoryId,
             name: it.name,
             start_date: startDate,
             end_date: endDate,
             duration_days: durationDays,
             category: it.taskCategory,
+            order: it.visualIndex, // índice en lista aplanada (árbol); no order de cotización
             priority: 'MEDIUM',
             status: 'PENDING',
             progress_percent: 0,
@@ -3812,6 +4028,7 @@ export async function sincronizarTareasEvento(
     return {
       success: true,
       created,
+      updated,
       skipped: existingItemIds.size,
     };
   } catch (err) {

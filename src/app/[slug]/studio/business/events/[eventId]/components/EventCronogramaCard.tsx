@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Lock } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -26,7 +26,6 @@ export function EventCronogramaCard({
   onUpdated,
 }: EventCronogramaCardProps) {
   const handleViewCronograma = () => {
-    // Navegar a la página de scheduler del evento
     window.location.href = `/${studioSlug}/studio/business/events/${eventId}/scheduler`;
   };
 
@@ -35,6 +34,19 @@ export function EventCronogramaCard({
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'completed' || t.progress_percent === 100).length;
 
+  const allClassified =
+    totalTasks === 0 ||
+    tasks.every(
+      (t) =>
+        (t as { catalog_category_id?: string | null }).catalog_category_id &&
+        (t as { category?: string }).category !== 'UNASSIGNED'
+    );
+  const pendingClassify = totalTasks > 0 ? tasks.filter(
+    (t) =>
+      !(t as { catalog_category_id?: string | null }).catalog_category_id ||
+      (t as { category?: string }).category === 'UNASSIGNED'
+  ).length : 0;
+
   return (
     <ZenCard>
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
@@ -42,15 +54,22 @@ export function EventCronogramaCard({
           <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
             Cronograma
           </ZenCardTitle>
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={handleViewCronograma}
-            className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
-          >
-            <Calendar className="h-3 w-3 mr-1" />
-            Ver
-          </ZenButton>
+          {allClassified ? (
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={handleViewCronograma}
+              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
+            >
+              <Calendar className="h-3 w-3 mr-1" />
+              Gestionar Cronograma
+            </ZenButton>
+          ) : (
+            <span className="flex items-center gap-1 h-6 px-2 text-[10px] text-amber-400/90 shrink-0" title="Clasifica los ítems pendientes para continuar">
+              <Lock className="h-3 w-3" />
+              {pendingClassify} pendiente{pendingClassify !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4">
@@ -81,6 +100,11 @@ export function EventCronogramaCard({
               No hay cronograma configurado
             </p>
           </div>
+        )}
+        {totalTasks > 0 && !allClassified && (
+          <p className="text-[10px] text-zinc-500 pt-2 border-t border-zinc-800 mt-2">
+            Clasifica los ítems pendientes para continuar.
+          </p>
         )}
       </ZenCardContent>
     </ZenCard>

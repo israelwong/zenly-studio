@@ -88,7 +88,7 @@ export function EventPanel({
             eventData={eventData}
             onUpdated={onEventUpdated}
           />
-          <EventTodoList studioSlug={studioSlug} eventId={eventId} />
+          <EventTodoList studioSlug={studioSlug} eventId={eventId} onSynced={onEventUpdated} />
 
           {/* TODO: Funcionalidad futura - EventItinerarioCard
           <EventItinerarioCard

@@ -4,11 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenConfirmModal, ZenButton } from '@/components/ui/zen';
-import {
-  cancelarEvento,
-  obtenerCotizacionesAutorizadasCount,
-  type EventoDetalle,
-} from '@/lib/actions/studio/business/events/events.actions';
+import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { EventPanel } from '../../components/EventPanel';
 import { EventDetailHeader } from './EventDetailHeader';
@@ -57,7 +53,7 @@ export function EventLayoutClient({
   // Cargar datos adicionales
   useEffect(() => {
     const loadAdditionalData = async () => {
-      // Obtener número de cotizaciones autorizadas
+      const { obtenerCotizacionesAutorizadasCount } = await import('@/lib/actions/studio/business/events');
       const countResult = await obtenerCotizacionesAutorizadasCount(studioSlug, eventId);
       if (countResult.success && countResult.count !== undefined) {
         setCotizacionesCount(countResult.count);
@@ -82,6 +78,7 @@ export function EventLayoutClient({
     const targetSlug = eventData?.promise_id ? 'pending' : undefined;
     setIsCancelling(true);
     try {
+      const { cancelarEvento } = await import('@/lib/actions/studio/business/events');
       const result = await cancelarEvento(studioSlug, eventId, targetSlug ? { promiseTargetStageSlug: targetSlug } : undefined);
       if (result.success) {
         toast.success('Evento cancelado correctamente');

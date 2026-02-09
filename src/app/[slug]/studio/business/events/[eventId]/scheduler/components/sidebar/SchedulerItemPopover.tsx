@@ -17,7 +17,6 @@ import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeC
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { TaskChecklistBlock } from '../checklist/TaskChecklistBlock';
 
 interface CrewMember {
     id: string;
@@ -469,20 +468,6 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                         </label>
                                     </div>
                                 </div>
-
-                                {/* Checklist (TODOs) - Añadir desde plantilla */}
-                                <TaskChecklistBlock
-                                    studioSlug={studioSlug}
-                                    eventId={eventId}
-                                    taskId={localItem.scheduler_task.id}
-                                    taskCategory={localItem.scheduler_task.category}
-                                    checklistItems={localItem.scheduler_task.checklist_items}
-                                    onChecklistUpdate={(next) => onItemUpdate?.({
-                                        ...localItem,
-                                        scheduler_task: { ...localItem.scheduler_task!, checklist_items: next },
-                                    })}
-                                    onImported={() => startTransition(() => router.refresh())}
-                                />
 
                                 {/* Separador */}
                                 <div className="border-t border-zinc-800" />

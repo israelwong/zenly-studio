@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
-import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isTaskRow, isAddPhantomRow, isManualTaskRow, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
+import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isManualTaskRow, ROW_HEIGHTS, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth } from '../../utils/coordinate-utils';
 
@@ -67,7 +67,8 @@ export const SchedulerGrid = React.memo(({
           return (
             <div
               key={row.id}
-              className="h-[40px] bg-zinc-900/50 border-b border-zinc-800 flex-shrink-0"
+              className="bg-zinc-900/50 border-b border-zinc-800 flex-shrink-0"
+              style={{ height: ROW_HEIGHTS.SECTION }}
             />
           );
         }
@@ -75,7 +76,18 @@ export const SchedulerGrid = React.memo(({
           return (
             <div
               key={row.id}
-              className="h-[32px] bg-zinc-900/30 border-b border-zinc-800/50 flex-shrink-0"
+              className="bg-zinc-900/30 border-b border-zinc-800/50 flex-shrink-0"
+              style={{ height: ROW_HEIGHTS.STAGE }}
+            />
+          );
+        }
+        if (isCategoryRow(row)) {
+          return (
+            <div
+              key={row.id}
+              className="border-b border-zinc-800/30 flex-shrink-0"
+              style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
+              aria-hidden
             />
           );
         }
@@ -83,7 +95,8 @@ export const SchedulerGrid = React.memo(({
           return (
             <div
               key={row.id}
-              className="h-[40px] border-b border-zinc-800/30 flex-shrink-0"
+              className="border-b border-zinc-800/30 flex-shrink-0"
+              style={{ height: ROW_HEIGHTS.PHANTOM }}
             />
           );
         }

@@ -4,17 +4,22 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { type DateRange } from 'react-day-picker';
 import { EventScheduler } from '../layout/EventScheduler';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { SchedulerData } from '@/lib/actions/studio/business/events';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+
+export type SchedulerViewData = EventoDetalle | SchedulerData;
 
 interface EventSchedulerViewProps {
   studioSlug: string;
   eventId: string;
-  eventData: EventoDetalle;
-  schedulerInstance?: EventoDetalle['scheduler'];
+  eventData: SchedulerViewData;
+  schedulerInstance?: SchedulerViewData['scheduler'];
   dateRange?: DateRange;
-  onDataChange?: (data: EventoDetalle) => void;
+  onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
+  /** Si se pasa, no se llama a obtenerCatalogo (carga atómica desde obtenerTareasScheduler). */
+  initialSecciones?: SeccionData[];
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -25,12 +30,18 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   dateRange: propDateRange,
   onDataChange,
   onRefetchEvent,
+  initialSecciones,
 }: EventSchedulerViewProps) {
-  const [secciones, setSecciones] = useState<SeccionData[]>([]);
-  const [loadingSecciones, setLoadingSecciones] = useState(true);
+  const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
+  const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
 
-  // Cargar secciones del catálogo
+  // Cargar secciones del catálogo solo si no se pasaron por carga atómica
   useEffect(() => {
+    if (initialSecciones && initialSecciones.length > 0) {
+      setSecciones(initialSecciones);
+      setLoadingSecciones(false);
+      return;
+    }
     const loadSecciones = async () => {
       setLoadingSecciones(true);
       try {
@@ -48,7 +59,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
     if (studioSlug) {
       loadSecciones();
     }
-  }, [studioSlug]);
+  }, [studioSlug, initialSecciones]);
 
   // Calcular rango por defecto si no está configurado (solo una vez al montar)
   const defaultDateRange = useMemo(() => {

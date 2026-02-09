@@ -2,9 +2,11 @@
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { type DateRange } from 'react-day-picker';
-import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { SchedulerData, SchedulerCotizacionItem } from '@/lib/actions/studio/business/events';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
-import { STAGE_ORDER } from '../../utils/scheduler-section-stages';
+import type { SchedulerViewData } from '../shared/EventSchedulerView';
+import { STAGE_ORDER, SIN_CATEGORIA_SECTION_ID } from '../../utils/scheduler-section-stages';
+import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import { SchedulerPanel } from './SchedulerPanel';
 import {
   actualizarSchedulerTaskFechas,
@@ -21,7 +23,8 @@ import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeC
 import { AddManualTaskModal } from '../task-actions/AddManualTaskModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 
-type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
+/** Ítem de cotización en la vista; compatible con SchedulerViewData y SchedulerData. */
+type CotizacionItem = SchedulerCotizacionItem;
 
 interface CreatedSchedulerTask {
   id: string;
@@ -47,10 +50,10 @@ interface ItemMetadata {
 interface EventSchedulerProps {
   studioSlug: string;
   eventId: string;
-  eventData: EventoDetalle;
+  eventData: SchedulerViewData;
   dateRange?: DateRange;
   secciones: SeccionData[];
-  onDataChange?: (data: EventoDetalle) => void;
+  onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
 }
 
@@ -96,26 +99,22 @@ export const EventScheduler = React.memo(function EventScheduler({
     setExpandedSections((prev) => {
       const next = new Set(prev);
       secciones.forEach((s) => next.add(s.id));
+      next.add(SIN_CATEGORIA_SECTION_ID);
       return next;
     });
     setExpandedStages((prev) => {
       const next = new Set(prev);
       secciones.forEach((s) => STAGE_ORDER.forEach((st) => next.add(`${s.id}-${st}`)));
+      STAGE_ORDER.forEach((st) => next.add(`${SIN_CATEGORIA_SECTION_ID}-${st}`));
       return next;
     });
   }, [secciones]);
 
-  // Sincronizar localEventData solo al cambiar de evento/scheduler (por id). No sobrescribir con props
-  // cuando es el mismo evento con contenido actualizado (p. ej. tras un patch optimista de nombre/costo).
-  const eventDataRef = React.useRef(eventData);
+  // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
+  // Así el Scheduler refleja cambios hechos fuera (Dashboard sync, otra pestaña, etc.).
   useEffect(() => {
-    const sameEvent = eventDataRef.current?.id === eventData?.id;
-    const sameScheduler = eventDataRef.current?.scheduler?.id === eventData?.scheduler?.id;
-    if (!sameEvent || !sameScheduler) {
-      eventDataRef.current = eventData;
-      setLocalEventData(eventData);
-    }
-  }, [eventData?.id, eventData?.scheduler?.id]);
+    setLocalEventData(eventData);
+  }, [eventData]);
 
   // Cargar preferencia de crew al montar
   useEffect(() => {
@@ -135,7 +134,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   // Callback para actualizar un item específico en localEventData
   const handleItemUpdate = useCallback((updatedItem: CotizacionItem) => {
-    let updatedData: EventoDetalle;
+    let updatedData: SchedulerViewData;
     setLocalEventData(prev => {
       const newData = {
         ...prev,
@@ -196,7 +195,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   // Mismo patrón que handleItemUpdate/completeTaskWithSkipPayment: nueva referencia de scheduler, array y objeto de tarea
   const handleManualTaskPatch = useCallback((taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => {
-    let updatedData: EventoDetalle | undefined;
+    let updatedData: SchedulerViewData | undefined;
     setLocalEventData((prev) => {
       if (!prev.scheduler?.tasks) return prev;
       const normalizedPatch = {
@@ -260,10 +259,16 @@ export const EventScheduler = React.memo(function EventScheduler({
   const handleManualTaskReorder = useCallback(
     async (taskId: string, direction: 'up' | 'down') => {
       const tasks = localEventData.scheduler?.tasks ?? [];
-      const current = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null) as (typeof tasks[0]) & { category?: string; order?: number } | undefined;
+      const current = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null) as (typeof tasks[0]) & { category?: string; order?: number; catalog_category_id?: string | null } | undefined;
       if (!current) return;
       const category = current.category ?? 'PLANNING';
-      const manualInCategory = tasks.filter((t) => t.cotizacion_item_id == null && (t as { category?: string }).category === category) as Array<typeof tasks[0] & { category: string; order?: number }>;
+      const catId = current.catalog_category_id ?? null;
+      const manualInCategory = tasks.filter(
+        (t) =>
+          t.cotizacion_item_id == null &&
+          (t as { category?: string }).category === category &&
+          ((t as { catalog_category_id?: string | null }).catalog_category_id ?? null) === catId
+      ) as Array<typeof tasks[0] & { category: string; order?: number }>;
       const sorted = [...manualInCategory].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       const idx = sorted.findIndex((t) => t.id === taskId);
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -290,13 +295,22 @@ export const EventScheduler = React.memo(function EventScheduler({
   );
 
   const handleManualTaskMoveStage = useCallback(
-    async (taskId: string, category: import('../../utils/scheduler-section-stages').TaskCategoryStage) => {
-      const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category);
+    async (
+      taskId: string,
+      category: import('../../utils/scheduler-section-stages').TaskCategoryStage,
+      catalogCategoryId?: string | null,
+      catalogCategoryNombre?: string | null
+    ) => {
+      const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category, catalogCategoryId);
       if (!result.success) {
         toast.error(result.error ?? 'Error al mover la tarea');
         return;
       }
-      handleManualTaskPatch(taskId, { category });
+      handleManualTaskPatch(taskId, {
+        category,
+        catalog_category_id: catalogCategoryId ?? null,
+        catalog_category_nombre: catalogCategoryNombre ?? null,
+      });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
     },
     [studioSlug, eventId, handleManualTaskPatch]
@@ -304,6 +318,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleManualTaskDuplicate = useCallback(
     async (taskId: string) => {
+      const current = localEventData.scheduler?.tasks?.find((t) => t.id === taskId && t.cotizacion_item_id == null);
       const result = await duplicarTareaManualScheduler(studioSlug, eventId, taskId);
       if (!result.success) {
         toast.error(result.error ?? 'Error al duplicar');
@@ -317,6 +332,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         end_date: result.data.task.end_date,
         category: result.data.task.category,
         cotizacion_item_id: null,
+        catalog_category_id: (current as { catalog_category_id?: string | null })?.catalog_category_id ?? null,
+        catalog_category_nombre: (current as { catalog_category_nombre?: string | null })?.catalog_category_nombre ?? null,
         status: result.data.task.status,
         order: result.data.task.order,
         budget_amount: result.data.task.budget_amount,
@@ -336,30 +353,31 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, localEventData, onDataChange]
   );
 
-  // Construir map de items desde cotizaciones aprobadas
-  // Usar localEventData para reflejar cambios inmediatamente
-  const itemsMap = useMemo(() => {
-    const map = new Map<string, CotizacionItem>();
+  // Paridad con Card: mismos getters y única fuente de orden (ordenarPorEstructuraCanonica). Sin .sort() ni pesos por nombre.
+  const getCategoryId = useCallback((t: CotizacionItem) => t.catalog_category_id ?? null, []);
+  const getName = useCallback((t: CotizacionItem) => t.name ?? null, []);
 
+  const itemsMap = useMemo(() => {
+    const allItems: CotizacionItem[] = [];
     localEventData.cotizaciones?.forEach((cotizacion) => {
-      // Incluir cotizaciones aprobadas/autorizadas
       const isApproved = cotizacion.status === 'autorizada'
         || cotizacion.status === 'aprobada'
         || cotizacion.status === 'approved'
         || cotizacion.status === 'seleccionada';
-
       if (isApproved) {
-        cotizacion.cotizacion_items?.forEach((item) => {
-          // Indexar por item_id (si existe) O por el id del cotizacion_item
-          // Esto permite soportar items creados desde catálogo o paquetes
-          const key = item.item_id || item.id;
-          map.set(key, item);
-        });
+        cotizacion.cotizacion_items?.forEach((item) => allItems.push(item));
       }
     });
 
+    const sortedItems =
+      secciones.length > 0
+        ? ordenarPorEstructuraCanonica(allItems, secciones, getCategoryId, getName)
+        : allItems;
+
+    const map = new Map<string, CotizacionItem>();
+    sortedItems.forEach((item) => map.set(item.item_id || item.id, item));
     return map;
-  }, [localEventData.cotizaciones]);
+  }, [localEventData.cotizaciones, secciones, getCategoryId, getName]);
 
   const manualTasks = useMemo(
     () =>
@@ -445,7 +463,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   const handleTaskUpdate = useCallback(
     async (taskId: string, startDate: Date, endDate: Date) => {
       try {
-        let updatedData: EventoDetalle;
+        let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = { ...prev };
 
@@ -534,7 +552,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
 
         // Actualización optimista: agregar la tarea al estado local inmediatamente
-        let updatedData: EventoDetalle;
+        let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = { ...prev };
 
@@ -599,7 +617,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
 
         // Actualización optimista: remover la tarea del estado local y limpiar personal asignado
-        let updatedData: EventoDetalle;
+        let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = { ...prev };
 
@@ -651,7 +669,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
           const idsSet = new Set(taskIds);
           setLocalEventData((prev) => {
-            const updatedData: EventoDetalle = {
+            const updatedData: SchedulerViewData = {
               ...prev,
               cotizaciones: prev.cotizaciones?.map((cotizacion) => ({
                 ...cotizacion,
@@ -702,7 +720,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (isManual) {
             handleManualTaskPatch(taskId, { status: 'PENDING', completed_at: null });
           } else {
-            let updatedDataUncomplete: EventoDetalle;
+            let updatedDataUncomplete: SchedulerViewData;
             setLocalEventData(prev => {
               const newData = {
                 ...prev,
@@ -836,7 +854,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             }
 
             // Actualización optimista
-            let updatedData: EventoDetalle;
+            let updatedData: SchedulerViewData;
             setLocalEventData(prev => {
               const newData = {
                 ...prev,
@@ -911,7 +929,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
 
         // Actualización optimista
-        let updatedData: EventoDetalle;
+        let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = {
             ...prev,
@@ -1003,9 +1021,9 @@ export const EventScheduler = React.memo(function EventScheduler({
             assigned_to_crew_member_id: crewMemberId,
             assigned_to_crew_member,
           });
-          let updatedData: EventoDetalle;
+          let updatedData: SchedulerViewData;
           setLocalEventData(prev => {
-            const newData: EventoDetalle = {
+            const newData: SchedulerViewData = {
               ...prev,
               scheduler: prev.scheduler
                 ? {
@@ -1094,7 +1112,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           throw new Error(result.error);
         }
 
-        let updatedData: EventoDetalle;
+        let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = {
             ...prev,
@@ -1173,14 +1191,14 @@ export const EventScheduler = React.memo(function EventScheduler({
         return;
       }
 
-      let updatedData: EventoDetalle;
+      let updatedData: SchedulerViewData;
       if (isManual) {
         handleManualTaskPatch(pendingTaskCompletion.taskId, {
           status: 'COMPLETED',
           completed_at: new Date(),
         });
         setLocalEventData(prev => {
-          const newData: EventoDetalle = {
+          const newData: SchedulerViewData = {
             ...prev,
             scheduler: prev.scheduler
               ? {

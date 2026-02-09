@@ -10,15 +10,26 @@ import { DateRangeConflictModal } from '../date-config/DateRangeConflictModal';
 import { PublicationBar } from './PublicationBar';
 import { ZenBadge } from '@/components/ui/zen';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { SchedulerData } from '@/lib/actions/studio/business/events';
+import type { SchedulerViewData } from './EventSchedulerView';
+
+/** Ítem mínimo para stats/validación; compatible con ambos payloads. */
+type ItemWithTask = {
+  scheduler_task: { start_date: Date; end_date: Date; completed_at: Date | null };
+  assigned_to_crew_member_id?: string | null;
+};
 
 interface SchedulerWrapperProps {
   studioSlug: string;
   eventId: string;
-  eventData: EventoDetalle;
+  /** EventoDetalle (obtenerEventoDetalle) o SchedulerData (obtenerTareasScheduler). */
+  eventData: EventoDetalle | SchedulerData;
   initialDateRange?: DateRange;
-  onDataChange?: (data: EventoDetalle) => void;
+  onDataChange?: (data: EventoDetalle | SchedulerData) => void;
   onRefetchEvent?: () => Promise<void>;
   cotizacionId?: string;
+  /** Secciones desde obtenerTareasScheduler (evita segunda carga de catálogo). */
+  initialSecciones?: import('@/lib/actions/schemas/catalogo-schemas').SeccionData[];
 }
 
 /**
@@ -32,6 +43,7 @@ export function SchedulerWrapper({
   onDataChange,
   onRefetchEvent,
   cotizacionId,
+  initialSecciones,
 }: SchedulerWrapperProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
@@ -52,11 +64,11 @@ export function SchedulerWrapper({
     return filteredCotizaciones?.map(c => c.id).join(',') || '';
   }, [filteredCotizaciones]);
   
-  const filteredEventData = useMemo(() => {
+  const filteredEventData = useMemo((): SchedulerViewData => {
     return {
       ...eventData,
       cotizaciones: filteredCotizaciones,
-    };
+    } as SchedulerViewData;
   }, [
     eventData?.id,
     eventData?.scheduler?.id,
@@ -75,8 +87,8 @@ export function SchedulerWrapper({
     const rangeTo = newRange.to;
 
     // Buscar todas las tareas con scheduler_task asignado (solo de la cotización filtrada)
-    const allItems = filteredCotizaciones.flatMap(cot => cot.cotizacion_items || []);
-    const itemsWithTasks = allItems.filter(item => item.scheduler_task);
+    const allItems: ItemWithTask[] = filteredCotizaciones.flatMap((cot) => ((cot.cotizacion_items || []) as unknown as ItemWithTask[]));
+    const itemsWithTasks = allItems.filter((item): item is ItemWithTask & { scheduler_task: NonNullable<ItemWithTask['scheduler_task']> } => !!item.scheduler_task);
 
     if (itemsWithTasks.length === 0) {
       return true; // No hay tareas, permitir cambio
@@ -124,8 +136,8 @@ export function SchedulerWrapper({
 
   // Resumen reactivo: mismo calculateTaskStatus que el Grid; se recalcula al actualizar eventData (p. ej. drag)
   const taskStats = useMemo(() => {
-    const allItems = filteredCotizaciones?.flatMap(cot => cot.cotizacion_items || []) ?? [];
-    const itemsWithTasks = allItems.filter(item => item.scheduler_task);
+    const allItems: ItemWithTask[] = (filteredCotizaciones?.flatMap((cot) => (cot.cotizacion_items || []) as unknown as ItemWithTask[]) ?? []);
+    const itemsWithTasks = allItems.filter((item): item is ItemWithTask & { scheduler_task: NonNullable<ItemWithTask['scheduler_task']> } => !!item.scheduler_task);
     const manualTasks = eventData.scheduler?.tasks?.filter(t => t.cotizacion_item_id == null) ?? [];
     const total = itemsWithTasks.length + manualTasks.length;
     const unassigned = allItems.length - itemsWithTasks.length;
@@ -256,6 +268,7 @@ export function SchedulerWrapper({
         dateRange={dateRange}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
+        initialSecciones={initialSecciones}
       />
 
       {/* Modal de conflicto de rango */}

@@ -2,6 +2,10 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
+import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 
 interface UpdateSchedulerTaskInput {
   start_date: Date;
@@ -139,7 +143,8 @@ export async function actualizarSchedulerTaskFechas(
 }
 
 /**
- * Obtiene todas las tareas de un evento (por instancia del scheduler vinculada al evento)
+ * Obtiene todas las tareas de un evento (por instancia del scheduler vinculada al evento).
+ * Para el Asistente: rellena catalog_category_id desde el ítem (service_category_id) cuando la tarea no lo tiene.
  */
 export async function obtenerSchedulerTareas(studioSlug: string, eventId: string) {
   try {
@@ -154,21 +159,35 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         name: true,
         duration_days: true,
         category: true,
+        catalog_category_id: true,
+        catalog_category: { select: { id: true, name: true } },
         status: true,
         progress_percent: true,
         start_date: true,
         end_date: true,
         cotizacion_item_id: true,
         cotizacion_item: {
-          select: { internal_delivery_days: true },
+          select: {
+            internal_delivery_days: true,
+            service_category_id: true,
+            items: { select: { service_category_id: true } },
+          },
         },
       },
       orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
     });
 
+    const data = tareas.map((t) => {
+      const fromItem = t.cotizacion_item?.service_category_id ?? t.cotizacion_item?.items?.service_category_id ?? null;
+      return {
+        ...t,
+        catalog_category_id: t.catalog_category_id ?? fromItem ?? null,
+      };
+    });
+
     return {
       success: true,
-      data: tareas,
+      data,
     };
   } catch (error) {
     console.error('Error fetching scheduler tasks:', error);
@@ -1127,7 +1146,8 @@ export async function asignarCrewATareaScheduler(
 }
 
 /**
- * Reordena una tarea manual (subir o bajar) dentro de su misma categoría.
+ * Reordena una tarea manual (subir o bajar) dentro de su misma etapa y categoría,
+ * permitiendo intercambiar con ítems comerciales (mismo catalog_category_id efectivo).
  */
 export async function reordenarTareaManualScheduler(
   studioSlug: string,
@@ -1142,20 +1162,26 @@ export async function reordenarTareaManualScheduler(
         cotizacion_item_id: null,
         scheduler_instance: { event_id: eventId },
       },
-      select: { id: true, category: true, order: true, scheduler_instance_id: true },
+      select: { id: true, category: true, order: true, catalog_category_id: true, scheduler_instance_id: true },
     });
     if (!task) {
       return { success: false, error: 'Tarea no encontrada' };
     }
 
-    const siblings = await prisma.studio_scheduler_event_tasks.findMany({
+    const targetCatId = task.catalog_category_id ?? null;
+    const allInStage = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
         scheduler_instance_id: task.scheduler_instance_id,
-        cotizacion_item_id: null,
         category: task.category,
       },
-      select: { id: true, order: true },
+      select: { id: true, order: true, catalog_category_id: true, cotizacion_item_id: true },
+      include: { cotizacion_item: { select: { service_category_id: true } } },
       orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
+    });
+
+    const siblings = allInStage.filter((t) => {
+      const effective = t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? null : t.catalog_category_id;
+      return (effective ?? null) === targetCatId;
     });
 
     const idx = siblings.findIndex((s) => s.id === taskId);
@@ -1189,13 +1215,14 @@ export async function reordenarTareaManualScheduler(
 }
 
 /**
- * Mueve una tarea manual a otra categoría/etapa.
+ * Mueve una tarea manual a otra etapa (y opcionalmente a una categoría del catálogo).
  */
 export async function moverTareaManualCategoria(
   studioSlug: string,
   eventId: string,
   taskId: string,
-  category: string
+  category: string,
+  catalogCategoryId?: string | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const validCategory = MANUAL_TASK_CATEGORIES.includes(category as (typeof MANUAL_TASK_CATEGORIES)[number])
@@ -1219,6 +1246,7 @@ export async function moverTareaManualCategoria(
         scheduler_instance_id: task.scheduler_instance_id,
         cotizacion_item_id: null,
         category: validCategory,
+        catalog_category_id: catalogCategoryId ?? null,
       },
       _max: { order: true },
     });
@@ -1226,7 +1254,11 @@ export async function moverTareaManualCategoria(
 
     await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
-      data: { category: validCategory, order: newOrder },
+      data: {
+        category: validCategory,
+        catalog_category_id: catalogCategoryId ?? null,
+        order: newOrder,
+      },
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -1237,6 +1269,63 @@ export async function moverTareaManualCategoria(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al mover la tarea',
+    };
+  }
+}
+
+const CLASIFICAR_TASK_CATEGORIES = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'REVIEW', 'DELIVERY', 'WARRANTY'] as const;
+
+/**
+ * Asigna categoría de catálogo y fase a cualquier tarea del scheduler (asistente de curaduría).
+ * También actualiza la fuente de verdad: service_category_id en studio_cotizacion_items cuando
+ * la tarea está ligada a un ítem de cotización, para que la sincronización no pierda la categorización.
+ */
+export async function clasificarTareaScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  category: string,
+  catalogCategoryId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const validCategory = CLASIFICAR_TASK_CATEGORIES.includes(category as (typeof CLASIFICAR_TASK_CATEGORIES)[number])
+      ? (category as (typeof CLASIFICAR_TASK_CATEGORIES)[number])
+      : 'PLANNING';
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, cotizacion_item_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: {
+        category: validCategory,
+        catalog_category_id: catalogCategoryId,
+      },
+    });
+
+    if (task.cotizacion_item_id && catalogCategoryId) {
+      await prisma.studio_cotizacion_items.update({
+        where: { id: task.cotizacion_item_id },
+        data: { service_category_id: catalogCategoryId },
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[clasificarTareaScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al clasificar la tarea',
     };
   }
 }
@@ -1270,6 +1359,7 @@ export async function duplicarTareaManualScheduler(
         category: true,
         order: true,
         budget_amount: true,
+        catalog_category_id: true,
       },
     });
     if (!task) {
@@ -1281,6 +1371,7 @@ export async function duplicarTareaManualScheduler(
         scheduler_instance_id: task.scheduler_instance_id,
         cotizacion_item_id: null,
         category: task.category,
+        catalog_category_id: task.catalog_category_id ?? null,
       },
       _max: { order: true },
     });
@@ -1313,6 +1404,7 @@ export async function duplicarTareaManualScheduler(
         name: `${task.name} (copia)`,
         duration_days: task.duration_days || 1,
         category: task.category,
+        catalog_category_id: task.catalog_category_id ?? null,
         start_date: startDate,
         end_date: toUTCNoon(endDate),
         sync_status: 'DRAFT',
@@ -1348,6 +1440,344 @@ export async function duplicarTareaManualScheduler(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al duplicar la tarea',
+    };
+  }
+}
+
+/** Datos mínimos que la vista Scheduler necesita (ítems, tareas, crew, costos, sync, categorías). Paridad con Card: catalog_category_id en primer nivel (effectiveCatalogCategoryId). */
+export interface SchedulerCotizacionItem {
+  id: string;
+  item_id: string | null;
+  name: string | null;
+  name_snapshot: string;
+  quantity: number;
+  order: number;
+  cost?: number | null;
+  cost_snapshot?: number;
+  profit_type?: string | null;
+  profit_type_snapshot?: string | null;
+  /** Categoría efectiva para orden canónico: task.catalog_category_id ?? service_category_id ?? items.service_category_id. Mismo shape que Card. */
+  catalog_category_id?: string | null;
+  /** Categoría del ítem en el catálogo (para fallback cuando la tarea no tiene catalog_category_id). */
+  service_category_id?: string | null;
+  /** Resuelto: service_category_id del ítem o del item del catálogo (items.service_category_id). */
+  resolved_service_category_id?: string | null;
+  seccion_name: string | null;
+  category_name: string | null;
+  seccion_name_snapshot: string | null;
+  category_name_snapshot: string | null;
+  assigned_to_crew_member_id?: string | null;
+  assigned_to_crew_member?: { id: string; name: string; tipo: string } | null;
+  scheduler_task: {
+    id: string;
+    name: string;
+    start_date: Date;
+    end_date: Date;
+    status: string;
+    progress_percent: number | null;
+    completed_at: Date | null;
+    category: string;
+    catalog_category_id: string | null;
+    /** Nombre de la categoría del catálogo (para Asistente y fallback). */
+    catalog_category?: { id: string; name: string } | null;
+    order: number;
+    assigned_to_crew_member_id: string | null;
+    assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
+    sync_status?: string;
+    invitation_status?: string | null;
+  } | null;
+}
+
+/** Payload completo de obtenerTareasScheduler (evento + secciones). */
+export interface TareasSchedulerPayload {
+  id: string;
+  name: string;
+  event_date: Date | null;
+  promise?: { id: string; name: string | null; event_date: Date | null } | null;
+  cotizaciones: Array<{
+    id: string;
+    name: string | null;
+    status: string;
+    cotizacion_items: SchedulerCotizacionItem[];
+  }>;
+  scheduler: {
+    id: string;
+    start_date: Date | null;
+    end_date: Date | null;
+    tasks: Array<{
+      id: string;
+      name: string;
+      start_date: Date;
+      end_date: Date;
+      status: string;
+      progress_percent: number | null;
+      completed_at: Date | null;
+      cotizacion_item_id: string | null;
+      category: string;
+      catalog_category_id: string | null;
+      catalog_category_nombre?: string | null;
+      order: number;
+      budget_amount: unknown;
+      assigned_to_crew_member_id: string | null;
+      assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
+    }>;
+  } | null;
+  secciones: SeccionData[];
+}
+
+/** Lo que la vista Scheduler necesita: evento + cotizaciones + scheduler (sin secciones). Acepta EventoDetalle o payload de obtenerTareasScheduler. */
+export type SchedulerData = Omit<TareasSchedulerPayload, 'secciones'>;
+
+/** Ítem mínimo que comparten EventoDetalle y SchedulerData para la vista (evita undefined en hijos). */
+export type SchedulerItemForView = SchedulerCotizacionItem;
+
+/**
+ * Carga atómica para el Scheduler: solo datos necesarios (ítems, tareas, secciones).
+ * No usa obtenerEventoDetalle para evitar profundidad de relaciones y timeouts.
+ */
+export async function obtenerTareasScheduler(
+  studioSlug: string,
+  eventId: string,
+  cotizacionId?: string | null
+): Promise<{ success: boolean; data?: TareasSchedulerPayload; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const event = await prisma.studio_events.findFirst({
+      where: { id: eventId, studio_id: studio.id },
+      select: {
+        id: true,
+        event_date: true,
+        cotizacion_id: true,
+        promise_id: true,
+        promise: { select: { id: true, name: true, event_date: true } },
+      },
+    });
+    if (!event) return { success: false, error: 'Evento no encontrado' };
+
+    const [schedulerInstance, cotizacionesRows, seccionesResult] = await Promise.all([
+      prisma.studio_scheduler_event_instances.findFirst({
+        where: { event_id: eventId },
+        select: {
+          id: true,
+          start_date: true,
+          end_date: true,
+          tasks: {
+            select: {
+              id: true,
+              name: true,
+              start_date: true,
+              end_date: true,
+              status: true,
+              progress_percent: true,
+              completed_at: true,
+              cotizacion_item_id: true,
+              category: true,
+              catalog_category_id: true,
+              catalog_category: {
+                select: { id: true, name: true },
+              },
+              order: true,
+              budget_amount: true,
+              assigned_to_crew_member_id: true,
+              assigned_to_crew_member: {
+                select: { id: true, name: true, email: true, tipo: true },
+              },
+            },
+            orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
+          },
+        },
+      }),
+      prisma.studio_cotizaciones.findMany({
+        where: {
+          OR: [
+            { evento_id: eventId },
+            ...(event.cotizacion_id ? [{ id: event.cotizacion_id }] : []),
+          ],
+          status: { in: ['autorizada', 'aprobada', 'approved'] },
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          cotizacion_items: {
+            // Paridad con Card: orden inicial por category + start_date se aplica en JS (orderItemsLikeCard). Select idéntico en campos de estructura (catalog_category_id, service_category_id, items.service_category_id).
+            orderBy: [{ order: 'asc' }],
+            select: {
+              ...COTIZACION_ITEMS_SELECT_STANDARD,
+              cost: true,
+              cost_snapshot: true,
+              profit_type: true,
+              profit_type_snapshot: true,
+              service_category_id: true,
+              service_categories: {
+                select: {
+                  id: true,
+                  name: true,
+                  order: true,
+                  section_categories: { select: { service_sections: { select: { id: true, name: true, order: true } } } },
+                },
+              },
+              items: {
+                select: {
+                  order: true,
+                  service_category_id: true,
+                  service_categories: {
+                    select: {
+                      id: true,
+                      name: true,
+                      order: true,
+                      section_categories: { select: { service_sections: { select: { id: true, name: true, order: true } } } },
+                    },
+                  },
+                },
+              },
+              assigned_to_crew_member_id: true,
+              assigned_to_crew_member: {
+                select: { id: true, name: true, tipo: true },
+              },
+              scheduler_task: {
+                select: {
+                  id: true,
+                  name: true,
+                  start_date: true,
+                  end_date: true,
+                  status: true,
+                  progress_percent: true,
+                  completed_at: true,
+                  category: true,
+                  catalog_category_id: true,
+                  catalog_category: {
+                    select: { id: true, name: true },
+                  },
+                  order: true,
+                  assigned_to_crew_member_id: true,
+                  assigned_to_crew_member: {
+                    select: { id: true, name: true, email: true, tipo: true },
+                  },
+                  sync_status: true,
+                  invitation_status: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      obtenerCatalogo(studioSlug, true),
+    ]);
+
+    const secciones = seccionesResult.success && seccionesResult.data ? seccionesResult.data : [];
+    const getCategoryId = (item: (typeof cotizacionesRows)[0]['cotizacion_items'][0]): string | null =>
+      item.scheduler_task?.catalog_category_id ?? item.service_category_id ?? item.items?.service_category_id ?? null;
+    const getName = (item: (typeof cotizacionesRows)[0]['cotizacion_items'][0]): string | null =>
+      item.scheduler_task?.name ?? item.name ?? item.name_snapshot ?? null;
+
+    // Paridad con Card (obtenerSchedulerTareas): mismo orderBy [category asc, start_date asc] para orden inicial.
+    const orderItemsLikeCard = <T extends { scheduler_task?: { category?: string; start_date?: Date } | null }>(items: T[]): T[] =>
+      [...items].sort((a, b) => {
+        const catA = a.scheduler_task?.category ?? 'PLANNING';
+        const catB = b.scheduler_task?.category ?? 'PLANNING';
+        if (catA !== catB) return catA.localeCompare(catB);
+        const dateA = a.scheduler_task?.start_date ? new Date(a.scheduler_task.start_date).getTime() : 0;
+        const dateB = b.scheduler_task?.start_date ? new Date(b.scheduler_task.start_date).getTime() : 0;
+        return dateA - dateB;
+      });
+
+    let cotizaciones = cotizacionesRows.map((c) => {
+      const withSameOrderAsCard = orderItemsLikeCard(c.cotizacion_items);
+      const orderedItems =
+        secciones.length > 0
+          ? ordenarPorEstructuraCanonica(withSameOrderAsCard, secciones, getCategoryId, getName)
+          : withSameOrderAsCard;
+      return {
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        cotizacion_items: orderedItems.map((item) => {
+          const resolved_service_category_id = item.service_category_id ?? item.items?.service_category_id ?? null;
+          const effectiveCatalogCategoryId = item.scheduler_task?.catalog_category_id ?? resolved_service_category_id;
+          return {
+            id: item.id,
+            item_id: item.item_id,
+            name: item.scheduler_task?.name ?? item.name ?? item.name_snapshot ?? null,
+            name_snapshot: item.name_snapshot,
+            quantity: item.quantity,
+            order: item.order,
+            cost: item.cost,
+            cost_snapshot: item.cost_snapshot,
+            profit_type: item.profit_type,
+            profit_type_snapshot: item.profit_type_snapshot,
+            service_category_id: item.service_category_id,
+            resolved_service_category_id,
+            catalog_category_id: effectiveCatalogCategoryId,
+            seccion_name: item.seccion_name,
+            category_name: item.category_name,
+            seccion_name_snapshot: item.seccion_name_snapshot,
+            category_name_snapshot: item.category_name_snapshot,
+            assigned_to_crew_member_id: item.assigned_to_crew_member_id,
+            assigned_to_crew_member: item.assigned_to_crew_member,
+            scheduler_task: item.scheduler_task
+              ? {
+                  ...item.scheduler_task,
+                  catalog_category_id: effectiveCatalogCategoryId ?? item.scheduler_task.catalog_category_id,
+                  catalog_category: item.scheduler_task.catalog_category,
+                  progress_percent: item.scheduler_task.progress_percent,
+                  completed_at: item.scheduler_task.completed_at,
+                  assigned_to_crew_member: item.scheduler_task.assigned_to_crew_member,
+                  sync_status: item.scheduler_task.sync_status,
+                  invitation_status: item.scheduler_task.invitation_status,
+                }
+              : null,
+          };
+        }),
+      };
+    });
+
+    if (cotizacionId) {
+      cotizaciones = cotizaciones.filter((c) => c.id === cotizacionId);
+    }
+
+    const tasks = schedulerInstance?.tasks ?? [];
+    const payload: TareasSchedulerPayload = {
+      id: event.id,
+      name: event.promise?.name ?? 'Evento',
+      event_date: event.event_date || event.promise?.event_date || null,
+      promise: event.promise
+        ? {
+            id: event.promise.id,
+            name: event.promise.name,
+            event_date: event.promise.event_date,
+          }
+        : null,
+      cotizaciones,
+      scheduler: schedulerInstance
+        ? {
+            id: schedulerInstance.id,
+            start_date: schedulerInstance.start_date,
+            end_date: schedulerInstance.end_date,
+            tasks: tasks.map((t) => ({
+              ...t,
+              catalog_category_nombre: t.catalog_category?.name ?? null,
+              progress_percent: t.progress_percent,
+              completed_at: t.completed_at,
+              budget_amount: t.budget_amount,
+              assigned_to_crew_member: t.assigned_to_crew_member,
+            })),
+          }
+        : null,
+      secciones: seccionesResult.success && seccionesResult.data ? seccionesResult.data : [],
+    };
+
+    return { success: true, data: payload };
+  } catch (error) {
+    console.error('[obtenerTareasScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cargar tareas del scheduler',
     };
   }
 }

@@ -25,7 +25,10 @@ export {
 export {
   actualizarSchedulerTaskFechas,
   obtenerSchedulerTareas,
+  clasificarTareaScheduler,
+  obtenerTareasScheduler,
 } from './scheduler-actions';
+export type { TareasSchedulerPayload, SchedulerData, SchedulerCotizacionItem, SchedulerItemForView } from './scheduler-actions';
 
 export {
   getChecklistTemplates,

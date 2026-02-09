@@ -66,9 +66,7 @@ export async function limpiarTareasGoogleSinPersonal(
       },
     });
 
-    console.log(
-      `[Google Calendar] ✅ Limpiadas ${resultado.count} tareas sin personal asignado`
-    );
+    // console.log(`[Google Calendar] ✅ Limpiadas ${resultado.count} tareas sin personal asignado`);
 
     return {
       success: true,

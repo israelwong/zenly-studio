@@ -3,7 +3,7 @@
 import React, { useCallback } from 'react';
 import type { DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
+import { ROW_HEIGHTS, type ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import { TaskBar } from './TaskBar';
 import { getTotalGridWidth, getDateFromPosition } from '../../utils/coordinate-utils';
 
@@ -90,9 +90,8 @@ export const SchedulerRow = React.memo(({
 
   return (
     <div
-      className={`relative h-[60px] border-b border-zinc-800/50 transition-colors ${!hasTask ? 'hover:bg-zinc-900/30 cursor-pointer' : ''
-        }`}
-      style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px` }}
+      className={`relative border-b border-zinc-800/50 transition-colors ${!hasTask ? 'hover:bg-zinc-900/30 cursor-pointer' : ''}`}
+      style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, height: ROW_HEIGHTS.TASK_ROW }}
       onClick={handleRowClick}
     >
       {/* Background grid lines (opcional, para referencia visual) */}

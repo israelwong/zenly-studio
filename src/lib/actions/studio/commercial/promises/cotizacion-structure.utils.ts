@@ -299,6 +299,104 @@ export function construirEstructuraJerarquicaCotizacion(
 }
 
 /**
+ * Devuelve los ids de cotizacion_item en el orden canónico de la estructura (sección → categoría → ítem).
+ * Usar para asignar visualIndex/order en scheduler a partir de la fuente única de verdad.
+ */
+export function aplanarEstructuraAOrdenIds(estructura: EstructuraJerarquica): string[] {
+  const ids: string[] = [];
+  for (const s of estructura.secciones) {
+    for (const c of s.categorias) {
+      for (const item of c.items) {
+        if (item.id != null) ids.push(item.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/** Peso por nombre para desempate (Shooting/Sesión primero, Asistencia después). Mismo criterio que sync. */
+/** Limpia el nombre antes de calcular peso: lowercase, trim, quita sufijos como "- modificado". */
+function limpiarNombreParaPeso(name: string | null | undefined, nameSnapshot: string | null | undefined): string {
+  const raw = (name ?? nameSnapshot ?? '').toString();
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/\s*-\s*modificado\s*$/i, '')
+    .trim();
+}
+
+/**
+ * Peso para desempate dentro de la misma categoría (orden canónico).
+ * 0 = Shooting/sesión (primero), 1000 = otros, 5000 = asistencia/asistente (último).
+ */
+export function pesoPorNombreCotizacion(name: string | null | undefined, nameSnapshot: string | null | undefined): number {
+  const n = limpiarNombreParaPeso(name, nameSnapshot);
+  if (n.includes('shooting') || n.includes('sesión') || n.includes('sesion')) return 0;
+  if (n.includes('asistencia') || n.includes('asistente')) return 5000;
+  return 1000;
+}
+
+/** Catálogo mínimo para construir mapa de orden (sección → categoría). */
+export type CatalogoParaOrden = Array<{ id: string; orden: number; categorias: Array<{ id: string; orden: number }> }>;
+
+export function buildCategoryOrderMap(secciones: CatalogoParaOrden): Map<string, { sectionOrden: number; categoryOrden: number }> {
+  const map = new Map<string, { sectionOrden: number; categoryOrden: number }>();
+  secciones.forEach((sec, sIdx) => {
+    sec.categorias.forEach((cat, cIdx) => {
+      map.set(cat.id, { sectionOrden: sec.orden ?? sIdx, categoryOrden: cat.orden ?? cIdx });
+    });
+  });
+  return map;
+}
+
+/** Ítem mínimo para ordenar por estructura maestra (id, quantity, subtotal, nombres, etc.). */
+export interface ItemParaOrdenCanonico {
+  id: string;
+  quantity: number;
+  subtotal: number;
+  name?: string | null;
+  name_snapshot?: string | null;
+  seccion_name?: string | null;
+  category_name?: string | null;
+  seccion_name_snapshot?: string | null;
+  category_name_snapshot?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Orden canónico usando la función maestra (construirEstructuraJerarquicaCotizacion + aplanar).
+ * Mismo motor que Workflow Card / agruparServiciosPorCotizacion. Devuelve ids en orden de visualización.
+ */
+export function obtenerOrdenCanonicoIds<T extends ItemParaOrdenCanonico>(
+  items: T[],
+  secciones: CatalogoParaOrden,
+  getCategoryId: (item: T) => string | null
+): string[] {
+  const categoryOrderMap = buildCategoryOrderMap(secciones);
+  const input: CotizacionItemInput[] = items.map((item) => {
+    const catId = getCategoryId(item);
+    const order = catId ? categoryOrderMap.get(catId) : null;
+    const sectionOrden = order?.sectionOrden ?? 999;
+    const categoryOrden = order?.categoryOrden ?? 999;
+    return {
+      id: item.id,
+      item_id: (item as { item_id?: string | null }).item_id,
+      quantity: item.quantity,
+      subtotal: Number(item.subtotal ?? 0),
+      name: item.name,
+      name_snapshot: item.name_snapshot,
+      seccion_name: item.seccion_name ?? item.seccion_name_snapshot ?? null,
+      category_name: item.category_name ?? item.category_name_snapshot ?? null,
+      seccion_orden: sectionOrden,
+      categoria_orden: categoryOrden,
+      order: pesoPorNombreCotizacion(item.name, item.name_snapshot),
+    };
+  });
+  const estructura = construirEstructuraJerarquicaCotizacion(input, { ordenarPor: 'catalogo' });
+  return aplanarEstructuraAOrdenIds(estructura);
+}
+
+/**
  * Consulta estándar para obtener cotizacion_items con snapshots y campos operacionales
  * Usar esta consulta en todas las funciones que necesiten construir estructura jerárquica
  */
@@ -321,4 +419,39 @@ export const COTIZACION_ITEMS_SELECT_STANDARD = {
   category_name: true,
   seccion_name: true,
 } as const;
+
+/** Shape mínimo para ordenar por catálogo (relaciones Prisma de cotizacion_item) */
+type ItemConOrdenCatalogo = {
+  order?: number | null;
+  items?: {
+    order?: number | null;
+    service_categories?: {
+      order?: number | null;
+      section_categories?: { service_sections?: { order?: number | null } } | null;
+    } | null;
+  } | null;
+  service_categories?: {
+    order?: number | null;
+    section_categories?: { service_sections?: { order?: number | null } } | null;
+  } | null;
+};
+
+/**
+ * Orden estándar: seccion_orden (catálogo) > categoria_orden (catálogo) > item_order (catálogo) > order (cotización).
+ * Fuente única para PDF, Cotización y Scheduler. Ítems (ej. Shooting) heredan el peso de su categoría.
+ */
+export function ordenarCotizacionItemsPorCatalogo<T extends ItemConOrdenCatalogo>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const seccionA = a.items?.service_categories?.section_categories?.service_sections?.order ?? a.service_categories?.section_categories?.service_sections?.order ?? 999;
+    const seccionB = b.items?.service_categories?.section_categories?.service_sections?.order ?? b.service_categories?.section_categories?.service_sections?.order ?? 999;
+    if (seccionA !== seccionB) return seccionA - seccionB;
+    const catA = a.items?.service_categories?.order ?? a.service_categories?.order ?? 999;
+    const catB = b.items?.service_categories?.order ?? b.service_categories?.order ?? 999;
+    if (catA !== catB) return catA - catB;
+    const itemOrderA = a.items?.order ?? 999;
+    const itemOrderB = b.items?.order ?? 999;
+    if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
+    return (a.order ?? 999) - (b.order ?? 999);
+  });
+}
 

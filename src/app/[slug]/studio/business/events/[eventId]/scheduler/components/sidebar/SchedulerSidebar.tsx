@@ -10,10 +10,13 @@ import {
   getSectionTaskCounts,
   isSectionRow,
   isStageRow,
+  isCategoryRow,
   isTaskRow,
   isAddPhantomRow,
   isManualTaskRow,
+  rowHeight,
   STAGE_COLORS,
+  ROW_HEIGHTS,
   type SchedulerRowDescriptor,
   type TaskCategoryStage,
   type ManualTaskPayload,
@@ -55,10 +58,7 @@ interface ItemMetadata {
 
 interface StageBlock {
   stageRow: { id: string; category: TaskCategoryStage; sectionId: string; label: string };
-  taskRows: Array<
-    | { type: 'task'; item: CotizacionItem; servicioNombre: string; categoriaNombre: string; seccionNombre: string; catalogItemId: string }
-    | { type: 'manual_task'; task: ManualTaskPayload }
-  >;
+  contentRows: Array<SchedulerRowDescriptor>;
   phantomRow: { id: string };
 }
 
@@ -75,7 +75,7 @@ interface SchedulerSidebarProps {
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
-  onManualTaskMoveStage?: (taskId: string, category: TaskCategoryStage) => void;
+  onManualTaskMoveStage?: (taskId: string, category: TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
@@ -84,6 +84,7 @@ interface SchedulerSidebarProps {
   onExpandedSectionsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
+
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -116,7 +117,7 @@ function ManualTaskRow({
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onReorderUp?: (taskId: string) => void;
   onReorderDown?: (taskId: string) => void;
-  onMoveToStage?: (taskId: string, category: TaskCategoryStage) => void;
+  onMoveToStage?: (taskId: string, category: TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onDuplicate?: (taskId: string) => void;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -236,8 +237,11 @@ function ManualTaskRow({
           onOpenChange={setMoveModalOpen}
           taskName={localTask.name}
           currentCategory={stageCategory}
+          currentCatalogCategoryId={localTask.catalog_category_id}
           secciones={secciones}
-          onConfirm={(category) => onMoveToStage(localTask.id, category)}
+          onConfirm={(category, catalogCategoryId, catalogCategoryNombre) =>
+            onMoveToStage(localTask.id, category, catalogCategoryId, catalogCategoryNombre)
+          }
         />
       )}
     </>
@@ -312,21 +316,12 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
       continue;
     }
     if (isStageRow(r)) {
-      const taskRows: StageBlock['taskRows'] = [];
+      const contentRows: StageBlock['contentRows'] = [];
       let phantomRow: { id: string } | null = null;
       i++;
       while (i < rows.length && !isSectionRow(rows[i]) && !isStageRow(rows[i])) {
-        if (isTaskRow(rows[i])) {
-          taskRows.push({
-            type: 'task',
-            item: rows[i].item,
-            servicioNombre: rows[i].servicioNombre,
-            categoriaNombre: rows[i].categoriaNombre,
-            seccionNombre: rows[i].seccionNombre,
-            catalogItemId: rows[i].catalogItemId,
-          });
-        } else if (isManualTaskRow(rows[i])) {
-          taskRows.push({ type: 'manual_task', task: rows[i].task });
+        if (isCategoryRow(rows[i]) || isTaskRow(rows[i]) || isManualTaskRow(rows[i])) {
+          contentRows.push(rows[i]);
         } else if (isAddPhantomRow(rows[i])) {
           phantomRow = { id: rows[i].id };
         }
@@ -336,7 +331,7 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
         type: 'stage_block',
         block: {
           stageRow: { id: r.id, category: r.category, sectionId: r.sectionId, label: r.label },
-          taskRows,
+          contentRows,
           phantomRow: phantomRow ?? { id: `${r.id}-add` },
         },
       });
@@ -345,15 +340,6 @@ function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'sec
     i++;
   }
   return blocks;
-}
-
-function rowHeight(r: SchedulerRowDescriptor): number {
-  if (isSectionRow(r)) return 40;
-  if (isStageRow(r)) return 32;
-  if (isTaskRow(r)) return 60;
-  if (isManualTaskRow(r)) return 60;
-  if (isAddPhantomRow(r)) return 40;
-  return 0;
 }
 
 export const SchedulerSidebar = React.memo(({
@@ -462,7 +448,8 @@ export const SchedulerSidebar = React.memo(({
               key={block.row.id}
               type="button"
               onClick={() => toggleSection(block.row.id)}
-              className="h-[40px] w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors"
+              className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors"
+              style={{ height: ROW_HEIGHTS.SECTION }}
               aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
             >
               {sectionExpanded ? (
@@ -480,18 +467,23 @@ export const SchedulerSidebar = React.memo(({
           );
         }
 
-        const { stageRow, taskRows, phantomRow } = block.block;
+        const { stageRow, contentRows, phantomRow } = block.block;
         const isExpanded = expandedStages.has(stageRow.id);
         const colors = STAGE_COLORS[stageRow.category];
-        const taskIds = taskRows.map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id)).filter(Boolean) as string[];
+        const taskRowsCount = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r)).length;
+        const taskIds = contentRows
+          .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
+          .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
+          .filter(Boolean) as string[];
 
         return (
           <React.Fragment key={stageRow.id}>
             <div
               className={`
-                h-[32px] border-b border-zinc-800/50 pl-6 pr-2 flex items-center justify-between gap-2 border-l-2
+                border-b border-zinc-800/50 pl-6 pr-2 flex items-center justify-between gap-2 border-l-2
                 ${colors}
               `}
+              style={{ height: ROW_HEIGHTS.STAGE }}
             >
               <button
                 type="button"
@@ -502,9 +494,9 @@ export const SchedulerSidebar = React.memo(({
                 {isExpanded ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />}
                 <span className="text-xs font-medium text-zinc-300 truncate">{stageRow.label}</span>
               </button>
-              {taskRows.length > 0 && (
+              {taskRowsCount > 0 && (
                 <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                  {taskRows.length} tarea{taskRows.length !== 1 ? 's' : ''}
+                  {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
                 </span>
               )}
               {onDeleteStage && (
@@ -522,61 +514,76 @@ export const SchedulerSidebar = React.memo(({
 
             {isExpanded ? (
               <>
-                {(() => {
-                  const manualInStage = taskRows.filter((r): r is { type: 'manual_task'; task: ManualTaskPayload } => r.type === 'manual_task');
-                  return taskRows.map((tr) =>
-                    tr.type === 'manual_task' ? (
-                      (() => {
-                        const idx = manualInStage.findIndex((m) => m.task.id === tr.task.id);
-                        return (
-                          <ManualTaskRow
-                            key={tr.task.id}
-                            task={tr.task}
+                {contentRows.map((row) => {
+                  if (isCategoryRow(row)) {
+                    return (
+                      <div
+                        key={row.id}
+                        className="flex items-center pl-10 pr-4 border-b border-zinc-800/30 bg-zinc-900/30"
+                        style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
+                      >
+                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate">
+                          {row.label}
+                        </span>
+                      </div>
+                    );
+                  }
+                  if (isManualTaskRow(row)) {
+                    const taskRowsInOrder = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
+                    const pos = taskRowsInOrder.findIndex((r) => r === row);
+                    return (
+                      <ManualTaskRow
+                        key={row.task.id}
+                        task={row.task}
+                        studioSlug={studioSlug}
+                        eventId={eventId}
+                        stageCategory={stageRow.category}
+                        secciones={secciones}
+                        canMoveUp={pos > 0}
+                        canMoveDown={pos < taskRowsInOrder.length - 1}
+                        onManualTaskPatch={onManualTaskPatch}
+                        onManualTaskDelete={onManualTaskDelete}
+                        onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
+                        onReorderDown={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'down') : undefined}
+                        onMoveToStage={onManualTaskMoveStage}
+                        onDuplicate={onManualTaskDuplicate}
+                      />
+                    );
+                  }
+                  if (isTaskRow(row)) {
+                    return (
+                      <div
+                        key={row.item.id}
+                        className="border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
+                        style={{ height: ROW_HEIGHTS.TASK_ROW }}
+                      >
+                        <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
+                        <div className="flex-1 min-w-0 flex items-center pl-8 pr-4">
+                          <SchedulerItem
+                            item={row.item}
+                            metadata={{
+                              seccionNombre: row.seccionNombre,
+                              categoriaNombre: row.categoriaNombre,
+                              servicioNombre: row.servicioNombre,
+                              servicioId: row.catalogItemId,
+                            }}
                             studioSlug={studioSlug}
                             eventId={eventId}
-                            stageCategory={stageRow.category}
-                            secciones={secciones}
-                            canMoveUp={idx > 0}
-                            canMoveDown={idx >= 0 && idx < manualInStage.length - 1}
-                            onManualTaskPatch={onManualTaskPatch}
-                            onManualTaskDelete={onManualTaskDelete}
-                            onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
-                            onReorderDown={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'down') : undefined}
-                            onMoveToStage={onManualTaskMoveStage}
-                            onDuplicate={onManualTaskDuplicate}
+                            renderItem={renderItem}
+                            onItemUpdate={onItemUpdate}
+                            onTaskToggleComplete={onTaskToggleComplete}
                           />
-                        );
-                      })()
-                    ) : (
-                    <div
-                      key={tr.item.id}
-                      className="h-[60px] border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
-                    >
-                      <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                      <div className="flex-1 min-w-0 flex items-center pl-8 pr-4">
-                        <SchedulerItem
-                          item={tr.item}
-                          metadata={{
-                            seccionNombre: tr.seccionNombre,
-                            categoriaNombre: tr.categoriaNombre,
-                            servicioNombre: tr.servicioNombre,
-                            servicioId: tr.catalogItemId,
-                          }}
-                          studioSlug={studioSlug}
-                          eventId={eventId}
-                          renderItem={renderItem}
-                          onItemUpdate={onItemUpdate}
-                          onTaskToggleComplete={onTaskToggleComplete}
-                        />
+                        </div>
                       </div>
-                    </div>
-                  )
-                );
-                })()}
+                    );
+                  }
+                  return null;
+                })}
                 <button
                   type="button"
                   onClick={() => onAddManualTask?.(stageRow.sectionId, stageRow.category)}
-                  className="h-[40px] w-full mt-0.5 border-b border-zinc-800/30 flex items-center gap-1.5 pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs relative"
+                  className="w-full border-b border-zinc-800/30 flex items-center gap-1.5 pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs relative"
+                  style={{ height: ROW_HEIGHTS.PHANTOM }}
                 >
                   <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
                   <Plus className="h-3.5 w-3.5 shrink-0" />

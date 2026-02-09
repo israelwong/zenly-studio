@@ -4,7 +4,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
-import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
+import {
+  obtenerTareasScheduler,
+  type TareasSchedulerPayload,
+  type SchedulerData,
+} from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
 import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
 import { type DateRange } from 'react-day-picker';
@@ -17,25 +21,25 @@ export default function EventSchedulerPage() {
   const eventId = params.eventId as string;
   const cotizacionId = searchParams.get('cotizacion');
   const [loading, setLoading] = useState(true);
-  const [eventData, setEventData] = useState<EventoDetalle | null>(null);
+  const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Scheduler';
   }, []);
 
-  const loadEvent = React.useCallback(async () => {
+  const loadScheduler = useCallback(async () => {
     if (!eventId || !studioSlug) return;
     try {
       setLoading(true);
-      const result = await obtenerEventoDetalle(studioSlug, eventId);
+      const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
       if (result.success && result.data) {
-        setEventData(result.data);
+        setPayload(result.data);
         setDateRange(prev => {
           if (!prev && result.data?.scheduler?.start_date && result.data?.scheduler?.end_date) {
             return {
-              from: result.data.scheduler.start_date,
-              to: result.data.scheduler.end_date,
+              from: new Date(result.data.scheduler.start_date),
+              to: new Date(result.data.scheduler.end_date),
             };
           }
           return prev;
@@ -45,17 +49,17 @@ export default function EventSchedulerPage() {
         router.push(`/${studioSlug}/studio/business/events/${eventId}`);
       }
     } catch (error) {
-      toast.error('Error al cargar el evento');
+      toast.error('Error al cargar el cronograma');
       router.push(`/${studioSlug}/studio/business/events/${eventId}`);
     } finally {
       setLoading(false);
     }
-  }, [eventId, studioSlug, router]);
+  }, [eventId, studioSlug, cotizacionId, router]);
 
   useEffect(() => {
     if (!eventId || !studioSlug) return;
-    loadEvent();
-  }, [eventId, studioSlug, loadEvent]);
+    loadScheduler();
+  }, [eventId, studioSlug, loadScheduler]);
 
   if (loading) {
     return (
@@ -187,9 +191,18 @@ export default function EventSchedulerPage() {
     );
   }
 
-  if (!eventData) {
+  if (!payload) {
     return null;
   }
+
+  const eventDataForWrapper: SchedulerData = {
+    id: payload.id,
+    name: payload.name,
+    event_date: payload.event_date,
+    promise: payload.promise,
+    cotizaciones: payload.cotizaciones,
+    scheduler: payload.scheduler,
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -208,8 +221,8 @@ export default function EventSchedulerPage() {
               <div>
                 <ZenCardTitle>
                   {cotizacionId
-                    ? eventData.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
-                    : eventData.promise?.name || eventData.name || 'Evento sin nombre'}
+                    ? payload.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
+                    : payload.promise?.name || payload.name || 'Evento sin nombre'}
                 </ZenCardTitle>
                 <ZenCardDescription>
                   {cotizacionId ? 'Cronograma de cotización' : 'Cronograma'}
@@ -219,18 +232,26 @@ export default function EventSchedulerPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          {/* Scheduler con Stats integrados */}
-<SchedulerWrapper
+          <SchedulerWrapper
             studioSlug={studioSlug}
             eventId={eventId}
-            eventData={eventData}
+            eventData={eventDataForWrapper as EventoDetalle}
             initialDateRange={dateRange}
+            initialSecciones={payload.secciones}
             onDataChange={(newData) => {
-              if (newData && (!eventData || eventData.id === newData.id)) {
-                setEventData(newData);
+              if (newData && payload && newData.id === payload.id) {
+                setPayload(prev =>
+                  prev
+                    ? {
+                        ...prev,
+                        cotizaciones: (newData as TareasSchedulerPayload).cotizaciones ?? prev.cotizaciones,
+                        scheduler: (newData as TareasSchedulerPayload).scheduler ?? prev.scheduler,
+                      }
+                    : prev
+                );
               }
             }}
-            onRefetchEvent={loadEvent}
+            onRefetchEvent={loadScheduler}
             cotizacionId={cotizacionId || undefined}
           />
         </ZenCardContent>

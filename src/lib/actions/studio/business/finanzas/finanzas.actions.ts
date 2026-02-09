@@ -330,7 +330,6 @@ export async function obtenerKPIsFinancieros(
             },
             select: {
                 id: true,
-                status: true,
                 quotes: {
                     where: {
                         status: { in: ['aprobada', 'autorizada', 'correcto', 'approved'] },
@@ -429,7 +428,7 @@ export async function obtenerKPIsFinancieros(
         const porPagarTotal = porPagar._sum.net_amount ?? 0;
 
         // ✅ Calcular costos y gastos de producción de cotizaciones autorizadas del mes
-        // Buscar eventos autorizados que se celebraron en el mes
+        // Buscar eventos autorizados que se celebraron en el mes (EventStatus: ACTIVE, IN_PROGRESS, COMPLETED)
         const eventosAutorizados = await prisma.studio_events.findMany({
             where: {
                 studio_id: studioId,
@@ -437,7 +436,7 @@ export async function obtenerKPIsFinancieros(
                     gte: start,
                     lte: end,
                 },
-                status: { in: ['autorizado', 'aprobado', 'completed'] },
+                status: { in: ['ACTIVE', 'IN_PROGRESS', 'COMPLETED'] },
             },
             select: {
                 id: true,
