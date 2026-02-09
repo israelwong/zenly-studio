@@ -28,6 +28,7 @@ interface EventSchedulerViewProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
+  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -46,6 +47,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
+  onMoveCategory,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -170,6 +172,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
+        onMoveCategory={onMoveCategory}
       />
     );
   }

@@ -410,11 +410,10 @@ export function buildSchedulerRows(
     return meta;
   };
 
-  // Interfaz tonta: orden estricto del array (itemsMap = orden que devuelve la función maestra). No usar .order ni task.order.
-  // Paridad con Card: catalog_category_id en primer nivel del ítem (mismo getter que ordenarPorEstructuraCanonica).
+  // Orden por task.order de scheduler_tasks (persistido en BD). Fallback a índice si no hay order.
   let displayIndex = 0;
   for (const item of itemsMap.values()) {
-    const task = item.scheduler_task as (typeof item.scheduler_task) & { catalog_category_id?: string | null; catalog_category?: { id: string; name: string } | null };
+    const task = item.scheduler_task as (typeof item.scheduler_task) & { catalog_category_id?: string | null; catalog_category?: { id: string; name: string } | null; order?: number | null };
     if (!task) continue;
 
     const itemWithCatalogId = item as typeof item & { catalog_category_id?: string | null };
@@ -439,7 +438,7 @@ export function buildSchedulerRows(
       catalogItemId,
     };
     getOrCreate(sectionId, stage, categoryKey).push({
-      order: displayIndex++,
+      order: task.order ?? displayIndex++,
       row,
     });
   }
@@ -448,6 +447,7 @@ export function buildSchedulerRows(
   const firstSectionId = secciones[0]?.id;
   const firstSectionNombre = secciones[0]?.nombre ?? '';
 
+  let manualDisplayIndex = 0;
   for (const task of manualTasks) {
     const explicitSectionId =
       task.catalog_section_id && secciones.some((s) => s.id === task.catalog_section_id)
@@ -482,7 +482,7 @@ export function buildSchedulerRows(
       stageCategory: stage,
     };
     getOrCreate(sectionId, stage, categoryKey).push({
-      order: displayIndex++,
+      order: task.order ?? manualDisplayIndex++,
       row,
     });
   }
@@ -575,6 +575,7 @@ export function buildSchedulerRows(
       } else {
         for (const categoryKey of categoryKeys) {
           const list = byCat.get(categoryKey)!;
+          const sorted = [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
           rows.push({
             type: 'category',
             id: `${stageId}-cat-${categoryKey}`,
@@ -582,7 +583,7 @@ export function buildSchedulerRows(
             sectionId,
             stageId,
           });
-          for (const { row: taskRow } of list) {
+          for (const { row: taskRow } of sorted) {
             rows.push(taskRow);
           }
           rows.push({

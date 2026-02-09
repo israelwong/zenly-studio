@@ -111,6 +111,29 @@ export default function EventSchedulerPage() {
     [studioSlug, persistStagingCustomCats]
   );
 
+  const handleMoveCategory = useCallback(
+    (stageKey: string, categoryId: string, direction: 'up' | 'down') => {
+      setCustomCategoriesBySectionStage((prev) => {
+        const list = prev.get(stageKey) ?? [];
+        const idx = list.findIndex((c) => c.id === categoryId);
+        if (idx < 0) return prev;
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= list.length) return prev;
+        const next = [...list];
+        [next[idx], next[swapIdx]] = [next[swapIdx]!, next[idx]!];
+        const nextMap = new Map(prev);
+        nextMap.set(stageKey, next);
+        if (eventId && typeof window !== 'undefined') {
+          const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
+          setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(nextMap) });
+        }
+        return nextMap;
+      });
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+    },
+    [eventId]
+  );
+
   const handleRemoveEmptyStage = useCallback((sectionId: string, stage: string) => {
     const stageKey = `${sectionId}-${stage}`;
     setExplicitlyActivatedStageIds((prev) => {
@@ -405,6 +428,7 @@ export default function EventSchedulerPage() {
             onToggleStage={handleToggleStage}
             onAddCustomCategory={handleAddCustomCategory}
             onRemoveEmptyStage={handleRemoveEmptyStage}
+            onMoveCategory={handleMoveCategory}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
                 setPayload(prev =>

@@ -101,6 +101,9 @@ interface SchedulerSidebarProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
+  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
+  onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
 }
 
 
@@ -112,6 +115,23 @@ function getInitials(name: string) {
 function formatCategoryLabel(label: string): string {
   if (typeof label !== 'string' || !label) return label;
   return label.replace(/\s*\(\d{10,}\)\s*$/, '').trim() || label;
+}
+
+/** Resuelve catalog_category_id desde una fila de tipo category (id = `${stageId}-cat-${key}`; key puede ser id o nombre). */
+function getCatalogCategoryIdFromCategoryRow(
+  row: { id: string; stageId: string; label: string },
+  sectionId: string,
+  secciones: SeccionData[]
+): string | null {
+  const prefix = `${row.stageId}-cat-`;
+  if (!row.id.startsWith(prefix)) return null;
+  const key = row.id.slice(prefix.length);
+  if (!key) return null;
+  const sec = secciones.find((s) => s.id === sectionId);
+  const byId = sec?.categorias?.find((c) => c.id === key)?.id;
+  if (byId) return byId;
+  const byName = sec?.categorias?.find((c) => c.nombre === key)?.id;
+  return byName ?? key;
 }
 
 function AddCustomCategoryForm({
@@ -172,6 +192,8 @@ function ManualTaskRow({
   secciones,
   canMoveUp = false,
   canMoveDown = false,
+  onMoveToPreviousCategory,
+  onMoveToNextCategory,
   onManualTaskPatch,
   onManualTaskDelete,
   onReorderUp,
@@ -186,6 +208,8 @@ function ManualTaskRow({
   secciones: SeccionData[];
   canMoveUp?: boolean;
   canMoveDown?: boolean;
+  onMoveToPreviousCategory?: () => void;
+  onMoveToNextCategory?: () => void;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onReorderUp?: (taskId: string) => void;
@@ -200,24 +224,37 @@ function ManualTaskRow({
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
   const hasCrew = !!localTask.assigned_to_crew_member;
 
+  const showUp = (onReorderUp != null && canMoveUp) || onMoveToPreviousCategory != null;
+  const showDown = (onReorderDown != null && canMoveDown) || onMoveToNextCategory != null;
+  const upEnabled = (onReorderUp != null && canMoveUp) || onMoveToPreviousCategory != null;
+  const downEnabled = (onReorderDown != null && canMoveDown) || onMoveToNextCategory != null;
+
   const actionsSlot = (
     <div className="flex items-center gap-0.5 shrink-0 pl-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-      {onReorderUp != null && (
+      {showUp && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onReorderUp(localTask.id); }}
-          disabled={!canMoveUp}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canMoveUp && onReorderUp) onReorderUp(localTask.id);
+            else if (onMoveToPreviousCategory) onMoveToPreviousCategory();
+          }}
+          disabled={!upEnabled}
           className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
           aria-label="Subir"
         >
           <ChevronUp className="h-4 w-4" />
         </button>
       )}
-      {onReorderDown != null && (
+      {showDown && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onReorderDown(localTask.id); }}
-          disabled={!canMoveDown}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canMoveDown && onReorderDown) onReorderDown(localTask.id);
+            else if (onMoveToNextCategory) onMoveToNextCategory();
+          }}
+          disabled={!downEnabled}
           className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
           aria-label="Bajar"
         >
@@ -441,6 +478,9 @@ export const SchedulerSidebar = React.memo(({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
+  onMoveCategory,
+  onItemTaskReorder,
+  onItemTaskMoveCategory,
 }: SchedulerSidebarProps) => {
   const rows = useMemo(
     () =>
@@ -623,20 +663,57 @@ export const SchedulerSidebar = React.memo(({
               <>
                 {contentRows.map((row) => {
                   if (isCategoryRow(row)) {
+                    const catPrefix = `${row.stageId}-cat-`;
+                    const categoryId = row.id.startsWith(catPrefix) ? row.id.slice(catPrefix.length) : '';
+                    const customList = customCategoriesBySectionStage.get(row.stageId) ?? [];
+                    const catIdx = customList.findIndex((c) => c.id === categoryId);
+                    const isCustomCategory = catIdx >= 0;
+                    const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
+                    const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
                     return (
                       <div
                         key={row.id}
-                        className="flex items-center pl-8 pr-4 border-b border-zinc-800/30 bg-zinc-900/30"
+                        className="group flex items-center pl-8 pr-4 border-b border-zinc-800/30 bg-zinc-900/30 gap-1"
                         style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
                         data-section-id={row.sectionId}
                         title={typeof row.sectionId === 'string' && row.sectionId ? `Sección: ${row.sectionId}` : undefined}
                       >
-                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate">
+                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
                           {formatCategoryLabel(row.label)}
                         </span>
                         {process.env.NODE_ENV === 'development' && row.sectionId && (
                           <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
                             ({row.sectionId.slice(0, 8)}…)
+                          </span>
+                        )}
+                        {(canMoveUp || canMoveDown) && (
+                          <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            {canMoveUp && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMoveCategory?.(row.stageId, categoryId, 'up');
+                                }}
+                                className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                aria-label="Mover categoría arriba"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {canMoveDown && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMoveCategory?.(row.stageId, categoryId, 'down');
+                                }}
+                                className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                aria-label="Mover categoría abajo"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </span>
                         )}
                       </div>
@@ -645,6 +722,21 @@ export const SchedulerSidebar = React.memo(({
                   if (isManualTaskRow(row)) {
                     const taskRowsInOrder = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
                     const pos = taskRowsInOrder.findIndex((r) => r === row);
+                    const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
+                    const orderedCategories = categoryRows.map((r) => ({
+                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                      name: r.label,
+                    }));
+                    const taskRowIndex = contentRows.indexOf(row);
+                    let categoryIndex = -1;
+                    for (let i = taskRowIndex - 1; i >= 0; i--) {
+                      if (isCategoryRow(contentRows[i]!)) {
+                        categoryIndex = categoryRows.indexOf(contentRows[i] as typeof categoryRows[0]);
+                        break;
+                      }
+                    }
+                    const prevCat = categoryIndex > 0 ? orderedCategories[categoryIndex - 1] : null;
+                    const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
                     return (
                       <ManualTaskRow
                         key={row.task.id}
@@ -655,6 +747,16 @@ export const SchedulerSidebar = React.memo(({
                         secciones={secciones}
                         canMoveUp={pos > 0}
                         canMoveDown={pos < taskRowsInOrder.length - 1}
+                        onMoveToPreviousCategory={
+                          prevCat && onManualTaskMoveStage
+                            ? () => onManualTaskMoveStage(row.task.id, stageRow.category, prevCat.id, prevCat.name)
+                            : undefined
+                        }
+                        onMoveToNextCategory={
+                          nextCat && onManualTaskMoveStage
+                            ? () => onManualTaskMoveStage(row.task.id, stageRow.category, nextCat.id, nextCat.name)
+                            : undefined
+                        }
                         onManualTaskPatch={onManualTaskPatch}
                         onManualTaskDelete={onManualTaskDelete}
                         onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
@@ -665,14 +767,43 @@ export const SchedulerSidebar = React.memo(({
                     );
                   }
                   if (isTaskRow(row)) {
+                    const taskId = row.item.scheduler_task?.id;
+                    const taskRowsInOrder = contentRows.filter(
+                      (r): r is typeof row | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow =>
+                        isTaskRow(r) || isManualTaskRow(r)
+                    );
+                    const pos = taskRowsInOrder.indexOf(row);
+                    const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
+                    const orderedCategories = categoryRows.map((r) => ({
+                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                      name: r.label,
+                    }));
+                    let itemCategoryIndex = -1;
+                    const taskRowIndex = contentRows.indexOf(row);
+                    for (let i = taskRowIndex - 1; i >= 0; i--) {
+                      if (isCategoryRow(contentRows[i]!)) {
+                        itemCategoryIndex = categoryRows.indexOf(contentRows[i] as (typeof categoryRows)[0]);
+                        break;
+                      }
+                    }
+                    const prevCat = itemCategoryIndex > 0 ? orderedCategories[itemCategoryIndex - 1]! : null;
+                    const nextCat =
+                      itemCategoryIndex >= 0 && itemCategoryIndex < orderedCategories.length - 1
+                        ? orderedCategories[itemCategoryIndex + 1]!
+                        : null;
+                    const canMoveUp = !!taskId && (pos > 0 || (pos === 0 && prevCat !== null));
+                    const canMoveDown =
+                      !!taskId && (pos < taskRowsInOrder.length - 1 || (pos === taskRowsInOrder.length - 1 && nextCat !== null));
+                    const showArrows = taskId && (canMoveUp || canMoveDown) && (onItemTaskReorder || onItemTaskMoveCategory);
+
                     return (
                       <div
                         key={row.item.id}
-                        className="border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
+                        className="group border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
                         style={{ height: ROW_HEIGHTS.TASK_ROW }}
                       >
                         <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                        <div className="flex-1 min-w-0 flex items-center pl-8 pr-4">
+                        <div className="flex-1 min-w-0 flex items-center pl-8 pr-4 gap-1">
                           <SchedulerItem
                             item={row.item}
                             metadata={{
@@ -687,6 +818,38 @@ export const SchedulerSidebar = React.memo(({
                             onItemUpdate={onItemUpdate}
                             onTaskToggleComplete={onTaskToggleComplete}
                           />
+                          {showArrows && (
+                            <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              {canMoveUp && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (pos > 0) onItemTaskReorder?.(taskId, 'up');
+                                    else if (prevCat) onItemTaskMoveCategory?.(taskId, prevCat.id);
+                                  }}
+                                  className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                  aria-label="Mover arriba"
+                                >
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              {canMoveDown && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (pos < taskRowsInOrder.length - 1) onItemTaskReorder?.(taskId, 'down');
+                                    else if (nextCat) onItemTaskMoveCategory?.(taskId, nextCat.id);
+                                  }}
+                                  className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                  aria-label="Mover abajo"
+                                >
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );

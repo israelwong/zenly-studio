@@ -12,7 +12,9 @@ import {
   actualizarSchedulerTaskFechas,
   eliminarTareaManual,
   reordenarTareaManualScheduler,
+  reordenarTareaScheduler,
   moverTareaManualCategoria,
+  moverTareaItemCategoria,
   duplicarTareaManualScheduler,
   crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
@@ -63,6 +65,7 @@ interface EventSchedulerProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
+  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
 }
 
 export const EventScheduler = React.memo(function EventScheduler({
@@ -80,6 +83,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
+  onMoveCategory,
 }: EventSchedulerProps) {
   const router = useRouter();
 
@@ -305,6 +309,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       }));
       onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: newTasks } });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [studioSlug, eventId, localEventData, onDataChange]
   );
@@ -327,8 +332,143 @@ export const EventScheduler = React.memo(function EventScheduler({
         catalog_category_nombre: catalogCategoryNombre ?? null,
       });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [studioSlug, eventId, handleManualTaskPatch]
+  );
+
+  const handleItemTaskReorder = useCallback(
+    async (taskId: string, direction: 'up' | 'down') => {
+      type ItemWithTask = NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & {
+        scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> & { order?: number | null };
+      };
+      const cotizaciones = localEventData.cotizaciones ?? [];
+      const allItems: ItemWithTask[] = [];
+      for (const cot of cotizaciones) {
+        for (const item of cot.cotizacion_items ?? []) {
+          if (item?.scheduler_task?.id) allItems.push(item as ItemWithTask);
+        }
+      }
+      const taskItem = allItems.find((i) => i.scheduler_task?.id === taskId);
+      if (!taskItem?.scheduler_task) return;
+      const category = taskItem.scheduler_task.category;
+      const effectiveCat = (taskItem as { service_category_id?: string | null }).service_category_id ?? taskItem.scheduler_task.catalog_category_id ?? null;
+      const siblings = allItems.filter((i) => {
+        const t = i.scheduler_task!;
+        const ec = (i as { service_category_id?: string | null }).service_category_id ?? t.catalog_category_id ?? null;
+        return t.category === category && (ec ?? null) === (effectiveCat ?? null);
+      });
+      siblings.sort((a, b) => ((a.scheduler_task!.order ?? 0) - (b.scheduler_task!.order ?? 0)));
+      const idx = siblings.findIndex((i) => i.scheduler_task!.id === taskId);
+      if (idx < 0) return;
+      const oldOrder = taskItem.scheduler_task.order ?? 0;
+      const prevOrder = direction === 'up' ? (siblings[idx - 1]?.scheduler_task?.order ?? 0) : oldOrder;
+      const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.scheduler_task?.order ?? 0);
+      let newOrder = Math.floor((prevOrder + nextOrder) / 2);
+      if (newOrder === prevOrder || newOrder === nextOrder) {
+        newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
+      }
+
+      setLocalEventData((prev) => {
+        const next = { ...prev };
+        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+          ...cot,
+          cotizacion_items: cot.cotizacion_items?.map((item) =>
+            item?.scheduler_task?.id === taskId
+              ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null }
+              : item
+          ),
+        }));
+        return next;
+      });
+
+      const result = await reordenarTareaScheduler(studioSlug, eventId, taskId, direction);
+      if (!result.success) {
+        setLocalEventData((prev) => {
+          const next = { ...prev };
+          next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) =>
+              item?.scheduler_task?.id === taskId
+                ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null }
+                : item
+            ),
+          }));
+          return next;
+        });
+        toast.error(result.error ?? 'Error al reordenar');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+    },
+    [studioSlug, eventId, localEventData]
+  );
+
+  const handleItemTaskMoveCategory = useCallback(
+    async (taskId: string, catalogCategoryId: string | null) => {
+      const cotizaciones = localEventData.cotizaciones ?? [];
+      let taskItem: (NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & { scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> }) | null = null;
+      for (const cot of cotizaciones) {
+        for (const item of cot.cotizacion_items ?? []) {
+          if (item?.scheduler_task?.id === taskId) {
+            taskItem = item as typeof taskItem;
+            break;
+          }
+        }
+        if (taskItem) break;
+      }
+      if (!taskItem?.scheduler_task) return;
+      const prevCatalogId = taskItem.scheduler_task.catalog_category_id ?? (taskItem as { service_category_id?: string | null }).service_category_id ?? null;
+      const prevOrder = taskItem.scheduler_task.order ?? 0;
+
+      setLocalEventData((prev) => {
+        const next = { ...prev };
+        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+          ...cot,
+          cotizacion_items: cot.cotizacion_items?.map((item) =>
+            item?.scheduler_task?.id === taskId
+              ? {
+                  ...item,
+                  ...(catalogCategoryId != null && (item as { catalog_category_id?: string | null }).catalog_category_id !== undefined
+                    ? { catalog_category_id: catalogCategoryId }
+                    : {}),
+                  scheduler_task: item.scheduler_task
+                    ? { ...item.scheduler_task, catalog_category_id: catalogCategoryId, order: (item.scheduler_task.order ?? 0) + 10000 }
+                    : null,
+                }
+              : item
+          ),
+        }));
+        return next;
+      });
+
+      const result = await moverTareaItemCategoria(studioSlug, eventId, taskId, catalogCategoryId);
+      if (!result.success) {
+        setLocalEventData((prev) => {
+          const next = { ...prev };
+          next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) =>
+              item?.scheduler_task?.id === taskId
+                ? {
+                    ...item,
+                    scheduler_task: item.scheduler_task
+                      ? { ...item.scheduler_task, catalog_category_id: prevCatalogId, order: prevOrder }
+                      : null,
+                  }
+                : item
+            ),
+          }));
+          return next;
+        });
+        toast.error(result.error ?? 'Error al mover la tarea');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+    },
+    [studioSlug, eventId, localEventData]
   );
 
   const handleManualTaskDuplicate = useCallback(
@@ -1385,6 +1525,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
+        onMoveCategory={onMoveCategory}
         onTaskUpdate={handleTaskUpdate}
         onTaskCreate={handleTaskCreate}
         onTaskDelete={handleTaskDelete}
@@ -1396,6 +1537,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         onManualTaskDelete={handleManualTaskDelete}
         onManualTaskReorder={handleManualTaskReorder}
         onManualTaskMoveStage={handleManualTaskMoveStage}
+        onItemTaskReorder={handleItemTaskReorder}
+        onItemTaskMoveCategory={handleItemTaskMoveCategory}
         onManualTaskDuplicate={handleManualTaskDuplicate}
         onManualTaskUpdate={() => onRefetchEvent?.()}
         onDeleteStage={handleDeleteStage}

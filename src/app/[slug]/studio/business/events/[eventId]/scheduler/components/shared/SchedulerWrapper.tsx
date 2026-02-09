@@ -30,6 +30,7 @@ interface SchedulerWrapperProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
+  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
 }
 
 /**
@@ -52,6 +53,7 @@ export function SchedulerWrapper({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
+  onMoveCategory,
 }: SchedulerWrapperProps) {
   const filteredCotizaciones = useMemo(() => {
     if (!cotizacionId || !eventData.cotizaciones) return eventData.cotizaciones ?? [];
@@ -82,6 +84,7 @@ export function SchedulerWrapper({
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
+        onMoveCategory={onMoveCategory}
       />
       <PublicationBar
         studioSlug={studioSlug}

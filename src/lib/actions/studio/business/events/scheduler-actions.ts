@@ -1261,24 +1261,102 @@ export async function reordenarTareaManualScheduler(
     if (direction === 'up' && idx === 0) return { success: true };
     if (direction === 'down' && idx === siblings.length - 1) return { success: true };
 
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    const other = siblings[swapIdx]!;
-    await prisma.$transaction([
-      prisma.studio_scheduler_event_tasks.update({
-        where: { id: taskId },
-        data: { order: other.order },
-      }),
-      prisma.studio_scheduler_event_tasks.update({
-        where: { id: other.id },
-        data: { order: task.order },
-      }),
-    ]);
+    const oldOrder = task.order ?? 0;
+    const prevOrder = direction === 'up' ? (siblings[idx - 1]?.order ?? 0) : oldOrder;
+    const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.order ?? 0);
+    let newOrder = Math.floor((prevOrder + nextOrder) / 2);
+    if (newOrder === prevOrder || newOrder === nextOrder) {
+      newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
+    }
+
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { order: newOrder },
+    });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
     return { success: true };
   } catch (error) {
     console.error('[reordenarTareaManualScheduler] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al reordenar',
+    };
+  }
+}
+
+/**
+ * Reordena cualquier tarea (manual o ítem) dentro de su misma etapa y categoría.
+ * order en BD es Int: se usa punto medio o saltos de 100 si colisiona.
+ */
+export async function reordenarTareaScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  direction: 'up' | 'down'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, category: true, order: true, catalog_category_id: true, scheduler_instance_id: true, cotizacion_item_id: true, cotizacion_item: { select: { service_category_id: true } } },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada' };
+    }
+
+    const targetCatId = task.cotizacion_item_id
+      ? task.cotizacion_item?.service_category_id ?? task.catalog_category_id ?? null
+      : task.catalog_category_id ?? null;
+
+    const allInStage = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: task.scheduler_instance_id,
+        category: task.category,
+      },
+      select: {
+        id: true,
+        order: true,
+        catalog_category_id: true,
+        cotizacion_item_id: true,
+        cotizacion_item: { select: { service_category_id: true } },
+      },
+      orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
+    });
+
+    const siblings = allInStage.filter((t) => {
+      const effective = t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? null : t.catalog_category_id;
+      return (effective ?? null) === targetCatId;
+    });
+
+    const idx = siblings.findIndex((s) => s.id === taskId);
+    if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
+    if (direction === 'up' && idx === 0) return { success: true };
+    if (direction === 'down' && idx === siblings.length - 1) return { success: true };
+
+    const oldOrder = task.order ?? 0;
+    const prevOrder = direction === 'up' ? (siblings[idx - 1]?.order ?? 0) : oldOrder;
+    const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.order ?? 0);
+    let newOrder = Math.floor((prevOrder + nextOrder) / 2);
+    if (newOrder === prevOrder || newOrder === nextOrder) {
+      newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
+    }
+
+    console.log('DB_ORDER_UPDATE:', { taskId, oldOrder, newOrder, direction });
+
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { order: newOrder },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[reordenarTareaScheduler] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al reordenar',
@@ -1338,6 +1416,65 @@ export async function moverTareaManualCategoria(
     return { success: true };
   } catch (error) {
     console.error('[moverTareaManualCategoria] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al mover la tarea',
+    };
+  }
+}
+
+/**
+ * Mueve una tarea ligada a ítem a otra categoría del catálogo dentro del mismo stage (re-parenting por flechas).
+ */
+export async function moverTareaItemCategoria(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  catalogCategoryId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        cotizacion_item_id: { not: null },
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { id: true, category: true, scheduler_instance_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea de ítem no encontrada' };
+    }
+
+    const baseWhere = {
+      scheduler_instance_id: task.scheduler_instance_id,
+      category: task.category,
+    };
+    const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
+      where:
+        catalogCategoryId == null
+          ? { ...baseWhere, catalog_category_id: null }
+          : {
+              ...baseWhere,
+              OR: [
+                { catalog_category_id: catalogCategoryId },
+                { cotizacion_item_id: { not: null }, cotizacion_item: { service_category_id: catalogCategoryId } },
+              ],
+            },
+      _max: { order: true },
+    });
+    const newOrder = (maxOrder._max.order ?? -1) + 1;
+
+    // Persistir en BD: catalog_category_id + order (re-parenting real en scheduler_tasks)
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { catalog_category_id: catalogCategoryId, order: newOrder },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[moverTareaItemCategoria] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al mover la tarea',

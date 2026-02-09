@@ -40,6 +40,8 @@ interface SchedulerPanelProps {
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
   onManualTaskMoveStage?: (taskId: string, category: import('../utils/scheduler-section-stages').TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
+  onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
+  onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
@@ -55,6 +57,7 @@ interface SchedulerPanelProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
+  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
 }
 
 /**
@@ -81,6 +84,8 @@ export const SchedulerPanel = React.memo(({
   onManualTaskDelete,
   onManualTaskReorder,
   onManualTaskMoveStage,
+  onItemTaskReorder,
+  onItemTaskMoveCategory,
   onManualTaskDuplicate,
   onManualTaskUpdate,
   onDeleteStage,
@@ -95,6 +100,7 @@ export const SchedulerPanel = React.memo(({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
+  onMoveCategory,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -151,11 +157,14 @@ export const SchedulerPanel = React.memo(({
             onToggleStage={onToggleStage}
             onAddCustomCategory={onAddCustomCategory}
             onRemoveEmptyStage={onRemoveEmptyStage}
+            onMoveCategory={onMoveCategory}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
             onManualTaskReorder={onManualTaskReorder}
             onManualTaskMoveStage={onManualTaskMoveStage}
+            onItemTaskReorder={onItemTaskReorder}
+            onItemTaskMoveCategory={onItemTaskMoveCategory}
             onManualTaskDuplicate={onManualTaskDuplicate}
             onManualTaskUpdate={onManualTaskUpdate}
             onDeleteStage={onDeleteStage}
