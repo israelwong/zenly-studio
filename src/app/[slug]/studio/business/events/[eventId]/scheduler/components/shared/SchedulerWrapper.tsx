@@ -16,6 +16,8 @@ interface SchedulerWrapperProps {
   onDateRangeChange?: (range: DateRange | undefined) => void;
   onDataChange?: (data: EventoDetalle | SchedulerData) => void;
   onRefetchEvent?: () => Promise<void>;
+  /** Llamado tras Publicar cambios: limpiar caché local y recargar datos. */
+  onPublished?: () => void;
   cotizacionId?: string;
   initialSecciones?: import('@/lib/actions/schemas/catalogo-schemas').SeccionData[];
   /** Secciones activas (con datos o activadas por usuario). */
@@ -40,6 +42,7 @@ export function SchedulerWrapper({
   dateRange,
   onDataChange,
   onRefetchEvent,
+  onPublished,
   cotizacionId,
   initialSecciones,
   activeSectionIds,
@@ -83,7 +86,7 @@ export function SchedulerWrapper({
       <PublicationBar
         studioSlug={studioSlug}
         eventId={eventId}
-        onPublished={() => onDataChange?.(eventData)}
+        onPublished={onPublished ?? (() => onDataChange?.(eventData))}
       />
     </>
   );

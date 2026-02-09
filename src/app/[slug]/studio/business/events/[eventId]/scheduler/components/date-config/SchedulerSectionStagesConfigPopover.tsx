@@ -17,6 +17,18 @@ interface SchedulerSectionStagesConfigPopoverProps {
   triggerClassName?: string;
 }
 
+const STAGE_KEY_SEP = '-';
+
+/** Construye la clave única sectionId-stageId. Siempre usar esta forma para consistencia. */
+export function buildStageKey(sectionId: string, stage: string): string {
+  return `${sectionId}${STAGE_KEY_SEP}${stage}`;
+}
+
+/** Devuelve true si sectionId es válido para herencia (no undefined/vacío). */
+function isValidSectionId(sectionId: string): boolean {
+  return typeof sectionId === 'string' && sectionId.length > 0;
+}
+
 export function SchedulerSectionStagesConfigPopover({
   sectionId,
   sectionName,
@@ -26,6 +38,10 @@ export function SchedulerSectionStagesConfigPopover({
   triggerClassName,
 }: SchedulerSectionStagesConfigPopoverProps) {
   const [open, setOpen] = useState(false);
+
+  if (!isValidSectionId(sectionId)) {
+    return null;
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -49,7 +65,7 @@ export function SchedulerSectionStagesConfigPopover({
         <p className="text-xs font-medium text-zinc-400 mb-2">Estados en esta sección</p>
         <div className="space-y-1.5">
           {(STAGE_ORDER as readonly TaskCategoryStage[]).map((stage) => {
-            const stageKey = `${sectionId}-${stage}`;
+            const stageKey = buildStageKey(sectionId, stage);
             const hasData = stageIdsWithData.has(stage);
             const disabled = hasData;
             return (

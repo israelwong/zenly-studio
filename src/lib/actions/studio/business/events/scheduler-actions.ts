@@ -907,6 +907,7 @@ export async function crearTareaManualScheduler(
     category: string;
     catalog_category_id: string | null;
     catalog_category_nombre: string | null;
+    catalog_section_id: string | null;
     budget_amount: number | null;
     status: string;
     progress_percent: number;
@@ -1028,6 +1029,7 @@ export async function crearTareaManualScheduler(
         category: task.category,
         catalog_category_id: task.catalog_category_id,
         catalog_category_nombre: task.catalog_category?.name ?? null,
+        catalog_section_id: params.sectionId ?? null,
         budget_amount: task.budget_amount != null ? Number(task.budget_amount) : null,
         status: task.status,
         progress_percent: task.progress_percent ?? 0,
@@ -1586,6 +1588,7 @@ export interface TareasSchedulerPayload {
       category: string;
       catalog_category_id: string | null;
       catalog_category_nombre?: string | null;
+      catalog_section_id?: string | null;
       order: number;
       budget_amount: unknown;
       assigned_to_crew_member_id: string | null;
@@ -1593,6 +1596,10 @@ export interface TareasSchedulerPayload {
     }>;
   } | null;
   secciones: SeccionData[];
+  /** Etapas vacías activadas por usuario (keys `${sectionId}-${stage}`). Si viene del servidor, hidrata la UI tras refresh. */
+  explicitlyActivatedStageIds?: string[];
+  /** Categorías manuales por etapa (keys `${sectionId}-${stage}`). Si viene del servidor, hidrata la UI tras refresh. */
+  customCategoriesBySectionStage?: Array<[string, Array<{ id: string; name: string }>]>;
 }
 
 /** Lo que la vista Scheduler necesita: evento + cotizaciones + scheduler (sin secciones). Acepta EventoDetalle o payload de obtenerTareasScheduler. */
@@ -1812,6 +1819,12 @@ export async function obtenerTareasScheduler(
     }
 
     const tasks = schedulerInstance?.tasks ?? [];
+    const seccionesForPayload = seccionesResult.success && seccionesResult.data ? seccionesResult.data : [];
+    const getSectionIdForCategory = (catalogCategoryId: string | null): string | null => {
+      if (!catalogCategoryId) return null;
+      const sec = seccionesForPayload.find((s) => s.categorias?.some((c) => c.id === catalogCategoryId));
+      return sec?.id ?? null;
+    };
     const payload: TareasSchedulerPayload = {
       id: event.id,
       name: event.promise?.name ?? 'Evento',
@@ -1832,6 +1845,7 @@ export async function obtenerTareasScheduler(
             tasks: tasks.map((t) => ({
               ...t,
               catalog_category_nombre: t.catalog_category?.name ?? null,
+              catalog_section_id: getSectionIdForCategory(t.catalog_category_id ?? null),
               progress_percent: t.progress_percent,
               completed_at: t.completed_at,
               budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
@@ -1839,7 +1853,7 @@ export async function obtenerTareasScheduler(
             })),
           }
         : null,
-      secciones: seccionesResult.success && seccionesResult.data ? seccionesResult.data : [],
+      secciones: seccionesForPayload,
     };
 
     return { success: true, data: payload };

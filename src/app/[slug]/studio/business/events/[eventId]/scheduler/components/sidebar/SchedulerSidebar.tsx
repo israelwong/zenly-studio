@@ -114,6 +114,7 @@ function AddCustomCategoryForm({
   onAdd,
   onCancel,
 }: {
+  /** Obligatorio: ID de la sección del catálogo; la categoría se asocia a esta sección+etapa. */
   sectionId: string;
   stage: string;
   onAdd: (name: string) => Promise<void>;
@@ -125,6 +126,7 @@ function AddCustomCategoryForm({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+    if (typeof sectionId !== 'string' || sectionId.length === 0) return;
     setLoading(true);
     try {
       await onAdd(trimmed);
@@ -133,7 +135,7 @@ function AddCustomCategoryForm({
     }
   };
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3" data-section-id={sectionId} data-stage={stage}>
       <label className="text-xs font-medium text-zinc-400 block">Nombre de la categoría</label>
       <input
         type="text"
@@ -620,10 +622,17 @@ export const SchedulerSidebar = React.memo(({
                         key={row.id}
                         className="flex items-center pl-10 pr-4 border-b border-zinc-800/30 bg-zinc-900/30"
                         style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
+                        data-section-id={row.sectionId}
+                        title={typeof row.sectionId === 'string' && row.sectionId ? `Sección: ${row.sectionId}` : undefined}
                       >
                         <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate">
                           {row.label}
                         </span>
+                        {process.env.NODE_ENV === 'development' && row.sectionId && (
+                          <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
+                            ({row.sectionId.slice(0, 8)}…)
+                          </span>
+                        )}
                       </div>
                     );
                   }
@@ -687,7 +696,7 @@ export const SchedulerSidebar = React.memo(({
                         className="border-b border-zinc-800/30 flex items-center pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
                         style={{ height: ROW_HEIGHTS.PHANTOM }}
                       >
-                        {onAddCustomCategory ? (
+                        {onAddCustomCategory && row.sectionId ? (
                           <Popover
                             open={isThisAddCatOpen}
                             onOpenChange={(open) => {

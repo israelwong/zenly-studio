@@ -123,6 +123,8 @@ export interface ManualTaskPayload {
   /** Categoría del catálogo (studio_service_categories); null = sin categoría */
   catalog_category_id?: string | null;
   catalog_category_nombre?: string | null;
+  /** Sección del catálogo (heredada al crear); asegura que la tarea aparezca bajo su sección. */
+  catalog_section_id?: string | null;
   status?: string;
   progress_percent?: number;
   completed_at?: Date | null;
@@ -327,6 +329,35 @@ type TaskRow = SchedulerTaskRow | SchedulerManualTaskRow;
  * @param explicitlyActivatedStageIds Keys `${sectionId}-${stage}`: etapas vacías activadas por usuario (array o Set).
  * @param customCategoriesBySectionStage Keys `${sectionId}-${stage}`: categorías personalizadas en esa etapa.
  */
+const STAGE_KEY_SEP = '-';
+
+function parseStageKey(key: string): { sectionId: string; stage: TaskCategoryStage } | null {
+  const sep = key.indexOf(STAGE_KEY_SEP);
+  if (sep <= 0 || sep >= key.length - 1) return null;
+  const sectionId = key.slice(0, sep);
+  const stage = key.slice(sep + 1) as TaskCategoryStage;
+  return STAGE_ORDER.includes(stage) ? { sectionId, stage } : null;
+}
+
+/** Extrae sectionIds del catálogo que aparecen en explicitlyActivatedStageIds o en las claves de customCategoriesBySectionStage. */
+function getSectionIdsFromStageKeys(
+  secciones: SeccionData[],
+  stageSet: Set<string>,
+  customCategoriesBySectionStage?: Map<string, CustomCategoryItem[]>
+): Set<string> {
+  const catalogIds = new Set(secciones.map((s) => s.id));
+  const out = new Set<string>();
+  stageSet.forEach((key) => {
+    const parsed = parseStageKey(key);
+    if (parsed && catalogIds.has(parsed.sectionId)) out.add(parsed.sectionId);
+  });
+  customCategoriesBySectionStage?.forEach((_, key) => {
+    const parsed = parseStageKey(key);
+    if (parsed && catalogIds.has(parsed.sectionId)) out.add(parsed.sectionId);
+  });
+  return out;
+}
+
 export function buildSchedulerRows(
   secciones: SeccionData[],
   itemsMap: Map<string, CotizacionItem>,
@@ -339,12 +370,10 @@ export function buildSchedulerRows(
   const categoryIdToSection = buildCategoryIdToSection(secciones);
   const stageSet = new Set(Array.isArray(explicitlyActivatedStageIds) ? explicitlyActivatedStageIds : (explicitlyActivatedStageIds ?? []));
 
-  const sectionOrder = activeSectionIds
-    ? [
-        ...secciones.filter((s) => activeSectionIds.has(s.id)).map((s) => s.id),
-        ...(activeSectionIds.has(SIN_CATEGORIA_SECTION_ID) ? [SIN_CATEGORIA_SECTION_ID] : []),
-      ]
-    : secciones.map((s) => s.id).concat(SIN_CATEGORIA_SECTION_ID);
+  const sectionIdsFromExplicitAndCustom = getSectionIdsFromStageKeys(secciones, stageSet, customCategoriesBySectionStage);
+  const includeInOrder = (id: string) =>
+    (!activeSectionIds || activeSectionIds.has(id)) || sectionIdsFromExplicitAndCustom.has(id);
+  const catalogOrder = secciones.filter((s) => includeInOrder(s.id)).map((s) => s.id);
 
   const data = new Map<
     string,
@@ -415,15 +444,34 @@ export function buildSchedulerRows(
     });
   }
 
-  // Tareas manuales (sin catalog_category_id → primera sección del catálogo, como antes)
+  // Tareas manuales: priorizar catalog_section_id si existe (heredado de la creación); si no, resolver por catalog_category_id; si no, primera sección. Nunca asignar a Sin Categoría si hay sectionId de catálogo.
   const firstSectionId = secciones[0]?.id;
   const firstSectionNombre = secciones[0]?.nombre ?? '';
 
   for (const task of manualTasks) {
+    const explicitSectionId =
+      task.catalog_section_id && secciones.some((s) => s.id === task.catalog_section_id)
+        ? task.catalog_section_id
+        : null;
     const catalogCategoryId = task.catalog_category_id ?? null;
-    const { sectionId, sectionNombre, categoryNombre } = catalogCategoryId
-      ? (categoryIdToSection.get(catalogCategoryId) ?? { sectionId: SIN_CATEGORIA_SECTION_ID, sectionNombre: 'Sin Categoría', categoryNombre: task.catalog_category_nombre ?? 'Sin categoría' })
-      : { sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID, sectionNombre: firstSectionNombre || 'Sin Categoría', categoryNombre: task.catalog_category_nombre ?? 'Sin categoría' };
+    const resolved = explicitSectionId
+      ? {
+          sectionId: explicitSectionId,
+          sectionNombre: secciones.find((s) => s.id === explicitSectionId)?.nombre ?? '',
+          categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+        }
+      : catalogCategoryId
+        ? (categoryIdToSection.get(catalogCategoryId) ?? {
+            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
+            sectionNombre: firstSectionNombre || 'Sin Categoría',
+            categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+          })
+        : {
+            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
+            sectionNombre: firstSectionNombre || 'Sin Categoría',
+            categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+          };
+    const { sectionId, sectionNombre, categoryNombre } = resolved;
     const stage = normalizeCategory(task.category);
     const categoryKey = categoryNombre;
 
@@ -439,19 +487,32 @@ export function buildSchedulerRows(
     });
   }
 
-  // Secciones activas sin datos: seed vacío para mostrar sección lista para tareas manuales
-  if (activeSectionIds) {
-    for (const sectionId of activeSectionIds) {
-      if (sectionId === SIN_CATEGORIA_SECTION_ID || data.has(sectionId)) continue;
-      const sec = secciones.find((s) => s.id === sectionId);
-      if (!sec) continue;
-      data.set(sectionId, new Map());
-      const byStage = data.get(sectionId)!;
-      for (const stage of STAGE_ORDER) {
-        byStage.set(stage, new Map());
-      }
+  // Secciones activas sin datos + secciones con estados/categorías manuales: seed para que existan en data y se rendericen bajo su sección.
+  const sectionsToSeed = new Set([
+    ...(activeSectionIds ?? []),
+    ...sectionIdsFromExplicitAndCustom,
+  ]);
+  for (const sectionId of sectionsToSeed) {
+    if (sectionId === SIN_CATEGORIA_SECTION_ID || data.has(sectionId)) continue;
+    const sec = secciones.find((s) => s.id === sectionId);
+    if (!sec) continue;
+    data.set(sectionId, new Map());
+    const byStage = data.get(sectionId)!;
+    for (const stage of STAGE_ORDER) {
+      byStage.set(stage, new Map());
     }
   }
+
+  // sectionOrder: catálogo primero; Sin Categoría SOLO si hay datos que resolvieron a Sin Categoría (sectionId nulo o sin match en catálogo).
+  const sectionOrderSet = new Set(catalogOrder);
+  const extraFromData = [...data.keys()].filter((id) => !sectionOrderSet.has(id));
+  const extraCatalog = extraFromData.filter((id) => id !== SIN_CATEGORIA_SECTION_ID);
+  const hasSinCategoriaData = data.has(SIN_CATEGORIA_SECTION_ID);
+  let sectionOrder: string[] = [
+    ...catalogOrder,
+    ...extraCatalog,
+    ...(hasSinCategoriaData ? [SIN_CATEGORIA_SECTION_ID] : []),
+  ];
 
   const getCatalogCategoryId = (sectionId: string, categoryLabel: string): string | null => {
     if (sectionId === SIN_CATEGORIA_SECTION_ID) return null;

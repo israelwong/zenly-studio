@@ -105,11 +105,16 @@ export const EventScheduler = React.memo(function EventScheduler({
     new Set(secciones.flatMap((s) => STAGE_ORDER.map((st) => `${s.id}-${st}`)))
   );
 
+  // Sidebar sync: secciones con estados activados manualmente DEBEN estar expandidas para verse bajo su sección.
   useEffect(() => {
     setExpandedSections((prev) => {
       const next = new Set(prev);
       secciones.forEach((s) => next.add(s.id));
       next.add(SIN_CATEGORIA_SECTION_ID);
+      (explicitlyActivatedStageIds ?? []).forEach((stageKey) => {
+        const sep = stageKey.indexOf('-');
+        if (sep > 0) next.add(stageKey.slice(0, sep));
+      });
       return next;
     });
     setExpandedStages((prev) => {
@@ -118,7 +123,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       STAGE_ORDER.forEach((st) => next.add(`${SIN_CATEGORIA_SECTION_ID}-${st}`));
       return next;
     });
-  }, [secciones]);
+  }, [secciones, explicitlyActivatedStageIds]);
 
   // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
   // Así el Scheduler refleja cambios hechos fuera (Dashboard sync, otra pestaña, etc.).
@@ -391,6 +396,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         cotizacion_item_id: null as const,
         catalog_category_id: result.data.catalog_category_id,
         catalog_category_nombre: result.data.catalog_category_nombre,
+        catalog_section_id: (result.data as { catalog_section_id?: string | null }).catalog_section_id ?? sectionId,
         status: result.data.status,
         progress_percent: result.data.progress_percent,
         completed_at: result.data.completed_at,

@@ -15,6 +15,14 @@ import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDate
 import { DateRangeConflictModal } from './components/date-config/DateRangeConflictModal';
 import { useSchedulerHeaderData } from './hooks/useSchedulerHeaderData';
 import { getSectionIdsWithDataFromEventData, getStageIdsWithDataBySectionFromEventData } from './utils/scheduler-section-stages';
+import {
+  getSchedulerStaging,
+  setSchedulerStaging,
+  clearSchedulerStaging,
+  customCategoriesMapFromStaging,
+  customCategoriesToStaging,
+  isValidStageKey,
+} from './utils/scheduler-staging-storage';
 import { type DateRange } from 'react-day-picker';
 
 export default function EventSchedulerPage() {
@@ -48,17 +56,31 @@ export default function EventSchedulerPage() {
 
   const handleToggleStage = useCallback((sectionId: string, stage: string, enabled: boolean) => {
     const stageKey = `${sectionId}-${stage}`;
-    setExplicitlyActivatedStageIds((prev) =>
-      enabled ? [...prev, stageKey] : prev.filter((id) => id !== stageKey)
-    );
+    if (enabled && !isValidStageKey(stageKey)) return;
+    setExplicitlyActivatedStageIds((prev) => {
+      const next = enabled ? [...prev, stageKey] : prev.filter((id) => id !== stageKey);
+      if (eventId && typeof window !== 'undefined') {
+        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
+        setSchedulerStaging(eventId, { ...staging, explicitlyActivatedStageIds: next });
+      }
+      return next;
+    });
     window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-  }, []);
+  }, [eventId]);
+
+  const persistStagingCustomCats = useCallback((next: Map<string, Array<{ id: string; name: string }>>) => {
+    if (eventId && typeof window !== 'undefined') {
+      const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
+      setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(next) });
+    }
+  }, [eventId]);
 
   const handleAddCustomCategory = useCallback(
     async (sectionId: string, stage: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       const key = `${sectionId}-${stage}`;
+      if (!isValidStageKey(key)) return;
       try {
         const { crearCategoria } = await import('@/lib/actions/studio/config/catalogo.actions');
         const uniqueName = `${trimmed} (${Date.now()})`;
@@ -68,6 +90,7 @@ export default function EventSchedulerPage() {
             const next = new Map(prev);
             const list = next.get(key) ?? [];
             next.set(key, [...list, { id: result.data!.id, name: trimmed }]);
+            persistStagingCustomCats(next);
             return next;
           });
           window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
@@ -79,24 +102,36 @@ export default function EventSchedulerPage() {
           const next = new Map(prev);
           const list = next.get(key) ?? [];
           next.set(key, [...list, { id: `custom-${key}-${Date.now()}`, name: trimmed }]);
+          persistStagingCustomCats(next);
           return next;
         });
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       }
     },
-    [studioSlug]
+    [studioSlug, persistStagingCustomCats]
   );
 
   const handleRemoveEmptyStage = useCallback((sectionId: string, stage: string) => {
     const stageKey = `${sectionId}-${stage}`;
-    setExplicitlyActivatedStageIds((prev) => prev.filter((id) => id !== stageKey));
+    setExplicitlyActivatedStageIds((prev) => {
+      const next = prev.filter((id) => id !== stageKey);
+      if (eventId && typeof window !== 'undefined') {
+        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
+        setSchedulerStaging(eventId, { ...staging, explicitlyActivatedStageIds: next });
+      }
+      return next;
+    });
     setCustomCategoriesBySectionStage((prev) => {
       const next = new Map(prev);
       next.delete(`${sectionId}-${stage}`);
+      if (eventId && typeof window !== 'undefined') {
+        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
+        setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(next) });
+      }
       return next;
     });
     window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-  }, []);
+  }, [eventId]);
 
   const eventDataForHook: SchedulerData | null = payload
     ? { id: payload.id, name: payload.name, event_date: payload.event_date, promise: payload.promise, cotizaciones: payload.cotizaciones, scheduler: payload.scheduler }
@@ -117,13 +152,39 @@ export default function EventSchedulerPage() {
       setLoading(true);
       const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
       if (result.success && result.data) {
-        setPayload(result.data);
+        const data = result.data;
+        if (typeof window !== 'undefined') {
+          console.log('PAYLOAD_INICIAL:', {
+            id: data.id,
+            schedulerTasksCount: data.scheduler?.tasks?.length ?? 0,
+            manualTasksCount: data.scheduler?.tasks?.filter((t) => t.cotizacion_item_id == null).length ?? 0,
+            explicitlyActivatedStageIds: data.explicitlyActivatedStageIds,
+            customCategoriesBySectionStage: data.customCategoriesBySectionStage,
+            seccionesCount: data.secciones?.length ?? 0,
+          });
+        }
+        setPayload(data);
         setDateRange(prev => {
-          if (!prev && result.data?.scheduler?.start_date && result.data?.scheduler?.end_date) {
+          if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
             return {
-              from: new Date(result.data.scheduler.start_date),
-              to: new Date(result.data.scheduler.end_date),
+              from: new Date(data.scheduler.start_date),
+              to: new Date(data.scheduler.end_date),
             };
+          }
+          return prev;
+        });
+        setExplicitlyActivatedStageIds(prev => {
+          const fromPayload = data.explicitlyActivatedStageIds;
+          if (fromPayload?.length) return fromPayload;
+          const staging = getSchedulerStaging(eventId);
+          return staging?.explicitlyActivatedStageIds ?? prev;
+        });
+        setCustomCategoriesBySectionStage(prev => {
+          const fromPayload = data.customCategoriesBySectionStage;
+          if (fromPayload?.length) return customCategoriesMapFromStaging(fromPayload);
+          const staging = getSchedulerStaging(eventId);
+          if (staging?.customCategoriesBySectionStage?.length) {
+            return customCategoriesMapFromStaging(staging.customCategoriesBySectionStage);
           }
           return prev;
         });
@@ -143,6 +204,11 @@ export default function EventSchedulerPage() {
     if (!eventId || !studioSlug) return;
     loadScheduler();
   }, [eventId, studioSlug, loadScheduler]);
+
+  const handlePublished = useCallback(() => {
+    clearSchedulerStaging(eventId);
+    loadScheduler();
+  }, [eventId, loadScheduler]);
 
   if (loading) {
     return (
@@ -353,6 +419,7 @@ export default function EventSchedulerPage() {
               }
             }}
             onRefetchEvent={loadScheduler}
+            onPublished={handlePublished}
             cotizacionId={cotizacionId || undefined}
           />
         </ZenCardContent>
