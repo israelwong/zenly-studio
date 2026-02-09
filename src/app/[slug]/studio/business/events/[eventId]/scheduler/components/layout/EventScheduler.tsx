@@ -11,8 +11,7 @@ import { SchedulerPanel } from './SchedulerPanel';
 import {
   actualizarSchedulerTaskFechas,
   eliminarTareaManual,
-  reordenarTareaManualScheduler,
-  reordenarTareaScheduler,
+  moveSchedulerTask,
   moverTareaManualCategoria,
   moverTareaItemCategoria,
   duplicarTareaManualScheduler,
@@ -129,9 +128,13 @@ export const EventScheduler = React.memo(function EventScheduler({
     });
   }, [secciones, explicitlyActivatedStageIds]);
 
+  // Bloquear sync desde el padre mientras un reorden está en vuelo (evitar snap-back).
+  const reorderInFlightRef = useRef(false);
+
   // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
-  // Así el Scheduler refleja cambios hechos fuera (Dashboard sync, otra pestaña, etc.).
+  // No sobrescribir mientras handleReorder está en vuelo para no revertir la actualización optimista.
   useEffect(() => {
+    if (reorderInFlightRef.current) return;
     setLocalEventData(eventData);
   }, [eventData]);
 
@@ -275,41 +278,150 @@ export const EventScheduler = React.memo(function EventScheduler({
     }
   }, [localEventData, studioSlug, eventId]);
 
-  const handleManualTaskReorder = useCallback(
+  /**
+   * Reorden unificado: lista combinada de ítems (cotización) + tareas manuales del mismo ámbito.
+   * Swap con idx-1 (arriba) o idx+1 (abajo) y re-indexación 0,1,2... en estado local y servidor.
+   */
+  const handleReorder = useCallback(
     async (taskId: string, direction: 'up' | 'down') => {
-      const tasks = localEventData.scheduler?.tasks ?? [];
-      const current = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null) as (typeof tasks[0]) & { category?: string; order?: number; catalog_category_id?: string | null } | undefined;
-      if (!current) return;
-      const category = current.category ?? 'PLANNING';
-      const catId = current.catalog_category_id ?? null;
-      const manualInCategory = tasks.filter(
-        (t) =>
-          t.cotizacion_item_id == null &&
-          (t as { category?: string }).category === category &&
-          ((t as { catalog_category_id?: string | null }).catalog_category_id ?? null) === catId
-      ) as Array<typeof tasks[0] & { category: string; order?: number }>;
-      const sorted = [...manualInCategory].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const idx = sorted.findIndex((t) => t.id === taskId);
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= sorted.length) return;
-      const other = sorted[swapIdx]!;
-      const result = await reordenarTareaManualScheduler(studioSlug, eventId, taskId, direction);
-      if (!result.success) {
-        toast.error(result.error ?? 'Error al reordenar');
-        return;
+      type Entry = { taskId: string; order: number; type: 'item'; item: NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] } | { taskId: string; order: number; type: 'manual'; task: NonNullable<SchedulerViewData['scheduler']>['tasks'][0] };
+      const cotizaciones = localEventData.cotizaciones ?? [];
+      const manualTasks = localEventData.scheduler?.tasks ?? [];
+
+      const itemsWithTask: Entry[] = [];
+      for (const cot of cotizaciones) {
+        for (const item of cot.cotizacion_items ?? []) {
+          if (item?.scheduler_task?.id) {
+            const st = item.scheduler_task as { order?: number; category?: string; catalog_category_id?: string | null };
+            const effectiveCat = (item as { service_category_id?: string | null }).service_category_id ?? st.catalog_category_id ?? null;
+            itemsWithTask.push({
+              taskId: item.scheduler_task.id,
+              order: st.order ?? 0,
+              type: 'item',
+              item,
+            });
+          }
+        }
       }
-      const newTasks = tasks.map((t) => {
-        if (t.id === taskId) return { ...t, order: other.order ?? 0 };
-        if (t.id === other.id) return { ...t, order: current.order ?? 0 };
-        return t;
+      const manualEntries: Entry[] = manualTasks
+        .filter((t) => t.cotizacion_item_id == null)
+        .map((t) => ({
+          taskId: t.id,
+          order: (t as { order?: number }).order ?? 0,
+          type: 'manual' as const,
+          task: t,
+        }));
+
+      const movedItem = itemsWithTask.find((e) => e.taskId === taskId);
+      const movedManual = manualEntries.find((e) => e.taskId === taskId);
+      const moved = movedItem ?? movedManual;
+      if (!moved) return;
+
+      const category = moved.type === 'item'
+        ? (moved.item.scheduler_task as { category?: string }).category ?? 'PLANNING'
+        : (moved.task as { category?: string }).category ?? 'PLANNING';
+      const effectiveCat = moved.type === 'item'
+        ? (moved.item as { service_category_id?: string | null }).service_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+        : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+
+      const sameScope = (e: Entry) => {
+        const cat = e.type === 'item' ? (e.item.scheduler_task as { category?: string }).category ?? 'PLANNING' : (e.task as { category?: string }).category ?? 'PLANNING';
+        const ec = e.type === 'item' ? (e.item as { service_category_id?: string | null }).service_category_id ?? (e.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null : (e.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+        return cat === category && (ec ?? null) === (effectiveCat ?? null);
+      };
+
+      const combined: Entry[] = [...itemsWithTask.filter(sameScope), ...manualEntries.filter(sameScope)];
+      combined.sort((a, b) => a.order - b.order);
+
+      const idx = combined.findIndex((e) => e.taskId === taskId);
+      if (idx < 0) return;
+      if (direction === 'up' && idx === 0) return;
+      if (direction === 'down' && idx === combined.length - 1) return;
+
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      const reordered = [...combined];
+      [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!];
+      const taskIdToNewOrder = new Map(reordered.map((e, i) => [e.taskId, i]));
+      const taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+
+      reorderInFlightRef.current = true;
+      setLocalEventData((prev) => {
+        const next = { ...prev };
+        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+          ...cot,
+          cotizacion_items: cot.cotizacion_items?.map((item) => {
+            const id = item?.scheduler_task?.id;
+            const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
+            if (newOrder === undefined) return item;
+            return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
+          }),
+        }));
+        next.scheduler = prev.scheduler
+          ? {
+              ...prev.scheduler,
+              tasks: (prev.scheduler.tasks ?? []).map((t) => {
+                const newOrder = taskIdToNewOrder.get(t.id);
+                if (newOrder === undefined) return t;
+                return { ...t, order: newOrder };
+              }),
+            }
+          : prev.scheduler;
+        return next;
       });
-      setLocalEventData((prev) => ({
-        ...prev,
-        scheduler: prev.scheduler ? { ...prev.scheduler, tasks: newTasks } : prev.scheduler,
-      }));
-      onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: newTasks } });
-      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+
+      try {
+        const result = await moveSchedulerTask(studioSlug, eventId, taskId, direction);
+        if (!result.success) {
+          setLocalEventData((prev) => {
+            const next = { ...prev };
+            next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+              ...cot,
+              cotizacion_items: cot.cotizacion_items?.map((item) => {
+                const id = item?.scheduler_task?.id;
+                const oldOrder = id != null ? taskIdToOldOrder.get(id) : undefined;
+                if (oldOrder === undefined) return item;
+                return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null };
+              }),
+            }));
+            next.scheduler = prev.scheduler
+              ? {
+                  ...prev.scheduler,
+                  tasks: (prev.scheduler.tasks ?? []).map((t) => {
+                    const oldOrder = taskIdToOldOrder.get(t.id);
+                    if (oldOrder === undefined) return t;
+                    return { ...t, order: oldOrder };
+                  }),
+                }
+              : prev.scheduler;
+            return next;
+          });
+          toast.error(result.error ?? 'Error al reordenar');
+          return;
+        }
+        const updatedData: SchedulerViewData = {
+          ...localEventData,
+          cotizaciones: localEventData.cotizaciones?.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) => {
+              const id = item?.scheduler_task?.id;
+              const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
+              if (newOrder === undefined) return item;
+              return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
+            }),
+          })),
+          scheduler: localEventData.scheduler
+            ? {
+                ...localEventData.scheduler,
+                tasks: (localEventData.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0 })),
+              }
+            : undefined,
+        };
+        onDataChange?.(updatedData);
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      } finally {
+        reorderInFlightRef.current = false;
+      }
     },
     [studioSlug, eventId, localEventData, onDataChange]
   );
@@ -335,74 +447,6 @@ export const EventScheduler = React.memo(function EventScheduler({
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [studioSlug, eventId, handleManualTaskPatch]
-  );
-
-  const handleItemTaskReorder = useCallback(
-    async (taskId: string, direction: 'up' | 'down') => {
-      type ItemWithTask = NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & {
-        scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> & { order?: number | null };
-      };
-      const cotizaciones = localEventData.cotizaciones ?? [];
-      const allItems: ItemWithTask[] = [];
-      for (const cot of cotizaciones) {
-        for (const item of cot.cotizacion_items ?? []) {
-          if (item?.scheduler_task?.id) allItems.push(item as ItemWithTask);
-        }
-      }
-      const taskItem = allItems.find((i) => i.scheduler_task?.id === taskId);
-      if (!taskItem?.scheduler_task) return;
-      const category = taskItem.scheduler_task.category;
-      const effectiveCat = (taskItem as { service_category_id?: string | null }).service_category_id ?? taskItem.scheduler_task.catalog_category_id ?? null;
-      const siblings = allItems.filter((i) => {
-        const t = i.scheduler_task!;
-        const ec = (i as { service_category_id?: string | null }).service_category_id ?? t.catalog_category_id ?? null;
-        return t.category === category && (ec ?? null) === (effectiveCat ?? null);
-      });
-      siblings.sort((a, b) => ((a.scheduler_task!.order ?? 0) - (b.scheduler_task!.order ?? 0)));
-      const idx = siblings.findIndex((i) => i.scheduler_task!.id === taskId);
-      if (idx < 0) return;
-      const oldOrder = taskItem.scheduler_task.order ?? 0;
-      const prevOrder = direction === 'up' ? (siblings[idx - 1]?.scheduler_task?.order ?? 0) : oldOrder;
-      const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.scheduler_task?.order ?? 0);
-      let newOrder = Math.floor((prevOrder + nextOrder) / 2);
-      if (newOrder === prevOrder || newOrder === nextOrder) {
-        newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
-      }
-
-      setLocalEventData((prev) => {
-        const next = { ...prev };
-        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
-          ...cot,
-          cotizacion_items: cot.cotizacion_items?.map((item) =>
-            item?.scheduler_task?.id === taskId
-              ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null }
-              : item
-          ),
-        }));
-        return next;
-      });
-
-      const result = await reordenarTareaScheduler(studioSlug, eventId, taskId, direction);
-      if (!result.success) {
-        setLocalEventData((prev) => {
-          const next = { ...prev };
-          next.cotizaciones = prev.cotizaciones?.map((cot) => ({
-            ...cot,
-            cotizacion_items: cot.cotizacion_items?.map((item) =>
-              item?.scheduler_task?.id === taskId
-                ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null }
-                : item
-            ),
-          }));
-          return next;
-        });
-        toast.error(result.error ?? 'Error al reordenar');
-        return;
-      }
-      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-    },
-    [studioSlug, eventId, localEventData]
   );
 
   const handleItemTaskMoveCategory = useCallback(
@@ -1535,9 +1579,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         onAddManualTaskSubmit={handleAddManualTaskSubmit}
         onManualTaskPatch={handleManualTaskPatch}
         onManualTaskDelete={handleManualTaskDelete}
-        onManualTaskReorder={handleManualTaskReorder}
+        onManualTaskReorder={handleReorder}
         onManualTaskMoveStage={handleManualTaskMoveStage}
-        onItemTaskReorder={handleItemTaskReorder}
+        onItemTaskReorder={handleReorder}
         onItemTaskMoveCategory={handleItemTaskMoveCategory}
         onManualTaskDuplicate={handleManualTaskDuplicate}
         onManualTaskUpdate={() => onRefetchEvent?.()}

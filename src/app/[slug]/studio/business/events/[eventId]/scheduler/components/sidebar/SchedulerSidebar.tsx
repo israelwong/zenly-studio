@@ -325,7 +325,7 @@ function ManualTaskRow({
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
         >
-          <ZenAvatar className="h-8 w-8 shrink-0">
+          <ZenAvatar className="h-7 w-7 shrink-0">
             {hasCrew ? (
               <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
                 {getInitials(localTask.assigned_to_crew_member!.name)}

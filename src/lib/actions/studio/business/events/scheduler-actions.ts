@@ -1213,10 +1213,12 @@ export async function asignarCrewATareaScheduler(
 }
 
 /**
- * Reordena una tarea manual (subir o bajar) dentro de su misma etapa y categoría,
- * permitiendo intercambiar con ítems comerciales (mismo catalog_category_id efectivo).
+ * Mueve una tarea (manual o ítem) dentro de su ámbito.
+ * Hermanos = todas las tareas con mismo instanceId, stage (category) y categoría efectiva,
+ * sin filtrar por cotizacion_item_id (ítems y manuales se intercalan).
+ * Re-indexación 0, 1, 2... en una sola transacción.
  */
-export async function reordenarTareaManualScheduler(
+export async function moveSchedulerTask(
   studioSlug: string,
   eventId: string,
   taskId: string,
@@ -1226,83 +1228,17 @@ export async function reordenarTareaManualScheduler(
     const task = await prisma.studio_scheduler_event_tasks.findFirst({
       where: {
         id: taskId,
-        cotizacion_item_id: null,
         scheduler_instance: { event_id: eventId },
-      },
-      select: { id: true, category: true, order: true, catalog_category_id: true, scheduler_instance_id: true },
-    });
-    if (!task) {
-      return { success: false, error: 'Tarea no encontrada' };
-    }
-
-    const targetCatId = task.catalog_category_id ?? null;
-    const allInStage = await prisma.studio_scheduler_event_tasks.findMany({
-      where: {
-        scheduler_instance_id: task.scheduler_instance_id,
-        category: task.category,
       },
       select: {
         id: true,
+        category: true,
         order: true,
         catalog_category_id: true,
+        scheduler_instance_id: true,
         cotizacion_item_id: true,
         cotizacion_item: { select: { service_category_id: true } },
       },
-      orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
-    });
-
-    const siblings = allInStage.filter((t) => {
-      const effective = t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? null : t.catalog_category_id;
-      return (effective ?? null) === targetCatId;
-    });
-
-    const idx = siblings.findIndex((s) => s.id === taskId);
-    if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
-    if (direction === 'up' && idx === 0) return { success: true };
-    if (direction === 'down' && idx === siblings.length - 1) return { success: true };
-
-    const oldOrder = task.order ?? 0;
-    const prevOrder = direction === 'up' ? (siblings[idx - 1]?.order ?? 0) : oldOrder;
-    const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.order ?? 0);
-    let newOrder = Math.floor((prevOrder + nextOrder) / 2);
-    if (newOrder === prevOrder || newOrder === nextOrder) {
-      newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
-    }
-
-    await prisma.studio_scheduler_event_tasks.update({
-      where: { id: taskId },
-      data: { order: newOrder },
-    });
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-    return { success: true };
-  } catch (error) {
-    console.error('[reordenarTareaManualScheduler] Error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al reordenar',
-    };
-  }
-}
-
-/**
- * Reordena cualquier tarea (manual o ítem) dentro de su misma etapa y categoría.
- * order en BD es Int: se usa punto medio o saltos de 100 si colisiona.
- */
-export async function reordenarTareaScheduler(
-  studioSlug: string,
-  eventId: string,
-  taskId: string,
-  direction: 'up' | 'down'
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const task = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        id: taskId,
-        scheduler_instance: { event_id: eventId },
-      },
-      select: { id: true, category: true, order: true, catalog_category_id: true, scheduler_instance_id: true, cotizacion_item_id: true, cotizacion_item: { select: { service_category_id: true } } },
     });
     if (!task) {
       return { success: false, error: 'Tarea no encontrada' };
@@ -1312,7 +1248,7 @@ export async function reordenarTareaScheduler(
       ? task.cotizacion_item?.service_category_id ?? task.catalog_category_id ?? null
       : task.catalog_category_id ?? null;
 
-    const allInStage = await prisma.studio_scheduler_event_tasks.findMany({
+    const siblings = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
         scheduler_instance_id: task.scheduler_instance_id,
         category: task.category,
@@ -1327,41 +1263,57 @@ export async function reordenarTareaScheduler(
       orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
     });
 
-    const siblings = allInStage.filter((t) => {
-      const effective = t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? null : t.catalog_category_id;
-      return (effective ?? null) === targetCatId;
-    });
+    const effectiveCat = (t: (typeof siblings)[0]) =>
+      t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? t.catalog_category_id ?? null : t.catalog_category_id ?? null;
+    const unified = siblings.filter((t) => (effectiveCat(t) ?? null) === (targetCatId ?? null));
 
-    const idx = siblings.findIndex((s) => s.id === taskId);
+    const idx = unified.findIndex((s) => s.id === taskId);
     if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
     if (direction === 'up' && idx === 0) return { success: true };
-    if (direction === 'down' && idx === siblings.length - 1) return { success: true };
+    if (direction === 'down' && idx === unified.length - 1) return { success: true };
 
-    const oldOrder = task.order ?? 0;
-    const prevOrder = direction === 'up' ? (siblings[idx - 1]?.order ?? 0) : oldOrder;
-    const nextOrder = direction === 'up' ? oldOrder : (siblings[idx + 1]?.order ?? 0);
-    let newOrder = Math.floor((prevOrder + nextOrder) / 2);
-    if (newOrder === prevOrder || newOrder === nextOrder) {
-      newOrder = direction === 'up' ? prevOrder - 100 : nextOrder + 100;
-    }
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const reordered = [...unified];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!];
 
-    console.log('DB_ORDER_UPDATE:', { taskId, oldOrder, newOrder, direction });
-
-    await prisma.studio_scheduler_event_tasks.update({
-      where: { id: taskId },
-      data: { order: newOrder },
-    });
+    const tx = reordered.map((s, i) =>
+      prisma.studio_scheduler_event_tasks.update({
+        where: { id: s.id },
+        data: { order: i },
+      })
+    );
+    await prisma.$transaction(tx);
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
     return { success: true };
   } catch (error) {
-    console.error('[reordenarTareaScheduler] Error:', error);
+    console.error('[moveSchedulerTask] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al reordenar',
     };
   }
+}
+
+/** @deprecated Usar moveSchedulerTask. Mantener por compatibilidad. */
+export async function reordenarTareaManualScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  direction: 'up' | 'down'
+): Promise<{ success: boolean; error?: string }> {
+  return moveSchedulerTask(studioSlug, eventId, taskId, direction);
+}
+
+/** @deprecated Usar moveSchedulerTask. Mantener por compatibilidad. */
+export async function reordenarTareaScheduler(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  direction: 'up' | 'down'
+): Promise<{ success: boolean; error?: string }> {
+  return moveSchedulerTask(studioSlug, eventId, taskId, direction);
 }
 
 /**

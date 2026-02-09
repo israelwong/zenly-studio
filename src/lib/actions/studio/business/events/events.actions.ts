@@ -3623,8 +3623,11 @@ function isServicioPrincipal(ci: { name?: string | null; name_snapshot?: string 
 }
 
 /**
- * Sincroniza tareas del scheduler con los ítems de la cotización autorizada del evento.
+ * Sincroniza tareas del scheduler con los ítems de la cotización autorizada del evento
+ * (incl. anexos si forman parte de cotizacion_items).
  * Crea una tarea por ítem con duración y etapa según catálogo; no duplica si ya existe.
+ * Ítems nuevos: order = max(order)+1 en su ámbito (category + catalog_category_id).
+ * Ítems existentes: no se sobrescribe order (respeta reorden manual del usuario).
  */
 export async function sincronizarTareasEvento(
   studioSlug: string,
@@ -3793,6 +3796,18 @@ export async function sincronizarTareasEvento(
         .map((t) => [t.cotizacion_item_id as string, t])
     );
 
+    // Ámbitos de orden: max(order) por (category, catalog_category_id) para no sobrescribir orden movido por usuario y asignar max+1 a ítems nuevos.
+    const allTasksWithOrder = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { scheduler_instance_id: schedulerInstanceId },
+      select: { order: true, category: true, catalog_category_id: true },
+    });
+    const maxOrderByScope = new Map<string, number>();
+    for (const t of allTasksWithOrder) {
+      const scopeKey = `${t.category}-${t.catalog_category_id ?? 'null'}`;
+      const current = maxOrderByScope.get(scopeKey) ?? -1;
+      maxOrderByScope.set(scopeKey, Math.max(current, t.order ?? 0));
+    }
+
     const categoryOrder: Array<'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = [
       'UNASSIGNED',
       'PLANNING',
@@ -3879,7 +3894,7 @@ export async function sincronizarTareasEvento(
       };
     });
 
-    // Persistir order = índice en la lista aplanada (0, 1, 2...). Nunca el order de la tabla cotización.
+    // Actualizar solo categoría cuando falta; NUNCA sobrescribir order (el usuario puede haber reordenado con flechas).
     let updated = 0;
     for (let i = 0; i < itemsRawAll.length; i++) {
       const it = itemsRawAll[i];
@@ -3889,13 +3904,12 @@ export async function sincronizarTareasEvento(
         existing.category != null &&
         existing.category !== 'UNASSIGNED' &&
         existing.catalog_category_id != null;
-      const data: { category?: string; catalog_category_id?: string | null; order?: number } = {
-        order: i, // índice del árbol aplanado; si Shooting está primero → 0
-      };
+      const data: { category?: string; catalog_category_id?: string | null } = {};
       if (!alreadyHasCategory) {
         data.category = it.taskCategory;
         data.catalog_category_id = it.serviceCategoryId;
       }
+      if (Object.keys(data).length === 0) continue;
       await prisma.studio_scheduler_event_tasks.update({
         where: { id: existing.id },
         data,
@@ -4001,6 +4015,10 @@ export async function sincronizarTareasEvento(
         }
         cursor = new Date(endDate);
 
+        const scopeKey = `${it.taskCategory}-${it.serviceCategoryId ?? 'null'}`;
+        const nextOrder = (maxOrderByScope.get(scopeKey) ?? -1) + 1;
+        maxOrderByScope.set(scopeKey, nextOrder);
+
         await prisma.studio_scheduler_event_tasks.create({
           data: {
             scheduler_instance_id: schedulerInstanceId,
@@ -4011,7 +4029,7 @@ export async function sincronizarTareasEvento(
             end_date: endDate,
             duration_days: durationDays,
             category: it.taskCategory,
-            order: it.visualIndex, // índice en lista aplanada (árbol); no order de cotización
+            order: nextOrder,
             priority: 'MEDIUM',
             status: 'PENDING',
             progress_percent: 0,
