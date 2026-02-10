@@ -63,7 +63,7 @@ interface SchedulerPanelProps {
   onSchedulerDragEnd?: (event: import('@dnd-kit/core').DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
-  isUpdatingOrder?: boolean;
+  updatingTaskId?: string | null;
 }
 
 /**
@@ -112,7 +112,7 @@ export const SchedulerPanel = React.memo(({
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
-  isUpdatingOrder = false,
+  updatingTaskId = null,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -190,7 +190,7 @@ export const SchedulerPanel = React.memo(({
             onSchedulerDragEnd={onSchedulerDragEnd}
             activeDragData={activeDragData}
             overlayPosition={overlayPosition}
-            isUpdatingOrder={isUpdatingOrder}
+            updatingTaskId={updatingTaskId}
           />
         </div>
 

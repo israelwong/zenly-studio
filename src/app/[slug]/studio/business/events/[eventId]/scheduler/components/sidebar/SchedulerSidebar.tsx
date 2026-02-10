@@ -58,6 +58,7 @@ import {
   Copy,
   FolderInput,
   GripVertical,
+  Loader2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -121,7 +122,7 @@ interface SchedulerSidebarProps {
   onSchedulerDragEnd?: (event: DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
-  isUpdatingOrder?: boolean;
+  updatingTaskId?: string | null;
 }
 
 
@@ -232,6 +233,7 @@ function SortableTaskRow({
   children,
   className = '',
   disableDrag = false,
+  isSaving = false,
 }: {
   taskId: string;
   isManual: boolean;
@@ -240,6 +242,7 @@ function SortableTaskRow({
   children: React.ReactNode;
   className?: string;
   disableDrag?: boolean;
+  isSaving?: boolean;
 }) {
   const id = String(taskId);
   const {
@@ -268,20 +271,24 @@ function SortableTaskRow({
       className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors ${className}`}
       data-scheduler-task-id={taskId}
     >
-      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; disableDrag desactiva solo el handle (lista visible). */}
+      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; isSaving muestra Loader2 y desactiva interacción. */}
       <button
         type="button"
-        aria-label={disableDrag ? undefined : 'Arrastrar para reordenar'}
-        title={disableDrag ? undefined : 'Arrastrar para reordenar'}
-        className={`w-8 shrink-0 flex items-center justify-center p-1 rounded touch-none ${disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'hover:bg-zinc-700 cursor-grab active:cursor-grabbing'}`}
+        aria-label={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
+        title={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
+        className={`w-8 shrink-0 flex items-center justify-center p-1 rounded touch-none ${isSaving ? 'cursor-wait pointer-events-none' : disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'hover:bg-zinc-700 cursor-grab active:cursor-grabbing'}`}
         style={{ touchAction: 'none' }}
-        {...(disableDrag ? {} : attributes)}
-        {...(disableDrag ? {} : listeners)}
+        {...(disableDrag || isSaving ? {} : attributes)}
+        {...(disableDrag || isSaving ? {} : listeners)}
         onClick={(e) => e.stopPropagation()}
       >
-        <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 pointer-events-none" aria-hidden />
+        {isSaving ? (
+          <Loader2 className="h-4 w-4 text-emerald-500 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 pointer-events-none" aria-hidden />
+        )}
       </button>
-      <SchedulerRamaLine />
+      <SchedulerRamaLine isManual={isManual} />
       <div
         className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 ${isDragging ? 'pointer-events-none' : ''}`}
         style={{ minHeight: ROW_HEIGHTS.TASK_ROW }}
@@ -292,11 +299,11 @@ function SortableTaskRow({
   );
 }
 
-/** Línea vertical que simula la rama del árbol; ancho 1px en estilo para que siempre sea visible. */
-function SchedulerRamaLine({ minHeight = ROW_HEIGHTS.TASK_ROW }: { minHeight?: number }) {
+/** Línea vertical que simula la rama del árbol; amber para tareas manuales (identidad visual). */
+function SchedulerRamaLine({ minHeight = ROW_HEIGHTS.TASK_ROW, isManual = false }: { minHeight?: number; isManual?: boolean }) {
   return (
     <div
-      className="shrink-0 self-stretch bg-zinc-500"
+      className={`shrink-0 self-stretch ${isManual ? 'bg-amber-500/60' : 'bg-zinc-500'}`}
       style={{ width: 1, minHeight }}
       aria-hidden
     />
@@ -422,6 +429,7 @@ function ManualTaskRow({
   onReorderDown,
   onMoveToStage,
   onDuplicate,
+  avatarRingClassName,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
@@ -438,6 +446,8 @@ function ManualTaskRow({
   onReorderDown?: (taskId: string) => void;
   onMoveToStage?: (taskId: string, category: TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onDuplicate?: (taskId: string) => void;
+  /** Anillo amber para identidad visual de tarea manual */
+  avatarRingClassName?: string;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -547,17 +557,33 @@ function ManualTaskRow({
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
         >
-          <ZenAvatar className="h-7 w-7 shrink-0">
-            {hasCrew ? (
-              <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
-                {getInitials(localTask.assigned_to_crew_member!.name)}
-              </ZenAvatarFallback>
-            ) : (
-              <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
-                <User className="h-3.5 w-3.5" />
-              </ZenAvatarFallback>
-            )}
-          </ZenAvatar>
+          {avatarRingClassName ? (
+            <span className={avatarRingClassName}>
+              <ZenAvatar className="h-7 w-7 shrink-0">
+                {hasCrew ? (
+                  <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+                    {getInitials(localTask.assigned_to_crew_member!.name)}
+                  </ZenAvatarFallback>
+                ) : (
+                  <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+                    <User className="h-3.5 w-3.5" />
+                  </ZenAvatarFallback>
+                )}
+              </ZenAvatar>
+            </span>
+          ) : (
+            <ZenAvatar className="h-7 w-7 shrink-0">
+              {hasCrew ? (
+                <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+                  {getInitials(localTask.assigned_to_crew_member!.name)}
+                </ZenAvatarFallback>
+              ) : (
+                <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+                  <User className="h-3.5 w-3.5" />
+                </ZenAvatarFallback>
+              )}
+            </ZenAvatar>
+          )}
           <p className={`flex-1 min-w-0 text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
             {localTask.name}
           </p>
@@ -680,7 +706,7 @@ export const SchedulerSidebar = React.memo(({
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
-  isUpdatingOrder = false,
+  updatingTaskId = null,
 }: SchedulerSidebarProps) => {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -814,11 +840,6 @@ export const SchedulerSidebar = React.memo(({
 
   return (
     <div className="w-full bg-zinc-950 overflow-visible relative" style={{ minHeight: totalMinHeight }}>
-      {isUpdatingOrder && (
-        <div className="absolute top-14 left-0 right-0 z-40 h-7 flex items-center justify-center bg-emerald-950/60 border-b border-emerald-700/40" aria-hidden>
-          <span className="text-xs text-emerald-300">Guardando orden...</span>
-        </div>
-      )}
       <div className="h-[60px] bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30">
         <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
       </div>
@@ -928,7 +949,6 @@ export const SchedulerSidebar = React.memo(({
                       .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
                       .map((t) => String(t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
                       .filter((id) => id && id !== 'undefined');
-                    if (process.env.NODE_ENV === 'development') console.log('[DnD] SortableContext Items:', segmentTaskIds);
                     const categoryRow = segment.categoryRow;
                     const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
                     const orderedCategories = categoryRows.map((r) => ({
@@ -1021,7 +1041,8 @@ export const SchedulerSidebar = React.memo(({
                           isManual
                           catalogCategoryId={manualCatalogCategoryId}
                           stageKey={stageRow.id}
-                          disableDrag={isUpdatingOrder}
+                          disableDrag={updatingTaskId != null}
+                          isSaving={updatingTaskId === String(row.task.id)}
                         >
                           <ManualTaskRow
                             task={row.task}
@@ -1078,7 +1099,8 @@ export const SchedulerSidebar = React.memo(({
                           isManual={false}
                           catalogCategoryId={itemEffectiveCatalogCategoryId}
                           stageKey={stageRow.id}
-                          disableDrag={isUpdatingOrder}
+                          disableDrag={updatingTaskId != null}
+                          isSaving={updatingTaskId === String(taskId)}
                         >
                           <div className="flex-1 min-w-0 flex items-center gap-2">
                             <SchedulerItem
@@ -1233,8 +1255,7 @@ export const SchedulerSidebar = React.memo(({
         })}
 
         <DragOverlay dropAnimation={null}>{null}</DragOverlay>
-        {!isUpdatingOrder &&
-          activeDragData &&
+        {activeDragData &&
           overlayPosition &&
           typeof document !== 'undefined' &&
           Number.isFinite(overlayPosition.x) &&

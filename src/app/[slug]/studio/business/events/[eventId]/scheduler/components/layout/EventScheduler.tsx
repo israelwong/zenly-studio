@@ -143,8 +143,8 @@ export const EventScheduler = React.memo(function EventScheduler({
   // Bloquear sync desde el padre mientras un reorden está en vuelo (evitar snap-back).
   const reorderInFlightRef = useRef(false);
 
-  /** Bloquea nuevos arrastres mientras persiste el orden en el servidor (evita cola de peticiones). */
-  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
+  /** ID de la tarea cuyo orden se está guardando; null = ninguno. Bloquea nuevo arrastre y muestra feedback en esa fila. */
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   /** Debounce: esperar 300ms antes de enviar al servidor; si el usuario mueve de nuevo, se reemplaza el payload. */
   const reorderDebounceRef = useRef<{
@@ -152,6 +152,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     payload: {
       studioSlug: string;
       eventId: string;
+      movedTaskId: string;
       reordered: string[];
       taskIdToOldOrder: Map<string, number>;
       taskIdToNewOrder: Map<string, number>;
@@ -487,7 +488,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       catalogCategoryId?: string | null,
       catalogCategoryNombre?: string | null
     ) => {
-      setIsUpdatingOrder(true);
+      setUpdatingTaskId(taskId);
       try {
         const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category, catalogCategoryId);
         if (!result.success) {
@@ -502,7 +503,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       } finally {
-        setIsUpdatingOrder(false);
+        setUpdatingTaskId(null);
       }
     },
     [studioSlug, eventId, handleManualTaskPatch]
@@ -510,7 +511,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleItemTaskMoveCategory = useCallback(
     async (taskId: string, catalogCategoryId: string | null) => {
-      setIsUpdatingOrder(true);
+      setUpdatingTaskId(taskId);
       try {
         const cotizaciones = localEventData.cotizaciones ?? [];
         let taskItem: (NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & { scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> }) | null = null;
@@ -573,7 +574,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       } finally {
-        setIsUpdatingOrder(false);
+        setUpdatingTaskId(null);
       }
     },
     [studioSlug, eventId, localEventData]
@@ -629,10 +630,9 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleSchedulerDragStart = useCallback(
     (event: DragStartEvent) => {
-      if (isUpdatingOrder) return;
+      if (updatingTaskId != null) return;
       const taskId = String(event.active.id);
       const foundTask = resolveActiveDragDataById(taskId);
-      console.log('[DnD] Global Search Result:', foundTask);
       if (foundTask) {
         lastOverIdRef.current = null;
         setActiveDragData(foundTask);
@@ -643,7 +643,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
       }
     },
-    [resolveActiveDragDataById, isUpdatingOrder]
+    [resolveActiveDragDataById, updatingTaskId]
   );
 
   const handleSchedulerDragMove = useCallback((event: DragMoveEvent) => {
@@ -665,7 +665,6 @@ export const EventScheduler = React.memo(function EventScheduler({
 
       // Prioridad absoluta al fallback: IGNORAR activeDragData para validaciones; usar siempre la búsqueda fresca
       const activeDataResolved = resolveActiveDragDataById(activeId);
-      console.log('[DnD] Drag Ended', { activeId: active.id, overId: over?.id, resolved: activeDataResolved });
 
       type Entry = {
         taskId: string;
@@ -745,27 +744,13 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
       }
 
-      if (!combined) {
-        console.log('[DnD] Scope Check (early):', { reason: 'segmentNotFound', activeId });
-        return;
-      }
+      if (!combined) return;
 
       const moved = combined.find((e) => e.taskId === activeId);
 
-      if (!overId || active.id === overId) {
-        console.log('[DnD] Scope Check (early):', { reason: 'noOverOrSame', overId, activeId: active.id });
-        return;
-      }
-      if (!moved) {
-        console.log('[DnD] Scope Check (early):', { reason: 'movedNotFound', activeId });
-        return;
-      }
-      if (!activeDataResolved) {
-        console.log('[DnD] Scope Check (early):', { reason: 'activeDataResolvedNull', activeId });
-        return;
-      }
-
-      console.log('[DnD] Item Type Check:', { id: activeId, isManual: activeDataResolved.isManual, canMove: true });
+      if (!overId || active.id === overId) return;
+      if (!moved) return;
+      if (!activeDataResolved) return;
 
       /** Normaliza categoría: '' / undefined / __sin_categoria__ → null (evita fallos en DB). */
       const normCat = (v: string | null | undefined): string | null =>
@@ -792,14 +777,9 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (!isManual) {
             await handleItemTaskMoveCategory(activeId, targetId ?? null);
           } else {
-            if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) {
-              console.log('[DnD] Scope Check:', { reason: 'manualSectionMismatch', activeStage: activeStageKey, targetStageKey, isManual: true });
-              return;
-            }
+            if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) return;
             await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, null);
           }
-        } else {
-          console.log('[DnD] Scope Check:', { reason: 'dropNotCategory', overId, activeStage: activeStageKey, isManual: activeDataResolved.isManual });
         }
         return;
       }
@@ -822,7 +802,6 @@ export const EventScheduler = React.memo(function EventScheduler({
       const scopeMatch =
         normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
       if (!scopeMatch) {
-        console.log('[DnD] Scope Check:', { activeStage: activeStageKey, overStage, activeCat, overCat, isManual: activeDataResolved.isManual });
         if (activeDataResolved.isManual && overStage && getSectionIdFromStageKey(activeStageKey) === getSectionIdFromStageKey(overStage)) {
           const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
           await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, null);
@@ -835,25 +814,18 @@ export const EventScheduler = React.memo(function EventScheduler({
       const overIndex = combined.findIndex((e) => e.taskId === overId);
       const fromIndex = combined.findIndex((e) => e.taskId === activeId);
 
-      console.log('[DnD] Precise Indices:', { fromId: active.id, fromIndex, overId: over?.id, overIndex });
+      if (fromIndex === -1 || overIndex === -1) return;
 
-      if (fromIndex === -1 || overIndex === -1) {
-        console.log('[DnD] Scope Check:', { reason: 'indexOutOfSegment', fromIndex, overIndex, activeId, overId, combinedIds: combined.map((e) => e.taskId) });
-        return;
-      }
-
-      console.log('[DnD] Full List Discovery:', combined.map((c) => c.taskId));
       const reorderedEntries = arrayMove(combined, fromIndex, overIndex);
       const reordered = reorderedEntries.map((e) => e.taskId);
       const originalIds = combined.map((e) => e.taskId);
-      console.log('[DnD] Full Segment Check:', { totalItems: combined.length, idsSent: reordered.length });
       const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
       if (!orderChanged) return;
 
       const taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
       const taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
 
-      setIsUpdatingOrder(true);
+      setUpdatingTaskId(activeId);
       // Actualización optimista SIEMPRE en movimiento válido: el ítem se queda en su nueva posición mientras el servidor procesa
       setLocalEventData((prev) => {
         const next = { ...prev };
@@ -872,7 +844,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         return next;
       });
 
-      const payload = { studioSlug, eventId, reordered, taskIdToOldOrder, taskIdToNewOrder };
+      const payload = { studioSlug, eventId, movedTaskId: activeId, reordered, taskIdToOldOrder, taskIdToNewOrder };
       if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
       reorderDebounceRef.current.payload = payload;
       reorderDebounceRef.current.timeout = setTimeout(async () => {
@@ -880,8 +852,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         reorderDebounceRef.current.timeout = null;
         reorderDebounceRef.current.payload = null;
         reorderInFlightRef.current = true;
+        setUpdatingTaskId(p.movedTaskId);
         try {
-          console.log('[DnD] Sending to Server:', { scope: activeStageKey, reorderedIds: p.reordered });
           const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
           if (!result.success) {
             setLocalEventDataRef.current((prev) => {
@@ -925,7 +897,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         } finally {
           reorderInFlightRef.current = false;
-          setIsUpdatingOrder(false);
+          setUpdatingTaskId(null);
         }
       }, 300);
       } finally {
@@ -2032,7 +2004,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onSchedulerDragEnd={handleSchedulerDragEnd}
         activeDragData={activeDragData}
         overlayPosition={overlayPosition}
-        isUpdatingOrder={isUpdatingOrder}
+        updatingTaskId={updatingTaskId}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}
