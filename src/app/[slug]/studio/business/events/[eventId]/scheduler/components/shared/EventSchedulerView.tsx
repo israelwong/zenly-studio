@@ -29,6 +29,8 @@ interface EventSchedulerViewProps {
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
+  onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -48,6 +50,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onAddCustomCategory,
   onRemoveEmptyStage,
   onMoveCategory,
+  onRenameCustomCategory,
+  onRemoveCustomCategory,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -173,6 +177,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
         onMoveCategory={onMoveCategory}
+        onRenameCustomCategory={onRenameCustomCategory}
+        onRemoveCustomCategory={onRemoveCustomCategory}
       />
     );
   }

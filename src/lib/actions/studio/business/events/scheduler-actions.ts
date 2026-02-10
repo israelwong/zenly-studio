@@ -980,32 +980,15 @@ export async function crearTareaManualScheduler(
       },
     });
 
-    console.log('[SERVER-RAW] Total tasks in event:', allEventTasks.length);
-    if (allEventTasks.length > 0) {
-      const sample = allEventTasks[0];
-      console.log(
-        '[SERVER-RAW] Sample Task:',
-        JSON.stringify(
-          {
-            id: sample.id,
-            order: sample.order,
-            category: sample.category,
-            catalog_category_id: sample.catalog_category_id,
-            cotizacion_item_id: sample.cotizacion_item_id,
-            cotizacion_item: sample.cotizacion_item,
-          },
-          null,
-          2
-        )
-      );
-    }
-
     type TaskRow = (typeof allEventTasks)[number];
     const normCat = (v: string | null): string | null =>
       v != null ? String(v).toLowerCase().trim() || null : null;
     const segmentCatalogNorm = normCat(catalogCategoryId);
 
-    // Lógica de match flexible: no más estricto que el front. Manual => category + catalog_category_id. Cotización => solo category (tCat suele venir null en DB).
+    /**
+     * Determina si una tarea pertenece al segmento (paridad con frontend).
+     * Manual: category + catalog_category_id. Cotización: solo category (catalog suele venir null en DB).
+     */
     const belongsToSegment = (t: TaskRow): boolean => {
       if (t.category !== category) return false;
       const isManual = t.cotizacion_item_id == null;
@@ -1014,14 +997,6 @@ export async function crearTareaManualScheduler(
     };
 
     const itemsInSegment = allEventTasks.filter(belongsToSegment);
-
-    const itemsForLog = itemsInSegment.map((i) => ({
-      id: i.id,
-      order: i.order,
-      type: i.cotizacion_item_id != null ? 'cotization' : 'manual',
-    }));
-    console.log('[SERVER-DB-CHECK] segment category=', category, 'catalogCategoryId=', catalogCategoryId);
-    console.log('[SERVER-DB-CHECK] Items found in segment:', JSON.stringify(itemsForLog));
 
     const maxOrder =
       itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) : -1;

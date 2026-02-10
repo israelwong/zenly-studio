@@ -78,6 +78,8 @@ interface EventSchedulerProps {
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
+  onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
 }
 
 export const EventScheduler = React.memo(function EventScheduler({
@@ -96,6 +98,8 @@ export const EventScheduler = React.memo(function EventScheduler({
   onAddCustomCategory,
   onRemoveEmptyStage,
   onMoveCategory,
+  onRenameCustomCategory,
+  onRemoveCustomCategory,
 }: EventSchedulerProps) {
   const router = useRouter();
 
@@ -357,6 +361,16 @@ export const EventScheduler = React.memo(function EventScheduler({
       toast.success('Tarea eliminada');
     }
   }, [localEventData, studioSlug, eventId]);
+
+  const handleDeleteCustomCategory = useCallback(
+    async (sectionId: string, stage: string, categoryId: string, taskIds: string[]) => {
+      for (const taskId of taskIds) {
+        await handleManualTaskDelete(taskId);
+      }
+      onRemoveCustomCategory?.(sectionId, stage, categoryId);
+    },
+    [handleManualTaskDelete, onRemoveCustomCategory]
+  );
 
   /**
    * Reorden unificado: lista combinada de ítems (cotización) + tareas manuales del mismo ámbito.
@@ -908,7 +922,6 @@ export const EventScheduler = React.memo(function EventScheduler({
       const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
       if (!orderChanged && !adoptedCatalogForManual) return;
 
-      console.log('[DEBUG-DRAG] New sequence of IDs:', reordered);
       setUpdatingTaskId(activeId);
       // Actualización optimista: nuevo orden y, si la manual adoptó categoría, catalog_category_id/catalog_category_nombre
       setLocalEventData((prev) => {
@@ -1076,7 +1089,11 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, localEventData, onDataChange]
   );
 
-  /** Reindexa un segmento (misma category + catalog_category_id) a orden 0, 1, 2... Sin huecos. Misma lógica que reorderSchedulerTasksToOrder en servidor. */
+  /**
+   * Reindexa un segmento (misma category + catalog_category_id) a orden 0, 1, 2… sin huecos.
+   * Mantiene paridad manuales + cotización: manuales por catalog_category_id, cotización por effectiveCat (service_category_id ?? catalog_category_id).
+   * Misma lógica que la reindexación en servidor (scheduler-actions).
+   */
   const applySegmentOrderNormalization = useCallback(
     (prev: SchedulerViewData, segmentCategory: string, segmentCatalogId: string | null): SchedulerViewData => {
       const entries: { id: string; order: number; type: 'manual' | 'cotization' }[] = [];
@@ -1098,9 +1115,6 @@ export const EventScheduler = React.memo(function EventScheduler({
       });
       entries.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
       const taskIdToNewOrder = new Map(entries.map((e, i) => [e.id, i]));
-      console.log('[DEBUG-ORDER] Normalizing Segment:', { segmentCategory, segmentCatalogId });
-      console.log('[DEBUG-ORDER] Tasks before map (manual + cotization in same bucket):', entries.map((e) => ({ id: e.id, currentOrder: e.order, type: e.type })));
-      console.log('[DEBUG-ORDER] Final Map assigned:', Array.from(taskIdToNewOrder.entries()));
       const next: SchedulerViewData = { ...prev };
       next.cotizaciones = prev.cotizaciones?.map((cot) => ({
         ...cot,
@@ -1163,7 +1177,6 @@ export const EventScheduler = React.memo(function EventScheduler({
         assigned_to_crew_member_id: result.data.assigned_to_crew_member_id,
         assigned_to_crew_member: result.data.assigned_to_crew_member,
       };
-      console.log('[DEBUG-CREATE] New task initial order:', newTask.order);
       const segmentCategory = newTask.category;
       const segmentCatalogId = newTask.catalog_category_id ?? null;
       setLocalEventData((prev) => {
@@ -2153,6 +2166,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
         onMoveCategory={onMoveCategory}
+        onRenameCustomCategory={onRenameCustomCategory}
+        onDeleteCustomCategory={handleDeleteCustomCategory}
         onTaskUpdate={handleTaskUpdate}
         onTaskCreate={handleTaskCreate}
         onTaskDelete={handleTaskDelete}

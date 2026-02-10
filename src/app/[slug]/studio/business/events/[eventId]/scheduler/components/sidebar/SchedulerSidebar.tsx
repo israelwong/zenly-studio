@@ -115,6 +115,8 @@ interface SchedulerSidebarProps {
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
+  onDeleteCustomCategory?: (sectionId: string, stage: string, categoryId: string, taskIds: string[]) => Promise<void>;
   onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
   onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
   onSchedulerDragStart?: (event: DragStartEvent) => void;
@@ -366,17 +368,27 @@ function getCatalogCategoryIdFromCategoryRow(
 function AddCustomCategoryForm({
   sectionId,
   stage,
+  mode = 'add',
+  initialName = '',
   onAdd,
+  onSave,
   onCancel,
 }: {
-  /** Obligatorio: ID de la sección del catálogo; la categoría se asocia a esta sección+etapa. */
   sectionId: string;
   stage: string;
+  mode?: 'add' | 'edit';
+  initialName?: string;
   onAdd: (name: string) => Promise<void>;
+  onSave?: (name: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(mode === 'edit' ? initialName : '');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode === 'edit') setName(initialName);
+  }, [mode, initialName]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
@@ -384,11 +396,13 @@ function AddCustomCategoryForm({
     if (typeof sectionId !== 'string' || sectionId.length === 0) return;
     setLoading(true);
     try {
-      await onAdd(trimmed);
+      if (mode === 'edit' && onSave) await onSave(trimmed);
+      else await onAdd(trimmed);
     } finally {
       setLoading(false);
     }
   };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-3" data-section-id={sectionId} data-stage={stage}>
       <label className="text-xs font-medium text-zinc-400 block">Nombre de la categoría</label>
@@ -405,7 +419,7 @@ function AddCustomCategoryForm({
           Cancelar
         </button>
         <button type="submit" disabled={loading || !name.trim()} className="px-3 py-1.5 text-sm bg-zinc-700 text-zinc-200 rounded-md hover:bg-zinc-600 disabled:opacity-50">
-          {loading ? 'Añadiendo…' : 'Añadir'}
+          {mode === 'edit' ? (loading ? 'Guardando…' : 'Guardar') : loading ? 'Añadiendo…' : 'Añadir'}
         </button>
       </div>
     </form>
@@ -699,6 +713,8 @@ export const SchedulerSidebar = React.memo(({
   onAddCustomCategory,
   onRemoveEmptyStage,
   onMoveCategory,
+  onRenameCustomCategory,
+  onDeleteCustomCategory,
   onItemTaskReorder,
   onItemTaskMoveCategory,
   onSchedulerDragStart,
@@ -772,8 +788,30 @@ export const SchedulerSidebar = React.memo(({
   const [addPopoverContext, setAddPopoverContext] = useState<
     | { type: 'add_task'; sectionId: string; stage: string; catalogCategoryId: string | null; sectionLabel: string }
     | { type: 'add_category'; sectionId: string; stage: string }
+    | { type: 'edit_category'; sectionId: string; stage: string; categoryId: string; currentName: string }
     | null
   >(null);
+
+  const [collapsedCategoryKeys, setCollapsedCategoryKeys] = useState<Set<string>>(new Set());
+  const categoryCollapseKey = (stageId: string, catalogCategoryId: string | null) =>
+    `${stageId}::${catalogCategoryId ?? 'null'}`;
+  const toggleCategoryCollapsed = useCallback((stageId: string, catalogCategoryId: string | null) => {
+    const key = categoryCollapseKey(stageId, catalogCategoryId);
+    setCollapsedCategoryKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const [deleteCategoryModal, setDeleteCategoryModal] = useState<{
+    open: boolean;
+    sectionId: string;
+    stage: string;
+    categoryId: string;
+    taskIds: string[];
+  }>({ open: false, sectionId: '', stage: '', categoryId: '', taskIds: [] });
 
   const toggleSection = useCallback(
     (sectionId: string) => {
@@ -820,6 +858,17 @@ export const SchedulerSidebar = React.memo(({
     await onDeleteStage(deleteModal.sectionId, deleteModal.stageCategory, deleteModal.taskIds);
     setDeleteModal((p) => ({ ...p, open: false }));
   }, [onDeleteStage, deleteModal.open, deleteModal.sectionId, deleteModal.stageCategory, deleteModal.taskIds]);
+
+  const handleDeleteCategoryConfirm = useCallback(async () => {
+    if (!onDeleteCustomCategory || !deleteCategoryModal.open) return;
+    await onDeleteCustomCategory(
+      deleteCategoryModal.sectionId,
+      deleteCategoryModal.stage,
+      deleteCategoryModal.categoryId,
+      deleteCategoryModal.taskIds
+    );
+    setDeleteCategoryModal((p) => ({ ...p, open: false }));
+  }, [onDeleteCustomCategory, deleteCategoryModal.open, deleteCategoryModal.sectionId, deleteCategoryModal.stage, deleteCategoryModal.categoryId, deleteCategoryModal.taskIds]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -966,58 +1015,141 @@ export const SchedulerSidebar = React.memo(({
                           const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
                           const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
                           const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
+                          const catCollapseKey = categoryCollapseKey(stageRow.id, catalogCategoryId);
+                          const isCategoryCollapsed = collapsedCategoryKeys.has(catCollapseKey);
+                          const isEditCatOpen =
+                            addPopoverContext?.type === 'edit_category' &&
+                            addPopoverContext.sectionId === catRow.sectionId &&
+                            addPopoverContext.stage === stageRow.category &&
+                            addPopoverContext.categoryId === categoryId;
                           return (
-                            <CategoryDroppableHeader
-                              key={catRow.id}
-                              stageKey={stageRow.id}
-                              catalogCategoryId={catalogCategoryId}
-                              isValidDrop={isValidDrop}
-                              sectionId={catRow.sectionId}
-                            >
-                              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
-                                {formatCategoryLabel(catRow.label)}
-                              </span>
-                              {process.env.NODE_ENV === 'development' && catRow.sectionId && (
-                                <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={catRow.sectionId}>
-                                  ({catRow.sectionId.slice(0, 8)}…)
-                                </span>
-                              )}
-                              {(canMoveUp || canMoveDown) && (
-                                <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                  {canMoveUp && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onMoveCategory?.(catRow.stageId, categoryId, 'up');
-                                      }}
-                                      className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                      aria-label="Mover categoría arriba"
-                                    >
-                                      <ChevronUp className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {canMoveDown && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onMoveCategory?.(catRow.stageId, categoryId, 'down');
-                                      }}
-                                      className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                      aria-label="Mover categoría abajo"
-                                    >
-                                      <ChevronDown className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                </span>
-                              )}
-                            </CategoryDroppableHeader>
-                          );
-                        })()}
-                        <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
-                          <div className="py-1 min-h-[4px]">
-                          {segment.rows.map((row) => {
+                            <React.Fragment key={catRow.id}>
+                              <CategoryDroppableHeader
+                                stageKey={stageRow.id}
+                                catalogCategoryId={catalogCategoryId}
+                                isValidDrop={isValidDrop}
+                                sectionId={catRow.sectionId}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleCategoryCollapsed(stageRow.id, catalogCategoryId);
+                                  }}
+                                  className="flex items-center gap-1 min-w-0 flex-1 text-left p-0.5 -ml-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 transition-[transform,color] duration-200"
+                                  aria-label={isCategoryCollapsed ? 'Expandir categoría' : 'Contraer categoría'}
+                                >
+                                  <ChevronRight
+                                    className={`h-3.5 w-3.5 shrink-0 ${!isCategoryCollapsed ? 'rotate-90' : ''}`}
+                                  />
+                                  <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0">
+                                    {formatCategoryLabel(catRow.label)}
+                                  </span>
+                                </button>
+                                {(canMoveUp || canMoveDown) && (
+                                  <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                    {canMoveUp && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMoveCategory?.(catRow.stageId, categoryId, 'up');
+                                        }}
+                                        className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                        aria-label="Mover categoría arriba"
+                                      >
+                                        <ChevronUp className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                    {canMoveDown && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMoveCategory?.(catRow.stageId, categoryId, 'down');
+                                        }}
+                                        className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                        aria-label="Mover categoría abajo"
+                                      >
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
+                                {isCustomCategory && (
+                                  <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-0.5">
+                                    {onRenameCustomCategory && (
+                                      <Popover
+                                        open={isEditCatOpen}
+                                        onOpenChange={(open) => {
+                                          if (!open) setAddPopoverContext(null);
+                                        }}
+                                      >
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAddPopoverContext({
+                                                type: 'edit_category',
+                                                sectionId: catRow.sectionId,
+                                                stage: stageRow.category,
+                                                categoryId,
+                                                currentName: formatCategoryLabel(catRow.label),
+                                              });
+                                            }}
+                                            className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                            aria-label="Editar categoría"
+                                          >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="end" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                                          <AddCustomCategoryForm
+                                            sectionId={catRow.sectionId}
+                                            stage={stageRow.category}
+                                            mode="edit"
+                                            initialName={formatCategoryLabel(catRow.label)}
+                                            onAdd={async () => {}}
+                                            onSave={async (name) => {
+                                              await onRenameCustomCategory(catRow.sectionId, stageRow.category, categoryId, name);
+                                              setAddPopoverContext(null);
+                                            }}
+                                            onCancel={() => setAddPopoverContext(null)}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    )}
+                                    {onDeleteCustomCategory && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (segmentTaskIds.length > 0) {
+                                            setDeleteCategoryModal({
+                                              open: true,
+                                              sectionId: catRow.sectionId,
+                                              stage: stageRow.category,
+                                              categoryId,
+                                              taskIds: segmentTaskIds,
+                                            });
+                                          } else {
+                                            onDeleteCustomCategory(catRow.sectionId, stageRow.category, categoryId, []);
+                                          }
+                                        }}
+                                        className="p-0.5 rounded hover:bg-red-900/40 text-zinc-400 hover:text-red-400 transition-colors"
+                                        aria-label="Eliminar categoría"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
+                              </CategoryDroppableHeader>
+                              {!isCategoryCollapsed && (
+                                <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
+                                  <div className="py-1 min-h-[4px]">
+                                  {segment.rows.map((row) => {
                     if (isManualTaskRow(row)) {
                       const taskRowsInOrder = segment.rows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
                       const pos = taskRowsInOrder.findIndex((r) => r === row);
@@ -1241,8 +1373,12 @@ export const SchedulerSidebar = React.memo(({
                     }
                     return null;
                   })}
-                          </div>
-                        </SortableContext>
+                                  </div>
+                                </SortableContext>
+                              )}
+                            </React.Fragment>
+                          );
+                        })()}
                       </React.Fragment>
                     );
                   })}
@@ -1289,6 +1425,19 @@ export const SchedulerSidebar = React.memo(({
         onConfirm={handleDeleteConfirm}
         title="Eliminar etapa"
         description="¿Eliminar etapa y sus tareas? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="destructive"
+      />
+      <ZenConfirmModal
+        isOpen={deleteCategoryModal.open}
+        onClose={() => setDeleteCategoryModal((p) => ({ ...p, open: false }))}
+        onConfirm={handleDeleteCategoryConfirm}
+        title="Eliminar categoría"
+        description={
+          deleteCategoryModal.taskIds.length > 0
+            ? `Esta categoría tiene ${deleteCategoryModal.taskIds.length} tarea(s). Se eliminarán también. ¿Continuar?`
+            : '¿Eliminar esta categoría?'
+        }
         confirmText="Eliminar"
         variant="destructive"
       />

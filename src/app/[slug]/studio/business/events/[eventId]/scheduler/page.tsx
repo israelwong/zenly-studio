@@ -134,6 +134,55 @@ export default function EventSchedulerPage() {
     [eventId]
   );
 
+  const handleRenameCustomCategory = useCallback(
+    async (sectionId: string, stage: string, categoryId: string, newName: string) => {
+      const trimmed = newName.trim();
+      if (!trimmed) return;
+      const key = `${sectionId}-${stage}`;
+      try {
+        const { actualizarCategoria } = await import('@/lib/actions/studio/config/catalogo.actions');
+        const result = await actualizarCategoria(studioSlug, categoryId, { nombre: trimmed });
+        if (result.success) {
+          setCustomCategoriesBySectionStage((prev) => {
+            const next = new Map(prev);
+            const list = next.get(key) ?? [];
+            const idx = list.findIndex((c) => c.id === categoryId);
+            if (idx >= 0) {
+              const nextList = [...list];
+              nextList[idx] = { ...nextList[idx]!, name: trimmed };
+              next.set(key, nextList);
+              persistStagingCustomCats(next);
+            }
+            return next;
+          });
+          window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        } else {
+          toast.error(result.error ?? 'Error al renombrar');
+        }
+      } catch {
+        toast.error('Error al renombrar la categoría');
+      }
+    },
+    [studioSlug, persistStagingCustomCats]
+  );
+
+  const handleRemoveCustomCategory = useCallback(
+    (sectionId: string, stage: string, categoryId: string) => {
+      const key = `${sectionId}-${stage}`;
+      setCustomCategoriesBySectionStage((prev) => {
+        const next = new Map(prev);
+        const list = next.get(key) ?? [];
+        const nextList = list.filter((c) => c.id !== categoryId);
+        if (nextList.length > 0) next.set(key, nextList);
+        else next.delete(key);
+        persistStagingCustomCats(next);
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+    },
+    [persistStagingCustomCats]
+  );
+
   const handleRemoveEmptyStage = useCallback((sectionId: string, stage: string) => {
     const stageKey = `${sectionId}-${stage}`;
     setExplicitlyActivatedStageIds((prev) => {
@@ -419,6 +468,8 @@ export default function EventSchedulerPage() {
             onAddCustomCategory={handleAddCustomCategory}
             onRemoveEmptyStage={handleRemoveEmptyStage}
             onMoveCategory={handleMoveCategory}
+            onRenameCustomCategory={handleRenameCustomCategory}
+            onRemoveCustomCategory={handleRemoveCustomCategory}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
                 setPayload(prev =>

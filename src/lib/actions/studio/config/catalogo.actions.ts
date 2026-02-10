@@ -579,10 +579,13 @@ export async function actualizarCategoria(
 ): Promise<ActionResponse<CategoriaData>> {
     try {
         const validatedData = CategoriaSchema.partial().parse(data);
+        const updateData: { name?: string; order?: number } = {};
+        if (validatedData.nombre !== undefined) updateData.name = validatedData.nombre;
+        if (validatedData.orden !== undefined) updateData.order = validatedData.orden;
 
         const categoria = await prisma.studio_service_categories.update({
             where: { id: categoriaId },
-            data: validatedData,
+            data: updateData,
             include: {
                 section_categories: {
                     select: {

@@ -58,6 +58,8 @@ interface SchedulerPanelProps {
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
+  onDeleteCustomCategory?: (sectionId: string, stage: string, categoryId: string, taskIds: string[]) => Promise<void>;
   onSchedulerDragStart?: (event: import('@dnd-kit/core').DragStartEvent) => void;
   onSchedulerDragMove?: (event: import('@dnd-kit/core').DragMoveEvent) => void;
   onSchedulerDragOver?: (event: import('@dnd-kit/core').DragOverEvent) => void;
@@ -108,6 +110,8 @@ export const SchedulerPanel = React.memo(({
   onAddCustomCategory,
   onRemoveEmptyStage,
   onMoveCategory,
+  onRenameCustomCategory,
+  onDeleteCustomCategory,
   onSchedulerDragStart,
   onSchedulerDragMove,
   onSchedulerDragOver,
@@ -172,6 +176,8 @@ export const SchedulerPanel = React.memo(({
             onAddCustomCategory={onAddCustomCategory}
             onRemoveEmptyStage={onRemoveEmptyStage}
             onMoveCategory={onMoveCategory}
+            onRenameCustomCategory={onRenameCustomCategory}
+            onDeleteCustomCategory={onDeleteCustomCategory}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
