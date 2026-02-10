@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import type { ManualTaskPayload } from '../utils/scheduler-section-stages';
 
 /**
- * Mismo patrón que useSchedulerItemSync: estado local que se sincroniza con la prop task.
- * Cuando el padre actualiza la tarea (handleManualTaskPatch), el hook detecta el cambio
- * y hace setState, forzando re-render del Sidebar (nombre y completado).
+ * Estado local del Sidebar sincronizado con la prop task. Por qué: el padre (EventScheduler) actualiza
+ * la tarea vía handleManualTaskPatch (Popover o Grid); el hook detecta el cambio por taskKey y hace setState,
+ * para que el Sidebar muestre nombre, completado y fechas/duración sin retraso.
  */
 export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
   const [localTask, setLocalTask] = useState(task);
@@ -19,7 +19,7 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
     [task.assigned_to_crew_member]
   );
 
-  // Misma prioridad que completed_at: duración y fechas disparan sync (Popover ↔ Grid por el mismo puente)
+  // Incluir duración/fechas en la key para que cambios desde el Popover o el Grid (resize) actualicen el formulario al instante.
   const startEndDurationKey = useMemo(() => {
     const start = task.start_date != null ? (task.start_date instanceof Date ? task.start_date.getTime() : new Date(task.start_date).getTime()) : null;
     const end = task.end_date != null ? (task.end_date instanceof Date ? task.end_date.getTime() : new Date(task.end_date).getTime()) : null;

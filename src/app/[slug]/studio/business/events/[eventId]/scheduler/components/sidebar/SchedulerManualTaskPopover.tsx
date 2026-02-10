@@ -142,9 +142,6 @@ export function SchedulerManualTaskPopover({
     try {
       if (durationChanged && anchorStart && computedEndDate) {
         const payload = { start_date: anchorStart, end_date: computedEndDate };
-        if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-          console.log('[Sync] Updating Task:', { id: task.id, newDuration: newDurationDays, newEndDate: computedEndDate });
-        }
         const res = await actualizarSchedulerTaskFechas(studioSlug, eventId, task.id, payload);
         if (!res.success) {
           onManualTaskPatch?.(task.id, snapshot);

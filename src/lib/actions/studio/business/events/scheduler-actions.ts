@@ -1,5 +1,6 @@
 'use server';
 
+import { addDays, differenceInCalendarDays } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
@@ -940,8 +941,6 @@ export async function crearTareaManualScheduler(
         ? (params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
         : 'PLANNING';
 
-    const durationDays = Math.max(1, Math.min(365, Math.round(params.durationDays) || 1));
-
     let instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { event_id: eventId },
       select: { id: true, start_date: true, end_date: true },
@@ -969,28 +968,74 @@ export async function crearTareaManualScheduler(
       });
     }
 
-    const lastTaskInCategory = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        scheduler_instance_id: instance.id,
-        category,
+    const catalogCategoryId = params.catalog_category_id ?? null;
+
+    // "Everything" query: todas las tareas del evento. include obligatorio para que cotizacion_item no llegue null.
+    const allEventTasks = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { scheduler_instance_id: instance.id },
+      include: {
+        cotizacion_item: {
+          select: { service_category_id: true },
+        },
       },
-      orderBy: { end_date: 'desc' },
-      select: { end_date: true },
     });
+
+    console.log('[SERVER-RAW] Total tasks in event:', allEventTasks.length);
+    if (allEventTasks.length > 0) {
+      const sample = allEventTasks[0];
+      console.log(
+        '[SERVER-RAW] Sample Task:',
+        JSON.stringify(
+          {
+            id: sample.id,
+            order: sample.order,
+            category: sample.category,
+            catalog_category_id: sample.catalog_category_id,
+            cotizacion_item_id: sample.cotizacion_item_id,
+            cotizacion_item: sample.cotizacion_item,
+          },
+          null,
+          2
+        )
+      );
+    }
+
+    type TaskRow = (typeof allEventTasks)[number];
+    const normCat = (v: string | null): string | null =>
+      v != null ? String(v).toLowerCase().trim() || null : null;
+    const segmentCatalogNorm = normCat(catalogCategoryId);
+
+    // Lógica de match flexible: no más estricto que el front. Manual => category + catalog_category_id. Cotización => solo category (tCat suele venir null en DB).
+    const belongsToSegment = (t: TaskRow): boolean => {
+      if (t.category !== category) return false;
+      const isManual = t.cotizacion_item_id == null;
+      if (isManual) return normCat(t.catalog_category_id) === segmentCatalogNorm;
+      return true; // cotización: basta con que coincida la category (etapa)
+    };
+
+    const itemsInSegment = allEventTasks.filter(belongsToSegment);
+
+    const itemsForLog = itemsInSegment.map((i) => ({
+      id: i.id,
+      order: i.order,
+      type: i.cotizacion_item_id != null ? 'cotization' : 'manual',
+    }));
+    console.log('[SERVER-DB-CHECK] segment category=', category, 'catalogCategoryId=', catalogCategoryId);
+    console.log('[SERVER-DB-CHECK] Items found in segment:', JSON.stringify(itemsForLog));
+
+    const maxOrder =
+      itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) : -1;
+    const newOrder = maxOrder + 1;
 
     const toUTCNoon = (d: Date) =>
       new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
-
-    const startDate = lastTaskInCategory
-      ? (() => {
-          const next = new Date(lastTaskInCategory.end_date);
-          next.setUTCDate(next.getUTCDate() + 1);
-          return toUTCNoon(next);
-        })()
-      : toUTCNoon(instance.start_date);
-
-    const endDate = new Date(startDate);
-    endDate.setUTCDate(endDate.getUTCDate() + durationDays - 1);
+    const todayNoon = toUTCNoon(new Date());
+    const eventStart = toUTCNoon(instance.start_date);
+    const eventEnd = toUTCNoon(instance.end_date);
+    const isTodayInRange = todayNoon.getTime() >= eventStart.getTime() && todayNoon.getTime() <= eventEnd.getTime();
+    const startDate = isTodayInRange ? todayNoon : eventStart;
+    const durationDays = Math.max(1, Math.min(365, Math.round(params.durationDays) || 1));
+    const endDate = addDays(startDate, durationDays - 1);
 
     const task = await prisma.studio_scheduler_event_tasks.create({
       data: {
@@ -1002,7 +1047,8 @@ export async function crearTareaManualScheduler(
         start_date: startDate,
         end_date: toUTCNoon(endDate),
         sync_status: 'DRAFT',
-        catalog_category_id: params.catalog_category_id ?? null,
+        catalog_category_id: catalogCategoryId,
+        order: newOrder,
         budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
       },
       select: {
@@ -1010,8 +1056,10 @@ export async function crearTareaManualScheduler(
         name: true,
         start_date: true,
         end_date: true,
+        duration_days: true,
         category: true,
         catalog_category_id: true,
+        order: true,
         budget_amount: true,
         status: true,
         progress_percent: true,
@@ -1024,8 +1072,42 @@ export async function crearTareaManualScheduler(
       },
     });
 
+    // Reindexación atómica después del insert: mismo criterio en memoria (include + comparación normalizada).
+    const allEventTasksAfter = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { scheduler_instance_id: instance.id },
+      include: {
+        cotizacion_item: {
+          select: { service_category_id: true },
+        },
+      },
+    });
+
+    const belongsToSegmentAfter = (t: (typeof allEventTasksAfter)[number]): boolean => {
+      if (t.category !== category) return false;
+      if (t.cotizacion_item_id == null) return normCat(t.catalog_category_id) === segmentCatalogNorm;
+      return true;
+    };
+
+    const segmentTasksAfter = allEventTasksAfter
+      .filter(belongsToSegmentAfter)
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+
+    if (segmentTasksAfter.length > 0) {
+      await prisma.$transaction(
+        segmentTasksAfter.map((t, i) =>
+          prisma.studio_scheduler_event_tasks.update({
+            where: { id: t.id },
+            data: { order: i },
+          })
+        )
+      );
+    }
+
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+
+    const finalOrder = segmentTasksAfter.findIndex((t) => t.id === task.id);
+    const orderToReturn = finalOrder >= 0 ? finalOrder : task.order;
 
     return {
       success: true,
@@ -1034,10 +1116,12 @@ export async function crearTareaManualScheduler(
         name: task.name,
         start_date: task.start_date,
         end_date: task.end_date,
+        duration_days: task.duration_days ?? durationDays,
         category: task.category,
         catalog_category_id: task.catalog_category_id,
         catalog_category_nombre: task.catalog_category?.name ?? null,
         catalog_section_id: params.sectionId ?? null,
+        order: orderToReturn,
         budget_amount: task.budget_amount != null ? Number(task.budget_amount) : null,
         status: task.status,
         progress_percent: task.progress_percent ?? 0,
@@ -1305,8 +1389,9 @@ export async function moveSchedulerTask(
 }
 
 /**
- * Reordena tareas dentro del mismo ámbito (mismo instance, stage, categoría efectiva).
- * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... en una transacción.
+ * Reordena tareas dentro del mismo stage (mismo instance, category).
+ * Si la lista incluye tareas manuales que venían de otra categoría, se les asigna catalog_category_id del ámbito destino (targetCatId) de forma atómica.
+ * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... y en manuales también catalog_category_id.
  */
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
@@ -1314,10 +1399,9 @@ export async function reorderSchedulerTasksToOrder(
   taskIdsInOrder: string[]
 ): Promise<{ success: boolean; error?: string }> {
   if (taskIdsInOrder.length === 0) return { success: true };
-  console.log('SERVER: Reordering tasks', taskIdsInOrder);
   try {
-    const first = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: { id: taskIdsInOrder[0], scheduler_instance: { event_id: eventId } },
+    const tasksInList = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { id: { in: taskIdsInOrder }, scheduler_instance: { event_id: eventId } },
       select: {
         id: true,
         category: true,
@@ -1327,47 +1411,33 @@ export async function reorderSchedulerTasksToOrder(
         cotizacion_item: { select: { service_category_id: true } },
       },
     });
+    if (tasksInList.length !== taskIdsInOrder.length) return { success: false, error: 'Una o más tareas no encontradas' };
+
+    const first = tasksInList.find((t) => t.id === taskIdsInOrder[0]);
     if (!first) return { success: false, error: 'Tarea no encontrada' };
 
     const targetCatId = first.cotizacion_item_id
       ? first.cotizacion_item?.service_category_id ?? first.catalog_category_id ?? null
       : first.catalog_category_id ?? null;
+    const targetCategory = first.category;
+    const instanceId = first.scheduler_instance_id;
 
-    // No filtrar por catalog_category_id en DB: sin categoría (null) debe funcionar; filtro efectivo en memoria (unified).
-    const siblings = await prisma.studio_scheduler_event_tasks.findMany({
-      where: {
-        scheduler_instance_id: first.scheduler_instance_id,
-        category: first.category,
-      },
-      select: {
-        id: true,
-        order: true,
-        catalog_category_id: true,
-        cotizacion_item_id: true,
-        cotizacion_item: { select: { service_category_id: true } },
-      },
-      orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
-    });
+    const allSameStage = tasksInList.every((t) => t.scheduler_instance_id === instanceId && t.category === targetCategory);
+    if (!allSameStage) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
 
-    const effectiveCat = (t: (typeof siblings)[0]) =>
-      t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? t.catalog_category_id ?? null : t.catalog_category_id ?? null;
-    const unified = siblings.filter((t) => (effectiveCat(t) ?? null) === (targetCatId ?? null));
-    const validIds = new Set(unified.map((s) => s.id));
-
-    const ordered = taskIdsInOrder.filter((id) => validIds.has(id));
-    if (ordered.length !== taskIdsInOrder.length) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito' };
-
-    console.time('DB_UPDATE');
-    const tx = ordered.map((id, i) =>
-      prisma.studio_scheduler_event_tasks.update({
+    const tx = taskIdsInOrder.map((id, i) => {
+      const task = tasksInList.find((t) => t.id === id)!;
+      const isManual = task.cotizacion_item_id == null;
+      return prisma.studio_scheduler_event_tasks.update({
         where: { id },
-        data: { order: i },
-      })
-    );
+        data: {
+          order: i,
+          ...(isManual ? { catalog_category_id: targetCatId } : {}),
+        },
+      });
+    });
     await prisma.$transaction(tx);
-    console.timeEnd('DB_UPDATE');
 
-    // No revalidar aquí: el cliente usa actualización optimista y onDataChange; revalidatePath puede causar render ~5s.
     return { success: true };
   } catch (error) {
     console.error('[reorderSchedulerTasksToOrder] Error:', error);
@@ -1574,9 +1644,11 @@ export async function clasificarTareaScheduler(
 }
 
 /**
- * Duplica una tarea manual (misma sección/etapa, nombre, costo, duración; estado PENDING).
- * El duplicado recibe order = maxOrder + 1 en su segmento (misma categoría/etapa), quedando al final de la lista.
- * Retorna el objeto completo (incl. catalog_category_id) para que el frontend y el DnD reconozcan el nuevo ID.
+ * Duplica una tarea manual en la misma categoría/etapa. La copia aparece justo debajo de la original:
+ * - Shift: se incrementa en +1 el order de todas las tareas del mismo ámbito con order > n.
+ * - La copia recibe order = n + 1.
+ * - Herencia temporal total: misma start_date, end_date y duration_days (se apilan en el Grid).
+ * - Nombre: "Nombre Original (copia)".
  */
 export async function duplicarTareaManualScheduler(
   studioSlug: string,
@@ -1591,6 +1663,7 @@ export async function duplicarTareaManualScheduler(
       name: string;
       start_date: Date;
       end_date: Date;
+      duration_days: number;
       category: string;
       order: number;
       budget_amount: number | null;
@@ -1632,47 +1705,35 @@ export async function duplicarTareaManualScheduler(
       category: task.category,
       catalog_category_id: task.catalog_category_id ?? null,
     };
-    const maxOrderRow = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: sameScope,
+    const n = task.order;
+
+    const toShift = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { ...sameScope, order: { gt: n } },
       orderBy: { order: 'desc' },
-      select: { order: true },
+      select: { id: true, order: true },
     });
-    const newOrder = (maxOrderRow?.order ?? -1) + 1;
+    for (const row of toShift) {
+      await prisma.studio_scheduler_event_tasks.update({
+        where: { id: row.id },
+        data: { order: row.order + 1 },
+      });
+    }
 
-    const lastInCategory = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        scheduler_instance_id: task.scheduler_instance_id,
-        category: task.category,
-      },
-      orderBy: { end_date: 'desc' },
-      select: { end_date: true },
-    });
-    const toUTCNoon = (d: Date) =>
-      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
-    const startDate = lastInCategory
-      ? (() => {
-          const next = new Date(lastInCategory.end_date);
-          next.setUTCDate(next.getUTCDate() + 1);
-          return toUTCNoon(next);
-        })()
-      : task.start_date;
-    const endDate = new Date(startDate);
-    endDate.setUTCDate(endDate.getUTCDate() + (task.duration_days || 1) - 1);
-
+    const durationDays = task.duration_days ?? Math.max(1, differenceInCalendarDays(task.end_date, task.start_date) + 1);
     const created = await prisma.studio_scheduler_event_tasks.create({
       data: {
         scheduler_instance_id: task.scheduler_instance_id,
         cotizacion_item_id: null,
         name: `${task.name} (copia)`,
-        duration_days: task.duration_days || 1,
+        duration_days: durationDays,
         category: task.category,
         catalog_category_id: task.catalog_category_id ?? null,
-        start_date: startDate,
-        end_date: toUTCNoon(endDate),
+        start_date: task.start_date,
+        end_date: task.end_date,
         sync_status: 'DRAFT',
         status: 'PENDING',
         progress_percent: 0,
-        order: newOrder,
+        order: n + 1,
         budget_amount: task.budget_amount,
       },
       select: {
@@ -1680,6 +1741,7 @@ export async function duplicarTareaManualScheduler(
         name: true,
         start_date: true,
         end_date: true,
+        duration_days: true,
         category: true,
         order: true,
         budget_amount: true,
@@ -1702,6 +1764,7 @@ export async function duplicarTareaManualScheduler(
           name: created.name,
           start_date: created.start_date,
           end_date: created.end_date,
+          duration_days: created.duration_days ?? durationDays,
           category: created.category,
           order: created.order,
           budget_amount: created.budget_amount != null ? Number(created.budget_amount) : null,

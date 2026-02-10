@@ -68,7 +68,7 @@ function TaskFormCreate({
   onSubmit,
 }: TaskFormCreateProps) {
   const [name, setName] = useState('');
-  const [durationDays, setDurationDays] = useState(1);
+  const [durationInput, setDurationInput] = useState('1');
   const [estimatedCost, setEstimatedCost] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -81,11 +81,13 @@ function TaskFormCreate({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+    const parsed = parseInt(durationInput, 10);
+    const durationDays = Number.isNaN(parsed) || parsed < 1 ? 1 : Math.min(365, parsed);
     setLoading(true);
     try {
       await onSubmit({
         name: trimmed,
-        durationDays: Math.max(1, Math.min(365, durationDays)),
+        durationDays,
         budgetAmount: parsedCost > 0 ? parsedCost : undefined,
       });
       onClose();
@@ -114,6 +116,22 @@ function TaskFormCreate({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-400">Duración (días)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={durationInput}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d+$/.test(v)) setDurationInput(v);
+              }}
+              onFocus={(e) => e.target.select()}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              placeholder="1"
+              aria-label="Duración en días"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium text-zinc-400">Costo estimado</label>
             <input
               type="text"
@@ -122,17 +140,6 @@ function TaskFormCreate({
               onChange={(e) => setEstimatedCost(e.target.value)}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               placeholder="0"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400">Duración (días)</label>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={durationDays}
-              onChange={(e) => setDurationDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
             />
           </div>
         </div>
@@ -225,7 +232,7 @@ function TaskFormEdit({
       ? { id: resolvedCrew.id, name: resolvedCrew.name, email: resolvedCrew.email ?? null, tipo: resolvedCrew.tipo }
       : null;
     const days = Math.max(1, Math.min(365, durationDays));
-    // Anclaje: la posición de inicio NUNCA cambia al modificar duración; new_end_date = addDays(start_date, days - 1)
+    // Anclaje en start_date: al cambiar solo duración la barra no debe saltar en el Grid; recalculamos end_date desde el inicio fijo (días inclusivos).
     const anchorStart = taskStart ?? new Date();
     const newEndDate = addDays(anchorStart, days - 1);
     onSave({

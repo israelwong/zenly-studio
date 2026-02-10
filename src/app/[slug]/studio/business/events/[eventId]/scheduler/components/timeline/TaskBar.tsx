@@ -201,9 +201,6 @@ export const TaskBar = React.memo(({
       }
 
       const durationInclusive = Math.max(1, differenceInCalendarDays(newEndDate, newStartDate) + 1);
-      if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-        console.log('[Sync] Resize Task:', { id: taskId, newDuration: durationInclusive, newEndDate });
-      }
       setIsUpdating(true);
       setLocalStartDate(newStartDate);
       setLocalEndDate(newEndDate);

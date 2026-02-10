@@ -272,7 +272,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     }
   }, [onDataChange]);
 
-  // Regla de oro: si entra end_date → recalcular duration_days; si entra duration_days → recalcular end_date. Fechas siempre como Date. Inmutabilidad para re-render del Grid.
+  // Patch central de tareas manuales: un solo lugar para actualizar estado y propagar al Grid. Por qué: end_date/duration_days se normalizan a Date y número aquí para que el Grid calcule ancho correcto; la sobrescritura explícita al final evita que valores crudos del patch (p. ej. string ISO) ganen sobre los calculados.
   const handleManualTaskPatch = useCallback((taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => {
     let updatedData: SchedulerViewData | undefined;
     setLocalEventData((prev) => {
@@ -300,7 +300,6 @@ export const EventScheduler = React.memo(function EventScheduler({
         ...(endDate != null && { end_date: endDate }),
         ...(durationDays != null && { duration_days: durationDays }),
       };
-      console.log('[REACTIVITY CHECK] Updating state for task:', taskId, 'New End Date:', normalizedPatch.end_date);
       const newTasks = prev.scheduler.tasks.map((t) => {
         if (t.id !== taskId) return { ...t };
         return {
@@ -747,6 +746,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       const allTaskIds = new Set<string>();
       const taskIdToMeta = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
       let combined: Entry[] | null = null;
+      let combinedTarget: Entry[] | null = null;
 
       for (const b of blocks) {
         if (b.type !== 'stage_block') continue;
@@ -764,6 +764,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             taskIdToMeta.set(taskId, { stageKey: stageId, catalogCategoryId });
           }
           const hasActive = taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === activeId);
+          const hasOver = overId ? taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === overId) : false;
           if (!combined && hasActive) {
             combined = taskRows.map((r) =>
               r.type === 'task'
@@ -783,6 +784,26 @@ export const EventScheduler = React.memo(function EventScheduler({
                   } satisfies Entry)
             );
             combined.sort((a, b) => a.order - b.order);
+          }
+          if (!combinedTarget && hasOver) {
+            combinedTarget = taskRows.map((r) =>
+              r.type === 'task'
+                ? ({
+                    taskId: String(r.item.scheduler_task?.id),
+                    order: (r.item.scheduler_task as { order?: number }).order ?? 0,
+                    stageKey: stageId,
+                    type: 'item' as const,
+                    item: r.item,
+                  } satisfies Entry)
+                : ({
+                    taskId: String(r.task.id),
+                    order: (r.task as { order?: number }).order ?? 0,
+                    stageKey: stageId,
+                    type: 'manual' as const,
+                    task: r.task,
+                  } satisfies Entry)
+            );
+            combinedTarget.sort((a, b) => a.order - b.order);
           }
         }
       }
@@ -846,35 +867,50 @@ export const EventScheduler = React.memo(function EventScheduler({
       const normalizeStageKeyForComparison = (sk: string | null | undefined) => (sk ?? '').trim();
       const scopeMatch =
         normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
+
+      let reordered: string[];
+      let taskIdToNewOrder: Map<string, number>;
+      let taskIdToOldOrder: Map<string, number>;
+      let adoptedCatalogForManual: { catalog_category_id: string | null; catalog_category_nombre: string | null } | null = null;
+
       if (!scopeMatch) {
-        if (isManual && overStage) {
+        if (isManual && overStage && combinedTarget) {
+          const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
+          if (dropIndex === -1) return;
+          const targetIds = combinedTarget.map((e) => e.taskId);
+          reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
+          taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+          taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+          adoptedCatalogForManual = { catalog_category_id: overCatResolved, catalog_category_nombre: getCatalogCategoryNombre(overCatResolved) };
           const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-          const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
-          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
+          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, adoptedCatalogForManual.catalog_category_nombre ?? null);
         } else {
-          // Ítem de cotización (o manual sin overStage): no puede cambiar categoría ni stage; snap-back + feedback
-          toast.error('Los ítems de cotización no pueden cambiar de categoría');
-          window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+          if (isManual && overStage) {
+            const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+            const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
+            await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
+          } else {
+            toast.error('Los ítems de cotización no pueden cambiar de categoría');
+            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+          }
+          return;
         }
-        return;
+      } else {
+        const overIndex = combined.findIndex((e) => e.taskId === overId);
+        const fromIndex = combined.findIndex((e) => e.taskId === activeId);
+        if (fromIndex === -1 || overIndex === -1) return;
+        const reorderedEntries = arrayMove(combined, fromIndex, overIndex);
+        reordered = reorderedEntries.map((e) => e.taskId);
+        taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+        taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
       }
-
-      const overIndex = combined.findIndex((e) => e.taskId === overId);
-      const fromIndex = combined.findIndex((e) => e.taskId === activeId);
-
-      if (fromIndex === -1 || overIndex === -1) return;
-
-      const reorderedEntries = arrayMove(combined, fromIndex, overIndex);
-      const reordered = reorderedEntries.map((e) => e.taskId);
       const originalIds = combined.map((e) => e.taskId);
       const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
-      if (!orderChanged) return;
+      if (!orderChanged && !adoptedCatalogForManual) return;
 
-      const taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-      const taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-
+      console.log('[DEBUG-DRAG] New sequence of IDs:', reordered);
       setUpdatingTaskId(activeId);
-      // Actualización optimista SIEMPRE en movimiento válido: el ítem se queda en su nueva posición mientras el servidor procesa
+      // Actualización optimista: nuevo orden y, si la manual adoptó categoría, catalog_category_id/catalog_category_nombre
       setLocalEventData((prev) => {
         const next = { ...prev };
         next.cotizaciones = prev.cotizaciones?.map((cot) => ({
@@ -887,7 +923,16 @@ export const EventScheduler = React.memo(function EventScheduler({
           }),
         }));
         next.scheduler = prev.scheduler
-          ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
+          ? {
+              ...prev.scheduler,
+              tasks: (prev.scheduler.tasks ?? []).map((t) => {
+                const newOrder = taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0;
+                const patch = adoptedCatalogForManual && t.id === activeId
+                  ? { catalog_category_id: adoptedCatalogForManual.catalog_category_id, catalog_category_nombre: adoptedCatalogForManual.catalog_category_nombre }
+                  : {};
+                return { ...t, order: newOrder, ...patch };
+              }),
+            }
           : prev.scheduler;
         return next;
       });
@@ -975,7 +1020,8 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleManualTaskDuplicate = useCallback(
     async (taskId: string) => {
-      const current = localEventData.scheduler?.tasks?.find((t) => t.id === taskId && t.cotizacion_item_id == null);
+      const tasks = localEventData.scheduler?.tasks ?? [];
+      const current = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null);
       const result = await duplicarTareaManualScheduler(studioSlug, eventId, taskId);
       if (!result.success) {
         toast.error(result.error ?? 'Error al duplicar');
@@ -986,6 +1032,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       const startDate = t.start_date instanceof Date ? t.start_date : new Date(t.start_date);
       const endDate = t.end_date instanceof Date ? t.end_date : new Date(t.end_date);
       const durationDays =
+        (t as { duration_days?: number }).duration_days ??
         (current as { duration_days?: number })?.duration_days ??
         Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
       const newTask = {
@@ -1007,33 +1054,75 @@ export const EventScheduler = React.memo(function EventScheduler({
         assigned_to_crew_member_id: null,
         assigned_to_crew_member: null,
       };
-      type TaskLike = { id: string; category?: string; catalog_category_id?: string | null; order?: number };
-      const sortTasks = (arr: TaskLike[]) =>
-        arr.slice().sort((a, b) => {
-          const catA = a.category ?? '';
-          const catB = b.category ?? '';
-          if (catA !== catB) return catA.localeCompare(catB);
-          const catIdA = a.catalog_category_id ?? '';
-          const catIdB = b.catalog_category_id ?? '';
-          if (catIdA !== catIdB) return String(catIdA).localeCompare(String(catIdB));
-          return (a.order ?? 0) - (b.order ?? 0);
-        });
       setLocalEventData((prev) => {
-        const base = (prev.scheduler?.tasks ?? []) as TaskLike[];
-        const withNew = [...base, newTask as TaskLike];
+        const base = prev.scheduler?.tasks ?? [];
+        const insertIndex = base.findIndex((x) => x.id === taskId);
+        const idx = insertIndex >= 0 ? insertIndex + 1 : base.length;
+        const next = [...base.slice(0, idx), newTask, ...base.slice(idx)];
         return {
           ...prev,
-          scheduler: prev.scheduler ? { ...prev.scheduler, tasks: sortTasks(withNew) } : prev.scheduler,
+          scheduler: prev.scheduler ? { ...prev.scheduler, tasks: next } : prev.scheduler,
         };
       });
-      const baseTasks = (localEventData.scheduler?.tasks ?? []) as TaskLike[];
-      const nextTasks = sortTasks([...baseTasks, newTask as TaskLike]);
+      const baseTasks = localEventData.scheduler?.tasks ?? [];
+      const insertIndex = baseTasks.findIndex((x) => x.id === taskId);
+      const idx = insertIndex >= 0 ? insertIndex + 1 : baseTasks.length;
+      const nextTasks = [...baseTasks.slice(0, idx), newTask, ...baseTasks.slice(idx)];
       onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: nextTasks } });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       toast.success('Tarea duplicada');
     },
     [studioSlug, eventId, localEventData, onDataChange]
+  );
+
+  /** Reindexa un segmento (misma category + catalog_category_id) a orden 0, 1, 2... Sin huecos. Misma lógica que reorderSchedulerTasksToOrder en servidor. */
+  const applySegmentOrderNormalization = useCallback(
+    (prev: SchedulerViewData, segmentCategory: string, segmentCatalogId: string | null): SchedulerViewData => {
+      const entries: { id: string; order: number; type: 'manual' | 'cotization' }[] = [];
+      prev.scheduler?.tasks?.forEach((t) => {
+        const task = t as { id: string; order?: number; category?: string; catalog_category_id?: string | null };
+        if (task.category === segmentCategory && (task.catalog_category_id ?? null) === segmentCatalogId) {
+          entries.push({ id: task.id, order: task.order ?? 0, type: 'manual' });
+        }
+      });
+      prev.cotizaciones?.forEach((cot) => {
+        cot.cotizacion_items?.forEach((item) => {
+          const st = item?.scheduler_task as { id: string; order?: number; category?: string; catalog_category_id?: string | null } | null;
+          if (!st) return;
+          const effectiveCat = (item as { service_category_id?: string | null }).service_category_id ?? st.catalog_category_id ?? null;
+          if (st.category === segmentCategory && (effectiveCat ?? null) === segmentCatalogId) {
+            entries.push({ id: st.id, order: st.order ?? 0, type: 'cotization' });
+          }
+        });
+      });
+      entries.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const taskIdToNewOrder = new Map(entries.map((e, i) => [e.id, i]));
+      console.log('[DEBUG-ORDER] Normalizing Segment:', { segmentCategory, segmentCatalogId });
+      console.log('[DEBUG-ORDER] Tasks before map (manual + cotization in same bucket):', entries.map((e) => ({ id: e.id, currentOrder: e.order, type: e.type })));
+      console.log('[DEBUG-ORDER] Final Map assigned:', Array.from(taskIdToNewOrder.entries()));
+      const next: SchedulerViewData = { ...prev };
+      next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+        ...cot,
+        cotizacion_items: cot.cotizacion_items?.map((item) => {
+          const id = item?.scheduler_task?.id;
+          const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
+          if (newOrder === undefined) return item;
+          return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
+        }),
+      }));
+      next.scheduler = prev.scheduler
+        ? {
+            ...prev.scheduler,
+            tasks: (prev.scheduler.tasks ?? []).map((t) => ({
+              ...t,
+              order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0,
+            })),
+          }
+        : prev.scheduler;
+      return next;
+    },
+    []
   );
 
   const handleAddManualTaskSubmit = useCallback(
@@ -1058,8 +1147,9 @@ export const EventScheduler = React.memo(function EventScheduler({
       const newTask = {
         id: result.data.id,
         name: result.data.name,
-        start_date: result.data.start_date,
-        end_date: result.data.end_date,
+        start_date: result.data.start_date instanceof Date ? result.data.start_date : new Date(result.data.start_date),
+        end_date: result.data.end_date instanceof Date ? result.data.end_date : new Date(result.data.end_date),
+        duration_days: (result.data as { duration_days?: number }).duration_days ?? 1,
         category: result.data.category,
         cotizacion_item_id: null as const,
         catalog_category_id: result.data.catalog_category_id,
@@ -1068,27 +1158,35 @@ export const EventScheduler = React.memo(function EventScheduler({
         status: result.data.status,
         progress_percent: result.data.progress_percent,
         completed_at: result.data.completed_at,
+        order: (result.data as { order?: number }).order ?? 0,
         budget_amount: result.data.budget_amount,
         assigned_to_crew_member_id: result.data.assigned_to_crew_member_id,
         assigned_to_crew_member: result.data.assigned_to_crew_member,
       };
-      setLocalEventData((prev) => ({
-        ...prev,
-        scheduler: prev.scheduler
-          ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
-          : prev.scheduler,
-      }));
-      onDataChange?.({
-        ...localEventData,
-        scheduler: {
-          ...localEventData.scheduler!,
-          tasks: [...(localEventData.scheduler?.tasks ?? []), newTask],
-        },
+      console.log('[DEBUG-CREATE] New task initial order:', newTask.order);
+      const segmentCategory = newTask.category;
+      const segmentCatalogId = newTask.catalog_category_id ?? null;
+      setLocalEventData((prev) => {
+        const withNew = {
+          ...prev,
+          scheduler: prev.scheduler
+            ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
+            : prev.scheduler,
+        };
+        return applySegmentOrderNormalization(withNew, segmentCategory, segmentCatalogId);
       });
+      const baseTasks = localEventData.scheduler?.tasks ?? [];
+      const withNewTasks = [...baseTasks, newTask];
+      const normalizedForParent = applySegmentOrderNormalization(
+        { ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: withNewTasks } },
+        segmentCategory,
+        segmentCatalogId
+      );
+      onDataChange?.(normalizedForParent);
       window.dispatchEvent(new CustomEvent('scheduler-task-created'));
       toast.success('Tarea creada');
     },
-    [studioSlug, eventId, localEventData, onDataChange]
+    [studioSlug, eventId, localEventData, onDataChange, applySegmentOrderNormalization]
   );
 
   // Paridad con Card: mismos getters y única fuente de orden (ordenarPorEstructuraCanonica). Sin .sort() ni pesos por nombre.
@@ -1117,6 +1215,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     return map;
   }, [localEventData.cotizaciones, secciones, getCategoryId, getName]);
 
+  // Dependencia en localEventData para que cualquier cambio (p. ej. duración en Popover) entregue un array nuevo al Grid y las keys con end_date.getTime() disparen remontaje de barras.
   const manualTasks = useMemo(
     () =>
       localEventData.scheduler?.tasks?.filter(
