@@ -1567,6 +1567,8 @@ export async function clasificarTareaScheduler(
 
 /**
  * Duplica una tarea manual (misma sección/etapa, nombre, costo, duración; estado PENDING).
+ * El duplicado recibe order = maxOrder + 1 en su segmento (misma categoría/etapa), quedando al final de la lista.
+ * Retorna el objeto completo (incl. catalog_category_id) para que el frontend y el DnD reconozcan el nuevo ID.
  */
 export async function duplicarTareaManualScheduler(
   studioSlug: string,
@@ -1574,7 +1576,22 @@ export async function duplicarTareaManualScheduler(
   taskId: string
 ): Promise<{
   success: boolean;
-  data?: { id: string; task: { id: string; name: string; start_date: Date; end_date: Date; category: string; order: number; budget_amount: number | null; status: string } };
+  data?: {
+    id: string;
+    task: {
+      id: string;
+      name: string;
+      start_date: Date;
+      end_date: Date;
+      category: string;
+      order: number;
+      budget_amount: number | null;
+      status: string;
+      catalog_category_id: string | null;
+      progress_percent: number;
+      completed_at: Date | null;
+    };
+  };
   error?: string;
 }> {
   try {
@@ -1601,16 +1618,18 @@ export async function duplicarTareaManualScheduler(
       return { success: false, error: 'Tarea no encontrada' };
     }
 
-    const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
-      where: {
-        scheduler_instance_id: task.scheduler_instance_id,
-        cotizacion_item_id: null,
-        category: task.category,
-        catalog_category_id: task.catalog_category_id ?? null,
-      },
-      _max: { order: true },
+    const sameScope = {
+      scheduler_instance_id: task.scheduler_instance_id,
+      cotizacion_item_id: null,
+      category: task.category,
+      catalog_category_id: task.catalog_category_id ?? null,
+    };
+    const maxOrderRow = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: sameScope,
+      orderBy: { order: 'desc' },
+      select: { order: true },
     });
-    const newOrder = (maxOrder._max.order ?? -1) + 1;
+    const newOrder = (maxOrderRow?.order ?? -1) + 1;
 
     const lastInCategory = await prisma.studio_scheduler_event_tasks.findFirst({
       where: {
@@ -1648,7 +1667,19 @@ export async function duplicarTareaManualScheduler(
         order: newOrder,
         budget_amount: task.budget_amount,
       },
-      select: { id: true, name: true, start_date: true, end_date: true, category: true, order: true, budget_amount: true, status: true },
+      select: {
+        id: true,
+        name: true,
+        start_date: true,
+        end_date: true,
+        category: true,
+        order: true,
+        budget_amount: true,
+        status: true,
+        catalog_category_id: true,
+        progress_percent: true,
+        completed_at: true,
+      },
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -1667,6 +1698,9 @@ export async function duplicarTareaManualScheduler(
           order: created.order,
           budget_amount: created.budget_amount != null ? Number(created.budget_amount) : null,
           status: created.status,
+          catalog_category_id: created.catalog_category_id ?? null,
+          progress_percent: created.progress_percent ?? 0,
+          completed_at: created.completed_at,
         },
       },
     };

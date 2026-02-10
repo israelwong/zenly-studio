@@ -13,7 +13,7 @@ import {
   closestCenter,
   DragOverlay,
 } from '@dnd-kit/core';
-import type { DragEndEvent, DragStartEvent, DragMoveEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -119,6 +119,7 @@ interface SchedulerSidebarProps {
   onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
   onSchedulerDragStart?: (event: DragStartEvent) => void;
   onSchedulerDragMove?: (event: DragMoveEvent) => void;
+  onSchedulerDragOver?: (event: DragOverEvent) => void;
   onSchedulerDragEnd?: (event: DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
@@ -193,13 +194,13 @@ function SchedulerDragOverlayRow({
   if (!name) name = 'Tarea';
   return (
     <div
-      className="flex items-center bg-zinc-900 border border-zinc-700 rounded cursor-grabbing box-border"
+      className="flex items-center bg-zinc-900 border border-zinc-700 rounded cursor-grabbing box-border opacity-80 scale-[1.05] shadow-2xl"
       style={{
         height: ROW_HEIGHTS.TASK_ROW,
         minHeight: ROW_HEIGHTS.TASK_ROW,
         width: SIDEBAR_WIDTH_PX,
         minWidth: SIDEBAR_WIDTH_PX,
-        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
       }}
     >
       <div className="w-8 shrink-0" aria-hidden />
@@ -261,14 +262,14 @@ function SortableTaskRow({
     height: ROW_HEIGHTS.TASK_ROW,
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors ${className}`}
+      className={`group relative flex items-center transition-colors border-b border-zinc-800/50 hover:bg-zinc-900/40 ${className}`}
       data-scheduler-task-id={taskId}
     >
       {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; isSaving muestra Loader2 y desactiva interacción. */}
@@ -329,8 +330,7 @@ function CategoryDroppableHeader({
   return (
     <div
       ref={setNodeRef}
-      className={`group flex items-center pl-8 pr-4 border-b gap-1 transition-colors ${isValidDrop ? 'bg-emerald-950/40 border-emerald-600/40' : 'border-zinc-800/30 bg-zinc-900/30'
-        }`}
+      className={`group flex items-center pl-8 pr-4 border-b gap-1 transition-colors ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'border-zinc-800/30 bg-zinc-900/30'}`}
       style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
       data-section-id={sectionId}
       title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
@@ -703,6 +703,7 @@ export const SchedulerSidebar = React.memo(({
   onItemTaskMoveCategory,
   onSchedulerDragStart,
   onSchedulerDragMove,
+  onSchedulerDragOver,
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
@@ -717,16 +718,12 @@ export const SchedulerSidebar = React.memo(({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  /** Guía DnD: ítem de cotización solo misma categoría; manual solo entre categorías de la misma sección. */
+  /** Guía DnD: ítem de cotización solo misma categoría (no resaltar otras). Manual: destinos válidos en cualquier stage. */
   const isCategoryValidDrop = useCallback(
     (stageKey: string, catalogCategoryId: string | null) => {
       if (!activeDragData) return false;
       const norm = (v: string | null | undefined) => (v === '' || v == null ? null : v);
-      if (activeDragData.isManual) {
-        const sectionFrom = activeDragData.stageKey.includes('-') ? activeDragData.stageKey.slice(0, activeDragData.stageKey.lastIndexOf('-')) : activeDragData.stageKey;
-        const sectionTo = stageKey.includes('-') ? stageKey.slice(0, stageKey.lastIndexOf('-')) : stageKey;
-        return sectionFrom === sectionTo;
-      }
+      if (activeDragData.isManual) return true;
       return activeDragData.stageKey === stageKey && norm(activeDragData.catalogCategoryId) === norm(catalogCategoryId);
     },
     [activeDragData]
@@ -852,6 +849,7 @@ export const SchedulerSidebar = React.memo(({
         collisionDetection={closestCenter}
         onDragStart={onSchedulerDragStart}
         onDragMove={onSchedulerDragMove}
+        onDragOver={onSchedulerDragOver}
         onDragEnd={onSchedulerDragEnd}
       >
         {blocks.map((block) => {
@@ -1255,6 +1253,7 @@ export const SchedulerSidebar = React.memo(({
         })}
 
         <DragOverlay dropAnimation={null}>{null}</DragOverlay>
+        {/* Overlay flotante vía Portal (document.body) para que no quede recortado por contenedores */}
         {activeDragData &&
           overlayPosition &&
           typeof document !== 'undefined' &&

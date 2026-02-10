@@ -60,6 +60,7 @@ interface SchedulerPanelProps {
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onSchedulerDragStart?: (event: import('@dnd-kit/core').DragStartEvent) => void;
   onSchedulerDragMove?: (event: import('@dnd-kit/core').DragMoveEvent) => void;
+  onSchedulerDragOver?: (event: import('@dnd-kit/core').DragOverEvent) => void;
   onSchedulerDragEnd?: (event: import('@dnd-kit/core').DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
@@ -109,6 +110,7 @@ export const SchedulerPanel = React.memo(({
   onMoveCategory,
   onSchedulerDragStart,
   onSchedulerDragMove,
+  onSchedulerDragOver,
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
@@ -187,6 +189,7 @@ export const SchedulerPanel = React.memo(({
             customCategoriesBySectionStage={customCategoriesBySectionStage}
             onSchedulerDragStart={onSchedulerDragStart}
             onSchedulerDragMove={onSchedulerDragMove}
+            onSchedulerDragOver={onSchedulerDragOver}
             onSchedulerDragEnd={onSchedulerDragEnd}
             activeDragData={activeDragData}
             overlayPosition={overlayPosition}

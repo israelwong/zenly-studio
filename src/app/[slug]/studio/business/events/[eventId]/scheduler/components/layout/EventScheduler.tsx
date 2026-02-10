@@ -26,7 +26,7 @@ import {
   duplicarTareaManualScheduler,
   crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
-import type { DragEndEvent, DragStartEvent, DragMoveEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
@@ -176,6 +176,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** Posición del overlay en body (createPortal) para que la fila arrastrada sea visible. */
   const [overlayPosition, setOverlayPosition] = useState<{ x: number; y: number } | null>(null);
   const overlayStartRectRef = useRef<{ left: number; top: number } | null>(null);
+
   /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
   const lastOverIdRef = useRef<string | null>(null);
 
@@ -580,6 +581,19 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, localEventData]
   );
 
+  /** Resuelve el nombre de categoría desde secciones para adopción visual (evita "Sin Categoría" en tareas huérfanas). */
+  const getCatalogCategoryNombre = useCallback(
+    (catalogCategoryId: string | null): string | null => {
+      if (!catalogCategoryId) return null;
+      for (const s of secciones) {
+        const cat = s.categorias?.find((c) => c.id === catalogCategoryId);
+        if (cat) return cat.nombre;
+      }
+      return null;
+    },
+    [secciones]
+  );
+
   /** Misma resolución que buildSchedulerRows: catalog_category_id → sectionId desde secciones. Sincronía con Sidebar. */
   const getSectionIdFromCatalog = useCallback((catalogCategoryId: string | null): string => {
     if (!catalogCategoryId || catalogCategoryId === SIN_CATEGORIA_SECTION_ID) return SIN_CATEGORIA_SECTION_ID;
@@ -651,6 +665,10 @@ export const EventScheduler = React.memo(function EventScheduler({
     if (!start) return;
     if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
     setOverlayPosition({ x: start.left + event.delta.x, y: start.top + event.delta.y });
+  }, []);
+
+  const handleSchedulerDragOver = useCallback((event: DragOverEvent) => {
+    if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
   }, []);
 
   const handleSchedulerDragEnd = useCallback(
@@ -768,17 +786,19 @@ export const EventScheduler = React.memo(function EventScheduler({
       const getSectionIdFromStageKey = (sk: string) => (sk.includes('-') ? sk.slice(0, sk.lastIndexOf('-')) : sk);
 
       // over.id puede ser ID de tarea (plano) o categoría (prefijo cat::). Si no es tarea conocida, tratar como categoría.
+      // Bloqueo estricto: ítems de cotización (isManual: false) no pueden cambiar categoría ni stage; handleItemTaskMoveCategory no se ejecuta en DnD.
       if (!allTaskIds.has(overId)) {
         const parsedCat = parseSchedulerCategoryDroppableId(overId);
         if (parsedCat) {
           const { stageKey: targetStageKey, catalogCategoryId: rawTarget } = parsedCat;
           const targetId = normCat(rawTarget);
           const stageCategory = (targetStageKey?.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-          if (!isManual) {
-            await handleItemTaskMoveCategory(activeId, targetId ?? null);
+          if (isManual) {
+            const targetCategoryNombre = getCatalogCategoryNombre(targetId);
+            await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, targetCategoryNombre ?? null);
           } else {
-            if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) return;
-            await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, null);
+            toast.error('Los ítems de cotización no pueden cambiar de categoría');
+            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
           }
         }
         return;
@@ -802,10 +822,13 @@ export const EventScheduler = React.memo(function EventScheduler({
       const scopeMatch =
         normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
       if (!scopeMatch) {
-        if (activeDataResolved.isManual && overStage && getSectionIdFromStageKey(activeStageKey) === getSectionIdFromStageKey(overStage)) {
+        if (isManual && overStage) {
           const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, null);
-        } else if (!isManual) {
+          const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
+          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
+        } else {
+          // Ítem de cotización (o manual sin overStage): no puede cambiar categoría ni stage; snap-back + feedback
+          toast.error('Los ítems de cotización no pueden cambiar de categoría');
           window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
         }
         return;
@@ -916,6 +939,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       activeSectionIds,
       explicitlyActivatedStageIds,
       customCategoriesBySectionStage,
+      getCatalogCategoryNombre,
       onDataChange,
       resolveActiveDragDataById,
       handleManualTaskMoveStage,
@@ -933,29 +957,49 @@ export const EventScheduler = React.memo(function EventScheduler({
         return;
       }
       if (!result.data) return;
+      const t = result.data.task;
       const newTask = {
         id: result.data.id,
-        name: result.data.task.name,
-        start_date: result.data.task.start_date,
-        end_date: result.data.task.end_date,
-        category: result.data.task.category,
+        name: t.name,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        category: t.category,
         cotizacion_item_id: null,
-        catalog_category_id: (current as { catalog_category_id?: string | null })?.catalog_category_id ?? null,
+        catalog_category_id: t.catalog_category_id ?? (current as { catalog_category_id?: string | null })?.catalog_category_id ?? null,
         catalog_category_nombre: (current as { catalog_category_nombre?: string | null })?.catalog_category_nombre ?? null,
-        status: result.data.task.status,
-        order: result.data.task.order,
-        budget_amount: result.data.task.budget_amount,
+        catalog_section_id: (current as { catalog_section_id?: string | null })?.catalog_section_id ?? null,
+        status: t.status,
+        progress_percent: t.progress_percent ?? 0,
+        completed_at: t.completed_at ?? null,
+        order: t.order,
+        budget_amount: t.budget_amount,
         assigned_to_crew_member_id: null,
         assigned_to_crew_member: null,
       };
-      setLocalEventData((prev) => ({
-        ...prev,
-        scheduler: prev.scheduler
-          ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
-          : prev.scheduler,
-      }));
-      onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: [...(localEventData.scheduler?.tasks ?? []), newTask] } });
+      type TaskLike = { id: string; category?: string; catalog_category_id?: string | null; order?: number };
+      const sortTasks = (arr: TaskLike[]) =>
+        arr.slice().sort((a, b) => {
+          const catA = a.category ?? '';
+          const catB = b.category ?? '';
+          if (catA !== catB) return catA.localeCompare(catB);
+          const catIdA = a.catalog_category_id ?? '';
+          const catIdB = b.catalog_category_id ?? '';
+          if (catIdA !== catIdB) return String(catIdA).localeCompare(String(catIdB));
+          return (a.order ?? 0) - (b.order ?? 0);
+        });
+      setLocalEventData((prev) => {
+        const base = (prev.scheduler?.tasks ?? []) as TaskLike[];
+        const withNew = [...base, newTask as TaskLike];
+        return {
+          ...prev,
+          scheduler: prev.scheduler ? { ...prev.scheduler, tasks: sortTasks(withNew) } : prev.scheduler,
+        };
+      });
+      const baseTasks = (localEventData.scheduler?.tasks ?? []) as TaskLike[];
+      const nextTasks = sortTasks([...baseTasks, newTask as TaskLike]);
+      onDataChange?.({ ...localEventData, scheduler: { ...localEventData.scheduler!, tasks: nextTasks } });
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       toast.success('Tarea duplicada');
     },
     [studioSlug, eventId, localEventData, onDataChange]
@@ -2001,6 +2045,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onExpandedStagesChange={setExpandedStages}
         onSchedulerDragStart={handleSchedulerDragStart}
         onSchedulerDragMove={handleSchedulerDragMove}
+        onSchedulerDragOver={handleSchedulerDragOver}
         onSchedulerDragEnd={handleSchedulerDragEnd}
         activeDragData={activeDragData}
         overlayPosition={overlayPosition}
