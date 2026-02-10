@@ -58,6 +58,11 @@ interface SchedulerPanelProps {
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
+  onSchedulerDragStart?: (event: import('@dnd-kit/core').DragStartEvent) => void;
+  onSchedulerDragMove?: (event: import('@dnd-kit/core').DragMoveEvent) => void;
+  onSchedulerDragEnd?: (event: import('@dnd-kit/core').DragEndEvent) => void;
+  activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
+  overlayPosition?: { x: number; y: number } | null;
 }
 
 /**
@@ -101,6 +106,11 @@ export const SchedulerPanel = React.memo(({
   onAddCustomCategory,
   onRemoveEmptyStage,
   onMoveCategory,
+  onSchedulerDragStart,
+  onSchedulerDragMove,
+  onSchedulerDragEnd,
+  activeDragData = null,
+  overlayPosition = null,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -133,14 +143,14 @@ export const SchedulerPanel = React.memo(({
 
   return (
     <div className="overflow-hidden bg-zinc-950">
-      {/* Contenedor principal con scroll unificado */}
+      {/* Contenedor principal: overflow-visible durante drag para que la fila no se recorte */}
       <div
         ref={timelineRef}
         onScroll={handleTimelineScroll}
-        className="flex h-[calc(100vh-300px)] bg-zinc-950 relative overflow-auto"
+        className={`flex h-[calc(100vh-300px)] bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'}`}
       >
         {/* Sidebar Sticky Left */}
-        <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-20">
+        <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-20 overflow-visible">
           <SchedulerSidebar
             secciones={secciones}
             itemsMap={itemsMap}
@@ -173,6 +183,11 @@ export const SchedulerPanel = React.memo(({
             onExpandedSectionsChange={onExpandedSectionsChange}
             onExpandedStagesChange={onExpandedStagesChange}
             customCategoriesBySectionStage={customCategoriesBySectionStage}
+            onSchedulerDragStart={onSchedulerDragStart}
+            onSchedulerDragMove={onSchedulerDragMove}
+            onSchedulerDragEnd={onSchedulerDragEnd}
+            activeDragData={activeDragData}
+            overlayPosition={overlayPosition}
           />
         </div>
 

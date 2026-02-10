@@ -1296,6 +1296,77 @@ export async function moveSchedulerTask(
   }
 }
 
+/**
+ * Reordena tareas dentro del mismo ámbito (mismo instance, stage, categoría efectiva).
+ * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... en una transacción.
+ */
+export async function reorderSchedulerTasksToOrder(
+  studioSlug: string,
+  eventId: string,
+  taskIdsInOrder: string[]
+): Promise<{ success: boolean; error?: string }> {
+  if (taskIdsInOrder.length === 0) return { success: true };
+  try {
+    const first = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: { id: taskIdsInOrder[0], scheduler_instance: { event_id: eventId } },
+      select: {
+        id: true,
+        category: true,
+        catalog_category_id: true,
+        scheduler_instance_id: true,
+        cotizacion_item_id: true,
+        cotizacion_item: { select: { service_category_id: true } },
+      },
+    });
+    if (!first) return { success: false, error: 'Tarea no encontrada' };
+
+    const targetCatId = first.cotizacion_item_id
+      ? first.cotizacion_item?.service_category_id ?? first.catalog_category_id ?? null
+      : first.catalog_category_id ?? null;
+
+    const siblings = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: first.scheduler_instance_id,
+        category: first.category,
+      },
+      select: {
+        id: true,
+        order: true,
+        catalog_category_id: true,
+        cotizacion_item_id: true,
+        cotizacion_item: { select: { service_category_id: true } },
+      },
+      orderBy: [{ order: 'asc' }, { start_date: 'asc' }],
+    });
+
+    const effectiveCat = (t: (typeof siblings)[0]) =>
+      t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? t.catalog_category_id ?? null : t.catalog_category_id ?? null;
+    const unified = siblings.filter((t) => (effectiveCat(t) ?? null) === (targetCatId ?? null));
+    const validIds = new Set(unified.map((s) => s.id));
+
+    const ordered = taskIdsInOrder.filter((id) => validIds.has(id));
+    if (ordered.length !== taskIdsInOrder.length) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito' };
+
+    const tx = ordered.map((id, i) =>
+      prisma.studio_scheduler_event_tasks.update({
+        where: { id },
+        data: { order: i },
+      })
+    );
+    await prisma.$transaction(tx);
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    return { success: true };
+  } catch (error) {
+    console.error('[reorderSchedulerTasksToOrder] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al reordenar',
+    };
+  }
+}
+
 /** @deprecated Usar moveSchedulerTask. Mantener por compatibilidad. */
 export async function reordenarTareaManualScheduler(
   studioSlug: string,

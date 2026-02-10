@@ -1,8 +1,20 @@
 'use client';
 
 import React, { useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  pointerWithin,
+  DragOverlay,
+} from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent, DragMoveEvent } from '@dnd-kit/core';
 import {
   buildSchedulerRows,
   filterRowsByExpandedSections,
@@ -41,6 +53,7 @@ import {
   Pencil,
   Copy,
   FolderInput,
+  GripVertical,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -104,11 +117,215 @@ interface SchedulerSidebarProps {
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
   onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
+  onSchedulerDragStart?: (event: DragStartEvent) => void;
+  onSchedulerDragMove?: (event: DragMoveEvent) => void;
+  onSchedulerDragEnd?: (event: DragEndEvent) => void;
+  activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
+  overlayPosition?: { x: number; y: number } | null;
 }
 
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+/** Id de droppable para una categoría: "cat::stageKey::catalogCategoryId" */
+export function schedulerCategoryDroppableId(stageKey: string, catalogCategoryId: string | null): string {
+  return `cat::${stageKey}::${catalogCategoryId ?? ''}`;
+}
+
+/**
+ * Parsea el id de droppable de categoría y devuelve stageKey y catalogCategoryId normalizado.
+ * '' o ausente → null (Sin Categoría). Para comparar ámbitos usar el ID real.
+ */
+export function parseSchedulerCategoryDroppableId(
+  overId: string | null
+): { stageKey: string; catalogCategoryId: string | null } | null {
+  if (!overId || !overId.startsWith('cat::')) return null;
+  const rest = overId.slice(5);
+  const idx = rest.indexOf('::');
+  const stageKey = idx >= 0 ? rest.slice(0, idx) : rest;
+  const catPart = idx >= 0 ? rest.slice(idx + 2) : '';
+  const catalogCategoryId = catPart === '' ? null : catPart;
+  return { stageKey: stageKey || '', catalogCategoryId };
+}
+
+/** Ancho del sidebar para que el overlay coincida exactamente (misma ilusión de "sacar la fila") */
+const SIDEBAR_WIDTH_PX = 360;
+
+/** Layout: handle 2rem + línea 1px + contenido con pl-4. */
+
+/** Fila clonada para DragOverlay: 60px, avatar, nombre, fondo sólido, sombra potente, cursor grabbing */
+function SchedulerDragOverlayRow({
+  taskId,
+  isManual,
+  itemsMap,
+  manualTasks,
+}: {
+  taskId: string;
+  isManual: boolean;
+  itemsMap: Map<string, CotizacionItem>;
+  manualTasks: ManualTaskPayload[];
+}) {
+  let name = '';
+  let initials: string | null = null;
+  let isCompleted = false;
+  if (isManual) {
+    const task = manualTasks.find((t) => t.id === taskId);
+    if (task) {
+      name = task.name;
+      isCompleted = !!task.completed_at || task.status === 'COMPLETED';
+      const crew = (task as { assigned_to_crew_member?: { name: string } | null }).assigned_to_crew_member;
+      initials = crew ? getInitials(crew.name) : null;
+    }
+  } else {
+    for (const item of itemsMap.values()) {
+      if (item?.scheduler_task?.id === taskId) {
+        const meta = item as { servicioNombre?: string; assigned_to_crew_member?: { name: string } | null };
+        name = meta.servicioNombre ?? (item as { name?: string }).name ?? '';
+        isCompleted = !!(item.scheduler_task as { completed_at?: Date | null })?.completed_at;
+        initials = meta.assigned_to_crew_member ? getInitials(meta.assigned_to_crew_member.name) : null;
+        break;
+      }
+    }
+  }
+  if (!name) name = 'Tarea';
+  return (
+    <div
+      className="flex items-center bg-zinc-900 border border-zinc-700 rounded cursor-grabbing box-border"
+      style={{
+        height: ROW_HEIGHTS.TASK_ROW,
+        minHeight: ROW_HEIGHTS.TASK_ROW,
+        width: SIDEBAR_WIDTH_PX,
+        minWidth: SIDEBAR_WIDTH_PX,
+        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+      }}
+    >
+      <div className="w-8 shrink-0" aria-hidden />
+      <SchedulerRamaLine />
+      <div className="flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4">
+        <ZenAvatar className="h-7 w-7 shrink-0">
+          {initials ? (
+            <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+              {initials}
+            </ZenAvatarFallback>
+          ) : (
+            <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+              <User className="h-3.5 w-3.5" />
+            </ZenAvatarFallback>
+          )}
+        </ZenAvatar>
+        <p className={`flex-1 min-w-0 text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+          {name}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DraggableDroppableTaskRow({
+  taskId,
+  isManual,
+  catalogCategoryId,
+  stageKey,
+  children,
+  className = '',
+}: {
+  taskId: string;
+  isManual: boolean;
+  catalogCategoryId: string | null;
+  stageKey: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggable({
+    id: taskId,
+    data: { taskId, isManual, catalogCategoryId, stageKey },
+  });
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: taskId,
+    data: { stageKey, catalogCategoryId },
+  });
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef]
+  );
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ height: ROW_HEIGHTS.TASK_ROW, touchAction: 'none' }}
+      className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors touch-none ${className}`}
+    >
+      {/* Handle: preventDefault evita que el scroll capture el gesto; setPointerCapture asegura que los eventos vayan al handle */}
+      <div
+        aria-label="Arrastrar"
+        className="w-8 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none relative z-10"
+        style={{ touchAction: 'none', minWidth: 32 }}
+        onPointerDown={(e) => {
+          e.preventDefault(); // Evita que el contenedor con scroll capture el gesto
+          if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+        }}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 touch-none pointer-events-none" style={{ touchAction: 'none' }} aria-hidden />
+      </div>
+      <SchedulerRamaLine />
+      {/* Contenido alineado a la derecha de la línea (poco padding para más espacio) */}
+      <div
+        className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 ${isDragging ? 'opacity-10 pointer-events-none' : ''}`}
+        style={{ minHeight: ROW_HEIGHTS.TASK_ROW }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Línea vertical que simula la rama del árbol; ancho 1px en estilo para que siempre sea visible. */
+function SchedulerRamaLine({ minHeight = ROW_HEIGHTS.TASK_ROW }: { minHeight?: number }) {
+  return (
+    <div
+      className="shrink-0 self-stretch bg-zinc-500"
+      style={{ width: 1, minHeight }}
+      aria-hidden
+    />
+  );
+}
+
+function CategoryDroppableHeader({
+  stageKey,
+  catalogCategoryId,
+  isValidDrop,
+  sectionId,
+  children,
+}: {
+  stageKey: string;
+  catalogCategoryId: string | null;
+  isValidDrop: boolean;
+  sectionId: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: schedulerCategoryDroppableId(stageKey, catalogCategoryId),
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`group flex items-center pl-8 pr-4 border-b gap-1 transition-colors ${isValidDrop ? 'bg-emerald-950/40 border-emerald-600/40' : 'border-zinc-800/30 bg-zinc-900/30'
+        }`}
+      style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
+      data-section-id={sectionId}
+      title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
+    >
+      {children}
+    </div>
+  );
 }
 
 /** Quita el sufijo " (timestamp)" del nombre de categoría para mostrar solo lo que escribió el usuario. */
@@ -271,37 +488,37 @@ function ManualTaskRow({
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
-        <DropdownMenuItem onClick={() => setPopoverOpen(true)} className="gap-2">
-          <Pencil className="h-3.5 w-3.5" />
-          Editar
-        </DropdownMenuItem>
-        {onDuplicate && (
-          <DropdownMenuItem onClick={() => onDuplicate(localTask.id)} className="gap-2">
-            <Copy className="h-3.5 w-3.5" />
-            Duplicar
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
+          <DropdownMenuItem onClick={() => setPopoverOpen(true)} className="gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Editar
           </DropdownMenuItem>
-        )}
-        {onMoveToStage && stageCategory != null && (
-          <DropdownMenuItem onClick={() => setMoveModalOpen(true)} className="gap-2">
-            <FolderInput className="h-3.5 w-3.5" />
-            Mover a…
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        {onManualTaskDelete && (
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setDeleteConfirmOpen(true)}
-            className="gap-2"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Eliminar
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {onDuplicate && (
+            <DropdownMenuItem onClick={() => onDuplicate(localTask.id)} className="gap-2">
+              <Copy className="h-3.5 w-3.5" />
+              Duplicar
+            </DropdownMenuItem>
+          )}
+          {onMoveToStage && stageCategory != null && (
+            <DropdownMenuItem onClick={() => setMoveModalOpen(true)} className="gap-2">
+              <FolderInput className="h-3.5 w-3.5" />
+              Mover a…
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          {onManualTaskDelete && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Eliminar
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 
@@ -320,7 +537,7 @@ function ManualTaskRow({
         rightSlot={actionsSlot}
       >
         <div
-          className="flex items-center gap-2 pl-10 pr-4 min-h-[60px]"
+          className="flex items-center gap-2 min-h-[60px] min-w-0 flex-1"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
@@ -378,23 +595,28 @@ function SchedulerItem({
   const { localItem } = useSchedulerItemSync(item, onItemUpdate);
   const isCompleted = !!localItem.scheduler_task?.completed_at;
 
+  /** Misma coordenada X que la tarea manual: avatar primero (h-7 w-7), luego texto */
   const DefaultItemRender = () => (
     <div className="w-full flex items-center gap-2">
+      <ZenAvatar className="h-7 w-7 shrink-0">
+        {localItem.assigned_to_crew_member ? (
+          <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+            {getInitials(localItem.assigned_to_crew_member.name)}
+          </ZenAvatarFallback>
+        ) : (
+          <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+            <User className="h-3.5 w-3.5" />
+          </ZenAvatarFallback>
+        )}
+      </ZenAvatar>
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
-          <div className="flex items-center gap-1.5 mt-1">
-            <ZenAvatar className="h-4 w-4 flex-shrink-0">
-              <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[8px]' : 'bg-blue-600/20 text-blue-400 text-[8px]'}>
-                {getInitials(localItem.assigned_to_crew_member.name)}
-              </ZenAvatarFallback>
-            </ZenAvatar>
-            <p className={`text-xs truncate ${isCompleted ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-500'}`}>
-              {localItem.assigned_to_crew_member.name}
-            </p>
-          </div>
+          <p className={`text-xs truncate mt-0.5 ${isCompleted ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-500'}`}>
+            {localItem.assigned_to_crew_member.name}
+          </p>
         )}
       </div>
     </div>
@@ -481,7 +703,30 @@ export const SchedulerSidebar = React.memo(({
   onMoveCategory,
   onItemTaskReorder,
   onItemTaskMoveCategory,
+  onSchedulerDragStart,
+  onSchedulerDragMove,
+  onSchedulerDragEnd,
+  activeDragData = null,
+  overlayPosition = null,
 }: SchedulerSidebarProps) => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  /** Guía DnD: ítem de cotización solo misma categoría; manual solo entre categorías de la misma sección. */
+  const isCategoryValidDrop = useCallback(
+    (stageKey: string, catalogCategoryId: string | null) => {
+      if (!activeDragData) return false;
+      const norm = (v: string | null | undefined) => (v === '' || v == null ? null : v);
+      if (activeDragData.isManual) {
+        const sectionFrom = activeDragData.stageKey.includes('-') ? activeDragData.stageKey.slice(0, activeDragData.stageKey.lastIndexOf('-')) : activeDragData.stageKey;
+        const sectionTo = stageKey.includes('-') ? stageKey.slice(0, stageKey.lastIndexOf('-')) : stageKey;
+        return sectionFrom === sectionTo;
+      }
+      return activeDragData.stageKey === stageKey && norm(activeDragData.catalogCategoryId) === norm(catalogCategoryId);
+    },
+    [activeDragData]
+  );
   const rows = useMemo(
     () =>
       buildSchedulerRows(
@@ -566,270 +811,146 @@ export const SchedulerSidebar = React.memo(({
   }, [onDeleteStage, deleteModal.open, deleteModal.sectionId, deleteModal.stageCategory, deleteModal.taskIds]);
 
   return (
-    <div className="w-full bg-zinc-950" style={{ minHeight: totalMinHeight }}>
+    <div className="w-full bg-zinc-950 overflow-visible" style={{ minHeight: totalMinHeight }}>
       <div className="h-[60px] bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30">
         <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
       </div>
 
-      {blocks.map((block) => {
-        if (block.type === 'section') {
-          const sectionExpanded = isSectionExpanded(block.row.id);
-          const taskCount = sectionTaskCounts.get(block.row.id) ?? 0;
-          const sectionData = secciones.find((s) => s.id === block.row.id);
-          const stageIdsWithData = stageIdsWithDataBySection.get(block.row.id) ?? new Set<string>();
-          return (
-            <div
-              key={block.row.id}
-              className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 rounded-none"
-              style={{ height: ROW_HEIGHTS.SECTION }}
-            >
-              <button
-                type="button"
-                onClick={() => toggleSection(block.row.id)}
-                className="flex-1 min-w-0 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors py-0 h-full"
-                aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={onSchedulerDragStart}
+        onDragMove={onSchedulerDragMove}
+        onDragEnd={onSchedulerDragEnd}
+      >
+        {blocks.map((block) => {
+          if (block.type === 'section') {
+            const sectionExpanded = isSectionExpanded(block.row.id);
+            const taskCount = sectionTaskCounts.get(block.row.id) ?? 0;
+            const sectionData = secciones.find((s) => s.id === block.row.id);
+            const stageIdsWithData = stageIdsWithDataBySection.get(block.row.id) ?? new Set<string>();
+            return (
+              <div
+                key={block.row.id}
+                className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 rounded-none"
+                style={{ height: ROW_HEIGHTS.SECTION }}
               >
-                {sectionExpanded ? (
-                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-zinc-400" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+                <button
+                  type="button"
+                  onClick={() => toggleSection(block.row.id)}
+                  className="flex-1 min-w-0 flex items-center gap-1.5 text-left rounded-none hover:bg-zinc-800/50 transition-colors py-0 h-full"
+                  aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
+                >
+                  {sectionExpanded ? (
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+                  )}
+                  <span className="text-base font-semibold text-zinc-300 truncate flex-1 min-w-0">{block.row.name}</span>
+                  {!sectionExpanded && taskCount > 0 && (
+                    <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
+                      {taskCount} tarea{taskCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </button>
+                {sectionData && onToggleStage && (
+                  <SchedulerSectionStagesConfigPopover
+                    sectionId={block.row.id}
+                    sectionName={block.row.name}
+                    stageIdsWithData={stageIdsWithData}
+                    explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+                    onToggleStage={onToggleStage}
+                  />
                 )}
-                <span className="text-base font-semibold text-zinc-300 truncate flex-1 min-w-0">{block.row.name}</span>
-                {!sectionExpanded && taskCount > 0 && (
-                  <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                    {taskCount} tarea{taskCount !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </button>
-              {sectionData && onToggleStage && (
-                <SchedulerSectionStagesConfigPopover
-                  sectionId={block.row.id}
-                  sectionName={block.row.name}
-                  stageIdsWithData={stageIdsWithData}
-                  explicitlyActivatedStageIds={explicitlyActivatedStageIds}
-                  onToggleStage={onToggleStage}
-                />
-              )}
-            </div>
-          );
-        }
+              </div>
+            );
+          }
 
-        const { stageRow, contentRows, phantomRow } = block.block;
-        const isExpanded = expandedStages.has(stageRow.id);
-        const colors = STAGE_COLORS[stageRow.category];
-        const taskRowsCount = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r)).length;
-        const taskIds = contentRows
-          .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
-          .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
-          .filter(Boolean) as string[];
+          const { stageRow, contentRows, phantomRow } = block.block;
+          const isExpanded = expandedStages.has(stageRow.id);
+          const colors = STAGE_COLORS[stageRow.category];
+          const taskRowsCount = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r)).length;
+          const taskIds = contentRows
+            .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
+            .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
+            .filter(Boolean) as string[];
 
-        return (
-          <React.Fragment key={stageRow.id}>
-            <div
-              className={`
+          return (
+            <React.Fragment key={stageRow.id}>
+              <div
+                className={`
                 border-b border-zinc-800/50 pl-6 pr-2 flex items-center justify-between gap-2 border-l-2
                 ${colors}
               `}
-              style={{ height: ROW_HEIGHTS.STAGE }}
-            >
-              <button
-                type="button"
-                onClick={() => toggleStage(stageRow.id)}
-                className="flex items-center gap-1 min-w-0 flex-1 text-left py-1 pr-1 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
-                aria-label={isExpanded ? 'Contraer etapa' : 'Expandir etapa'}
+                style={{ height: ROW_HEIGHTS.STAGE }}
               >
-                {isExpanded ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />}
-                <span className="text-xs font-medium text-zinc-300 truncate">{stageRow.label}</span>
-              </button>
-              {taskRowsCount > 0 && (
-                <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                  {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
-                </span>
-              )}
-              {onDeleteStage && (
                 <button
                   type="button"
-                  onClick={() => handleDeleteStageClick(stageRow.sectionId, stageRow.category, taskIds)}
-                  className="p-1 rounded hover:bg-red-900/40 text-zinc-500 hover:text-red-400 flex-shrink-0"
-                  title="Eliminar etapa"
-                  aria-label="Eliminar etapa"
+                  onClick={() => toggleStage(stageRow.id)}
+                  className="flex items-center gap-1 min-w-0 flex-1 text-left py-1 pr-1 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  aria-label={isExpanded ? 'Contraer etapa' : 'Expandir etapa'}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />}
+                  <span className="text-xs font-medium text-zinc-300 truncate">{stageRow.label}</span>
                 </button>
-              )}
-            </div>
+                {taskRowsCount > 0 && (
+                  <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
+                    {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {onDeleteStage && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteStageClick(stageRow.sectionId, stageRow.category, taskIds)}
+                    className="p-1 rounded hover:bg-red-900/40 text-zinc-500 hover:text-red-400 flex-shrink-0"
+                    title="Eliminar etapa"
+                    aria-label="Eliminar etapa"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
 
-            {isExpanded ? (
-              <>
-                {contentRows.map((row) => {
-                  if (isCategoryRow(row)) {
-                    const catPrefix = `${row.stageId}-cat-`;
-                    const categoryId = row.id.startsWith(catPrefix) ? row.id.slice(catPrefix.length) : '';
-                    const customList = customCategoriesBySectionStage.get(row.stageId) ?? [];
-                    const catIdx = customList.findIndex((c) => c.id === categoryId);
-                    const isCustomCategory = catIdx >= 0;
-                    const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
-                    const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
-                    return (
-                      <div
-                        key={row.id}
-                        className="group flex items-center pl-8 pr-4 border-b border-zinc-800/30 bg-zinc-900/30 gap-1"
-                        style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
-                        data-section-id={row.sectionId}
-                        title={typeof row.sectionId === 'string' && row.sectionId ? `Sección: ${row.sectionId}` : undefined}
-                      >
-                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
-                          {formatCategoryLabel(row.label)}
-                        </span>
-                        {process.env.NODE_ENV === 'development' && row.sectionId && (
-                          <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
-                            ({row.sectionId.slice(0, 8)}…)
+              {isExpanded ? (
+                <>
+                  {contentRows.map((row) => {
+                    if (isCategoryRow(row)) {
+                      const catPrefix = `${row.stageId}-cat-`;
+                      const categoryId = row.id.startsWith(catPrefix) ? row.id.slice(catPrefix.length) : '';
+                      const catalogCategoryId = getCatalogCategoryIdFromCategoryRow(row, stageRow.sectionId, secciones);
+                      const customList = customCategoriesBySectionStage.get(row.stageId) ?? [];
+                      const catIdx = customList.findIndex((c) => c.id === categoryId);
+                      const isCustomCategory = catIdx >= 0;
+                      const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
+                      const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
+                      const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
+                      return (
+                        <CategoryDroppableHeader
+                          key={row.id}
+                          stageKey={stageRow.id}
+                          catalogCategoryId={catalogCategoryId}
+                          isValidDrop={isValidDrop}
+                          sectionId={row.sectionId}
+                        >
+                          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
+                            {formatCategoryLabel(row.label)}
                           </span>
-                        )}
-                        {(canMoveUp || canMoveDown) && (
-                          <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            {canMoveUp && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onMoveCategory?.(row.stageId, categoryId, 'up');
-                                }}
-                                className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                aria-label="Mover categoría arriba"
-                              >
-                                <ChevronUp className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            {canMoveDown && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onMoveCategory?.(row.stageId, categoryId, 'down');
-                                }}
-                                className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                aria-label="Mover categoría abajo"
-                              >
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  }
-                  if (isManualTaskRow(row)) {
-                    const taskRowsInOrder = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
-                    const pos = taskRowsInOrder.findIndex((r) => r === row);
-                    const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
-                    const orderedCategories = categoryRows.map((r) => ({
-                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
-                      name: r.label,
-                    }));
-                    const taskRowIndex = contentRows.indexOf(row);
-                    let categoryIndex = -1;
-                    for (let i = taskRowIndex - 1; i >= 0; i--) {
-                      if (isCategoryRow(contentRows[i]!)) {
-                        categoryIndex = categoryRows.indexOf(contentRows[i] as typeof categoryRows[0]);
-                        break;
-                      }
-                    }
-                    const prevCat = categoryIndex > 0 ? orderedCategories[categoryIndex - 1] : null;
-                    const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
-                    return (
-                      <ManualTaskRow
-                        key={row.task.id}
-                        task={row.task}
-                        studioSlug={studioSlug}
-                        eventId={eventId}
-                        stageCategory={stageRow.category}
-                        secciones={secciones}
-                        canMoveUp={pos > 0}
-                        canMoveDown={pos < taskRowsInOrder.length - 1}
-                        onMoveToPreviousCategory={
-                          prevCat && onManualTaskMoveStage
-                            ? () => onManualTaskMoveStage(row.task.id, stageRow.category, prevCat.id, prevCat.name)
-                            : undefined
-                        }
-                        onMoveToNextCategory={
-                          nextCat && onManualTaskMoveStage
-                            ? () => onManualTaskMoveStage(row.task.id, stageRow.category, nextCat.id, nextCat.name)
-                            : undefined
-                        }
-                        onManualTaskPatch={onManualTaskPatch}
-                        onManualTaskDelete={onManualTaskDelete}
-                        onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
-                        onReorderDown={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'down') : undefined}
-                        onMoveToStage={onManualTaskMoveStage}
-                        onDuplicate={onManualTaskDuplicate}
-                      />
-                    );
-                  }
-                  if (isTaskRow(row)) {
-                    const taskId = row.item.scheduler_task?.id;
-                    const taskRowsInOrder = contentRows.filter(
-                      (r): r is typeof row | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow =>
-                        isTaskRow(r) || isManualTaskRow(r)
-                    );
-                    const pos = taskRowsInOrder.indexOf(row);
-                    const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
-                    const orderedCategories = categoryRows.map((r) => ({
-                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
-                      name: r.label,
-                    }));
-                    let itemCategoryIndex = -1;
-                    const taskRowIndex = contentRows.indexOf(row);
-                    for (let i = taskRowIndex - 1; i >= 0; i--) {
-                      if (isCategoryRow(contentRows[i]!)) {
-                        itemCategoryIndex = categoryRows.indexOf(contentRows[i] as (typeof categoryRows)[0]);
-                        break;
-                      }
-                    }
-                    const prevCat = itemCategoryIndex > 0 ? orderedCategories[itemCategoryIndex - 1]! : null;
-                    const nextCat =
-                      itemCategoryIndex >= 0 && itemCategoryIndex < orderedCategories.length - 1
-                        ? orderedCategories[itemCategoryIndex + 1]!
-                        : null;
-                    const canMoveUp = !!taskId && (pos > 0 || (pos === 0 && prevCat !== null));
-                    const canMoveDown =
-                      !!taskId && (pos < taskRowsInOrder.length - 1 || (pos === taskRowsInOrder.length - 1 && nextCat !== null));
-                    const showArrows = taskId && (canMoveUp || canMoveDown) && (onItemTaskReorder || onItemTaskMoveCategory);
-
-                    return (
-                      <div
-                        key={row.item.id}
-                        className="group border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors relative"
-                        style={{ height: ROW_HEIGHTS.TASK_ROW }}
-                      >
-                        <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                        <div className="flex-1 min-w-0 flex items-center pl-8 pr-4 gap-1">
-                          <SchedulerItem
-                            item={row.item}
-                            metadata={{
-                              seccionNombre: row.seccionNombre,
-                              categoriaNombre: row.categoriaNombre,
-                              servicioNombre: row.servicioNombre,
-                              servicioId: row.catalogItemId,
-                            }}
-                            studioSlug={studioSlug}
-                            eventId={eventId}
-                            renderItem={renderItem}
-                            onItemUpdate={onItemUpdate}
-                            onTaskToggleComplete={onTaskToggleComplete}
-                          />
-                          {showArrows && (
+                          {process.env.NODE_ENV === 'development' && row.sectionId && (
+                            <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
+                              ({row.sectionId.slice(0, 8)}…)
+                            </span>
+                          )}
+                          {(canMoveUp || canMoveDown) && (
                             <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                               {canMoveUp && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (pos > 0) onItemTaskReorder?.(taskId, 'up');
-                                    else if (prevCat) onItemTaskMoveCategory?.(taskId, prevCat.id);
+                                    onMoveCategory?.(row.stageId, categoryId, 'up');
                                   }}
                                   className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                  aria-label="Mover arriba"
+                                  aria-label="Mover categoría arriba"
                                 >
                                   <ChevronUp className="h-3.5 w-3.5" />
                                 </button>
@@ -839,142 +960,279 @@ export const SchedulerSidebar = React.memo(({
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (pos < taskRowsInOrder.length - 1) onItemTaskReorder?.(taskId, 'down');
-                                    else if (nextCat) onItemTaskMoveCategory?.(taskId, nextCat.id);
+                                    onMoveCategory?.(row.stageId, categoryId, 'down');
                                   }}
                                   className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                  aria-label="Mover abajo"
+                                  aria-label="Mover categoría abajo"
                                 >
                                   <ChevronDown className="h-3.5 w-3.5" />
                                 </button>
                               )}
                             </span>
                           )}
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (isAddCategoryPhantomRow(row)) {
-                    const isThisAddCatOpen =
-                      addPopoverContext?.type === 'add_category' &&
-                      addPopoverContext.sectionId === row.sectionId &&
-                      addPopoverContext.stage === row.stageCategory;
-                    return (
-                      <div
-                        key={row.id}
-                        className="border-b border-zinc-800/30 flex items-center pl-8 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
-                        style={{ height: ROW_HEIGHTS.PHANTOM }}
-                      >
-                        {onAddCustomCategory && row.sectionId ? (
-                          <Popover
-                            open={isThisAddCatOpen}
-                            onOpenChange={(open) => {
-                              if (!open) setAddPopoverContext(null);
-                            }}
-                          >
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setAddPopoverContext({
-                                    type: 'add_category',
-                                    sectionId: row.sectionId,
-                                    stage: row.stageCategory,
-                                  })
-                                }
-                                className="flex items-center gap-1.5 w-full text-left"
-                              >
-                                <Plus className="h-3.5 w-3.5 shrink-0" />
-                                <span>Añadir categoría personalizada</span>
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-                              <AddCustomCategoryForm
-                                sectionId={row.sectionId}
-                                stage={row.stageCategory}
-                                onAdd={async (name) => {
-                                  await onAddCustomCategory(row.sectionId, row.stageCategory, name);
-                                  setAddPopoverContext(null);
-                                }}
-                                onCancel={() => setAddPopoverContext(null)}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <span className="flex items-center gap-1.5">
-                            <Plus className="h-3.5 w-3.5 shrink-0" />
-                            Añadir categoría personalizada
-                          </span>
-                        )}
-                      </div>
-                    );
-                  }
-                  if (isAddPhantomRow(row)) {
-                    const sectionLabel = row.categoryLabel
-                      ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${row.categoryLabel}`
-                      : (STAGE_LABELS[stageRow.category] ?? stageRow.label);
-                    const isThisPopoverOpen =
-                      addPopoverContext?.type === 'add_task' &&
-                      addPopoverContext.sectionId === row.sectionId &&
-                      addPopoverContext.stage === row.stageCategory &&
-                      addPopoverContext.catalogCategoryId === row.catalogCategoryId;
-                    return (
-                      <Popover
-                        key={row.id}
-                        open={isThisPopoverOpen}
-                        onOpenChange={(open) => {
-                          if (!open) setAddPopoverContext(null);
-                        }}
-                      >
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAddPopoverContext({
-                                type: 'add_task',
-                                sectionId: row.sectionId,
-                                stage: row.stageCategory,
-                                catalogCategoryId: row.catalogCategoryId,
-                                sectionLabel,
-                              })
-                            }
-                            className="w-full border-b border-zinc-800/30 flex items-center gap-1.5 pl-10 pr-4 text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs relative"
-                            style={{ height: ROW_HEIGHTS.PHANTOM }}
-                          >
-                            <div className="absolute left-8 top-0 bottom-0 w-px bg-zinc-500 shrink-0" aria-hidden />
-                            <Plus className="h-3.5 w-3.5 shrink-0" />
-                            <span>Añadir tarea personalizada</span>
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-80 p-3 bg-zinc-900 border-zinc-800"
-                          align="start"
-                          side="bottom"
-                          sideOffset={4}
+                        </CategoryDroppableHeader>
+                      );
+                    }
+                    if (isManualTaskRow(row)) {
+                      const taskRowsInOrder = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
+                      const pos = taskRowsInOrder.findIndex((r) => r === row);
+                      const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
+                      const orderedCategories = categoryRows.map((r) => ({
+                        id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                        name: r.label,
+                      }));
+                      const taskRowIndex = contentRows.indexOf(row);
+                      let categoryIndex = -1;
+                      for (let i = taskRowIndex - 1; i >= 0; i--) {
+                        if (isCategoryRow(contentRows[i]!)) {
+                          categoryIndex = categoryRows.indexOf(contentRows[i] as typeof categoryRows[0]);
+                          break;
+                        }
+                      }
+                      const prevCat = categoryIndex > 0 ? orderedCategories[categoryIndex - 1] : null;
+                      const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
+                      const manualCatalogCategoryId = (row.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+                      return (
+                        <DraggableDroppableTaskRow
+                          key={row.task.id}
+                          taskId={row.task.id}
+                          isManual
+                          catalogCategoryId={manualCatalogCategoryId}
+                          stageKey={stageRow.id}
                         >
-                          <TaskForm
-                            mode="create"
+                          <ManualTaskRow
+                            task={row.task}
                             studioSlug={studioSlug}
                             eventId={eventId}
-                            sectionLabel={sectionLabel}
-                            onClose={() => setAddPopoverContext(null)}
-                            onSubmit={async (data) => {
-                              if (!onAddManualTaskSubmit) return;
-                              await onAddManualTaskSubmit(row.sectionId, row.stageCategory, row.catalogCategoryId, data);
-                              setAddPopoverContext(null);
-                            }}
+                            stageCategory={stageRow.category}
+                            secciones={secciones}
+                            canMoveUp={pos > 0}
+                            canMoveDown={pos < taskRowsInOrder.length - 1}
+                            onMoveToPreviousCategory={
+                              prevCat && onManualTaskMoveStage
+                                ? () => onManualTaskMoveStage(row.task.id, stageRow.category, prevCat.id, prevCat.name)
+                                : undefined
+                            }
+                            onMoveToNextCategory={
+                              nextCat && onManualTaskMoveStage
+                                ? () => onManualTaskMoveStage(row.task.id, stageRow.category, nextCat.id, nextCat.name)
+                                : undefined
+                            }
+                            onManualTaskPatch={onManualTaskPatch}
+                            onManualTaskDelete={onManualTaskDelete}
+                            onReorderUp={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'up') : undefined}
+                            onReorderDown={onManualTaskReorder ? (id) => onManualTaskReorder(id, 'down') : undefined}
+                            onMoveToStage={onManualTaskMoveStage}
+                            onDuplicate={onManualTaskDuplicate}
                           />
-                        </PopoverContent>
-                      </Popover>
-                    );
-                  }
-                  return null;
-                })}
-              </>
-            ) : null}
-          </React.Fragment>
-        );
-      })}
+                        </DraggableDroppableTaskRow>
+                      );
+                    }
+                    if (isTaskRow(row)) {
+                      const taskId = row.item.scheduler_task?.id;
+                      const taskRowsInOrder = contentRows.filter(
+                        (r): r is typeof row | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow =>
+                          isTaskRow(r) || isManualTaskRow(r)
+                      );
+                      const pos = taskRowsInOrder.indexOf(row);
+                      const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
+                      const orderedCategories = categoryRows.map((r) => ({
+                        id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                        name: r.label,
+                      }));
+                      let itemCategoryIndex = -1;
+                      const taskRowIndex = contentRows.indexOf(row);
+                      for (let i = taskRowIndex - 1; i >= 0; i--) {
+                        if (isCategoryRow(contentRows[i]!)) {
+                          itemCategoryIndex = categoryRows.indexOf(contentRows[i] as (typeof categoryRows)[0]);
+                          break;
+                        }
+                      }
+                      const itemEffectiveCatalogCategoryId =
+                        itemCategoryIndex >= 0 && itemCategoryIndex < orderedCategories.length
+                          ? orderedCategories[itemCategoryIndex]!.id
+                          : (row.item as { service_category_id?: string | null }).service_category_id ?? (row.item.scheduler_task as { catalog_category_id?: string | null })?.catalog_category_id ?? null;
+
+                      return (
+                        <DraggableDroppableTaskRow
+                          key={row.item.id}
+                          taskId={taskId!}
+                          isManual={false}
+                          catalogCategoryId={itemEffectiveCatalogCategoryId}
+                          stageKey={stageRow.id}
+                        >
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <SchedulerItem
+                              item={row.item}
+                              metadata={{
+                                seccionNombre: row.seccionNombre,
+                                categoriaNombre: row.categoriaNombre,
+                                servicioNombre: row.servicioNombre,
+                                servicioId: row.catalogItemId,
+                              }}
+                              studioSlug={studioSlug}
+                              eventId={eventId}
+                              renderItem={renderItem}
+                              onItemUpdate={onItemUpdate}
+                              onTaskToggleComplete={onTaskToggleComplete}
+                            />
+                          </div>
+                        </DraggableDroppableTaskRow>
+                      );
+                    }
+                    if (isAddCategoryPhantomRow(row)) {
+                      const isThisAddCatOpen =
+                        addPopoverContext?.type === 'add_category' &&
+                        addPopoverContext.sectionId === row.sectionId &&
+                        addPopoverContext.stage === row.stageCategory;
+                      return (
+                        <div
+                          key={row.id}
+                          className="border-b border-zinc-800/30 flex items-center text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                          style={{ height: ROW_HEIGHTS.PHANTOM }}
+                        >
+                          <div className="w-8 shrink-0" aria-hidden />
+                          <div className="flex-1 min-w-0 flex items-center gap-1.5 pr-4">
+                          {onAddCustomCategory && row.sectionId ? (
+                            <Popover
+                              open={isThisAddCatOpen}
+                              onOpenChange={(open) => {
+                                if (!open) setAddPopoverContext(null);
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAddPopoverContext({
+                                      type: 'add_category',
+                                      sectionId: row.sectionId,
+                                      stage: row.stageCategory,
+                                    })
+                                  }
+                                  className="flex items-center gap-1.5 w-full text-left"
+                                >
+                                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                                  <span>Añadir categoría personalizada</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                                <AddCustomCategoryForm
+                                  sectionId={row.sectionId}
+                                  stage={row.stageCategory}
+                                  onAdd={async (name) => {
+                                    await onAddCustomCategory(row.sectionId, row.stageCategory, name);
+                                    setAddPopoverContext(null);
+                                  }}
+                                  onCancel={() => setAddPopoverContext(null)}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <span className="flex items-center gap-1.5">
+                              <Plus className="h-3.5 w-3.5 shrink-0" />
+                              Añadir categoría personalizada
+                            </span>
+                          )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (isAddPhantomRow(row)) {
+                      const sectionLabel = row.categoryLabel
+                        ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${row.categoryLabel}`
+                        : (STAGE_LABELS[stageRow.category] ?? stageRow.label);
+                      const isThisPopoverOpen =
+                        addPopoverContext?.type === 'add_task' &&
+                        addPopoverContext.sectionId === row.sectionId &&
+                        addPopoverContext.stage === row.stageCategory &&
+                        addPopoverContext.catalogCategoryId === row.catalogCategoryId;
+                      return (
+                        <Popover
+                          key={row.id}
+                          open={isThisPopoverOpen}
+                          onOpenChange={(open) => {
+                            if (!open) setAddPopoverContext(null);
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAddPopoverContext({
+                                  type: 'add_task',
+                                  sectionId: row.sectionId,
+                                  stage: row.stageCategory,
+                                  catalogCategoryId: row.catalogCategoryId,
+                                  sectionLabel,
+                                })
+                              }
+                              className="w-full border-b border-zinc-800/30 flex items-center text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                              style={{ height: ROW_HEIGHTS.PHANTOM }}
+                            >
+                              <div className="w-8 shrink-0" aria-hidden />
+                              <SchedulerRamaLine minHeight={ROW_HEIGHTS.PHANTOM} />
+                              <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-4 pr-4">
+                                <Plus className="h-3.5 w-3.5 shrink-0" />
+                                <span>Añadir tarea personalizada</span>
+                              </div>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-80 p-3 bg-zinc-900 border-zinc-800"
+                            align="start"
+                            side="bottom"
+                            sideOffset={4}
+                          >
+                            <TaskForm
+                              mode="create"
+                              studioSlug={studioSlug}
+                              eventId={eventId}
+                              sectionLabel={sectionLabel}
+                              onClose={() => setAddPopoverContext(null)}
+                              onSubmit={async (data) => {
+                                if (!onAddManualTaskSubmit) return;
+                                await onAddManualTaskSubmit(row.sectionId, row.stageCategory, row.catalogCategoryId, data);
+                                setAddPopoverContext(null);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      );
+                    }
+                    return null;
+                  })}
+                </>
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+
+        <DragOverlay dropAnimation={null}>{null}</DragOverlay>
+        {activeDragData &&
+          overlayPosition &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              className="cursor-grabbing pointer-events-none"
+              style={{
+                position: 'fixed',
+                left: overlayPosition.x,
+                top: overlayPosition.y,
+                zIndex: 99999,
+                touchAction: 'none',
+              }}
+            >
+              <SchedulerDragOverlayRow
+                taskId={activeDragData.taskId}
+                isManual={activeDragData.isManual}
+                itemsMap={itemsMap}
+                manualTasks={manualTasks}
+              />
+            </div>,
+            document.body
+          )}
+      </DndContext>
 
       <ZenConfirmModal
         isOpen={deleteModal.open}

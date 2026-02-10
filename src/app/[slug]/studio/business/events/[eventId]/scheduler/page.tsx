@@ -176,16 +176,6 @@ export default function EventSchedulerPage() {
       const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
       if (result.success && result.data) {
         const data = result.data;
-        if (typeof window !== 'undefined') {
-          console.log('PAYLOAD_INICIAL:', {
-            id: data.id,
-            schedulerTasksCount: data.scheduler?.tasks?.length ?? 0,
-            manualTasksCount: data.scheduler?.tasks?.filter((t) => t.cotizacion_item_id == null).length ?? 0,
-            explicitlyActivatedStageIds: data.explicitlyActivatedStageIds,
-            customCategoriesBySectionStage: data.customCategoriesBySectionStage,
-            seccionesCount: data.secciones?.length ?? 0,
-          });
-        }
         setPayload(data);
         setDateRange(prev => {
           if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
