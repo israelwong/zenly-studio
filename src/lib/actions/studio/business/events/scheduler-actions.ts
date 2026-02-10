@@ -1306,6 +1306,7 @@ export async function reorderSchedulerTasksToOrder(
   taskIdsInOrder: string[]
 ): Promise<{ success: boolean; error?: string }> {
   if (taskIdsInOrder.length === 0) return { success: true };
+  console.log('SERVER: Reordering tasks', taskIdsInOrder);
   try {
     const first = await prisma.studio_scheduler_event_tasks.findFirst({
       where: { id: taskIdsInOrder[0], scheduler_instance: { event_id: eventId } },
@@ -1324,6 +1325,7 @@ export async function reorderSchedulerTasksToOrder(
       ? first.cotizacion_item?.service_category_id ?? first.catalog_category_id ?? null
       : first.catalog_category_id ?? null;
 
+    // No filtrar por catalog_category_id en DB: sin categoría (null) debe funcionar; filtro efectivo en memoria (unified).
     const siblings = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
         scheduler_instance_id: first.scheduler_instance_id,
@@ -1347,6 +1349,7 @@ export async function reorderSchedulerTasksToOrder(
     const ordered = taskIdsInOrder.filter((id) => validIds.has(id));
     if (ordered.length !== taskIdsInOrder.length) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito' };
 
+    console.time('DB_UPDATE');
     const tx = ordered.map((id, i) =>
       prisma.studio_scheduler_event_tasks.update({
         where: { id },
@@ -1354,9 +1357,9 @@ export async function reorderSchedulerTasksToOrder(
       })
     );
     await prisma.$transaction(tx);
+    console.timeEnd('DB_UPDATE');
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    // No revalidar aquí: el cliente usa actualización optimista y onDataChange; revalidatePath puede causar render ~5s.
     return { success: true };
   } catch (error) {
     console.error('[reorderSchedulerTasksToOrder] Error:', error);

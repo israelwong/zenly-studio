@@ -70,6 +70,17 @@
   .animate-progress-load {
     animation: progressLoad 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
+
+  @keyframes scheduler-dnd-shake-kf {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+  }
+  .scheduler-dnd-shake {
+    animation: scheduler-dnd-shake-kf 0.4s ease-in-out;
+  }
 }
 
 :root {

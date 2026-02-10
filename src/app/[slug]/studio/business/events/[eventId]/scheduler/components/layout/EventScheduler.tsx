@@ -5,7 +5,15 @@ import { type DateRange } from 'react-day-picker';
 import type { SchedulerData, SchedulerCotizacionItem } from '@/lib/actions/studio/business/events';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { SchedulerViewData } from '../shared/EventSchedulerView';
-import { STAGE_ORDER, SIN_CATEGORIA_SECTION_ID } from '../../utils/scheduler-section-stages';
+import {
+  STAGE_ORDER,
+  SIN_CATEGORIA_SECTION_ID,
+  buildSchedulerRows,
+  getStageSegments,
+  groupRowsIntoBlocks,
+  isTaskRow,
+  isManualTaskRow,
+} from '../../utils/scheduler-section-stages';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import { SchedulerPanel } from './SchedulerPanel';
 import {
@@ -19,6 +27,7 @@ import {
   crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
 import type { DragEndEvent, DragStartEvent, DragMoveEvent } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -134,6 +143,27 @@ export const EventScheduler = React.memo(function EventScheduler({
   // Bloquear sync desde el padre mientras un reorden está en vuelo (evitar snap-back).
   const reorderInFlightRef = useRef(false);
 
+  /** Bloquea nuevos arrastres mientras persiste el orden en el servidor (evita cola de peticiones). */
+  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
+
+  /** Debounce: esperar 300ms antes de enviar al servidor; si el usuario mueve de nuevo, se reemplaza el payload. */
+  const reorderDebounceRef = useRef<{
+    timeout: ReturnType<typeof setTimeout> | null;
+    payload: {
+      studioSlug: string;
+      eventId: string;
+      reordered: string[];
+      taskIdToOldOrder: Map<string, number>;
+      taskIdToNewOrder: Map<string, number>;
+    } | null;
+  }>({ timeout: null, payload: null });
+  const setLocalEventDataRef = useRef(setLocalEventData);
+  const localEventDataRef = useRef(localEventData);
+  const onDataChangeRef = useRef(onDataChange);
+  setLocalEventDataRef.current = setLocalEventData;
+  localEventDataRef.current = localEventData;
+  onDataChangeRef.current = onDataChange;
+
   /** Datos del ítem arrastrado (para que el Sidebar resalte destinos válidos). */
   const [activeDragData, setActiveDragData] = useState<{
     taskId: string;
@@ -145,6 +175,15 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** Posición del overlay en body (createPortal) para que la fila arrastrada sea visible. */
   const [overlayPosition, setOverlayPosition] = useState<{ x: number; y: number } | null>(null);
   const overlayStartRectRef = useRef<{ left: number; top: number } | null>(null);
+  /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
+  const lastOverIdRef = useRef<string | null>(null);
+
+  // Limpieza del debounce al desmontar
+  useEffect(() => {
+    return () => {
+      if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
+    };
+  }, []);
 
   // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
   // No sobrescribir mientras handleReorder está en vuelo para no revertir la actualización optimista.
@@ -448,62 +487,46 @@ export const EventScheduler = React.memo(function EventScheduler({
       catalogCategoryId?: string | null,
       catalogCategoryNombre?: string | null
     ) => {
-      const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category, catalogCategoryId);
-      if (!result.success) {
-        toast.error(result.error ?? 'Error al mover la tarea');
-        return;
+      setIsUpdatingOrder(true);
+      try {
+        const result = await moverTareaManualCategoria(studioSlug, eventId, taskId, category, catalogCategoryId);
+        if (!result.success) {
+          toast.error(result.error ?? 'Error al mover la tarea');
+          return;
+        }
+        handleManualTaskPatch(taskId, {
+          category,
+          catalog_category_id: catalogCategoryId ?? null,
+          catalog_category_nombre: catalogCategoryNombre ?? null,
+        });
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      } finally {
+        setIsUpdatingOrder(false);
       }
-      handleManualTaskPatch(taskId, {
-        category,
-        catalog_category_id: catalogCategoryId ?? null,
-        catalog_category_nombre: catalogCategoryNombre ?? null,
-      });
-      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [studioSlug, eventId, handleManualTaskPatch]
   );
 
   const handleItemTaskMoveCategory = useCallback(
     async (taskId: string, catalogCategoryId: string | null) => {
-      const cotizaciones = localEventData.cotizaciones ?? [];
-      let taskItem: (NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & { scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> }) | null = null;
-      for (const cot of cotizaciones) {
-        for (const item of cot.cotizacion_items ?? []) {
-          if (item?.scheduler_task?.id === taskId) {
-            taskItem = item as typeof taskItem;
-            break;
+      setIsUpdatingOrder(true);
+      try {
+        const cotizaciones = localEventData.cotizaciones ?? [];
+        let taskItem: (NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] & { scheduler_task: NonNullable<NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0]['scheduler_task']> }) | null = null;
+        for (const cot of cotizaciones) {
+          for (const item of cot.cotizacion_items ?? []) {
+            if (item?.scheduler_task?.id === taskId) {
+              taskItem = item as typeof taskItem;
+              break;
+            }
           }
+          if (taskItem) break;
         }
-        if (taskItem) break;
-      }
-      if (!taskItem?.scheduler_task) return;
-      const prevCatalogId = taskItem.scheduler_task.catalog_category_id ?? (taskItem as { service_category_id?: string | null }).service_category_id ?? null;
-      const prevOrder = taskItem.scheduler_task.order ?? 0;
+        if (!taskItem?.scheduler_task) return;
+        const prevCatalogId = taskItem.scheduler_task.catalog_category_id ?? (taskItem as { service_category_id?: string | null }).service_category_id ?? null;
+        const prevOrder = taskItem.scheduler_task.order ?? 0;
 
-      setLocalEventData((prev) => {
-        const next = { ...prev };
-        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
-          ...cot,
-          cotizacion_items: cot.cotizacion_items?.map((item) =>
-            item?.scheduler_task?.id === taskId
-              ? {
-                ...item,
-                ...(catalogCategoryId != null && (item as { catalog_category_id?: string | null }).catalog_category_id !== undefined
-                  ? { catalog_category_id: catalogCategoryId }
-                  : {}),
-                scheduler_task: item.scheduler_task
-                  ? { ...item.scheduler_task, catalog_category_id: catalogCategoryId, order: (item.scheduler_task.order ?? 0) + 10000 }
-                  : null,
-              }
-              : item
-          ),
-        }));
-        return next;
-      });
-
-      const result = await moverTareaItemCategoria(studioSlug, eventId, taskId, catalogCategoryId);
-      if (!result.success) {
         setLocalEventData((prev) => {
           const next = { ...prev };
           next.cotizaciones = prev.cotizaciones?.map((cot) => ({
@@ -512,8 +535,11 @@ export const EventScheduler = React.memo(function EventScheduler({
               item?.scheduler_task?.id === taskId
                 ? {
                   ...item,
+                  ...(catalogCategoryId != null && (item as { catalog_category_id?: string | null }).catalog_category_id !== undefined
+                    ? { catalog_category_id: catalogCategoryId }
+                    : {}),
                   scheduler_task: item.scheduler_task
-                    ? { ...item.scheduler_task, catalog_category_id: prevCatalogId, order: prevOrder }
+                    ? { ...item.scheduler_task, catalog_category_id: catalogCategoryId, order: (item.scheduler_task.order ?? 0) + 10000 }
                     : null,
                 }
                 : item
@@ -521,68 +547,125 @@ export const EventScheduler = React.memo(function EventScheduler({
           }));
           return next;
         });
-        toast.error(result.error ?? 'Error al mover la tarea');
-        return;
+
+        const result = await moverTareaItemCategoria(studioSlug, eventId, taskId, catalogCategoryId);
+        if (!result.success) {
+          setLocalEventData((prev) => {
+            const next = { ...prev };
+            next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+              ...cot,
+              cotizacion_items: cot.cotizacion_items?.map((item) =>
+                item?.scheduler_task?.id === taskId
+                  ? {
+                    ...item,
+                    scheduler_task: item.scheduler_task
+                      ? { ...item.scheduler_task, catalog_category_id: prevCatalogId, order: prevOrder }
+                      : null,
+                  }
+                  : item
+              ),
+            }));
+            return next;
+          });
+          toast.error(result.error ?? 'Error al mover la tarea');
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      } finally {
+        setIsUpdatingOrder(false);
       }
-      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [studioSlug, eventId, localEventData]
   );
 
-  const handleSchedulerDragStart = useCallback((event: DragStartEvent) => {
-    const taskId = String(event.active.id);
-    // useSortable no pasa data; resolver desde localEventData
-    const cotizaciones = localEventData.cotizaciones ?? [];
-    const manualTasks = localEventData.scheduler?.tasks ?? [];
-    let resolved: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null = null;
-    for (const cot of cotizaciones) {
-      const sectionId = (cot as { catalog_section_id?: string | null }).catalog_section_id ?? SIN_CATEGORIA_SECTION_ID;
-      for (const item of cot.cotizacion_items ?? []) {
-        if (item?.scheduler_task?.id === taskId) {
-          const st = item.scheduler_task as { category?: string; catalog_category_id?: string | null };
-          const effectiveCat = (item as { service_category_id?: string | null }).service_category_id ?? st.catalog_category_id ?? null;
-          resolved = { taskId, isManual: false, catalogCategoryId: effectiveCat ?? null, stageKey: `${sectionId}-${st.category ?? 'PLANNING'}` };
-          break;
+  /** Misma resolución que buildSchedulerRows: catalog_category_id → sectionId desde secciones. Sincronía con Sidebar. */
+  const getSectionIdFromCatalog = useCallback((catalogCategoryId: string | null): string => {
+    if (!catalogCategoryId || catalogCategoryId === SIN_CATEGORIA_SECTION_ID) return SIN_CATEGORIA_SECTION_ID;
+    for (const s of secciones) {
+      for (const c of s.categorias) {
+        if (c.id === catalogCategoryId) return s.id;
+      }
+    }
+    return SIN_CATEGORIA_SECTION_ID;
+  }, [secciones]);
+
+  /** Búsqueda global por ID de tarea. stageKey = misma lógica que Sidebar (buildSchedulerRows): sectionId desde categoría del ítem, no desde cot. */
+  const resolveActiveDragDataById = useCallback(
+    (activeId: string): { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null => {
+      const searchId = String(activeId).trim();
+      const cotizaciones = localEventData.cotizaciones ?? [];
+      const manualTasks = localEventData.scheduler?.tasks ?? [];
+      for (const cot of cotizaciones) {
+        for (const item of cot.cotizacion_items ?? []) {
+          const id = item?.scheduler_task?.id;
+          const match = id != null && String(id) === searchId;
+          if (match) {
+            const st = item.scheduler_task as { category?: string; catalog_category_id?: string | null };
+            const catalogCategoryId = (item as { catalog_category_id?: string | null }).catalog_category_id ?? st.catalog_category_id ?? null;
+            const sectionId = getSectionIdFromCatalog(catalogCategoryId);
+            const stageKey = `${sectionId}-${st.category ?? 'PLANNING'}`;
+            return { taskId: String(id), isManual: false, catalogCategoryId: catalogCategoryId ?? null, stageKey };
+          }
         }
       }
-      if (resolved) break;
-    }
-    if (!resolved) {
-      const manual = manualTasks.find((t) => t.id === taskId && t.cotizacion_item_id == null);
-      if (manual) {
-        const t = manual as { catalog_section_id?: string | null; category?: string; catalog_category_id?: string | null };
-        resolved = {
-          taskId,
-          isManual: true,
-          catalogCategoryId: t.catalog_category_id ?? null,
-          stageKey: `${t.catalog_section_id ?? SIN_CATEGORIA_SECTION_ID}-${t.category ?? 'PLANNING'}`,
-        };
+      for (const t of manualTasks) {
+        const id = t.id;
+        const match = id != null && String(id) === searchId && (t as { cotizacion_item_id?: string | null }).cotizacion_item_id == null;
+        if (match) {
+          const manual = t as { catalog_section_id?: string | null; category?: string; catalog_category_id?: string | null };
+          return {
+            taskId: String(id),
+            isManual: true,
+            catalogCategoryId: manual.catalog_category_id ?? null,
+            stageKey: `${manual.catalog_section_id ?? SIN_CATEGORIA_SECTION_ID}-${manual.category ?? 'PLANNING'}`,
+          };
+        }
       }
-    }
-    if (resolved) {
-      console.log('[DnD] Drag Started', event.active.id);
-      setActiveDragData(resolved);
-      const rect = event.active.rect.current;
-      if (rect) {
-        overlayStartRectRef.current = { left: rect.left, top: rect.top };
-        setOverlayPosition({ x: rect.left, y: rect.top });
+      return null;
+    },
+    [localEventData, getSectionIdFromCatalog]
+  );
+
+  const handleSchedulerDragStart = useCallback(
+    (event: DragStartEvent) => {
+      if (isUpdatingOrder) return;
+      const taskId = String(event.active.id);
+      const foundTask = resolveActiveDragDataById(taskId);
+      console.log('[DnD] Global Search Result:', foundTask);
+      if (foundTask) {
+        lastOverIdRef.current = null;
+        setActiveDragData(foundTask);
+        const rect = event.active.rect.current;
+        if (rect) {
+          overlayStartRectRef.current = { left: rect.left, top: rect.top };
+          setOverlayPosition({ x: rect.left, y: rect.top });
+        }
       }
-    }
-  }, [localEventData]);
+    },
+    [resolveActiveDragDataById, isUpdatingOrder]
+  );
 
   const handleSchedulerDragMove = useCallback((event: DragMoveEvent) => {
     const start = overlayStartRectRef.current;
     if (!start) return;
+    if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
     setOverlayPosition({ x: start.left + event.delta.x, y: start.top + event.delta.y });
   }, []);
 
   const handleSchedulerDragEnd = useCallback(
     async (event: DragEndEvent) => {
+      try {
       const { active, over } = event;
       const activeId = String(active.id);
-      const overId = over?.id ? String(over.id) : null;
+      let overId = over?.id ? String(over.id) : null;
+      if (!overId && lastOverIdRef.current && lastOverIdRef.current !== activeId) overId = lastOverIdRef.current;
+      lastOverIdRef.current = null;
       const overData = over?.data?.current as { stageKey?: string; catalogCategoryId?: string | null } | undefined;
+
+      // Prioridad absoluta al fallback: IGNORAR activeDragData para validaciones; usar siempre la búsqueda fresca
+      const activeDataResolved = resolveActiveDragDataById(activeId);
+      console.log('[DnD] Drag Ended', { activeId: active.id, overId: over?.id, resolved: activeDataResolved });
 
       type Entry = {
         taskId: string;
@@ -597,171 +680,275 @@ export const EventScheduler = React.memo(function EventScheduler({
         type: 'manual';
         task: NonNullable<SchedulerViewData['scheduler']>['tasks'][0];
       };
+
+      // Misma fuente que el Sidebar: buildSchedulerRows → groupRowsIntoBlocks → getStageSegments. Handler ve EXACTAMENTE lo que ve el SortableContext.
       const cotizaciones = localEventData.cotizaciones ?? [];
-      const manualTasks = localEventData.scheduler?.tasks ?? [];
-      const itemsWithTask: Entry[] = [];
-      for (const cot of cotizaciones) {
-        const sectionId = (cot as { catalog_section_id?: string | null }).catalog_section_id ?? SIN_CATEGORIA_SECTION_ID;
-        for (const item of cot.cotizacion_items ?? []) {
-          if (item?.scheduler_task?.id) {
-            const st = item.scheduler_task as { order?: number; category?: string; catalog_category_id?: string | null };
-            const effectiveCat = (item as { service_category_id?: string | null }).service_category_id ?? st.catalog_category_id ?? null;
-            const stageKey = `${sectionId}-${st.category ?? 'PLANNING'}`;
-            itemsWithTask.push({ taskId: item.scheduler_task.id, order: st.order ?? 0, stageKey, type: 'item', item });
+      const manualTasksForRows = (localEventData.scheduler?.tasks ?? []).filter((t) => t.cotizacion_item_id == null);
+      const allItemsForMap: CotizacionItem[] = [];
+      cotizaciones.forEach((cot) => {
+        const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
+        if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
+      });
+      const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
+      const itemsMapForRows = new Map<string, CotizacionItem>();
+      sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+
+      const rows = buildSchedulerRows(
+        secciones,
+        itemsMapForRows,
+        manualTasksForRows,
+        activeSectionIds,
+        explicitlyActivatedStageIds,
+        customCategoriesBySectionStage
+      );
+      const blocks = groupRowsIntoBlocks(rows);
+      const allTaskIds = new Set<string>();
+      const taskIdToMeta = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
+      let combined: Entry[] | null = null;
+
+      for (const b of blocks) {
+        if (b.type !== 'stage_block') continue;
+        const stageId = b.block.stageRow.id;
+        for (const segment of getStageSegments(b.block.contentRows)) {
+          const taskRows = segment.rows.filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r));
+          for (const r of taskRows) {
+            const taskId = r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id);
+            if (!taskId || taskId === 'undefined') continue;
+            allTaskIds.add(taskId);
+            const catalogCategoryId =
+              r.type === 'task'
+                ? (r.item as { catalog_category_id?: string | null }).catalog_category_id ?? (r.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+                : (r.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+            taskIdToMeta.set(taskId, { stageKey: stageId, catalogCategoryId });
+          }
+          const hasActive = taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === activeId);
+          if (!combined && hasActive) {
+            combined = taskRows.map((r) =>
+              r.type === 'task'
+                ? ({
+                    taskId: String(r.item.scheduler_task?.id),
+                    order: (r.item.scheduler_task as { order?: number }).order ?? 0,
+                    stageKey: stageId,
+                    type: 'item' as const,
+                    item: r.item,
+                  } satisfies Entry)
+                : ({
+                    taskId: String(r.task.id),
+                    order: (r.task as { order?: number }).order ?? 0,
+                    stageKey: stageId,
+                    type: 'manual' as const,
+                    task: r.task,
+                  } satisfies Entry)
+            );
+            combined.sort((a, b) => a.order - b.order);
           }
         }
       }
-      const manualEntries: Entry[] = manualTasks
-        .filter((t) => t.cotizacion_item_id == null)
-        .map((t) => ({
-          taskId: t.id,
-          order: (t as { order?: number }).order ?? 0,
-          stageKey: `${(t as { catalog_section_id?: string | null }).catalog_section_id ?? SIN_CATEGORIA_SECTION_ID}-${(t as { category?: string }).category ?? 'PLANNING'}`,
-          type: 'manual' as const,
-          task: t,
-        }));
 
-      const moved = itemsWithTask.find((e) => e.taskId === activeId) ?? manualEntries.find((e) => e.taskId === activeId);
+      if (!combined) {
+        console.log('[DnD] Scope Check (early):', { reason: 'segmentNotFound', activeId });
+        return;
+      }
 
-      setActiveDragData(null);
-      setOverlayPosition(null);
-      overlayStartRectRef.current = null;
-      if (!overId || active.id === overId) return;
-      if (!moved) return;
+      const moved = combined.find((e) => e.taskId === activeId);
 
-      const category = moved.type === 'item' ? (moved.item.scheduler_task as { category?: string }).category ?? 'PLANNING' : (moved.task as { category?: string }).category ?? 'PLANNING';
-      const effectiveCat = moved.type === 'item' ? (moved.item as { service_category_id?: string | null }).service_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
-      const isManual = moved.type === 'manual';
-      const activeStageKey = moved.stageKey;
-      const activeCatalogCategoryId = effectiveCat ?? null;
+      if (!overId || active.id === overId) {
+        console.log('[DnD] Scope Check (early):', { reason: 'noOverOrSame', overId, activeId: active.id });
+        return;
+      }
+      if (!moved) {
+        console.log('[DnD] Scope Check (early):', { reason: 'movedNotFound', activeId });
+        return;
+      }
+      if (!activeDataResolved) {
+        console.log('[DnD] Scope Check (early):', { reason: 'activeDataResolvedNull', activeId });
+        return;
+      }
 
-      // Mismo ámbito estricto: mismo stageKey y misma categoría efectiva
-      const sameScope = (e: Entry) => {
-        const cat = e.type === 'item' ? (e.item.scheduler_task as { category?: string }).category ?? 'PLANNING' : (e.task as { category?: string }).category ?? 'PLANNING';
-        const ec = e.type === 'item' ? (e.item as { service_category_id?: string | null }).service_category_id ?? (e.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null : (e.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
-        return e.stageKey === activeStageKey && cat === category && (ec ?? null) === (effectiveCat ?? null);
-      };
-      const combined: Entry[] = [...itemsWithTask.filter(sameScope), ...manualEntries.filter(sameScope)];
-      combined.sort((a, b) => a.order - b.order);
+      console.log('[DnD] Item Type Check:', { id: activeId, isManual: activeDataResolved.isManual, canMove: true });
 
-      /** Normaliza categoría: '' o undefined → null (guía: Limpieza de IDs). */
-      const normCat = (v: string | null | undefined): string | null => (v === '' || v == null ? null : v);
+      /** Normaliza categoría: '' / undefined / __sin_categoria__ → null (evita fallos en DB). */
+      const normCat = (v: string | null | undefined): string | null =>
+        v === '' || v == null || v === SIN_CATEGORIA_SECTION_ID ? null : v;
 
-      /** sectionId desde stageKey (formato "sectionId-STAGE"). Guía: manuales solo entre categorías de la misma sección. */
+      const isManual = activeDataResolved.isManual;
+      const activeStageKey = activeDataResolved.stageKey;
+      const activeCatalogCategoryId = normCat(activeDataResolved.catalogCategoryId) ?? null;
+
+      const effectiveCat =
+        moved.type === 'item'
+          ? (moved.item as { catalog_category_id?: string | null }).catalog_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+          : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+      /** sectionId desde stageKey (formato "sectionId-STAGE). */
       const getSectionIdFromStageKey = (sk: string) => (sk.includes('-') ? sk.slice(0, sk.lastIndexOf('-')) : sk);
 
-      /** Extracción targetCategoryId (guía): cat::stageKey::catalogCategoryId → parsed. */
-      const parsedCat = parseSchedulerCategoryDroppableId(overId);
-      if (parsedCat) {
-        const { stageKey: targetStageKey, catalogCategoryId: rawTarget } = parsedCat;
-        const targetId = normCat(rawTarget);
-        if (targetId === null) return; // Nunca mover a Sin categoría
-        const stageCategory = (targetStageKey?.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-        if (!isManual) {
-          // Ítem de cotización: solo misma categoría (guía: reversión inmediata si no coincide)
-          const itemCatalogId = normCat(effectiveCat);
-          if (activeStageKey !== targetStageKey) return;
-          if (itemCatalogId !== targetId) return;
-          await handleItemTaskMoveCategory(activeId, targetId);
+      // over.id puede ser ID de tarea (plano) o categoría (prefijo cat::). Si no es tarea conocida, tratar como categoría.
+      if (!allTaskIds.has(overId)) {
+        const parsedCat = parseSchedulerCategoryDroppableId(overId);
+        if (parsedCat) {
+          const { stageKey: targetStageKey, catalogCategoryId: rawTarget } = parsedCat;
+          const targetId = normCat(rawTarget);
+          const stageCategory = (targetStageKey?.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+          if (!isManual) {
+            await handleItemTaskMoveCategory(activeId, targetId ?? null);
+          } else {
+            if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) {
+              console.log('[DnD] Scope Check:', { reason: 'manualSectionMismatch', activeStage: activeStageKey, targetStageKey, isManual: true });
+              return;
+            }
+            await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, null);
+          }
         } else {
-          // Tarea manual: solo entre categorías de la misma sección
-          if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) return;
-          await handleManualTaskMoveStage(activeId, stageCategory, rawTarget, null);
+          console.log('[DnD] Scope Check:', { reason: 'dropNotCategory', overId, activeStage: activeStageKey, isManual: activeDataResolved.isManual });
         }
         return;
       }
 
-      // Droppable = otra tarea: reorden solo si mismo scope (stageKey + categoría)
-      const activeCat = normCat(activeCatalogCategoryId);
+      const activeCat = activeCatalogCategoryId;
       const overEntry = combined.find((e) => e.taskId === overId);
-      const overStage = overData?.stageKey ?? overEntry?.stageKey;
+      const overMeta = taskIdToMeta.get(overId);
+      const overStage = overData?.stageKey ?? overEntry?.stageKey ?? overMeta?.stageKey;
       const overCatResolved = overEntry
         ? overEntry.type === 'item'
-          ? normCat((overEntry.item as { service_category_id?: string | null }).service_category_id ?? (overEntry.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
+          ? normCat((overEntry.item as { catalog_category_id?: string | null }).catalog_category_id ?? (overEntry.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
           : normCat((overEntry.task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
-        : null;
+        : overMeta
+          ? normCat(overMeta.catalogCategoryId)
+          : null;
       const overCat = normCat(overData?.catalogCategoryId) ?? overCatResolved;
-      if (overStage !== activeStageKey || overCat !== activeCat) {
+
+      /** Limpieza para comparar stageKey: mismo valor que usa el Sidebar (evita __sin_categoria__ vs ID por string). */
+      const normalizeStageKeyForComparison = (sk: string | null | undefined) => (sk ?? '').trim();
+      const scopeMatch =
+        normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
+      if (!scopeMatch) {
+        console.log('[DnD] Scope Check:', { activeStage: activeStageKey, overStage, activeCat, overCat, isManual: activeDataResolved.isManual });
+        if (activeDataResolved.isManual && overStage && getSectionIdFromStageKey(activeStageKey) === getSectionIdFromStageKey(overStage)) {
+          const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, null);
+        } else if (!isManual) {
+          window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+        }
         return;
       }
+
       const overIndex = combined.findIndex((e) => e.taskId === overId);
-      if (overIndex < 0) return;
       const fromIndex = combined.findIndex((e) => e.taskId === activeId);
-      if (fromIndex < 0) return;
-      const reordered = combined.map((e) => e.taskId);
-      reordered.splice(fromIndex, 1);
-      reordered.splice(overIndex, 0, activeId);
+
+      console.log('[DnD] Precise Indices:', { fromId: active.id, fromIndex, overId: over?.id, overIndex });
+
+      if (fromIndex === -1 || overIndex === -1) {
+        console.log('[DnD] Scope Check:', { reason: 'indexOutOfSegment', fromIndex, overIndex, activeId, overId, combinedIds: combined.map((e) => e.taskId) });
+        return;
+      }
+
+      console.log('[DnD] Full List Discovery:', combined.map((c) => c.taskId));
+      const reorderedEntries = arrayMove(combined, fromIndex, overIndex);
+      const reordered = reorderedEntries.map((e) => e.taskId);
+      const originalIds = combined.map((e) => e.taskId);
+      console.log('[DnD] Full Segment Check:', { totalItems: combined.length, idsSent: reordered.length });
+      const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
+      if (!orderChanged) return;
+
       const taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
       const taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
 
-      reorderInFlightRef.current = true;
+      setIsUpdatingOrder(true);
+      // Actualización optimista SIEMPRE en movimiento válido: el ítem se queda en su nueva posición mientras el servidor procesa
       setLocalEventData((prev) => {
         const next = { ...prev };
         next.cotizaciones = prev.cotizaciones?.map((cot) => ({
           ...cot,
           cotizacion_items: cot.cotizacion_items?.map((item) => {
             const id = item?.scheduler_task?.id;
-            const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
+            const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
             if (newOrder === undefined) return item;
             return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
           }),
         }));
         next.scheduler = prev.scheduler
-          ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0 })) }
+          ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
           : prev.scheduler;
         return next;
       });
-      try {
-        const result = await reorderSchedulerTasksToOrder(studioSlug, eventId, reordered);
-        if (!result.success) {
-          setLocalEventData((prev) => {
-            const next = { ...prev };
-            next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+
+      const payload = { studioSlug, eventId, reordered, taskIdToOldOrder, taskIdToNewOrder };
+      if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
+      reorderDebounceRef.current.payload = payload;
+      reorderDebounceRef.current.timeout = setTimeout(async () => {
+        const p = reorderDebounceRef.current.payload ?? payload;
+        reorderDebounceRef.current.timeout = null;
+        reorderDebounceRef.current.payload = null;
+        reorderInFlightRef.current = true;
+        try {
+          console.log('[DnD] Sending to Server:', { scope: activeStageKey, reorderedIds: p.reordered });
+          const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
+          if (!result.success) {
+            setLocalEventDataRef.current((prev) => {
+              const next = { ...prev };
+              next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+                ...cot,
+                cotizacion_items: cot.cotizacion_items?.map((item) => {
+                  const id = item?.scheduler_task?.id;
+                  const o = id != null ? p.taskIdToOldOrder.get(String(id)) : undefined;
+                  if (o === undefined) return item;
+                  return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: o } : null };
+                }),
+              }));
+              next.scheduler = prev.scheduler
+                ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToOldOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
+                : prev.scheduler;
+              return next;
+            });
+            toast.error(result.error ?? 'Error al reordenar');
+            return;
+          }
+          const data = localEventDataRef.current;
+          const updatedData: SchedulerViewData = {
+            ...data,
+            cotizaciones: data.cotizaciones?.map((cot) => ({
               ...cot,
               cotizacion_items: cot.cotizacion_items?.map((item) => {
                 const id = item?.scheduler_task?.id;
-                const oldOrder = id != null ? taskIdToOldOrder.get(id) : undefined;
-                if (oldOrder === undefined) return item;
-                return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null };
+                const newOrder = id != null ? p.taskIdToNewOrder.get(String(id)) : undefined;
+                if (newOrder === undefined) return item;
+                return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
               }),
-            }));
-            next.scheduler = prev.scheduler
-              ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToOldOrder.get(t.id) ?? (t as { order?: number }).order ?? 0 })) }
-              : prev.scheduler;
-            return next;
-          });
-          toast.error(result.error ?? 'Error al reordenar');
-          return;
+            })),
+            scheduler: data.scheduler
+              ? { ...data.scheduler, tasks: (data.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
+              : undefined,
+          };
+          onDataChangeRef.current?.(updatedData);
+          toast.success('Orden guardado');
+          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+          window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        } finally {
+          reorderInFlightRef.current = false;
+          setIsUpdatingOrder(false);
         }
-        const updatedData: SchedulerViewData = {
-          ...localEventData,
-          cotizaciones: localEventData.cotizaciones?.map((cot) => ({
-            ...cot,
-            cotizacion_items: cot.cotizacion_items?.map((item) => {
-              const id = item?.scheduler_task?.id;
-              const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
-              if (newOrder === undefined) return item;
-              return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
-            }),
-          })),
-          scheduler: localEventData.scheduler
-            ? { ...localEventData.scheduler, tasks: (localEventData.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0 })) }
-            : undefined,
-        };
-        onDataChange?.(updatedData);
-        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      }, 300);
       } finally {
-        reorderInFlightRef.current = false;
+        lastOverIdRef.current = null;
+        setActiveDragData(null);
+        setOverlayPosition(null);
+        overlayStartRectRef.current = null;
+        setActiveDragData(null);
       }
     },
     [
       studioSlug,
       eventId,
       localEventData,
+      secciones,
+      activeSectionIds,
+      explicitlyActivatedStageIds,
+      customCategoriesBySectionStage,
       onDataChange,
+      resolveActiveDragDataById,
       handleManualTaskMoveStage,
       handleItemTaskMoveCategory,
+      reorderSchedulerTasksToOrder,
     ]
   );
 
@@ -1845,6 +2032,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onSchedulerDragEnd={handleSchedulerDragEnd}
         activeDragData={activeDragData}
         overlayPosition={overlayPosition}
+        isUpdatingOrder={isUpdatingOrder}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

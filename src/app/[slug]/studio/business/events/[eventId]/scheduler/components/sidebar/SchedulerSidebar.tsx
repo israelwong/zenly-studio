@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
@@ -21,6 +21,8 @@ import {
   filterRowsByExpandedSections,
   filterRowsByExpandedStages,
   getSectionTaskCounts,
+  getStageSegments,
+  groupRowsIntoBlocks,
   isSectionRow,
   isStageRow,
   isCategoryRow,
@@ -33,6 +35,7 @@ import {
   ROW_HEIGHTS,
   STAGE_LABELS,
   type SchedulerRowDescriptor,
+  type StageBlock,
   type TaskCategoryStage,
   type ManualTaskPayload,
 } from '../../utils/scheduler-section-stages';
@@ -75,11 +78,6 @@ interface ItemMetadata {
   servicioId: string;
 }
 
-interface StageBlock {
-  stageRow: { id: string; category: TaskCategoryStage; sectionId: string; label: string };
-  contentRows: Array<SchedulerRowDescriptor>;
-  phantomRow: { id: string };
-}
 
 interface SchedulerSidebarProps {
   secciones: SeccionData[];
@@ -123,6 +121,7 @@ interface SchedulerSidebarProps {
   onSchedulerDragEnd?: (event: DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
+  isUpdatingOrder?: boolean;
 }
 
 
@@ -232,6 +231,7 @@ function SortableTaskRow({
   stageKey,
   children,
   className = '',
+  disableDrag = false,
 }: {
   taskId: string;
   isManual: boolean;
@@ -239,7 +239,9 @@ function SortableTaskRow({
   stageKey: string;
   children: React.ReactNode;
   className?: string;
+  disableDrag?: boolean;
 }) {
+  const id = String(taskId);
   const {
     attributes,
     listeners,
@@ -247,7 +249,10 @@ function SortableTaskRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: taskId });
+  } = useSortable({
+    id,
+    animateLayoutChanges: () => true,
+  });
 
   const style = {
     height: ROW_HEIGHTS.TASK_ROW,
@@ -261,16 +266,17 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors ${className}`}
+      data-scheduler-task-id={taskId}
     >
-      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto */}
+      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; disableDrag desactiva solo el handle (lista visible). */}
       <button
         type="button"
-        aria-label="Arrastrar para reordenar"
-        title="Arrastrar para reordenar"
-        className="w-8 shrink-0 flex items-center justify-center p-1 hover:bg-zinc-700 rounded cursor-grab active:cursor-grabbing touch-none"
+        aria-label={disableDrag ? undefined : 'Arrastrar para reordenar'}
+        title={disableDrag ? undefined : 'Arrastrar para reordenar'}
+        className={`w-8 shrink-0 flex items-center justify-center p-1 rounded touch-none ${disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'hover:bg-zinc-700 cursor-grab active:cursor-grabbing'}`}
         style={{ touchAction: 'none' }}
-        {...attributes}
-        {...listeners}
+        {...(disableDrag ? {} : attributes)}
+        {...(disableDrag ? {} : listeners)}
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 pointer-events-none" aria-hidden />
@@ -636,54 +642,7 @@ function SchedulerItem({
   );
 }
 
-/** Agrupa contentRows por categoría: cada segmento tiene la fila de categoría (si hay) y las filas hasta la siguiente categoría (tareas + phantoms). */
-function getStageSegments(contentRows: SchedulerRowDescriptor[]): Array<{ categoryRow: SchedulerRowDescriptor | null; rows: SchedulerRowDescriptor[] }> {
-  const segments: Array<{ categoryRow: SchedulerRowDescriptor | null; rows: SchedulerRowDescriptor[] }> = [];
-  for (const row of contentRows) {
-    if (isCategoryRow(row)) {
-      segments.push({ categoryRow: row, rows: [] });
-    } else {
-      if (segments.length === 0) segments.push({ categoryRow: null, rows: [] });
-      segments[segments.length - 1]!.rows.push(row);
-    }
-  }
-  return segments;
-}
-
-function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> {
-  const blocks: Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> = [];
-  let i = 0;
-  while (i < rows.length) {
-    const r = rows[i];
-    if (isSectionRow(r)) {
-      blocks.push({ type: 'section', row: { id: r.id, name: r.name } });
-      i++;
-      continue;
-    }
-    if (isStageRow(r)) {
-      const contentRows: StageBlock['contentRows'] = [];
-      i++;
-      while (i < rows.length && !isSectionRow(rows[i]) && !isStageRow(rows[i])) {
-        const r = rows[i];
-        if (isCategoryRow(r) || isTaskRow(r) || isManualTaskRow(r) || isAddPhantomRow(r) || isAddCategoryPhantomRow(r)) {
-          contentRows.push(r);
-        }
-        i++;
-      }
-      blocks.push({
-        type: 'stage_block',
-        block: {
-          stageRow: { id: r.id, category: r.category, sectionId: r.sectionId, label: r.label },
-          contentRows,
-          phantomRow: { id: `${r.id}-add` },
-        },
-      });
-      continue;
-    }
-    i++;
-  }
-  return blocks;
-}
+const EMPTY_STAGE_SEGMENTS: import('../../utils/scheduler-section-stages').StageSegment[] = [];
 
 export const SchedulerSidebar = React.memo(({
   secciones,
@@ -721,7 +680,13 @@ export const SchedulerSidebar = React.memo(({
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
+  isUpdatingOrder = false,
 }: SchedulerSidebarProps) => {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -762,6 +727,16 @@ export const SchedulerSidebar = React.memo(({
     [rows, expandedSections, expandedStages]
   );
   const blocks = useMemo(() => groupRowsIntoBlocks(filteredRows), [filteredRows]);
+
+  /** Segmentos memoizados por stage para evitar que SortableContext se destruya/reconstruya en cada render (causa de que no deje subir). */
+  const stageSegmentsByStageId = useMemo(() => {
+    const m = new Map<string, Array<{ categoryRow: SchedulerRowDescriptor | null; rows: SchedulerRowDescriptor[] }>>();
+    blocks.forEach((b) => {
+      if (b.type === 'stage_block') m.set(b.block.stageRow.id, getStageSegments(b.block.contentRows));
+    });
+    return m;
+  }, [blocks]);
+
   const totalMinHeight = useMemo(() => filteredRows.reduce((acc, r) => acc + rowHeight(r), 0), [filteredRows]);
 
   const [deleteModal, setDeleteModal] = useState<{
@@ -823,12 +798,34 @@ export const SchedulerSidebar = React.memo(({
     setDeleteModal((p) => ({ ...p, open: false }));
   }, [onDeleteStage, deleteModal.open, deleteModal.sectionId, deleteModal.stageCategory, deleteModal.taskIds]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { taskId: id } = (e as CustomEvent<{ taskId: string }>).detail ?? {};
+      if (!id) return;
+      const el = document.querySelector(`[data-scheduler-task-id="${id}"]`);
+      if (el) {
+        el.classList.add('scheduler-dnd-shake');
+        setTimeout(() => el.classList.remove('scheduler-dnd-shake'), 400);
+      }
+    };
+    window.addEventListener('scheduler-dnd-shake', handler);
+    return () => window.removeEventListener('scheduler-dnd-shake', handler);
+  }, []);
+
   return (
-    <div className="w-full bg-zinc-950 overflow-visible" style={{ minHeight: totalMinHeight }}>
+    <div className="w-full bg-zinc-950 overflow-visible relative" style={{ minHeight: totalMinHeight }}>
+      {isUpdatingOrder && (
+        <div className="absolute top-14 left-0 right-0 z-40 h-7 flex items-center justify-center bg-emerald-950/60 border-b border-emerald-700/40" aria-hidden>
+          <span className="text-xs text-emerald-300">Guardando orden...</span>
+        </div>
+      )}
       <div className="h-[60px] bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30">
         <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
       </div>
 
+      {!isMounted ? (
+        <div className="flex items-center justify-center py-8 text-zinc-500 text-sm">Cargando...</div>
+      ) : (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -926,11 +923,12 @@ export const SchedulerSidebar = React.memo(({
 
               {isExpanded ? (
                 <>
-                  {getStageSegments(contentRows).map((segment, segIdx) => {
+                  {(stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS).map((segment, segIdx) => {
                     const segmentTaskIds = segment.rows
                       .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
-                      .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
-                      .filter(Boolean) as string[];
+                      .map((t) => String(t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
+                      .filter((id) => id && id !== 'undefined');
+                    if (process.env.NODE_ENV === 'development') console.log('[DnD] SortableContext Items:', segmentTaskIds);
                     const categoryRow = segment.categoryRow;
                     const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
                     const orderedCategories = categoryRows.map((r) => ({
@@ -1000,6 +998,7 @@ export const SchedulerSidebar = React.memo(({
                           );
                         })()}
                         <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
+                          <div className="py-1 min-h-[4px]">
                           {segment.rows.map((row) => {
                     if (isManualTaskRow(row)) {
                       const taskRowsInOrder = segment.rows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
@@ -1018,10 +1017,11 @@ export const SchedulerSidebar = React.memo(({
                       return (
                         <SortableTaskRow
                           key={row.task.id}
-                          taskId={row.task.id}
+                          taskId={String(row.task.id)}
                           isManual
                           catalogCategoryId={manualCatalogCategoryId}
                           stageKey={stageRow.id}
+                          disableDrag={isUpdatingOrder}
                         >
                           <ManualTaskRow
                             task={row.task}
@@ -1074,10 +1074,11 @@ export const SchedulerSidebar = React.memo(({
                       return (
                         <SortableTaskRow
                           key={row.item.id}
-                          taskId={taskId!}
+                          taskId={String(taskId!)}
                           isManual={false}
                           catalogCategoryId={itemEffectiveCatalogCategoryId}
                           stageKey={stageRow.id}
+                          disableDrag={isUpdatingOrder}
                         >
                           <div className="flex-1 min-w-0 flex items-center gap-2">
                             <SchedulerItem
@@ -1220,6 +1221,7 @@ export const SchedulerSidebar = React.memo(({
                     }
                     return null;
                   })}
+                          </div>
                         </SortableContext>
                       </React.Fragment>
                     );
@@ -1231,9 +1233,12 @@ export const SchedulerSidebar = React.memo(({
         })}
 
         <DragOverlay dropAnimation={null}>{null}</DragOverlay>
-        {activeDragData &&
+        {!isUpdatingOrder &&
+          activeDragData &&
           overlayPosition &&
           typeof document !== 'undefined' &&
+          Number.isFinite(overlayPosition.x) &&
+          Number.isFinite(overlayPosition.y) &&
           createPortal(
             <div
               className="cursor-grabbing pointer-events-none"
@@ -1243,6 +1248,7 @@ export const SchedulerSidebar = React.memo(({
                 top: overlayPosition.y,
                 zIndex: 99999,
                 touchAction: 'none',
+                pointerEvents: 'none',
               }}
             >
               <SchedulerDragOverlayRow
@@ -1255,6 +1261,7 @@ export const SchedulerSidebar = React.memo(({
             document.body
           )}
       </DndContext>
+      )}
 
       <ZenConfirmModal
         isOpen={deleteModal.open}

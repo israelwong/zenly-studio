@@ -720,3 +720,67 @@ export function getSectionTaskCounts(rows: SchedulerRowDescriptor[]): Map<string
   }
   return counts;
 }
+
+/** Segmento de un stage: fila de categoría (opcional) + filas hasta la siguiente categoría. Misma lógica que Sidebar para DnD. */
+export interface StageSegment {
+  categoryRow: SchedulerCategoryRow | null;
+  rows: SchedulerRowDescriptor[];
+}
+
+/** Agrupa contentRows por categoría: cada segmento = categoría + tareas hasta la siguiente. */
+export function getStageSegments(contentRows: SchedulerRowDescriptor[]): StageSegment[] {
+  const segments: StageSegment[] = [];
+  for (const row of contentRows) {
+    if (isCategoryRow(row)) {
+      segments.push({ categoryRow: row, rows: [] });
+    } else {
+      if (segments.length === 0) segments.push({ categoryRow: null, rows: [] });
+      segments[segments.length - 1]!.rows.push(row);
+    }
+  }
+  return segments;
+}
+
+export interface StageBlock {
+  stageRow: { id: string; category: TaskCategoryStage; sectionId: string; label: string };
+  contentRows: SchedulerRowDescriptor[];
+  phantomRow: { id: string };
+}
+
+/** Agrupa filas planas en bloques: sección | (stage + contentRows). Misma lógica que Sidebar. */
+export function groupRowsIntoBlocks(
+  rows: SchedulerRowDescriptor[]
+): Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> {
+  const blocks: Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> = [];
+  let i = 0;
+  while (i < rows.length) {
+    const r = rows[i];
+    if (isSectionRow(r)) {
+      blocks.push({ type: 'section', row: { id: r.id, name: r.name } });
+      i++;
+      continue;
+    }
+    if (isStageRow(r)) {
+      const contentRows: SchedulerRowDescriptor[] = [];
+      i++;
+      while (i < rows.length && !isSectionRow(rows[i]) && !isStageRow(rows[i])) {
+        const row = rows[i];
+        if (isCategoryRow(row) || isTaskRow(row) || isManualTaskRow(row) || isAddPhantomRow(row) || isAddCategoryPhantomRow(row)) {
+          contentRows.push(row);
+        }
+        i++;
+      }
+      blocks.push({
+        type: 'stage_block',
+        block: {
+          stageRow: { id: r.id, category: r.category, sectionId: r.sectionId, label: r.label },
+          contentRows,
+          phantomRow: { id: `${r.id}-add` },
+        },
+      });
+      continue;
+    }
+    i++;
+  }
+  return blocks;
+}
