@@ -9,12 +9,13 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  useDraggable,
   useDroppable,
-  pointerWithin,
+  closestCenter,
   DragOverlay,
 } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent, DragMoveEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   buildSchedulerRows,
   filterRowsByExpandedSections,
@@ -223,7 +224,8 @@ function SchedulerDragOverlayRow({
   );
 }
 
-function DraggableDroppableTaskRow({
+/** Fila de tarea reordenable con useSortable (patrón Catalogo.tsx). Handle con touch-none para que el scroll no capture el gesto. */
+function SortableTaskRow({
   taskId,
   isManual,
   catalogCategoryId,
@@ -238,47 +240,44 @@ function DraggableDroppableTaskRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggable({
-    id: taskId,
-    data: { taskId, isManual, catalogCategoryId, stageKey },
-  });
-  const { setNodeRef: setDropRef } = useDroppable({
-    id: taskId,
-    data: { stageKey, catalogCategoryId },
-  });
-  const setNodeRef = useCallback(
-    (node: HTMLElement | null) => {
-      setDragRef(node);
-      setDropRef(node);
-    },
-    [setDragRef, setDropRef]
-  );
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: taskId });
+
+  const style = {
+    height: ROW_HEIGHTS.TASK_ROW,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <div
       ref={setNodeRef}
-      style={{ height: ROW_HEIGHTS.TASK_ROW, touchAction: 'none' }}
-      className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors touch-none ${className}`}
+      style={style}
+      className={`group relative border-b border-zinc-800/50 flex items-center hover:bg-zinc-900/50 transition-colors ${className}`}
     >
-      {/* Handle: preventDefault evita que el scroll capture el gesto; setPointerCapture asegura que los eventos vayan al handle */}
-      <div
-        aria-label="Arrastrar"
-        className="w-8 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none relative z-10"
-        style={{ touchAction: 'none', minWidth: 32 }}
-        onPointerDown={(e) => {
-          e.preventDefault(); // Evita que el contenedor con scroll capture el gesto
-          if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          }
-        }}
+      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto */}
+      <button
+        type="button"
+        aria-label="Arrastrar para reordenar"
+        title="Arrastrar para reordenar"
+        className="w-8 shrink-0 flex items-center justify-center p-1 hover:bg-zinc-700 rounded cursor-grab active:cursor-grabbing touch-none"
+        style={{ touchAction: 'none' }}
         {...attributes}
         {...listeners}
+        onClick={(e) => e.stopPropagation()}
       >
-        <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 touch-none pointer-events-none" style={{ touchAction: 'none' }} aria-hidden />
-      </div>
+        <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 pointer-events-none" aria-hidden />
+      </button>
       <SchedulerRamaLine />
-      {/* Contenido alineado a la derecha de la línea (poco padding para más espacio) */}
       <div
-        className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 ${isDragging ? 'opacity-10 pointer-events-none' : ''}`}
+        className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 ${isDragging ? 'pointer-events-none' : ''}`}
         style={{ minHeight: ROW_HEIGHTS.TASK_ROW }}
       >
         {children}
@@ -637,6 +636,20 @@ function SchedulerItem({
   );
 }
 
+/** Agrupa contentRows por categoría: cada segmento tiene la fila de categoría (si hay) y las filas hasta la siguiente categoría (tareas + phantoms). */
+function getStageSegments(contentRows: SchedulerRowDescriptor[]): Array<{ categoryRow: SchedulerRowDescriptor | null; rows: SchedulerRowDescriptor[] }> {
+  const segments: Array<{ categoryRow: SchedulerRowDescriptor | null; rows: SchedulerRowDescriptor[] }> = [];
+  for (const row of contentRows) {
+    if (isCategoryRow(row)) {
+      segments.push({ categoryRow: row, rows: [] });
+    } else {
+      if (segments.length === 0) segments.push({ categoryRow: null, rows: [] });
+      segments[segments.length - 1]!.rows.push(row);
+    }
+  }
+  return segments;
+}
+
 function groupRowsIntoBlocks(rows: SchedulerRowDescriptor[]): Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> {
   const blocks: Array<{ type: 'section'; row: { id: string; name: string } } | { type: 'stage_block'; block: StageBlock }> = [];
   let i = 0;
@@ -818,7 +831,7 @@ export const SchedulerSidebar = React.memo(({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={pointerWithin}
+        collisionDetection={closestCenter}
         onDragStart={onSchedulerDragStart}
         onDragMove={onSchedulerDragMove}
         onDragEnd={onSchedulerDragEnd}
@@ -913,79 +926,89 @@ export const SchedulerSidebar = React.memo(({
 
               {isExpanded ? (
                 <>
-                  {contentRows.map((row) => {
-                    if (isCategoryRow(row)) {
-                      const catPrefix = `${row.stageId}-cat-`;
-                      const categoryId = row.id.startsWith(catPrefix) ? row.id.slice(catPrefix.length) : '';
-                      const catalogCategoryId = getCatalogCategoryIdFromCategoryRow(row, stageRow.sectionId, secciones);
-                      const customList = customCategoriesBySectionStage.get(row.stageId) ?? [];
-                      const catIdx = customList.findIndex((c) => c.id === categoryId);
-                      const isCustomCategory = catIdx >= 0;
-                      const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
-                      const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
-                      const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
-                      return (
-                        <CategoryDroppableHeader
-                          key={row.id}
-                          stageKey={stageRow.id}
-                          catalogCategoryId={catalogCategoryId}
-                          isValidDrop={isValidDrop}
-                          sectionId={row.sectionId}
-                        >
-                          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
-                            {formatCategoryLabel(row.label)}
-                          </span>
-                          {process.env.NODE_ENV === 'development' && row.sectionId && (
-                            <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={row.sectionId}>
-                              ({row.sectionId.slice(0, 8)}…)
-                            </span>
-                          )}
-                          {(canMoveUp || canMoveDown) && (
-                            <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                              {canMoveUp && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onMoveCategory?.(row.stageId, categoryId, 'up');
-                                  }}
-                                  className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                  aria-label="Mover categoría arriba"
-                                >
-                                  <ChevronUp className="h-3.5 w-3.5" />
-                                </button>
+                  {getStageSegments(contentRows).map((segment, segIdx) => {
+                    const segmentTaskIds = segment.rows
+                      .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
+                      .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
+                      .filter(Boolean) as string[];
+                    const categoryRow = segment.categoryRow;
+                    const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
+                    const orderedCategories = categoryRows.map((r) => ({
+                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                      name: r.label,
+                    }));
+                    const catRow = categoryRow && isCategoryRow(categoryRow) ? categoryRow : null;
+                    return (
+                      <React.Fragment key={catRow?.id ?? `seg-${segIdx}`}>
+                        {catRow && (() => {
+                          const catPrefix = `${catRow.stageId}-cat-`;
+                          const categoryId = catRow.id.startsWith(catPrefix) ? catRow.id.slice(catPrefix.length) : '';
+                          const catalogCategoryId = getCatalogCategoryIdFromCategoryRow(catRow, stageRow.sectionId, secciones);
+                          const customList = customCategoriesBySectionStage.get(catRow.stageId) ?? [];
+                          const catIdx = customList.findIndex((c) => c.id === categoryId);
+                          const isCustomCategory = catIdx >= 0;
+                          const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
+                          const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
+                          const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
+                          return (
+                            <CategoryDroppableHeader
+                              key={catRow.id}
+                              stageKey={stageRow.id}
+                              catalogCategoryId={catalogCategoryId}
+                              isValidDrop={isValidDrop}
+                              sectionId={catRow.sectionId}
+                            >
+                              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide truncate min-w-0 flex-1">
+                                {formatCategoryLabel(catRow.label)}
+                              </span>
+                              {process.env.NODE_ENV === 'development' && catRow.sectionId && (
+                                <span className="text-[9px] text-zinc-600 ml-1 truncate max-w-[120px]" title={catRow.sectionId}>
+                                  ({catRow.sectionId.slice(0, 8)}…)
+                                </span>
                               )}
-                              {canMoveDown && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onMoveCategory?.(row.stageId, categoryId, 'down');
-                                  }}
-                                  className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                  aria-label="Mover categoría abajo"
-                                >
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                </button>
+                              {(canMoveUp || canMoveDown) && (
+                                <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                  {canMoveUp && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onMoveCategory?.(catRow.stageId, categoryId, 'up');
+                                      }}
+                                      className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                      aria-label="Mover categoría arriba"
+                                    >
+                                      <ChevronUp className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  {canMoveDown && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onMoveCategory?.(catRow.stageId, categoryId, 'down');
+                                      }}
+                                      className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
+                                      aria-label="Mover categoría abajo"
+                                    >
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </span>
                               )}
-                            </span>
-                          )}
-                        </CategoryDroppableHeader>
-                      );
-                    }
+                            </CategoryDroppableHeader>
+                          );
+                        })()}
+                        <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
+                          {segment.rows.map((row) => {
                     if (isManualTaskRow(row)) {
-                      const taskRowsInOrder = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
+                      const taskRowsInOrder = segment.rows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
                       const pos = taskRowsInOrder.findIndex((r) => r === row);
-                      const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
-                      const orderedCategories = categoryRows.map((r) => ({
-                        id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
-                        name: r.label,
-                      }));
-                      const taskRowIndex = contentRows.indexOf(row);
+                      const taskRowIndexInContent = contentRows.indexOf(row);
                       let categoryIndex = -1;
-                      for (let i = taskRowIndex - 1; i >= 0; i--) {
+                      for (let i = taskRowIndexInContent - 1; i >= 0; i--) {
                         if (isCategoryRow(contentRows[i]!)) {
-                          categoryIndex = categoryRows.indexOf(contentRows[i] as typeof categoryRows[0]);
+                          categoryIndex = categoryRows.indexOf(contentRows[i] as (typeof categoryRows)[0]);
                           break;
                         }
                       }
@@ -993,7 +1016,7 @@ export const SchedulerSidebar = React.memo(({
                       const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
                       const manualCatalogCategoryId = (row.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
                       return (
-                        <DraggableDroppableTaskRow
+                        <SortableTaskRow
                           key={row.task.id}
                           taskId={row.task.id}
                           isManual
@@ -1025,24 +1048,19 @@ export const SchedulerSidebar = React.memo(({
                             onMoveToStage={onManualTaskMoveStage}
                             onDuplicate={onManualTaskDuplicate}
                           />
-                        </DraggableDroppableTaskRow>
+                        </SortableTaskRow>
                       );
                     }
                     if (isTaskRow(row)) {
                       const taskId = row.item.scheduler_task?.id;
-                      const taskRowsInOrder = contentRows.filter(
+                      const taskRowsInOrder = segment.rows.filter(
                         (r): r is typeof row | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow =>
                           isTaskRow(r) || isManualTaskRow(r)
                       );
                       const pos = taskRowsInOrder.indexOf(row);
-                      const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
-                      const orderedCategories = categoryRows.map((r) => ({
-                        id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
-                        name: r.label,
-                      }));
                       let itemCategoryIndex = -1;
-                      const taskRowIndex = contentRows.indexOf(row);
-                      for (let i = taskRowIndex - 1; i >= 0; i--) {
+                      const taskRowIndexInContent = contentRows.indexOf(row);
+                      for (let i = taskRowIndexInContent - 1; i >= 0; i--) {
                         if (isCategoryRow(contentRows[i]!)) {
                           itemCategoryIndex = categoryRows.indexOf(contentRows[i] as (typeof categoryRows)[0]);
                           break;
@@ -1054,7 +1072,7 @@ export const SchedulerSidebar = React.memo(({
                           : (row.item as { service_category_id?: string | null }).service_category_id ?? (row.item.scheduler_task as { catalog_category_id?: string | null })?.catalog_category_id ?? null;
 
                       return (
-                        <DraggableDroppableTaskRow
+                        <SortableTaskRow
                           key={row.item.id}
                           taskId={taskId!}
                           isManual={false}
@@ -1077,7 +1095,7 @@ export const SchedulerSidebar = React.memo(({
                               onTaskToggleComplete={onTaskToggleComplete}
                             />
                           </div>
-                        </DraggableDroppableTaskRow>
+                        </SortableTaskRow>
                       );
                     }
                     if (isAddCategoryPhantomRow(row)) {
@@ -1201,6 +1219,10 @@ export const SchedulerSidebar = React.memo(({
                       );
                     }
                     return null;
+                  })}
+                        </SortableContext>
+                      </React.Fragment>
+                    );
                   })}
                 </>
               ) : null}

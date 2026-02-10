@@ -531,21 +531,45 @@ export const EventScheduler = React.memo(function EventScheduler({
   );
 
   const handleSchedulerDragStart = useCallback((event: DragStartEvent) => {
-    const data = event.active.data.current as { taskId?: string; isManual?: boolean; catalogCategoryId?: string | null; stageKey?: string } | undefined;
-    if (data?.taskId && data?.stageKey != null) {
-      setActiveDragData({
-        taskId: data.taskId,
-        isManual: !!data.isManual,
-        catalogCategoryId: data.catalogCategoryId ?? null,
-        stageKey: data.stageKey,
-      });
+    const taskId = String(event.active.id);
+    // useSortable no pasa data; resolver desde localEventData
+    const cotizaciones = localEventData.cotizaciones ?? [];
+    const manualTasks = localEventData.scheduler?.tasks ?? [];
+    let resolved: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null = null;
+    for (const cot of cotizaciones) {
+      const sectionId = (cot as { catalog_section_id?: string | null }).catalog_section_id ?? SIN_CATEGORIA_SECTION_ID;
+      for (const item of cot.cotizacion_items ?? []) {
+        if (item?.scheduler_task?.id === taskId) {
+          const st = item.scheduler_task as { category?: string; catalog_category_id?: string | null };
+          const effectiveCat = (item as { service_category_id?: string | null }).service_category_id ?? st.catalog_category_id ?? null;
+          resolved = { taskId, isManual: false, catalogCategoryId: effectiveCat ?? null, stageKey: `${sectionId}-${st.category ?? 'PLANNING'}` };
+          break;
+        }
+      }
+      if (resolved) break;
+    }
+    if (!resolved) {
+      const manual = manualTasks.find((t) => t.id === taskId && t.cotizacion_item_id == null);
+      if (manual) {
+        const t = manual as { catalog_section_id?: string | null; category?: string; catalog_category_id?: string | null };
+        resolved = {
+          taskId,
+          isManual: true,
+          catalogCategoryId: t.catalog_category_id ?? null,
+          stageKey: `${t.catalog_section_id ?? SIN_CATEGORIA_SECTION_ID}-${t.category ?? 'PLANNING'}`,
+        };
+      }
+    }
+    if (resolved) {
+      console.log('[DnD] Drag Started', event.active.id);
+      setActiveDragData(resolved);
       const rect = event.active.rect.current;
       if (rect) {
         overlayStartRectRef.current = { left: rect.left, top: rect.top };
         setOverlayPosition({ x: rect.left, y: rect.top });
       }
     }
-  }, []);
+  }, [localEventData]);
 
   const handleSchedulerDragMove = useCallback((event: DragMoveEvent) => {
     const start = overlayStartRectRef.current;
@@ -558,7 +582,6 @@ export const EventScheduler = React.memo(function EventScheduler({
       const { active, over } = event;
       const activeId = String(active.id);
       const overId = over?.id ? String(over.id) : null;
-      const data = active.data.current as { taskId?: string; isManual?: boolean; catalogCategoryId?: string | null; stageKey?: string } | undefined;
       const overData = over?.data?.current as { stageKey?: string; catalogCategoryId?: string | null } | undefined;
 
       type Entry = {
@@ -604,18 +627,19 @@ export const EventScheduler = React.memo(function EventScheduler({
       setOverlayPosition(null);
       overlayStartRectRef.current = null;
       if (!overId || active.id === overId) return;
-      if (!data?.taskId) return;
       if (!moved) return;
 
       const category = moved.type === 'item' ? (moved.item.scheduler_task as { category?: string }).category ?? 'PLANNING' : (moved.task as { category?: string }).category ?? 'PLANNING';
       const effectiveCat = moved.type === 'item' ? (moved.item as { service_category_id?: string | null }).service_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
       const isManual = moved.type === 'manual';
+      const activeStageKey = moved.stageKey;
+      const activeCatalogCategoryId = effectiveCat ?? null;
 
       // Mismo ámbito estricto: mismo stageKey y misma categoría efectiva
       const sameScope = (e: Entry) => {
         const cat = e.type === 'item' ? (e.item.scheduler_task as { category?: string }).category ?? 'PLANNING' : (e.task as { category?: string }).category ?? 'PLANNING';
         const ec = e.type === 'item' ? (e.item as { service_category_id?: string | null }).service_category_id ?? (e.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null : (e.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
-        return e.stageKey === data.stageKey && cat === category && (ec ?? null) === (effectiveCat ?? null);
+        return e.stageKey === activeStageKey && cat === category && (ec ?? null) === (effectiveCat ?? null);
       };
       const combined: Entry[] = [...itemsWithTask.filter(sameScope), ...manualEntries.filter(sameScope)];
       combined.sort((a, b) => a.order - b.order);
@@ -636,19 +660,19 @@ export const EventScheduler = React.memo(function EventScheduler({
         if (!isManual) {
           // Ítem de cotización: solo misma categoría (guía: reversión inmediata si no coincide)
           const itemCatalogId = normCat(effectiveCat);
-          if (data.stageKey !== targetStageKey) return;
+          if (activeStageKey !== targetStageKey) return;
           if (itemCatalogId !== targetId) return;
           await handleItemTaskMoveCategory(activeId, targetId);
         } else {
           // Tarea manual: solo entre categorías de la misma sección
-          if (getSectionIdFromStageKey(data.stageKey ?? '') !== getSectionIdFromStageKey(targetStageKey)) return;
+          if (getSectionIdFromStageKey(activeStageKey) !== getSectionIdFromStageKey(targetStageKey)) return;
           await handleManualTaskMoveStage(activeId, stageCategory, rawTarget, null);
         }
         return;
       }
 
       // Droppable = otra tarea: reorden solo si mismo scope (stageKey + categoría)
-      const activeCat = normCat(data.catalogCategoryId);
+      const activeCat = normCat(activeCatalogCategoryId);
       const overEntry = combined.find((e) => e.taskId === overId);
       const overStage = overData?.stageKey ?? overEntry?.stageKey;
       const overCatResolved = overEntry
@@ -657,7 +681,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           : normCat((overEntry.task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
         : null;
       const overCat = normCat(overData?.catalogCategoryId) ?? overCatResolved;
-      if (overStage !== data.stageKey || overCat !== activeCat) {
+      if (overStage !== activeStageKey || overCat !== activeCat) {
         return;
       }
       const overIndex = combined.findIndex((e) => e.taskId === overId);
