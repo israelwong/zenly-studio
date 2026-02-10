@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ZenButton, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { X, UserPlus, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -168,9 +168,15 @@ function TaskFormEdit({
   const initialName = task.name ?? '';
   const initialBudget = task.budget_amount != null ? Number(task.budget_amount) : null;
   const initialCompleted = task.status === 'COMPLETED' || !!task.completed_at;
+  const taskStart = task.start_date ? new Date(task.start_date) : null;
+  const taskEnd = task.end_date ? new Date(task.end_date) : null;
+  const initialDuration =
+    (task as { duration_days?: number }).duration_days ??
+    (taskStart && taskEnd ? Math.max(1, differenceInCalendarDays(taskEnd, taskStart) + 1) : 1);
 
   const [taskName, setTaskName] = useState(initialName);
   const [estimatedCost, setEstimatedCost] = useState<string>(initialBudget != null ? String(initialBudget) : '');
+  const [durationDays, setDurationDays] = useState(initialDuration);
   const [localCompleted, setLocalCompleted] = useState(initialCompleted);
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -194,8 +200,9 @@ function TaskFormEdit({
   useEffect(() => {
     setTaskName(initialName);
     setEstimatedCost(initialBudget != null ? String(initialBudget) : '');
+    setDurationDays(initialDuration);
     setLocalCompleted(initialCompleted);
-  }, [task.id, initialName, initialBudget, initialCompleted]);
+  }, [task.id, initialName, initialBudget, initialDuration, initialCompleted]);
 
   const parsedCost = (() => {
     const num = parseFloat(estimatedCost.replace(/,/g, '.'));
@@ -203,7 +210,8 @@ function TaskFormEdit({
   })();
   const nameChanged = (taskName.trim() || 'Tarea manual') !== (initialName.trim() || 'Tarea manual');
   const costChanged = parsedCost !== (initialBudget ?? 0);
-  const hasChangesNameOrCost = nameChanged || costChanged;
+  const durationChanged = durationDays !== initialDuration;
+  const hasChangesNameOrCost = nameChanged || costChanged || durationChanged;
 
   const taskStartDate = task.start_date ? new Date(task.start_date) : null;
   const taskEndDate = task.end_date ? new Date(task.end_date) : null;
@@ -216,11 +224,18 @@ function TaskFormEdit({
     const assigned_to_crew_member = resolvedCrew
       ? { id: resolvedCrew.id, name: resolvedCrew.name, email: resolvedCrew.email ?? null, tipo: resolvedCrew.tipo }
       : null;
+    const days = Math.max(1, Math.min(365, durationDays));
+    // Anclaje: la posición de inicio NUNCA cambia al modificar duración; new_end_date = addDays(start_date, days - 1)
+    const anchorStart = taskStart ?? new Date();
+    const newEndDate = addDays(anchorStart, days - 1);
     onSave({
       assigned_to_crew_member_id: localCrewId,
       assigned_to_crew_member,
       name: newName,
       budget_amount: parsedCost,
+      duration_days: durationChanged ? days : undefined,
+      start_date: durationChanged ? anchorStart : undefined,
+      end_date: durationChanged ? newEndDate : undefined,
       status: localCompleted ? 'COMPLETED' : 'PENDING',
       completed_at: localCompleted ? new Date() : null,
     });
@@ -243,16 +258,29 @@ function TaskFormEdit({
             placeholder="Nombre de la tarea"
           />
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-400">Costo estimado</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={estimatedCost}
-            onChange={(e) => setEstimatedCost(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-            placeholder="0"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-400">Duración (días)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={durationDays}
+              onChange={(e) => setDurationDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-400">Costo estimado</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={estimatedCost}
+              onChange={(e) => setEstimatedCost(e.target.value)}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              placeholder="0"
+            />
+          </div>
         </div>
       </div>
       <div className="border-t border-zinc-800" />

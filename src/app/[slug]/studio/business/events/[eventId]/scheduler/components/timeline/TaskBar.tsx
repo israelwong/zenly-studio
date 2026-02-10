@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState, useEffect } from 'react';
 import { Rnd, type RndDragEvent } from 'react-rnd';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
@@ -200,9 +200,20 @@ export const TaskBar = React.memo(({
         return;
       }
 
+      const durationInclusive = Math.max(1, differenceInCalendarDays(newEndDate, newStartDate) + 1);
+      if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+        console.log('[Sync] Resize Task:', { id: taskId, newDuration: durationInclusive, newEndDate });
+      }
       setIsUpdating(true);
       setLocalStartDate(newStartDate);
       setLocalEndDate(newEndDate);
+      if (manualTask && onManualTaskPatch) {
+        onManualTaskPatch(taskId, {
+          start_date: newStartDate,
+          end_date: newEndDate,
+          duration_days: durationInclusive,
+        });
+      }
       onUpdate(taskId, newStartDate, newEndDate).catch(() => {
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
@@ -210,7 +221,7 @@ export const TaskBar = React.memo(({
         setIsUpdating(false);
       });
     },
-    [taskId, dateRange, onUpdate, startDate, endDate]
+    [taskId, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -243,7 +254,7 @@ export const TaskBar = React.memo(({
       onManualTaskPatch={onManualTaskPatch}
     >
       <Rnd
-        key={`${taskId}-${itemId}`}
+        key={`${taskId}-${itemId}-${endDate.getTime()}`}
         default={{
           x: initialX,
           y: 6,

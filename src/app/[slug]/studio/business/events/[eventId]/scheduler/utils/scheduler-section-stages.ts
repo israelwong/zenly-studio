@@ -128,6 +128,8 @@ export interface ManualTaskPayload {
   status?: string;
   progress_percent?: number;
   completed_at?: Date | null;
+  /** Duración en días (inclusivo; BD: duration_days). */
+  duration_days?: number;
   /** Costo estimado (budget_amount en BD) */
   budget_amount?: number | null;
   /** Orden dentro de la misma categoría/etapa */

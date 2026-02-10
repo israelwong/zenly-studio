@@ -83,14 +83,22 @@ export async function actualizarSchedulerTaskFechas(
       currentStartDateOnly.getTime() !== startDateOnly.getTime() ||
       currentEndDateOnly.getTime() !== endDateOnly.getTime();
 
+    // Días inclusivos (ej. lun–mié = 3 días); consistente con el Grid y el Popover
+    const durationDays = Math.max(
+      1,
+      Math.ceil((endDateOnly.getTime() - startDateOnly.getTime()) / (24 * 60 * 60 * 1000)) + 1
+    );
+
     // Si las fechas cambiaron y la tarea estaba sincronizada, marcar como DRAFT
     const updateData: {
       start_date: Date;
       end_date: Date;
+      duration_days?: number;
       sync_status?: 'DRAFT';
     } = {
       start_date: startDate,
       end_date: endDate,
+      duration_days: durationDays,
     };
 
     if (datesChanged && (currentTask.sync_status === 'INVITED' || currentTask.sync_status === 'PUBLISHED')) {
@@ -1778,6 +1786,7 @@ export interface TareasSchedulerPayload {
       name: string;
       start_date: Date;
       end_date: Date;
+      duration_days?: number;
       status: string;
       progress_percent: number | null;
       completed_at: Date | null;
@@ -1846,6 +1855,7 @@ export async function obtenerTareasScheduler(
               name: true,
               start_date: true,
               end_date: true,
+              duration_days: true,
               status: true,
               progress_percent: true,
               completed_at: true,

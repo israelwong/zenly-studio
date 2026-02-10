@@ -14,6 +14,7 @@ import {
   isTaskRow,
   isManualTaskRow,
 } from '../../utils/scheduler-section-stages';
+import { addDays, differenceInCalendarDays } from 'date-fns';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import { SchedulerPanel } from './SchedulerPanel';
 import {
@@ -271,20 +272,44 @@ export const EventScheduler = React.memo(function EventScheduler({
     }
   }, [onDataChange]);
 
-  // Mismo patrón que handleItemUpdate/completeTaskWithSkipPayment: nueva referencia de scheduler, array y objeto de tarea
+  // Regla de oro: si entra end_date → recalcular duration_days; si entra duration_days → recalcular end_date. Fechas siempre como Date. Inmutabilidad para re-render del Grid.
   const handleManualTaskPatch = useCallback((taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => {
     let updatedData: SchedulerViewData | undefined;
     setLocalEventData((prev) => {
       if (!prev.scheduler?.tasks) return prev;
+      const current = prev.scheduler.tasks.find((t) => t.id === taskId);
+      const toDate = (d: Date | string | undefined) => (d == null ? undefined : d instanceof Date ? d : new Date(d));
+      const startDate = toDate(patch.start_date) ?? (current ? toDate(current.start_date) : undefined);
+      const currentEnd = current ? toDate(current.end_date) : undefined;
+      let endDate: Date | undefined;
+      if (patch.duration_days != null && startDate != null) {
+        endDate = addDays(startDate, Math.max(1, patch.duration_days) - 1);
+      } else if (patch.end_date != null) {
+        endDate = toDate(patch.end_date)!;
+      } else {
+        endDate = currentEnd;
+      }
+      const durationDays =
+        startDate != null && endDate != null ? Math.max(1, differenceInCalendarDays(endDate, startDate) + 1) : undefined;
       const normalizedPatch = {
         ...patch,
         completed_at: patch.completed_at != null
           ? (patch.completed_at instanceof Date ? patch.completed_at.toISOString() : patch.completed_at)
           : patch.completed_at,
+        ...(startDate != null && { start_date: startDate }),
+        ...(endDate != null && { end_date: endDate }),
+        ...(durationDays != null && { duration_days: durationDays }),
       };
-      const newTasks = prev.scheduler.tasks.map((t) =>
-        t.id === taskId ? { ...t, ...normalizedPatch } : { ...t }
-      );
+      console.log('[REACTIVITY CHECK] Updating state for task:', taskId, 'New End Date:', normalizedPatch.end_date);
+      const newTasks = prev.scheduler.tasks.map((t) => {
+        if (t.id !== taskId) return { ...t };
+        return {
+          ...t,
+          ...normalizedPatch,
+          ...(endDate != null && { end_date: endDate }),
+          ...(durationDays != null && { duration_days: durationDays }),
+        };
+      });
       updatedData = {
         ...prev,
         scheduler: {
@@ -958,11 +983,17 @@ export const EventScheduler = React.memo(function EventScheduler({
       }
       if (!result.data) return;
       const t = result.data.task;
+      const startDate = t.start_date instanceof Date ? t.start_date : new Date(t.start_date);
+      const endDate = t.end_date instanceof Date ? t.end_date : new Date(t.end_date);
+      const durationDays =
+        (current as { duration_days?: number })?.duration_days ??
+        Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
       const newTask = {
         id: result.data.id,
         name: t.name,
-        start_date: t.start_date,
-        end_date: t.end_date,
+        start_date: startDate,
+        end_date: endDate,
+        duration_days: durationDays,
         category: t.category,
         cotizacion_item_id: null,
         catalog_category_id: t.catalog_category_id ?? (current as { catalog_category_id?: string | null })?.catalog_category_id ?? null,
@@ -1091,7 +1122,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       localEventData.scheduler?.tasks?.filter(
         (t): t is typeof t & { cotizacion_item_id: null } => t.cotizacion_item_id == null
       ) ?? [],
-    [localEventData.scheduler?.tasks] // dependencia explícita: cualquier cambio en tasks recalcula
+    [localEventData]
   );
 
   // Construir estructura personalizada para items sin catálogo

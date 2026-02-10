@@ -117,19 +117,21 @@ export const SchedulerGrid = React.memo(({
         }
         if (isManualTaskRow(row)) {
           const t = row.task;
+          const startDate = new Date(t.start_date);
+          const endDate = new Date(t.end_date);
           const tasks = [
             {
               id: t.id,
               name: t.name,
-              start_date: new Date(t.start_date),
-              end_date: new Date(t.end_date),
+              start_date: startDate,
+              end_date: endDate,
               is_completed: !!(t.completed_at ?? (t.status === 'COMPLETED')),
               has_crew_member: !!t.assigned_to_crew_member_id,
             },
           ];
           return (
             <SchedulerRow
-              key={t.id}
+              key={`${t.id}-${endDate.getTime()}`}
               itemId={t.id}
               catalogItemId={t.id}
               itemName={t.name}

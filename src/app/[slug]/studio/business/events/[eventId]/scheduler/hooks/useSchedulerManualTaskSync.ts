@@ -19,6 +19,14 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
     [task.assigned_to_crew_member]
   );
 
+  // Misma prioridad que completed_at: duración y fechas disparan sync (Popover ↔ Grid por el mismo puente)
+  const startEndDurationKey = useMemo(() => {
+    const start = task.start_date != null ? (task.start_date instanceof Date ? task.start_date.getTime() : new Date(task.start_date).getTime()) : null;
+    const end = task.end_date != null ? (task.end_date instanceof Date ? task.end_date.getTime() : new Date(task.end_date).getTime()) : null;
+    const days = (task as { duration_days?: number }).duration_days ?? null;
+    return `${start}-${end}-${days}`;
+  }, [task.start_date, task.end_date, (task as { duration_days?: number }).duration_days]);
+
   const taskKey = useMemo(
     () =>
       JSON.stringify({
@@ -28,8 +36,9 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
         completed_at: task.completed_at,
         assigned_to_crew_member_id: task.assigned_to_crew_member_id,
         assignedToCrewKey,
+        startEndDurationKey,
       }),
-    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey]
+    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey, startEndDurationKey]
   );
 
   useEffect(() => {

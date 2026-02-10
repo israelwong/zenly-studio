@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { addDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { actualizarCostoTareaManual, actualizarNombreTareaManual, asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { actualizarCostoTareaManual, actualizarNombreTareaManual, asignarCrewATareaScheduler, actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
@@ -20,7 +21,7 @@ interface CrewMember {
 
 export type ManualTaskPatch = Partial<Pick<
   ManualTaskPayload,
-  'name' | 'budget_amount' | 'assigned_to_crew_member_id' | 'assigned_to_crew_member' | 'status' | 'completed_at' | 'category' | 'catalog_category_id' | 'catalog_category_nombre'
+  'name' | 'budget_amount' | 'duration_days' | 'start_date' | 'end_date' | 'assigned_to_crew_member_id' | 'assigned_to_crew_member' | 'status' | 'completed_at' | 'category' | 'catalog_category_id' | 'catalog_category_nombre'
 >>;
 
 interface SchedulerManualTaskPopoverProps {
@@ -118,9 +119,20 @@ export function SchedulerManualTaskPopover({
     const newName = patch.name ?? initialName;
     const nameChanged = newName !== (initialName.trim() || 'Tarea manual');
     const costChanged = (patch.budget_amount ?? initialBudget ?? 0) !== (initialBudget ?? 0);
+    const newDurationDays = patch.duration_days != null ? Math.max(1, Math.min(365, patch.duration_days)) : null;
+    const durationChanged = newDurationDays != null && newDurationDays !== ((task as { duration_days?: number }).duration_days ?? 1);
+    // Anclaje: start_date no cambia; new_end_date = addDays(task.start_date, new_duration_days - 1)
+    const anchorStart = task.start_date ? new Date(task.start_date) : null;
+    const computedEndDate =
+      durationChanged && anchorStart && newDurationDays != null
+        ? addDays(anchorStart, newDurationDays - 1)
+        : null;
     const snapshot: ManualTaskPatch = {
       name: initialName,
       budget_amount: initialBudget,
+      start_date: task.start_date ? new Date(task.start_date) : undefined,
+      end_date: task.end_date ? new Date(task.end_date) : undefined,
+      duration_days: (task as { duration_days?: number }).duration_days,
       assigned_to_crew_member_id: task.assigned_to_crew_member_id ?? null,
       assigned_to_crew_member: task.assigned_to_crew_member ?? null,
       status: initialCompleted ? 'COMPLETED' : 'PENDING',
@@ -128,6 +140,23 @@ export function SchedulerManualTaskPopover({
     };
     setIsSaving(true);
     try {
+      if (durationChanged && anchorStart && computedEndDate) {
+        const payload = { start_date: anchorStart, end_date: computedEndDate };
+        if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+          console.log('[Sync] Updating Task:', { id: task.id, newDuration: newDurationDays, newEndDate: computedEndDate });
+        }
+        const res = await actualizarSchedulerTaskFechas(studioSlug, eventId, task.id, payload);
+        if (!res.success) {
+          onManualTaskPatch?.(task.id, snapshot);
+          toast.error(res.error ?? 'Error al actualizar fechas');
+          return;
+        }
+        onManualTaskPatch?.(task.id, {
+          start_date: anchorStart,
+          end_date: computedEndDate,
+          duration_days: newDurationDays,
+        });
+      }
       const promises: Promise<{ success: boolean; error?: string }>[] = [];
       if (nameChanged) promises.push(actualizarNombreTareaManual(studioSlug, eventId, task.id, newName));
       if (costChanged) promises.push(actualizarCostoTareaManual(studioSlug, eventId, task.id, patch.budget_amount ?? 0));
@@ -150,6 +179,9 @@ export function SchedulerManualTaskPopover({
     studioSlug,
     eventId,
     task.id,
+    task.start_date,
+    task.end_date,
+    (task as { duration_days?: number }).duration_days,
     initialName,
     initialBudget,
     initialCompleted,

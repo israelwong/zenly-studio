@@ -108,7 +108,7 @@ export const SchedulerRow = React.memo(({
       <div className="relative w-full h-full">
         {tasks.map((task) => (
           <TaskBar
-            key={task.id}
+            key={`${task.id}-${task.end_date.getTime()}`}
             taskId={task.id}
             itemId={itemId}
             taskName={task.name}
