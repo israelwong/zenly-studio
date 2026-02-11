@@ -253,12 +253,12 @@ export const TaskBar = React.memo(({
       onItemUpdate={onItemUpdate}
       onManualTaskPatch={onManualTaskPatch}
     >
+      {/* Wrapper exterior: recibe el transform por CSS; no interfiere con react-rnd */}
       <div
-        style={
-          inBulkDragSegment
-            ? { transform: 'translateX(var(--bulk-drag-offset, 0px))', transition: 'none' }
-            : undefined
-        }
+        className="outer-drag-wrapper"
+        data-bulk-id={taskId}
+        data-in-bulk-segment={inBulkDragSegment ? 'true' : 'false'}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       >
         <Rnd
           key={`${taskId}-${itemId}-${endDate.getTime()}`}
@@ -296,10 +296,11 @@ export const TaskBar = React.memo(({
           overflow-hidden whitespace-nowrap
         `}
       >
-        <div
-          className="w-full h-full flex items-center justify-between gap-1.5 px-1.5 pointer-events-none"
-          title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
-        >
+        <div className={`w-full h-full relative ${inBulkDragSegment ? 'opacity-40' : ''}`}>
+          <div
+            className="w-full h-full flex items-center justify-between gap-1.5 px-1.5 pointer-events-none"
+            title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
+          >
           <span className="flex-1 truncate text-center text-xs font-medium">{taskName}</span>
           
           {/* Indicadores de sincronización */}
@@ -332,6 +333,7 @@ export const TaskBar = React.memo(({
               </>
             )}
           </div>
+        </div>
         </div>
       </Rnd>
       </div>

@@ -217,3 +217,20 @@
   color: var(--popover-foreground) !important;
   opacity: 0.8 !important;
 }
+
+/* Capa de proyección: atenuar originales; al quitar la clase hacen fade-in y ocultan el salto */
+.is-bulk-dragging [data-in-bulk-segment="true"] {
+  opacity: 0 !important;
+  transition: opacity 0.15s ease-in;
+}
+
+/* Ghost estable: sin transición durante arrastre; pointer-events para que el mouse solo toque el grid; will-change para GPU */
+#drag-projection-layer,
+#drag-projection-layer * {
+  pointer-events: none !important;
+}
+#drag-projection-layer,
+#drag-projection-layer [style*="translateX"] {
+  transition: none !important;
+  will-change: transform;
+}

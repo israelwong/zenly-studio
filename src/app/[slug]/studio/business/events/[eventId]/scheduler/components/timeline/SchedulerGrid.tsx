@@ -31,7 +31,7 @@ interface SchedulerGridProps {
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
   /** Power Bar: segmentKey + taskIds para marcar segmento activo; daysOffset solo para tooltip (actualizado en mousemove solo cuando cambia el redondeo) */
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
-  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number) => void;
+  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
 }
 
 function SchedulerGridInner(
@@ -177,7 +177,7 @@ function SchedulerGridInner(
           return (
             <div
               key={row.id}
-              className="border-b border-white/5 flex-shrink-0 flex items-center relative box-border overflow-hidden"
+              className="border-b border-white/5 flex-shrink-0 flex items-center relative box-border overflow-visible"
               style={{ height: ROW_HEIGHTS.CATEGORY_HEADER, minHeight: ROW_HEIGHTS.CATEGORY_HEADER, maxHeight: ROW_HEIGHTS.CATEGORY_HEADER, boxSizing: 'border-box' }}
             >
               {hasTasks && onBulkDragStart && bounds.minStartDate && bounds.maxEndDate && (
@@ -185,6 +185,7 @@ function SchedulerGridInner(
                   role="button"
                   tabIndex={0}
                   aria-label="Mover todas las tareas de esta categoría"
+                  data-bulk-bar-segment={row.id}
                   className={`absolute inset-y-2 flex items-center justify-center cursor-grab active:cursor-grabbing rounded border-t ${stageClasses.bg} ${stageClasses.border} hover:opacity-90 transition-opacity`}
                   style={{
                     left: barLeft,
@@ -192,22 +193,18 @@ function SchedulerGridInner(
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onBulkDragStart(row.id, bounds.taskIds, e.clientX);
+                    onBulkDragStart(row.id, bounds.taskIds, e.clientX, e.clientY);
                   }}
                 >
-                  <GripVertical className={`h-4 w-4 ${stageClasses.icon}`} />
-                </div>
-              )}
-              {isDraggingThisSegment && daysOffset !== 0 && (
-                <div
-                  className="absolute z-20 px-2 py-0.5 rounded text-xs font-medium bg-zinc-800 text-zinc-200 border border-zinc-600 shadow-lg pointer-events-none whitespace-nowrap"
-                  style={{
-                    left: barLeft + barWidth / 2,
-                    top: '50%',
-                    transform: 'translate(-50%, -50%) translateX(var(--bulk-drag-offset, 0px))',
-                  }}
-                >
-                  {daysOffset > 0 ? '+' : ''}{daysOffset} día{daysOffset !== 1 ? 's' : ''}
+                  {/* Wrapper exterior: recibe transform por CSS; contenido interior se atenúa */}
+                  <div
+                    className="outer-drag-wrapper h-full w-full flex items-center justify-center rounded"
+                    data-in-bulk-segment={isDraggingThisSegment ? 'true' : 'false'}
+                  >
+                    <div className={`h-full w-full flex items-center justify-center ${isDraggingThisSegment ? 'opacity-40' : ''}`}>
+                      <GripVertical className={`h-4 w-4 ${stageClasses.icon}`} />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

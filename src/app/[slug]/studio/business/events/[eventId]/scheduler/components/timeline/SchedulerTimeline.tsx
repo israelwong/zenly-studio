@@ -31,7 +31,7 @@ interface SchedulerTimelineProps {
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
   gridRef?: React.RefObject<HTMLDivElement | null>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
-  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number) => void;
+  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
 }
 
 export const SchedulerTimeline = React.memo(({

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { type DateRange } from 'react-day-picker';
 import type { SchedulerData, SchedulerCotizacionItem } from '@/lib/actions/studio/business/events';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -187,19 +188,35 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
   const lastOverIdRef = useRef<string | null>(null);
 
-  /** Power Bar: ref al grid para --bulk-drag-offset; ref para startClientX y lastDaysOffset. */
+  /** Power Bar: ref al grid; capa de proyección (clones) y tooltip. */
   const gridRef = useRef<HTMLDivElement>(null);
+  const projectionLayerRef = useRef<HTMLDivElement>(null);
+  const bulkDragTooltipRef = useRef<HTMLDivElement>(null);
   const bulkDragRef = useRef<{
     segmentKey: string;
     taskIds: string[];
     startClientX: number;
+    startClientY: number;
     lastDaysOffset: number;
+    startScrollLeft: number;
   } | null>(null);
+  const hasCapturedRects = useRef(false);
   const [bulkDragState, setBulkDragState] = useState<{
     segmentKey: string;
     taskIds: string[];
     daysOffset?: number;
   } | null>(null);
+  const [bulkDragRects, setBulkDragRects] = useState<Array<{
+    taskId: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    backgroundColor: string;
+    borderRadius: string;
+  }>>([]);
+  /** True mientras la capa de proyección hace fade-out antes de desmontar. */
+  const [bulkDragFadingOut, setBulkDragFadingOut] = useState(false);
 
   // Limpieza del debounce al desmontar
   useEffect(() => {
@@ -1428,40 +1445,180 @@ export const EventScheduler = React.memo(function EventScheduler({
   );
 
   /** Inicio de arrastre masivo (Power Bar): un solo setState; offset se maneja por CSS var en mousemove. */
-  const onBulkDragStart = useCallback((segmentKey: string, taskIds: string[], clientX: number) => {
-    bulkDragRef.current = { segmentKey, taskIds, startClientX: clientX, lastDaysOffset: 0 };
+  const onBulkDragStart = useCallback((segmentKey: string, taskIds: string[], clientX: number, clientY: number) => {
+    bulkDragRef.current = {
+      segmentKey,
+      taskIds,
+      startClientX: clientX,
+      startClientY: clientY,
+      lastDaysOffset: 0,
+      startScrollLeft: gridRef.current?.scrollLeft ?? 0,
+    };
     setBulkDragState({ segmentKey, taskIds, daysOffset: 0 });
   }, []);
 
   useEffect(() => {
-    if (!bulkDragState) return;
-    gridRef.current?.style.setProperty('--bulk-drag-offset', '0px');
-    const onMove = (e: MouseEvent) => {
+    if (!bulkDragState || hasCapturedRects.current) return;
+    const taskIds = new Set(bulkDragState.taskIds);
+    const segmentKey = bulkDragState.segmentKey;
+
+    const FALLBACK_CLONE_COLOR = 'rgba(147, 51, 234, 0.9)';
+
+    const captureAndApply = () => {
+      const rects: Array<{ taskId: string; left: number; top: number; width: number; height: number; backgroundColor: string; borderRadius: string }> = [];
+
+      for (const id of bulkDragState.taskIds) {
+        const el = document.querySelector<HTMLElement>(`[data-bulk-id="${id}"]`);
+        if (!el) {
+          console.warn('[Power Bar] No encontrado en DOM:', id);
+          continue;
+        }
+        const target = el.firstElementChild as HTMLElement | null;
+        const box = target?.getBoundingClientRect() ?? el.getBoundingClientRect();
+        const style = target ? getComputedStyle(target) : getComputedStyle(el);
+        let bg = style.backgroundColor;
+        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
+          bg = FALLBACK_CLONE_COLOR;
+        }
+        rects.push({
+          taskId: id,
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+          backgroundColor: bg,
+          borderRadius: style.borderRadius || '6px',
+        });
+      }
+
+      const powerBarEl = document.querySelector<HTMLElement>(`[data-bulk-bar-segment="${segmentKey}"]`);
+      if (powerBarEl) {
+        const box = powerBarEl.getBoundingClientRect();
+        const style = getComputedStyle(powerBarEl);
+        let bg = style.backgroundColor;
+        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
+          bg = FALLBACK_CLONE_COLOR;
+        }
+        rects.push({
+          taskId: `power-bar-${segmentKey}`,
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+          backgroundColor: bg,
+          borderRadius: style.borderRadius || '6px',
+        });
+      } else {
+        console.warn('[Power Bar] Power Bar no encontrada para segmento:', segmentKey);
+      }
+
+      console.log('[Power Bar] Clones capturados por ID:', rects.length, rects.length ? rects.map((r) => r.taskId) : '(ninguno)');
+      setBulkDragRects(rects);
+      hasCapturedRects.current = true;
+
+      const gridEl = gridRef.current;
+      if (gridEl) {
+        gridEl.classList.add('is-bulk-dragging');
+      }
+
+      const layerEl = projectionLayerRef.current;
+      if (!layerEl) {
+        console.warn('[Power Bar] projectionLayerRef.current no está listo al aplicar clase');
+      } else {
+        layerEl.style.setProperty('--bulk-drag-offset', '0px');
+      }
+
       const ref = bulkDragRef.current;
-      if (!ref) return;
-      const offsetPx = e.clientX - ref.startClientX;
-      gridRef.current?.style.setProperty('--bulk-drag-offset', `${offsetPx}px`);
-      const daysOffset = Math.round(offsetPx / COLUMN_WIDTH);
-      if (daysOffset !== ref.lastDaysOffset) {
-        ref.lastDaysOffset = daysOffset;
-        setBulkDragState(prev => (prev ? { ...prev, daysOffset } : null));
+      if (ref && bulkDragTooltipRef.current) {
+        bulkDragTooltipRef.current.style.left = `${ref.startClientX + 12}px`;
+        bulkDragTooltipRef.current.style.top = `${ref.startClientY + 12}px`;
+      }
+    };
+
+    setTimeout(() => {
+      captureAndApply();
+    }, 0);
+
+    const onMove = (e: MouseEvent) => {
+      const r = bulkDragRef.current;
+      if (!r) return;
+      const scrollLeft = gridRef.current?.scrollLeft ?? 0;
+      const offsetPx = e.clientX - r.startClientX + (scrollLeft - r.startScrollLeft);
+      const layerEl = projectionLayerRef.current;
+      if (layerEl) {
+        layerEl.style.setProperty('--bulk-drag-offset', `${offsetPx}px`);
+      }
+      if (bulkDragTooltipRef.current) {
+        bulkDragTooltipRef.current.style.left = `${e.clientX + 12}px`;
+        bulkDragTooltipRef.current.style.top = `${e.clientY + 12}px`;
+      }
+      const days = Math.round(offsetPx / COLUMN_WIDTH);
+      if (days !== r.lastDaysOffset) {
+        r.lastDaysOffset = days;
+        setBulkDragState(prev => (prev ? { ...prev, daysOffset: days } : null));
       }
     };
     const onUp = async (e: MouseEvent) => {
       const ref = bulkDragRef.current;
       bulkDragRef.current = null;
-      setBulkDragState(null);
-      gridRef.current?.style.removeProperty('--bulk-drag-offset');
+      hasCapturedRects.current = false;
       if (!ref) return;
-      const offsetPx = e.clientX - ref.startClientX;
-      const daysOffset = Math.round(offsetPx / COLUMN_WIDTH);
-      if (daysOffset === 0) return;
+      const scrollLeft = gridRef.current?.scrollLeft ?? 0;
+      const offsetPx = e.clientX - ref.startClientX + (scrollLeft - ref.startScrollLeft);
+      const finalDays = Math.round(offsetPx / COLUMN_WIDTH);
+
+      if (finalDays !== 0) {
+        const data = localEventDataRef.current;
+        const taskIdSet = new Set(ref.taskIds);
+        const optimisticUpdates: Array<{ taskId: string; start_date: Date; end_date: Date }> = [];
+        for (const t of data.scheduler?.tasks ?? []) {
+          if (taskIdSet.has(t.id)) {
+            optimisticUpdates.push({
+              taskId: t.id,
+              start_date: addDays(new Date(t.start_date), finalDays),
+              end_date: addDays(new Date(t.end_date), finalDays),
+            });
+          }
+        }
+        for (const cot of data.cotizaciones ?? []) {
+          for (const item of cot.cotizacion_items ?? []) {
+            const st = item.scheduler_task;
+            if (st && taskIdSet.has(st.id)) {
+              optimisticUpdates.push({
+                taskId: st.id,
+                start_date: addDays(new Date(st.start_date), finalDays),
+                end_date: addDays(new Date(st.end_date), finalDays),
+              });
+            }
+          }
+        }
+        // flushSync: tareas + Power Bar (getSegmentBounds) actualizan en el mismo ciclo
+        flushSync(() => {
+          handleBulkTasksMoved(optimisticUpdates);
+        });
+      }
+
+      // Seguro de vida 200ms: no quitar clase ni rects; ghost visible y originales ocultos mientras React pinta
+      setTimeout(() => {
+        gridRef.current?.classList.remove('is-bulk-dragging');
+        projectionLayerRef.current?.style.removeProperty('--bulk-drag-offset');
+        setTimeout(() => {
+          setBulkDragFadingOut(true);
+          setTimeout(() => {
+            setBulkDragState(null);
+            setBulkDragRects([]);
+            setBulkDragFadingOut(false);
+          }, 200);
+        }, 150);
+      }, 200);
+
+      if (finalDays === 0) return;
       try {
         const result = await actualizarSchedulerTareasBulkFechas(
           studioSlug,
           eventId,
           ref.taskIds,
-          daysOffset
+          finalDays
         );
         if (result.success && result.data) {
           handleBulkTasksMoved(result.data);
@@ -1474,6 +1631,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => {
+      hasCapturedRects.current = false;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
@@ -2253,7 +2411,52 @@ export const EventScheduler = React.memo(function EventScheduler({
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      {/* Capa de proyección: fixed inset-0; tooltip fuera para no heredar transform y posición estable viewport */}
+      {bulkDragState && (
+        <>
+          <div
+            id="drag-projection-layer"
+            ref={projectionLayerRef}
+            className="fixed inset-0"
+            style={{
+              zIndex: 9999,
+              opacity: bulkDragFadingOut ? 0 : 1,
+              transition: bulkDragFadingOut ? 'opacity 0.2s ease-out' : 'none',
+              pointerEvents: 'none',
+            }}
+          >
+            {bulkDragRects.map((rect) => (
+              <div
+                key={rect.taskId}
+                className="absolute rounded shadow-lg"
+                style={{
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                  backgroundColor: rect.backgroundColor,
+                  borderRadius: rect.borderRadius,
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  transform: 'translateX(var(--bulk-drag-offset, 0px))',
+                  transition: 'none',
+                  willChange: 'transform',
+                  zIndex: 9999,
+                }}
+              />
+            ))}
+          </div>
+          {bulkDragState.daysOffset !== 0 && (
+            <div
+              ref={bulkDragTooltipRef}
+              className="fixed px-2 py-0.5 rounded text-xs font-medium bg-zinc-800 text-zinc-200 border border-zinc-600 shadow-lg whitespace-nowrap"
+              style={{ position: 'fixed', left: 0, top: 0, zIndex: 10000, pointerEvents: 'none' }}
+            >
+              {bulkDragState.daysOffset! > 0 ? '+' : ''}{bulkDragState.daysOffset} día{bulkDragState.daysOffset !== 1 && bulkDragState.daysOffset !== -1 ? 's' : ''}
+            </div>
+          )}
+        </>
+      )}
       <SchedulerPanel
         secciones={seccionesFiltradasConItems}
         itemsMap={itemsMap}

@@ -29,8 +29,8 @@ export default function EventSchedulerPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const studioSlug = params.slug as string;
-  const eventId = params.eventId as string;
+  const studioSlug = (params?.slug as string) ?? '';
+  const eventId = (params?.eventId as string) ?? '';
   const cotizacionId = searchParams.get('cotizacion');
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
