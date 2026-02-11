@@ -1469,10 +1469,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
       for (const id of bulkDragState.taskIds) {
         const el = document.querySelector<HTMLElement>(`[data-bulk-id="${id}"]`);
-        if (!el) {
-          console.warn('[Power Bar] No encontrado en DOM:', id);
-          continue;
-        }
+        if (!el) continue;
         const target = el.firstElementChild as HTMLElement | null;
         const box = target?.getBoundingClientRect() ?? el.getBoundingClientRect();
         const style = target ? getComputedStyle(target) : getComputedStyle(el);
@@ -1508,11 +1505,8 @@ export const EventScheduler = React.memo(function EventScheduler({
           backgroundColor: bg,
           borderRadius: style.borderRadius || '6px',
         });
-      } else {
-        console.warn('[Power Bar] Power Bar no encontrada para segmento:', segmentKey);
       }
 
-      console.log('[Power Bar] Clones capturados por ID:', rects.length, rects.length ? rects.map((r) => r.taskId) : '(ninguno)');
       setBulkDragRects(rects);
       hasCapturedRects.current = true;
 
@@ -1522,11 +1516,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       }
 
       const layerEl = projectionLayerRef.current;
-      if (!layerEl) {
-        console.warn('[Power Bar] projectionLayerRef.current no está listo al aplicar clase');
-      } else {
-        layerEl.style.setProperty('--bulk-drag-offset', '0px');
-      }
+      if (layerEl) layerEl.style.setProperty('--bulk-drag-offset', '0px');
 
       const ref = bulkDragRef.current;
       if (ref && bulkDragTooltipRef.current) {
@@ -1592,13 +1582,11 @@ export const EventScheduler = React.memo(function EventScheduler({
             }
           }
         }
-        // flushSync: tareas + Power Bar (getSegmentBounds) actualizan en el mismo ciclo
         flushSync(() => {
           handleBulkTasksMoved(optimisticUpdates);
         });
       }
 
-      // Seguro de vida 200ms: no quitar clase ni rects; ghost visible y originales ocultos mientras React pinta
       setTimeout(() => {
         gridRef.current?.classList.remove('is-bulk-dragging');
         projectionLayerRef.current?.style.removeProperty('--bulk-drag-offset');
@@ -2412,7 +2400,6 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   return (
     <div className="w-full relative">
-      {/* Capa de proyección: fixed inset-0; tooltip fuera para no heredar transform y posición estable viewport */}
       {bulkDragState && (
         <>
           <div

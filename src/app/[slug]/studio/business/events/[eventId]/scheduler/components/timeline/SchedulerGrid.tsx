@@ -29,7 +29,6 @@ interface SchedulerGridProps {
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
-  /** Power Bar: segmentKey + taskIds para marcar segmento activo; daysOffset solo para tooltip (actualizado en mousemove solo cuando cambia el redondeo) */
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
 }
