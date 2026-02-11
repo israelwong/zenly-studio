@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState, useEffect } from 'react';
 import { Rnd, type RndDragEvent } from 'react-rnd';
-import { format, differenceInCalendarDays } from 'date-fns';
+import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
@@ -11,6 +11,7 @@ import {
   getDateFromPosition,
   getWidthFromDuration,
   isDateInRange,
+  COLUMN_WIDTH,
 } from '../../utils/coordinate-utils';
 import {
   calculateTaskStatus,
@@ -72,7 +73,7 @@ export const TaskBar = React.memo(({
   const [localEndDate, setLocalEndDate] = useState(endDate);
 
   // Track movimiento real para prevenir context menu durante drag/resize
-  const dragStartPosRef = React.useRef({ x: 0, width: 0 });
+  const dragStartPosRef = React.useRef<{ x: number; width: number }>({ x: 0, width: 0 });
 
   // Sincronizar estado local cuando las props cambien (actualización optimista externa)
   useEffect(() => {
@@ -155,55 +156,62 @@ export const TaskBar = React.memo(({
     [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate]
   );
 
-  // Manejar resize start - guardar ancho inicial
+  // Manejar resize start - guardar ancho y posición inicial
   const handleResizeStart = useCallback((_e: React.SyntheticEvent, _direction: string, ref: HTMLElement) => {
-    dragStartPosRef.current.width = ref.offsetWidth;
-  }, []);
+    dragStartPosRef.current = {
+      x: getPositionFromDate(localStartDate, dateRange),
+      width: ref.offsetWidth,
+    };
+  }, [localStartDate, dateRange]);
 
-  // Manejar resize stop - solo actualizar si hubo cambio real
+  // Manejar resize stop - lógica bidireccional por direction
   const handleResizeStop = useCallback(
     (
       _e: MouseEvent | TouchEvent,
-      _direction: string,
-      _ref: HTMLElement,
-      _delta: { height: number; width: number },
+      direction: string,
+      ref: HTMLElement,
+      delta: { height: number; width: number },
       position: { x: number; y: number }
     ) => {
-      const rawWidth = _ref.offsetWidth;
+      const rawWidth = ref.offsetWidth;
 
-      // Forzar ancho mínimo de 60px (1 día) y redondear a múltiplos de 60px
-      const snappedWidth = Math.max(60, Math.round(rawWidth / 60) * 60);
+      // Snap al grid: múltiplos de 60px, mínimo 1 día
+      const snappedWidth = Math.max(COLUMN_WIDTH, Math.round(rawWidth / COLUMN_WIDTH) * COLUMN_WIDTH);
+      const deltaDays = Math.round(delta.width / COLUMN_WIDTH);
 
-      // Detectar si hubo cambio real (threshold de 10px = grid snap)
-      const hasResized = Math.abs(snappedWidth - dragStartPosRef.current.width) > 10;
+      if (deltaDays === 0) return;
 
-      if (!hasResized) {
-        return; // No hubo resize, ignorar
+      let newStartDate: Date;
+      let newEndDate: Date;
+
+      if (direction === 'left') {
+        // Izquierda: start_date se mueve; end_date fijo
+        const daysToMove = Math.round(delta.width / COLUMN_WIDTH);
+        newStartDate = addDays(localStartDate, -daysToMove);
+        newEndDate = localEndDate;
+      } else if (direction === 'right') {
+        // Derecha: start_date fijo; solo duration
+        newStartDate = localStartDate;
+        const newDurationDays = Math.max(1, Math.round(snappedWidth / COLUMN_WIDTH));
+        newEndDate = addDays(localStartDate, newDurationDays - 1);
+      } else {
+        return;
       }
 
-      const newStartDate = getDateFromPosition(position.x, dateRange);
+      // Normalizar a mediodía UTC para consistencia
+      const norm = (d: Date) =>
+        new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+      newStartDate = norm(newStartDate);
+      newEndDate = norm(newEndDate);
 
-      // Convertir ancho a duración en días (mínimo 1 día) usando métodos UTC
-      const newDurationDays = Math.max(1, snappedWidth / 60);
-      const newStartDateUtc = new Date(Date.UTC(
-        newStartDate.getUTCFullYear(),
-        newStartDate.getUTCMonth(),
-        newStartDate.getUTCDate(),
-        12, 0, 0
-      ));
-      const newEndDate = new Date(Date.UTC(
-        newStartDateUtc.getUTCFullYear(),
-        newStartDateUtc.getUTCMonth(),
-        newStartDateUtc.getUTCDate() + (newDurationDays - 1),
-        12, 0, 0
-      ));
+      const durationInclusive = Math.max(1, differenceInCalendarDays(newEndDate, newStartDate) + 1);
+      if (durationInclusive < 1) return;
 
-      // Validar que las fechas estén dentro del rango
       if (!isDateInRange(newStartDate, dateRange) || !isDateInRange(newEndDate, dateRange)) {
         return;
       }
 
-      const durationInclusive = Math.max(1, differenceInCalendarDays(newEndDate, newStartDate) + 1);
+      // Actualización optimista inmediata
       setIsUpdating(true);
       setLocalStartDate(newStartDate);
       setLocalEndDate(newEndDate);
@@ -221,7 +229,7 @@ export const TaskBar = React.memo(({
         setIsUpdating(false);
       });
     },
-    [taskId, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
+    [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -261,7 +269,7 @@ export const TaskBar = React.memo(({
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       >
         <Rnd
-          key={`${taskId}-${itemId}-${endDate.getTime()}`}
+          key={`${taskId}-${itemId}-${localEndDate.getTime()}-${localStartDate.getTime()}`}
         default={{
           x: initialX,
           y: 6,

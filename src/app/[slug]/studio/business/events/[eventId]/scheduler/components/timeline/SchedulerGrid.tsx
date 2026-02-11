@@ -161,7 +161,8 @@ function SchedulerGridInner(
     [totalDays, dateRange?.from]
   );
 
-  const renderPhantomRow = useCallback(
+  /** Solo add_phantom: celdas clicables con hover y + para añadir tarea en fecha. */
+  const renderAddTaskPhantomRow = useCallback(
     (row: { id: string; sectionId: string; stageCategory: TaskCategoryStage; catalogCategoryId: string | null; categoryLabel: string }) => {
       if (!onAddManualTaskSubmit || !dateRange?.from || !studioSlug || !eventId) {
         return (
@@ -196,6 +197,27 @@ function SchedulerGridInner(
       );
     },
     [onAddManualTaskSubmit, dateRange, studioSlug, eventId, daysArray]
+  );
+
+  /** add_category_phantom: celdas estáticas, sin hover ni +. Las categorías no se asocian a fecha. */
+  const renderAddCategoryPhantomRow = useCallback(
+    (rowId: string) => (
+      <div
+        key={rowId}
+        className="border-b border-white/5 flex-shrink-0 flex box-border overflow-hidden"
+        style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
+        aria-hidden
+      >
+        {daysArray.map((dayIndex) => (
+          <div
+            key={dayIndex}
+            className="w-[60px] min-w-[60px] flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0"
+            role="presentation"
+          />
+        ))}
+      </div>
+    ),
+    [daysArray]
   );
 
   return (
@@ -276,7 +298,7 @@ function SchedulerGridInner(
           );
         }
         if (isAddPhantomRow(row)) {
-          return renderPhantomRow({
+          return renderAddTaskPhantomRow({
             id: row.id,
             sectionId: row.sectionId,
             stageCategory: row.stageCategory,
@@ -285,13 +307,7 @@ function SchedulerGridInner(
           });
         }
         if (isAddCategoryPhantomRow(row)) {
-          return renderPhantomRow({
-            id: row.id,
-            sectionId: row.sectionId,
-            stageCategory: row.stageCategory,
-            catalogCategoryId: null,
-            categoryLabel: STAGE_LABELS[row.stageCategory] ?? row.stageCategory,
-          });
+          return renderAddCategoryPhantomRow(row.id);
         }
         if (isManualTaskRow(row)) {
           const t = row.task;
