@@ -1,4 +1,4 @@
-import { User, Calendar } from 'lucide-react';
+import { User } from 'lucide-react';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface SchedulerAgrupacionCellProps {
@@ -14,10 +14,9 @@ interface SchedulerAgrupacionCellProps {
         } | null;
     } | null;
     duration?: number; // Duración en días
-    hasSlot?: boolean; // Indica si tiene un slot asignado en el cronograma
 }
 
-export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration, hasSlot = false }: SchedulerAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
 
     // Generar iniciales del nombre
@@ -75,12 +74,6 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
                         }`}>
                         {servicio}
                     </p>
-                    {/* Indicador de slot asignado */}
-                    {hasSlot && (
-                        <span className="inline-flex items-center" title="Slot asignado en cronograma">
-                            <Calendar className="h-3 w-3 text-blue-400 shrink-0" />
-                        </span>
-                    )}
                     {duration && duration > 0 && (
                         <span className="ml-1.5 text-zinc-600 text-xs font-normal">
                             {duration}d

@@ -4,7 +4,6 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { Rnd, type RndDragEvent } from 'react-rnd';
 import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
 import {
   getPositionFromDate,
@@ -90,7 +89,8 @@ export const TaskBar = React.memo(({
     isCompleted,
   });
 
-  const statusColor = getStatusColor(status, hasCrewMember);
+  const isSubtask = (manualTask as { parent_id?: string | null })?.parent_id != null || (item?.scheduler_task as { parent_id?: string | null })?.parent_id != null;
+  const statusColor = getStatusColor(status, hasCrewMember, isSubtask);
   const computedX = getPositionFromDate(localStartDate, dateRange);
   const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate), COLUMN_WIDTH);
   const position = isResizing ? rndPosition : { x: computedX, y: 6 };
@@ -322,37 +322,12 @@ export const TaskBar = React.memo(({
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
           <span className="flex-1 truncate text-center text-xs font-medium">{taskName}</span>
-          
-          {/* Indicadores de sincronización */}
-          <div className="flex items-center gap-1 shrink-0">
-            {item?.scheduler_task && (
-              <>
-                {/* Icono de estado de sincronización */}
-                {item.scheduler_task.sync_status === 'INVITED' ? (
-                  <Calendar className="h-3 w-3 text-emerald-400" title="✅ Sincronizado con Google Calendar - Invitación enviada" />
-                ) : item.scheduler_task.sync_status === 'PUBLISHED' ? (
-                  <Calendar className="h-3 w-3 text-blue-400" title="📋 Publicado en ZEN (no sincronizado con Google Calendar)" />
-                ) : (
-                  <Calendar className="h-3 w-3 text-zinc-500" title="📝 Borrador - Usa 'Publicar Cronograma' para sincronizar" />
-                )}
-
-                {/* Badge de estado de invitación */}
-                {item.scheduler_task.sync_status === 'INVITED' && item.scheduler_task.invitation_status && (
-                  <>
-                    {item.scheduler_task.invitation_status === 'ACCEPTED' && (
-                      <CheckCircle2 className="h-3 w-3 text-emerald-400" title="Invitación aceptada" />
-                    )}
-                    {item.scheduler_task.invitation_status === 'DECLINED' && (
-                      <XCircle className="h-3 w-3 text-red-400" title="Invitación rechazada" />
-                    )}
-                    {item.scheduler_task.invitation_status === 'PENDING' && (
-                      <Clock className="h-3 w-3 text-amber-400" title="Esperando respuesta" />
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          {/* Indicador de sincronización: pequeño punto/icono en borde derecho cuando está sincronizado */}
+          {item?.scheduler_task?.sync_status === 'INVITED' && (
+            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0" title="Sincronizado con Google Calendar">
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+            </div>
+          )}
         </div>
         </div>
       </Rnd>

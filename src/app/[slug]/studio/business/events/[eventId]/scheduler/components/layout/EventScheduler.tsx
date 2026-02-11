@@ -28,6 +28,7 @@ import {
   moverTareaItemCategoria,
   duplicarTareaManualScheduler,
   crearTareaManualScheduler,
+  toggleTaskHierarchy,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { COLUMN_WIDTH } from '../../utils/coordinate-utils';
 
@@ -35,7 +36,6 @@ const EDGE_SCROLL_THRESHOLD = 100;
 const SIDEBAR_WIDTH = 360;
 const EDGE_SCROLL_VELOCITY = 10;
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -43,6 +43,7 @@ import { SchedulerAgrupacionCell } from '../sidebar/SchedulerAgrupacionCell';
 import { parseSchedulerCategoryDroppableId } from '../sidebar/SchedulerSidebar';
 import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeCompleteModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 
 /** Ítem de cotización en la vista; compatible con SchedulerViewData y SchedulerData. */
 type CotizacionItem = SchedulerCotizacionItem;
@@ -133,6 +134,11 @@ export const EventScheduler = React.memo(function EventScheduler({
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() =>
     new Set(secciones.flatMap((s) => STAGE_ORDER.map((st) => `${s.id}-${st}`)))
   );
+  const [googleCalendarEnabled, setGoogleCalendarEnabled] = useState(false);
+
+  useEffect(() => {
+    tieneGoogleCalendarHabilitado(studioSlug).then(setGoogleCalendarEnabled).catch(() => setGoogleCalendarEnabled(false));
+  }, [studioSlug]);
 
   // Sidebar sync: secciones con estados activados manualmente DEBEN estar expandidas para verse bajo su sección.
   useEffect(() => {
@@ -575,18 +581,24 @@ export const EventScheduler = React.memo(function EventScheduler({
           toast.error(result.error ?? 'Error al mover la tarea');
           return;
         }
-        handleManualTaskPatch(taskId, {
-          category,
-          catalog_category_id: catalogCategoryId ?? null,
-          catalog_category_nombre: catalogCategoryNombre ?? null,
+        const patch = { category, catalog_category_id: catalogCategoryId ?? null, catalog_category_nombre: catalogCategoryNombre ?? null };
+        const tasks = localEventData.scheduler?.tasks ?? [];
+        const childIds = new Set(tasks.filter((t) => (t as { parent_id?: string | null }).parent_id === taskId).map((t) => t.id));
+        const updated = tasks.map((t) => {
+          if (t.id === taskId) return { ...t, ...patch };
+          if (childIds.has(t.id)) return { ...t, ...patch };
+          return { ...t };
         });
+        const nextData = { ...localEventData, scheduler: localEventData.scheduler ? { ...localEventData.scheduler, tasks: updated } : localEventData.scheduler };
+        setLocalEventData(nextData);
+        onDataChange?.(nextData);
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       } finally {
         setUpdatingTaskId(null);
       }
     },
-    [studioSlug, eventId, handleManualTaskPatch]
+    [studioSlug, eventId, localEventData, onDataChange]
   );
 
   const handleItemTaskMoveCategory = useCallback(
@@ -954,7 +966,17 @@ export const EventScheduler = React.memo(function EventScheduler({
         const overIndex = combined.findIndex((e) => e.taskId === overId);
         const fromIndex = combined.findIndex((e) => e.taskId === activeId);
         if (fromIndex === -1 || overIndex === -1) return;
-        const reorderedEntries = arrayMove(combined, fromIndex, overIndex);
+        const getParentId = (e: Entry) =>
+          e.type === 'item'
+            ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
+            : ((e.task as { parent_id?: string | null }).parent_id ?? null);
+        const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
+        const block = [combined[fromIndex]!, ...childrenOfActive];
+        const blockIds = new Set(block.map((e) => e.taskId));
+        const rest = combined.filter((e) => !blockIds.has(e.taskId));
+        const insertIndex = rest.findIndex((e) => e.taskId === overId);
+        const finalInsertIndex = insertIndex >= 0 ? insertIndex : rest.length;
+        const reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
         reordered = reorderedEntries.map((e) => e.taskId);
         taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
         taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
@@ -1180,13 +1202,64 @@ export const EventScheduler = React.memo(function EventScheduler({
     []
   );
 
+  const handleToggleTaskHierarchy = useCallback(
+    async (taskId: string, parentId: string | null) => {
+      const result = await toggleTaskHierarchy(studioSlug, eventId, taskId, parentId);
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al actualizar jerarquía');
+        return;
+      }
+      setLocalEventData((prev) => {
+        const next = { ...prev };
+        if (prev.scheduler?.tasks) {
+          next.scheduler = {
+            ...prev.scheduler,
+            tasks: prev.scheduler.tasks.map((t) =>
+              t.id === taskId ? { ...t, parent_id: parentId } : t
+            ),
+          };
+        }
+        if (prev.cotizaciones) {
+          next.cotizaciones = prev.cotizaciones.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) =>
+              item?.scheduler_task?.id === taskId
+                ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, parent_id: parentId } : null }
+                : item
+            ) ?? [],
+          }));
+        }
+        return next;
+      });
+      const next = {
+        ...localEventData,
+        scheduler: localEventData.scheduler?.tasks
+          ? { ...localEventData.scheduler, tasks: localEventData.scheduler.tasks.map((t) => (t.id === taskId ? { ...t, parent_id: parentId } : t)) }
+          : localEventData.scheduler,
+        cotizaciones: localEventData.cotizaciones?.map((cot) => ({
+          ...cot,
+          cotizacion_items: cot.cotizacion_items?.map((item) =>
+            item?.scheduler_task?.id === taskId
+              ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, parent_id: parentId } : null }
+              : item
+          ) ?? [],
+        })) ?? localEventData.cotizaciones,
+      };
+      onDataChange?.(next);
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      toast.success(parentId ? 'Convertida en tarea secundaria' : 'Convertida en tarea principal');
+    },
+    [studioSlug, eventId, localEventData, onDataChange]
+  );
+
   const handleAddManualTaskSubmit = useCallback(
     async (
       sectionId: string,
       stage: string,
       catalogCategoryId: string | null,
       data: { name: string; durationDays: number; budgetAmount?: number },
-      startDate?: Date
+      startDate?: Date,
+      parentId?: string | null
     ) => {
       const result = await crearTareaManualScheduler(studioSlug, eventId, {
         sectionId,
@@ -1196,6 +1269,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         catalog_category_id: catalogCategoryId,
         budget_amount: data.budgetAmount != null && data.budgetAmount >= 0 ? data.budgetAmount : null,
         start_date: startDate,
+        parent_id: parentId ?? null,
       });
       if (!result.success || !result.data) {
         toast.error(result.error ?? 'Error al crear la tarea');
@@ -1210,6 +1284,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         category: result.data.category,
         cotizacion_item_id: null as const,
         catalog_category_id: result.data.catalog_category_id,
+        parent_id: (result.data as { parent_id?: string | null }).parent_id ?? null,
         catalog_category_nombre: result.data.catalog_category_nombre,
         catalog_section_id: (result.data as { catalog_section_id?: string | null }).catalog_section_id ?? sectionId,
         status: result.data.status,
@@ -2447,7 +2522,6 @@ export const EventScheduler = React.memo(function EventScheduler({
         servicio={metadata.servicioNombre}
         isCompleted={isCompleted}
         assignedCrewMember={assignedCrewMember}
-        hasSlot={!!item.scheduler_task}
       />
     );
   };
@@ -2539,6 +2613,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         renderSidebarItem={renderSidebarItem}
         onItemUpdate={handleItemUpdate}
         onAddManualTaskSubmit={handleAddManualTaskSubmit}
+        onToggleTaskHierarchy={handleToggleTaskHierarchy}
         onManualTaskPatch={handleManualTaskPatch}
         onManualTaskDelete={handleManualTaskDelete}
         onManualTaskReorder={handleReorder}
@@ -2564,6 +2639,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
         isMaximized={isMaximized}
+        googleCalendarEnabled={googleCalendarEnabled}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

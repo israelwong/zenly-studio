@@ -27,6 +27,7 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
     return `${start}-${end}-${days}`;
   }, [task.start_date, task.end_date, (task as { duration_days?: number }).duration_days]);
 
+  const parentId = (task as { parent_id?: string | null }).parent_id ?? null;
   const taskKey = useMemo(
     () =>
       JSON.stringify({
@@ -37,8 +38,9 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
         assigned_to_crew_member_id: task.assigned_to_crew_member_id,
         assignedToCrewKey,
         startEndDurationKey,
+        parent_id: parentId,
       }),
-    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey, startEndDurationKey]
+    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey, startEndDurationKey, parentId]
   );
 
   useEffect(() => {

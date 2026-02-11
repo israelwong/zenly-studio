@@ -28,6 +28,8 @@ export interface TaskFormCreateProps {
   studioSlug: string;
   eventId: string;
   sectionLabel?: string;
+  /** Nombre del padre para modo subtarea (muestra NUEVA SUBTAREA · [PADRE]) */
+  parentName?: string;
   onClose: () => void;
   onSubmit: (data: { name: string; durationDays: number; budgetAmount?: number }) => Promise<void>;
 }
@@ -64,6 +66,7 @@ function TaskFormCreate({
   studioSlug,
   eventId,
   sectionLabel,
+  parentName,
   onClose,
   onSubmit,
 }: TaskFormCreateProps) {
@@ -98,9 +101,8 @@ function TaskFormCreate({
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-medium text-emerald-400 uppercase tracking-wide" data-scheduler-label="manual-task">
-        Nueva tarea manual
-        {sectionLabel ? ` · ${sectionLabel}` : ''}
+      <p className={`text-[10px] font-medium uppercase tracking-wide text-emerald-400`} data-scheduler-label="manual-task">
+        {parentName ? `Nueva subtarea · ${parentName.length > 40 ? parentName.slice(0, 37) + '...' : parentName}` : `Nueva tarea manual${sectionLabel ? ` · ${sectionLabel}` : ''}`}
       </p>
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <div className="space-y-2">

@@ -159,6 +159,7 @@ export interface ManualTaskPayload {
     email: string | null;
     tipo: string;
   } | null;
+  parent_id?: string | null;
 }
 
 export interface SchedulerManualTaskRow {
@@ -343,6 +344,81 @@ export function getCategoryIdsWithDataBySectionFromEventData(
 }
 
 type TaskRow = SchedulerTaskRow | SchedulerManualTaskRow;
+
+/** Extrae taskId y parentId de una fila de tarea (ítem o manual). */
+function getTaskIdAndParent(row: TaskRow): { taskId: string; parentId: string | null } | null {
+  if (row.type === 'manual_task') {
+    return { taskId: row.task.id, parentId: row.task.parent_id ?? null };
+  }
+  const st = row.item.scheduler_task as { id?: string; parent_id?: string | null } | null | undefined;
+  if (!st?.id) return null;
+  return { taskId: st.id, parentId: st.parent_id ?? null };
+}
+
+/**
+ * Israel Algorithm: reordena tareas por jerarquía.
+ * Regla: cada padre seguido por sus hijos (ordenados por order). Huérfanas al final (console.warn en dev).
+ */
+export function reorderWithHierarchy(
+  list: Array<{ order: number; row: TaskRow }>
+): Array<{ order: number; row: TaskRow }> {
+  const byTaskId = new Map<string, { order: number; row: TaskRow }>();
+  const taskMeta = new Map<string, { parentId: string | null }>();
+
+  for (const entry of list) {
+    const meta = getTaskIdAndParent(entry.row);
+    if (!meta) continue;
+    byTaskId.set(meta.taskId, entry);
+    taskMeta.set(meta.taskId, { parentId: meta.parentId });
+  }
+
+  const taskIds = new Set(byTaskId.keys());
+  const roots: string[] = [];
+  const childrenByParent = new Map<string, string[]>();
+  const orphans: string[] = [];
+
+  for (const [taskId, meta] of taskMeta.entries()) {
+    const parentId = meta.parentId;
+    if (!parentId) {
+      roots.push(taskId);
+    } else if (taskIds.has(parentId)) {
+      const arr = childrenByParent.get(parentId) ?? [];
+      arr.push(taskId);
+      childrenByParent.set(parentId, arr);
+    } else {
+      orphans.push(taskId);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[reorderWithHierarchy] Tarea huérfana:', taskId, 'parent_id:', parentId, 'no existe en la categoría');
+      }
+    }
+  }
+
+  const result: Array<{ order: number; row: TaskRow }> = [];
+  const sortedRoots = [...roots].sort((a, b) => {
+    const ea = byTaskId.get(a)!;
+    const eb = byTaskId.get(b)!;
+    return (ea.order ?? 0) - (eb.order ?? 0) || a.localeCompare(b);
+  });
+
+  for (const rootId of sortedRoots) {
+    result.push(byTaskId.get(rootId)!);
+    const children = childrenByParent.get(rootId) ?? [];
+    const sortedChildren = [...children].sort((a, b) => {
+      const ea = byTaskId.get(a)!;
+      const eb = byTaskId.get(b)!;
+      return (ea.order ?? 0) - (eb.order ?? 0) || a.localeCompare(b);
+    });
+    for (const cid of sortedChildren) {
+      result.push(byTaskId.get(cid)!);
+    }
+  }
+
+  for (const oid of orphans) {
+    result.push(byTaskId.get(oid)!);
+  }
+
+  return result;
+}
 
 /**
  * @param activeSectionIds Si se proporciona, solo se emiten estas secciones.
@@ -601,7 +677,7 @@ export function buildSchedulerRows(
         );
         for (const categoryKey of sortedCategoryKeys) {
           const list = byCat.get(categoryKey)!;
-          const sorted = [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          const sorted = reorderWithHierarchy([...list]);
           rows.push({
             type: 'category',
             id: `${stageId}-cat-${categoryKey}`,

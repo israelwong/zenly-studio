@@ -1015,6 +1015,8 @@ export async function crearTareaManualScheduler(
     budget_amount?: number | null;
     /** Fecha de inicio (celda clicada en grid). Si se omite, usa cascada (hoy en rango o inicio evento). */
     start_date?: Date;
+    /** ID de tarea padre para subtarea. Si se omite, es tarea principal. */
+    parent_id?: string | null;
   }
 ): Promise<{
   success: boolean;
@@ -1027,6 +1029,7 @@ export async function crearTareaManualScheduler(
     catalog_category_id: string | null;
     catalog_category_nombre: string | null;
     catalog_section_id: string | null;
+    parent_id: string | null;
     budget_amount: number | null;
     status: string;
     progress_percent: number;
@@ -1079,6 +1082,16 @@ export async function crearTareaManualScheduler(
     }
 
     const catalogCategoryId = params.catalog_category_id ?? null;
+    const parentId = params.parent_id ?? null;
+
+    if (parentId) {
+      const parent = await prisma.studio_scheduler_event_tasks.findFirst({
+        where: { id: parentId, scheduler_instance_id: instance.id },
+        select: { id: true, catalog_category_id: true, category: true, parent_id: true },
+      });
+      if (!parent) return { success: false, error: 'Tarea padre no encontrada' };
+      if (parent.parent_id != null) return { success: false, error: 'Solo se permite un nivel de profundidad. El padre no puede ser a su vez una subtarea.' };
+    }
 
     // "Everything" query: todas las tareas del evento. include obligatorio para que cotizacion_item no llegue null.
     const allEventTasks = await prisma.studio_scheduler_event_tasks.findMany({
@@ -1108,9 +1121,27 @@ export async function crearTareaManualScheduler(
 
     const itemsInSegment = allEventTasks.filter(belongsToSegment);
 
-    const maxOrder =
-      itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) : -1;
-    const newOrder = maxOrder + 1;
+    let newOrder: number;
+    if (parentId) {
+      const parent = itemsInSegment.find((t) => t.id === parentId);
+      newOrder = parent != null ? parent.order + 1 : (itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) + 1 : 0);
+      // Shift: incrementar order de tareas con order >= newOrder para abrir hueco
+      const toShift = itemsInSegment.filter((t) => t.order >= newOrder);
+      if (toShift.length > 0) {
+        await prisma.$transaction(
+          toShift.map((t) =>
+            prisma.studio_scheduler_event_tasks.update({
+              where: { id: t.id },
+              data: { order: t.order + 1 },
+            })
+          ),
+          { timeout: 10_000 }
+        );
+      }
+    } else {
+      const maxOrder = itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) : -1;
+      newOrder = maxOrder + 1;
+    }
 
     const toUTCNoon = (d: Date) =>
       new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
@@ -1137,6 +1168,7 @@ export async function crearTareaManualScheduler(
         end_date: toUTCNoon(endDate),
         sync_status: 'DRAFT',
         catalog_category_id: catalogCategoryId,
+        parent_id: parentId,
         order: newOrder,
         budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
       },
@@ -1148,6 +1180,7 @@ export async function crearTareaManualScheduler(
         duration_days: true,
         category: true,
         catalog_category_id: true,
+        parent_id: true,
         order: true,
         budget_amount: true,
         status: true,
@@ -1211,6 +1244,7 @@ export async function crearTareaManualScheduler(
         catalog_category_id: task.catalog_category_id,
         catalog_category_nombre: task.catalog_category?.name ?? null,
         catalog_section_id: params.sectionId ?? null,
+        parent_id: parentId,
         order: orderToReturn,
         budget_amount: task.budget_amount != null ? Number(task.budget_amount) : null,
         status: task.status,
@@ -1594,15 +1628,38 @@ export async function moverTareaManualCategoria(
       },
       _max: { order: true },
     });
-    const newOrder = (maxOrder._max.order ?? -1) + 1;
+    const parentOrder = (maxOrder._max.order ?? -1) + 1;
 
-    await prisma.studio_scheduler_event_tasks.update({
-      where: { id: taskId },
-      data: {
-        category: validCategory,
-        catalog_category_id: catalogCategoryId ?? null,
-        order: newOrder,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.studio_scheduler_event_tasks.update({
+        where: { id: taskId },
+        data: {
+          category: validCategory,
+          catalog_category_id: catalogCategoryId ?? null,
+          order: parentOrder,
+        },
+      });
+
+      const children = await tx.studio_scheduler_event_tasks.findMany({
+        where: { parent_id: taskId, scheduler_instance_id: task.scheduler_instance_id },
+        select: { id: true },
+        orderBy: { order: 'asc' },
+      });
+
+      if (children.length > 0) {
+        await Promise.all(
+          children.map((c, i) =>
+            tx.studio_scheduler_event_tasks.update({
+              where: { id: c.id },
+              data: {
+                category: validCategory,
+                catalog_category_id: catalogCategoryId ?? null,
+                order: parentOrder + 1 + i,
+              },
+            })
+          )
+        );
+      }
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -2063,6 +2120,7 @@ export async function obtenerTareasScheduler(
               cotizacion_item_id: true,
               category: true,
               catalog_category_id: true,
+              parent_id: true,
               catalog_category: {
                 select: { id: true, name: true },
               },
@@ -2136,6 +2194,7 @@ export async function obtenerTareasScheduler(
                   completed_at: true,
                   category: true,
                   catalog_category_id: true,
+                  parent_id: true,
                   catalog_category: {
                     select: { id: true, name: true },
                   },
@@ -2215,6 +2274,7 @@ export async function obtenerTareasScheduler(
                   assigned_to_crew_member: item.scheduler_task.assigned_to_crew_member,
                   sync_status: item.scheduler_task.sync_status,
                   invitation_status: item.scheduler_task.invitation_status,
+                  parent_id: item.scheduler_task.parent_id,
                 }
               : null,
           };
@@ -2270,6 +2330,56 @@ export async function obtenerTareasScheduler(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al cargar tareas del scheduler',
+    };
+  }
+}
+
+/**
+ * Actualiza la jerarquía de una tarea: parent_id (null = principal, string = secundaria).
+ */
+export async function toggleTaskHierarchy(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  parentId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const instance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { event_id: eventId },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento no encontrado' };
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: { id: taskId, scheduler_instance_id: instance.id },
+      select: { id: true },
+    });
+    if (!task) return { success: false, error: 'Tarea no encontrada' };
+
+    if (parentId) {
+      const parent = await prisma.studio_scheduler_event_tasks.findFirst({
+        where: { id: parentId, scheduler_instance_id: instance.id },
+        select: { id: true },
+      });
+      if (!parent) return { success: false, error: 'Tarea padre no encontrada' };
+    }
+
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: taskId },
+      data: { parent_id: parentId },
+    });
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar jerarquía',
     };
   }
 }

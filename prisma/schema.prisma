@@ -1897,6 +1897,9 @@ model studio_scheduler_event_tasks {
   sync_status                SyncStatus                       @default(DRAFT)
   invitation_status          InvitationStatus?
   catalog_category_id        String?
+  parent_id                  String?
+  parent_task                studio_scheduler_event_tasks?     @relation("TaskParentChild", fields: [parent_id], references: [id], onDelete: SetNull)
+  child_tasks                studio_scheduler_event_tasks[]   @relation("TaskParentChild")
   assigned_to                user_studio_roles?                @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
   assigned_to_crew_member    studio_crew_members?             @relation("SchedulerTaskAssignedCrew", fields: [assigned_to_crew_member_id], references: [id], onDelete: SetNull)
   completed_by               user_studio_roles?               @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
@@ -1919,6 +1922,7 @@ model studio_scheduler_event_tasks {
   @@index([cotizacion_item_id])
   @@index([google_calendar_id])
   @@index([google_event_id])
+  @@index([parent_id])
   @@index([scheduler_instance_id, status], map: "studio_gantt_event_tasks_gantt_instance_id_status_idx")
 }
 

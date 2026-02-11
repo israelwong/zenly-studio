@@ -35,8 +35,10 @@ interface SchedulerPanelProps {
     stage: string,
     catalogCategoryId: string | null,
     data: { name: string; durationDays: number; budgetAmount?: number },
-    startDate?: Date
+    startDate?: Date,
+    parentId?: string | null
   ) => Promise<void>;
+  onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -74,6 +76,7 @@ interface SchedulerPanelProps {
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
   isMaximized?: boolean;
+  googleCalendarEnabled?: boolean;
 }
 
 /**
@@ -96,6 +99,7 @@ export const SchedulerPanel = React.memo(({
   renderSidebarItem,
   onItemUpdate,
   onAddManualTaskSubmit,
+  onToggleTaskHierarchy,
   onManualTaskPatch,
   onManualTaskDelete,
   onManualTaskReorder,
@@ -131,6 +135,7 @@ export const SchedulerPanel = React.memo(({
   bulkDragState = null,
   onBulkDragStart,
   isMaximized,
+  googleCalendarEnabled = false,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -198,6 +203,7 @@ export const SchedulerPanel = React.memo(({
             onRenameCustomCategory={onRenameCustomCategory}
             onDeleteCustomCategory={onDeleteCustomCategory}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
+            onToggleTaskHierarchy={onToggleTaskHierarchy}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
             onManualTaskReorder={onManualTaskReorder}
@@ -219,6 +225,7 @@ export const SchedulerPanel = React.memo(({
             activeDragData={activeDragData}
             overlayPosition={overlayPosition}
             updatingTaskId={updatingTaskId}
+            googleCalendarEnabled={googleCalendarEnabled}
           />
         </div>
 

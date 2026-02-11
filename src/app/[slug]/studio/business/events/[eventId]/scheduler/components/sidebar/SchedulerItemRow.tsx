@@ -74,7 +74,6 @@ export function SchedulerItemRow({
                             isCompleted={isCompleted}
                             assignedCrewMember={localItem.assigned_to_crew_member}
                             duration={duration}
-                            hasSlot={!!localItem.scheduler_task}
                         />
                     </button>
                 </SchedulerItemDetailPopover>

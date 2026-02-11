@@ -37,8 +37,9 @@ export function calculateTaskStatus(context: TaskStatusContext): TaskStatus {
  * Mapea el estado de tarea a color visual
  * @param status Estado de la tarea
  * @param hasCrewMember Si tiene personal asignado (opcional)
+ * @param isSubtask Si es tarea secundaria (más oscuro en gris)
  */
-export function getStatusColor(status: TaskStatus, hasCrewMember?: boolean): string {
+export function getStatusColor(status: TaskStatus, hasCrewMember?: boolean, isSubtask?: boolean): string {
   // Si está completada, siempre verde
   if (status === 'COMPLETED') {
     return 'bg-emerald-600 hover:bg-emerald-500';
@@ -58,8 +59,8 @@ export function getStatusColor(status: TaskStatus, hasCrewMember?: boolean): str
       : 'bg-blue-700 hover:bg-blue-600'; // Pendiente con personal: azul más oscuro
   }
 
-  // Sin personal asignado: gris
-  return 'bg-zinc-600 hover:bg-zinc-500';
+  // Sin personal asignado: gris. Subtareas un poco más oscuro
+  return isSubtask ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-zinc-600 hover:bg-zinc-500';
 }
 
 /**
