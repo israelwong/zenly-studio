@@ -42,6 +42,8 @@ interface TaskBarProps {
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
+  /** Power Bar: si true, aplica translateX(var(--bulk-drag-offset, 0px)) para arrastre por CSS */
+  inBulkDragSegment?: boolean;
 }
 
 export const TaskBar = React.memo(({
@@ -63,6 +65,7 @@ export const TaskBar = React.memo(({
   onItemUpdate,
   onManualTaskPatch,
   onClick,
+  inBulkDragSegment,
 }: TaskBarProps) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(startDate);
@@ -250,8 +253,15 @@ export const TaskBar = React.memo(({
       onItemUpdate={onItemUpdate}
       onManualTaskPatch={onManualTaskPatch}
     >
-      <Rnd
-        key={`${taskId}-${itemId}-${endDate.getTime()}`}
+      <div
+        style={
+          inBulkDragSegment
+            ? { transform: 'translateX(var(--bulk-drag-offset, 0px))', transition: 'none' }
+            : undefined
+        }
+      >
+        <Rnd
+          key={`${taskId}-${itemId}-${endDate.getTime()}`}
         default={{
           x: initialX,
           y: 6,
@@ -324,6 +334,7 @@ export const TaskBar = React.memo(({
           </div>
         </div>
       </Rnd>
+      </div>
     </TaskBarContextMenu>
   );
 });

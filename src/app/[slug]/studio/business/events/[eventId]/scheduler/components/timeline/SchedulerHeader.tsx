@@ -13,7 +13,7 @@ interface SchedulerHeaderProps {
 export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) => {
   if (!dateRange?.from || !dateRange?.to) {
     return (
-      <div className="h-[60px] flex items-center justify-center bg-zinc-900/50 border-b border-zinc-800">
+      <div className="h-12 min-h-12 max-h-12 flex items-center justify-center bg-zinc-900/50 border-b border-white/5 box-border">
         <span className="text-xs text-zinc-600">Configurar fechas</span>
       </div>
     );
@@ -33,7 +33,7 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
 
   return (
     <div
-      className="flex h-[60px] bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0 sticky top-0 z-10"
+      className="flex h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex-shrink-0 sticky top-0 z-10 box-border"
       style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px` }}
     >
       {days.map((day, index) => {
@@ -51,18 +51,15 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
             `}
           >
             {shouldShowMonth(day, index) && (
-              <span className="text-[9px] font-semibold text-zinc-400 uppercase mb-0.5">
+              <span className="text-[9px] font-semibold text-zinc-400 uppercase leading-tight">
                 {format(day, 'MMM', { locale: es })}
               </span>
             )}
-            <span className="text-[10px] font-medium text-zinc-500 uppercase">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase leading-tight">
               {format(day, 'EEE', { locale: es })}
             </span>
             <span
-              className={`
-                text-xs font-bold mt-0.5
-                ${isToday ? 'text-emerald-400' : 'text-zinc-300'}
-              `}
+              className={`text-xs font-bold leading-tight ${isToday ? 'text-emerald-400' : 'text-zinc-300'}`}
             >
               {format(day, 'd')}
             </span>

@@ -1,7 +1,7 @@
 import { differenceInDays, addDays } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 
-const COLUMN_WIDTH = 60; // px
+export const COLUMN_WIDTH = 60; // px
 
 /**
  * Posición X de una fecha en el grid. Usa toLocalDateOnly para que la columna

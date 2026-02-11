@@ -29,6 +29,9 @@ interface SchedulerTimelineProps {
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  gridRef?: React.RefObject<HTMLDivElement | null>;
+  bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
+  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number) => void;
 }
 
 export const SchedulerTimeline = React.memo(({
@@ -49,6 +52,9 @@ export const SchedulerTimeline = React.memo(({
   activeSectionIds,
   explicitlyActivatedStageIds,
   customCategoriesBySectionStage,
+  gridRef,
+  bulkDragState = null,
+  onBulkDragStart,
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
   const todayPosition = getTodayPosition(dateRange);
@@ -58,8 +64,9 @@ export const SchedulerTimeline = React.memo(({
       {/* Header con fechas */}
       <SchedulerHeader dateRange={dateRange} />
 
-      {/* Grid con tareas */}
+      {/* Grid con tareas (ref para --bulk-drag-offset) */}
       <SchedulerGrid
+        ref={gridRef}
         secciones={secciones}
         itemsMap={itemsMap}
         manualTasks={manualTasks}
@@ -77,6 +84,8 @@ export const SchedulerTimeline = React.memo(({
         onManualTaskPatch={onManualTaskPatch}
         expandedSections={expandedSections}
         expandedStages={expandedStages}
+        bulkDragState={bulkDragState}
+        onBulkDragStart={onBulkDragStart}
       />
 
       {/* Línea vertical "HOY" */}

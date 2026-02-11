@@ -33,6 +33,8 @@ interface SchedulerRowProps {
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
+  /** Power Bar: si true, la barra usa --bulk-drag-offset para el translate */
+  inBulkDragSegment?: boolean;
 }
 
 export const SchedulerRow = React.memo(({
@@ -52,6 +54,7 @@ export const SchedulerRow = React.memo(({
   onItemUpdate,
   onManualTaskPatch,
   onClick,
+  inBulkDragSegment,
 }: SchedulerRowProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
   const hasTask = tasks.length > 0;
@@ -90,8 +93,8 @@ export const SchedulerRow = React.memo(({
 
   return (
     <div
-      className={`relative border-b border-zinc-800/50 transition-colors ${!hasTask ? 'hover:bg-zinc-900/30 cursor-pointer' : ''}`}
-      style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, height: ROW_HEIGHTS.TASK_ROW }}
+      className={`relative border-b border-white/5 transition-colors box-border flex items-center overflow-hidden ${!hasTask ? 'hover:bg-zinc-900/30 cursor-pointer' : ''}`}
+      style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, height: ROW_HEIGHTS.TASK_ROW, minHeight: ROW_HEIGHTS.TASK_ROW, maxHeight: ROW_HEIGHTS.TASK_ROW, boxSizing: 'border-box' }}
       onClick={handleRowClick}
     >
       {/* Background grid lines (opcional, para referencia visual) */}
@@ -105,7 +108,7 @@ export const SchedulerRow = React.memo(({
       </div>
 
       {/* Tareas renderizadas con react-rnd */}
-      <div className="relative w-full h-full">
+      <div className="relative w-full h-full self-stretch min-h-0">
         {tasks.map((task) => (
           <TaskBar
             key={`${task.id}-${task.end_date.getTime()}`}
@@ -126,6 +129,7 @@ export const SchedulerRow = React.memo(({
             onManualTaskPatch={onManualTaskPatch}
             onToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            inBulkDragSegment={inBulkDragSegment}
           />
         ))}
       </div>

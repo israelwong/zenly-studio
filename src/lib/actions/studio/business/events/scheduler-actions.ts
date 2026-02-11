@@ -151,6 +151,113 @@ export async function actualizarSchedulerTaskFechas(
   }
 }
 
+const toUTCNoon = (d: Date) =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+
+/**
+ * Mueve masivamente las fechas de varias tareas (start_date y end_date) sumando daysOffset días.
+ * Restringe las fechas al rango de la instancia del evento.
+ * Devuelve las nuevas fechas por tarea para actualización optimista en el cliente.
+ */
+export async function actualizarSchedulerTareasBulkFechas(
+  studioSlug: string,
+  eventId: string,
+  taskIds: string[],
+  daysOffset: number
+): Promise<
+  { success: true; data: Array<{ taskId: string; start_date: Date; end_date: Date }> } | { success: false; error: string }
+> {
+  try {
+    if (!taskIds.length) {
+      return { success: true, data: [] };
+    }
+
+    const instance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { event_id: eventId },
+      select: { id: true, start_date: true, end_date: true },
+    });
+    if (!instance) {
+      return { success: false, error: 'Evento o instancia del scheduler no encontrada' };
+    }
+
+    const eventStart = toUTCNoon(instance.start_date);
+    const eventEnd = toUTCNoon(instance.end_date);
+
+    const tasks = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        id: { in: taskIds },
+        scheduler_instance_id: instance.id,
+      },
+      select: { id: true, start_date: true, end_date: true, sync_status: true },
+    });
+
+    if (tasks.length !== taskIds.length) {
+      return { success: false, error: 'Alguna tarea no pertenece a este evento' };
+    }
+
+    const roundedOffset = Math.round(daysOffset);
+    const updates: Array<{ taskId: string; start_date: Date; end_date: Date; duration_days: number; sync_status?: 'DRAFT' }> = [];
+
+    for (const task of tasks) {
+      const rawStart = addDays(toUTCNoon(task.start_date), roundedOffset);
+      const rawEnd = addDays(toUTCNoon(task.end_date), roundedOffset);
+      let start_date =
+        rawStart.getTime() < eventStart.getTime()
+          ? eventStart
+          : rawStart.getTime() > eventEnd.getTime()
+            ? eventEnd
+            : rawStart;
+      let end_date =
+        rawEnd.getTime() < eventStart.getTime()
+          ? eventStart
+          : rawEnd.getTime() > eventEnd.getTime()
+            ? eventEnd
+            : rawEnd;
+      if (start_date.getTime() > end_date.getTime()) end_date = start_date;
+      const startOnly = new Date(Date.UTC(start_date.getUTCFullYear(), start_date.getUTCMonth(), start_date.getUTCDate()));
+      const endOnly = new Date(Date.UTC(end_date.getUTCFullYear(), end_date.getUTCMonth(), end_date.getUTCDate()));
+      const durationDays = Math.max(1, differenceInCalendarDays(endOnly, startOnly) + 1);
+      const sync_status =
+        task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED' ? ('DRAFT' as const) : undefined;
+      updates.push({
+        taskId: task.id,
+        start_date: start_date,
+        end_date: end_date,
+        duration_days: durationDays,
+        ...(sync_status && { sync_status }),
+      });
+    }
+
+    await prisma.$transaction(
+      updates.map((u) =>
+        prisma.studio_scheduler_event_tasks.update({
+          where: { id: u.taskId },
+          data: {
+            start_date: u.start_date,
+            end_date: u.end_date,
+            duration_days: u.duration_days,
+            ...(u.sync_status && { sync_status: u.sync_status }),
+          },
+        })
+      )
+    );
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+
+    return {
+      success: true,
+      data: updates.map((u) => ({ taskId: u.taskId, start_date: u.start_date, end_date: u.end_date })),
+    };
+  } catch (error) {
+    console.error('Error bulk moving scheduler tasks:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al mover las tareas',
+    };
+  }
+}
+
 /**
  * Obtiene todas las tareas de un evento (por instancia del scheduler vinculada al evento).
  * Para el Asistente: rellena catalog_category_id desde el ítem (service_category_id) cuando la tarea no lo tiene.

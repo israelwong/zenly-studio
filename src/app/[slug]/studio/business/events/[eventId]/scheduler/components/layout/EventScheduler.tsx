@@ -19,6 +19,7 @@ import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master
 import { SchedulerPanel } from './SchedulerPanel';
 import {
   actualizarSchedulerTaskFechas,
+  actualizarSchedulerTareasBulkFechas,
   eliminarTareaManual,
   moveSchedulerTask,
   reorderSchedulerTasksToOrder,
@@ -27,6 +28,7 @@ import {
   duplicarTareaManualScheduler,
   crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { COLUMN_WIDTH } from '../../utils/coordinate-utils';
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
@@ -184,6 +186,20 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
   const lastOverIdRef = useRef<string | null>(null);
+
+  /** Power Bar: ref al grid para --bulk-drag-offset; ref para startClientX y lastDaysOffset. */
+  const gridRef = useRef<HTMLDivElement>(null);
+  const bulkDragRef = useRef<{
+    segmentKey: string;
+    taskIds: string[];
+    startClientX: number;
+    lastDaysOffset: number;
+  } | null>(null);
+  const [bulkDragState, setBulkDragState] = useState<{
+    segmentKey: string;
+    taskIds: string[];
+    daysOffset?: number;
+  } | null>(null);
 
   // Limpieza del debounce al desmontar
   useEffect(() => {
@@ -1376,6 +1392,93 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, onDataChange]
   );
 
+  /** Actualización optimista tras movimiento masivo (Power Bar). */
+  const handleBulkTasksMoved = useCallback(
+    (updates: Array<{ taskId: string; start_date: Date | string; end_date: Date | string }>) => {
+      const byId = new Map(updates.map(u => [u.taskId, { start: new Date(u.start_date), end: new Date(u.end_date) }]));
+      setLocalEventData(prev => {
+        const next = { ...prev };
+        next.cotizaciones = prev.cotizaciones?.map(cot => ({
+          ...cot,
+          cotizacion_items: cot.cotizacion_items?.map(item => {
+            if (!item.scheduler_task) return item;
+            const up = byId.get(item.scheduler_task.id);
+            if (!up) return item;
+            return {
+              ...item,
+              scheduler_task: { ...item.scheduler_task, start_date: up.start, end_date: up.end },
+            };
+          }),
+        }));
+        if (next.scheduler?.tasks) {
+          next.scheduler = {
+            ...next.scheduler,
+            tasks: next.scheduler.tasks.map(t => {
+              const up = byId.get(t.id);
+              if (!up) return t;
+              return { ...t, start_date: up.start, end_date: up.end };
+            }),
+          };
+        }
+        if (onDataChange) queueMicrotask(() => onDataChange(next));
+        return next;
+      });
+    },
+    [onDataChange]
+  );
+
+  /** Inicio de arrastre masivo (Power Bar): un solo setState; offset se maneja por CSS var en mousemove. */
+  const onBulkDragStart = useCallback((segmentKey: string, taskIds: string[], clientX: number) => {
+    bulkDragRef.current = { segmentKey, taskIds, startClientX: clientX, lastDaysOffset: 0 };
+    setBulkDragState({ segmentKey, taskIds, daysOffset: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (!bulkDragState) return;
+    gridRef.current?.style.setProperty('--bulk-drag-offset', '0px');
+    const onMove = (e: MouseEvent) => {
+      const ref = bulkDragRef.current;
+      if (!ref) return;
+      const offsetPx = e.clientX - ref.startClientX;
+      gridRef.current?.style.setProperty('--bulk-drag-offset', `${offsetPx}px`);
+      const daysOffset = Math.round(offsetPx / COLUMN_WIDTH);
+      if (daysOffset !== ref.lastDaysOffset) {
+        ref.lastDaysOffset = daysOffset;
+        setBulkDragState(prev => (prev ? { ...prev, daysOffset } : null));
+      }
+    };
+    const onUp = async (e: MouseEvent) => {
+      const ref = bulkDragRef.current;
+      bulkDragRef.current = null;
+      setBulkDragState(null);
+      gridRef.current?.style.removeProperty('--bulk-drag-offset');
+      if (!ref) return;
+      const offsetPx = e.clientX - ref.startClientX;
+      const daysOffset = Math.round(offsetPx / COLUMN_WIDTH);
+      if (daysOffset === 0) return;
+      try {
+        const result = await actualizarSchedulerTareasBulkFechas(
+          studioSlug,
+          eventId,
+          ref.taskIds,
+          daysOffset
+        );
+        if (result.success && result.data) {
+          handleBulkTasksMoved(result.data);
+          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        } else if (!result.success) toast.error(result.error ?? 'Error al mover tareas');
+      } catch {
+        toast.error('Error al mover tareas');
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [bulkDragState, studioSlug, eventId, handleBulkTasksMoved]);
+
   // Manejar creación de tareas (click en slot vacío)
   const handleTaskCreate = useCallback(
     async (itemId: string, catalogItemId: string, itemName: string, startDate: Date) => {
@@ -2195,6 +2298,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         activeDragData={activeDragData}
         overlayPosition={overlayPosition}
         updatingTaskId={updatingTaskId}
+        gridRef={gridRef}
+        bulkDragState={bulkDragState}
+        onBulkDragStart={onBulkDragStart}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

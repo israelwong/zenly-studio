@@ -67,6 +67,9 @@ interface SchedulerPanelProps {
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
   updatingTaskId?: string | null;
+  gridRef?: React.RefObject<HTMLDivElement | null>;
+  bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
+  onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number) => void;
 }
 
 /**
@@ -119,6 +122,9 @@ export const SchedulerPanel = React.memo(({
   activeDragData = null,
   overlayPosition = null,
   updatingTaskId = null,
+  gridRef,
+  bulkDragState = null,
+  onBulkDragStart,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -223,6 +229,9 @@ export const SchedulerPanel = React.memo(({
             onManualTaskPatch={onManualTaskPatch}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
+            gridRef={gridRef}
+            bulkDragState={bulkDragState}
+            onBulkDragStart={onBulkDragStart}
           />
         </div>
       </div>
@@ -245,8 +254,13 @@ export const SchedulerPanel = React.memo(({
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  const bulkDragEqual =
+    prevProps.bulkDragState === nextProps.bulkDragState ||
+    (!!prevProps.bulkDragState === !!nextProps.bulkDragState &&
+      prevProps.bulkDragState?.segmentKey === nextProps.bulkDragState?.segmentKey &&
+      prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

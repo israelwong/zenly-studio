@@ -196,10 +196,11 @@ function SchedulerDragOverlayRow({
   if (!name) name = 'Tarea';
   return (
     <div
-      className="flex items-center bg-zinc-900 border border-zinc-700 rounded cursor-grabbing box-border opacity-80 scale-[1.05] shadow-2xl"
+      className="flex items-center bg-zinc-900 border border-zinc-700 rounded cursor-grabbing box-border overflow-hidden opacity-80 scale-[1.05] shadow-2xl"
       style={{
         height: ROW_HEIGHTS.TASK_ROW,
         minHeight: ROW_HEIGHTS.TASK_ROW,
+        maxHeight: ROW_HEIGHTS.TASK_ROW,
         width: SIDEBAR_WIDTH_PX,
         minWidth: SIDEBAR_WIDTH_PX,
         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
@@ -262,6 +263,9 @@ function SortableTaskRow({
 
   const style = {
     height: ROW_HEIGHTS.TASK_ROW,
+    minHeight: ROW_HEIGHTS.TASK_ROW,
+    maxHeight: ROW_HEIGHTS.TASK_ROW,
+    boxSizing: 'border-box' as const,
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
@@ -271,7 +275,7 @@ function SortableTaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-center transition-colors border-b border-zinc-800/50 hover:bg-zinc-900/40 ${className}`}
+      className={`group relative flex items-center box-border overflow-hidden transition-colors border-b border-white/5 hover:bg-zinc-900/40 ${className}`}
       data-scheduler-task-id={taskId}
     >
       {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; isSaving muestra Loader2 y desactiva interacción. */}
@@ -293,8 +297,7 @@ function SortableTaskRow({
       </button>
       <SchedulerRamaLine isManual={isManual} />
       <div
-        className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 ${isDragging ? 'pointer-events-none' : ''}`}
-        style={{ minHeight: ROW_HEIGHTS.TASK_ROW }}
+        className={`flex-1 min-w-0 flex items-center gap-2 pl-4 pr-4 py-2 h-full overflow-hidden ${isDragging ? 'pointer-events-none' : ''}`}
       >
         {children}
       </div>
@@ -332,8 +335,8 @@ function CategoryDroppableHeader({
   return (
     <div
       ref={setNodeRef}
-      className={`group flex items-center pl-8 pr-4 border-b gap-1 transition-colors ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'border-zinc-800/30 bg-zinc-900/30'}`}
-      style={{ height: ROW_HEIGHTS.CATEGORY_HEADER }}
+      className={`group flex items-center pl-8 pr-4 border-b border-white/5 transition-colors box-border overflow-hidden ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-zinc-800/30 bg-zinc-900/30'}`}
+      style={{ height: ROW_HEIGHTS.CATEGORY_HEADER, minHeight: ROW_HEIGHTS.CATEGORY_HEADER, maxHeight: ROW_HEIGHTS.CATEGORY_HEADER, boxSizing: 'border-box' }}
       data-section-id={sectionId}
       title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
     >
@@ -566,7 +569,7 @@ function ManualTaskRow({
         rightSlot={actionsSlot}
       >
         <div
-          className="flex items-center gap-2 min-h-[60px] min-w-0 flex-1"
+          className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
@@ -598,7 +601,7 @@ function ManualTaskRow({
               )}
             </ZenAvatar>
           )}
-          <p className={`flex-1 min-w-0 text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
+          <p className={`flex-1 min-w-0 text-sm font-medium leading-tight line-clamp-2 ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
             {localTask.name}
           </p>
         </div>
@@ -654,12 +657,12 @@ function SchedulerItem({
           </ZenAvatarFallback>
         )}
       </ZenAvatar>
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
+      <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        <p className={`text-sm font-medium leading-tight line-clamp-2 ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
-          <p className={`text-xs truncate mt-0.5 ${isCompleted ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-500'}`}>
+          <p className={`text-xs truncate leading-tight ${isCompleted ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-500'}`}>
             {localItem.assigned_to_crew_member.name}
           </p>
         )}
@@ -885,8 +888,8 @@ export const SchedulerSidebar = React.memo(({
   }, []);
 
   return (
-    <div className="w-full bg-zinc-950 overflow-visible relative" style={{ minHeight: totalMinHeight }}>
-      <div className="h-[60px] bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30">
+    <div className="w-full bg-zinc-950 overflow-visible relative box-border" style={{ minHeight: totalMinHeight }}>
+      <div className="h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30 box-border">
         <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
       </div>
 
@@ -910,8 +913,8 @@ export const SchedulerSidebar = React.memo(({
             return (
               <div
                 key={block.row.id}
-                className="w-full bg-zinc-900/50 border-b border-zinc-800 px-4 flex items-center gap-1.5 rounded-none"
-                style={{ height: ROW_HEIGHTS.SECTION }}
+                className="w-full bg-zinc-900/50 border-b border-white/5 px-4 flex items-center gap-1.5 rounded-none box-border overflow-hidden"
+                style={{ height: ROW_HEIGHTS.SECTION, minHeight: ROW_HEIGHTS.SECTION, maxHeight: ROW_HEIGHTS.SECTION, boxSizing: 'border-box' }}
               >
                 <button
                   type="button"
@@ -957,15 +960,15 @@ export const SchedulerSidebar = React.memo(({
             <React.Fragment key={stageRow.id}>
               <div
                 className={`
-                border-b border-zinc-800/50 pl-6 pr-2 flex items-center justify-between gap-2 border-l-2
+                border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 border-l-2 box-border overflow-hidden
                 ${colors}
               `}
-                style={{ height: ROW_HEIGHTS.STAGE }}
+                style={{ height: ROW_HEIGHTS.STAGE, minHeight: ROW_HEIGHTS.STAGE, maxHeight: ROW_HEIGHTS.STAGE, boxSizing: 'border-box' }}
               >
                 <button
                   type="button"
                   onClick={() => toggleStage(stageRow.id)}
-                  className="flex items-center gap-1 min-w-0 flex-1 text-left py-1 pr-1 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="flex items-center gap-1 min-w-0 flex-1 text-left py-0 pr-1 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
                   aria-label={isExpanded ? 'Contraer etapa' : 'Expandir etapa'}
                 >
                   {isExpanded ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />}
@@ -1148,7 +1151,7 @@ export const SchedulerSidebar = React.memo(({
                               </CategoryDroppableHeader>
                               {!isCategoryCollapsed && (
                                 <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
-                                  <div className="py-1 min-h-[4px]">
+                                  <div>
                                   {segment.rows.map((row) => {
                     if (isManualTaskRow(row)) {
                       const taskRowsInOrder = segment.rows.filter((r) => isTaskRow(r) || isManualTaskRow(r));
@@ -1259,8 +1262,8 @@ export const SchedulerSidebar = React.memo(({
                       return (
                         <div
                           key={row.id}
-                          className="border-b border-zinc-800/30 flex items-center text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
-                          style={{ height: ROW_HEIGHTS.PHANTOM }}
+                          className="border-b border-white/5 flex items-center box-border overflow-hidden text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                          style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
                         >
                           <div className="w-8 shrink-0" aria-hidden />
                           <div className="flex-1 min-w-0 flex items-center gap-1.5 pr-4">
@@ -1338,8 +1341,8 @@ export const SchedulerSidebar = React.memo(({
                                   sectionLabel,
                                 })
                               }
-                              className="w-full border-b border-zinc-800/30 flex items-center text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
-                              style={{ height: ROW_HEIGHTS.PHANTOM }}
+                              className="w-full border-b border-white/5 flex items-center box-border overflow-hidden text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300 transition-colors text-xs"
+                              style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
                             >
                               <div className="w-8 shrink-0" aria-hidden />
                               <SchedulerRamaLine minHeight={ROW_HEIGHTS.PHANTOM} />

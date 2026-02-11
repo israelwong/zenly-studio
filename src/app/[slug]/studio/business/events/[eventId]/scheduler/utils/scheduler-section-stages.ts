@@ -26,19 +26,37 @@ export const STAGE_COLORS: Record<TaskCategoryStage, string> = {
   DELIVERY: 'border-l-emerald-500/60 bg-emerald-950/20',
 };
 
-/** Alturas unificadas para Sidebar y Grid (geometría 1:1) */
+/** Clases para la Power Bar por etapa: fondo con opacidad, borde e icono sólidos */
+export const POWER_BAR_STAGE_CLASSES: Record<
+  TaskCategoryStage,
+  { bg: string; border: string; icon: string }
+> = {
+  PLANNING: { bg: 'bg-violet-500/20', border: 'border-t-violet-500', icon: 'text-violet-400' },
+  PRODUCTION: { bg: 'bg-purple-500/20', border: 'border-t-purple-500', icon: 'text-purple-400' },
+  POST_PRODUCTION: { bg: 'bg-amber-500/20', border: 'border-t-amber-500', icon: 'text-amber-400' },
+  DELIVERY: { bg: 'bg-emerald-500/20', border: 'border-t-emerald-500', icon: 'text-emerald-400' },
+};
+
+/** Alturas fijas unificadas: todo 48px. 1 fila Sidebar = 1 fila Grid. box-sizing: border-box. */
+export const SECTION_HEIGHT = 48;
+export const STAGE_HEIGHT = 48;
+export const CATEGORY_HEIGHT = 48;
+export const ITEM_HEIGHT = 48;
+export const ACTION_HEIGHT = 48;
+
 export const ROW_HEIGHTS = {
-  SECTION: 40,
-  STAGE: 32,
-  CATEGORY_HEADER: 28,
-  TASK_ROW: 60,
-  PHANTOM: 40,
+  SECTION: 48,
+  STAGE: 48,
+  CATEGORY_HEADER: 48,
+  TASK_ROW: 48,
+  PHANTOM: 48,
 } as const;
 export const SECTION_ROW_HEIGHT = ROW_HEIGHTS.SECTION;
 export const STAGE_ROW_HEIGHT = ROW_HEIGHTS.STAGE;
 export const CATEGORY_HEADER_HEIGHT = ROW_HEIGHTS.CATEGORY_HEADER;
 export const TASK_ROW_HEIGHT = ROW_HEIGHTS.TASK_ROW;
 export const PHANTOM_ROW_HEIGHT = ROW_HEIGHTS.PHANTOM;
+export const ADD_BUTTON_ROW_HEIGHT = ROW_HEIGHTS.PHANTOM;
 
 function normalizeCategory(category: string | undefined): TaskCategoryStage {
   if (!category) return 'PLANNING';
