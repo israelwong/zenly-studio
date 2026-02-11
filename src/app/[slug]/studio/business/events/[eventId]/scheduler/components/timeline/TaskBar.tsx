@@ -71,6 +71,9 @@ export const TaskBar = React.memo(({
   const [isUpdating, setIsUpdating] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
+  const [isResizing, setIsResizing] = useState(false);
+  const [rndPosition, setRndPosition] = useState({ x: 0, y: 6 });
+  const [rndSize, setRndSize] = useState({ width: 60, height: 48 });
 
   // Track movimiento real para prevenir context menu durante drag/resize
   const dragStartPosRef = React.useRef<{ x: number; width: number }>({ x: 0, width: 0 });
@@ -88,8 +91,10 @@ export const TaskBar = React.memo(({
   });
 
   const statusColor = getStatusColor(status, hasCrewMember);
-  const initialX = getPositionFromDate(localStartDate, dateRange);
-  const width = getWidthFromDuration(localStartDate, localEndDate);
+  const computedX = getPositionFromDate(localStartDate, dateRange);
+  const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate), COLUMN_WIDTH);
+  const position = isResizing ? rndPosition : { x: computedX, y: 6 };
+  const size = isResizing ? rndSize : { width: computedWidth, height: 48 };
 
   // Manejar drag start - guardar posición inicial
   const handleDragStart = useCallback((_e: RndDragEvent, d: { x: number; y: number }) => {
@@ -158,78 +163,89 @@ export const TaskBar = React.memo(({
 
   // Manejar resize start - guardar ancho y posición inicial
   const handleResizeStart = useCallback((_e: React.SyntheticEvent, _direction: string, ref: HTMLElement) => {
-    dragStartPosRef.current = {
-      x: getPositionFromDate(localStartDate, dateRange),
-      width: ref.offsetWidth,
-    };
+    setIsResizing(true);
+    const startX = getPositionFromDate(localStartDate, dateRange);
+    const width = ref.offsetWidth;
+    setRndPosition({ x: startX, y: 6 });
+    setRndSize({ width, height: 48 });
+    dragStartPosRef.current = { x: startX, width };
   }, [localStartDate, dateRange]);
 
-  // Manejar resize stop - lógica bidireccional por direction
+  // Durante el drag: sin resizeGrid, valores raw de react-rnd para feedback visual fluido
+  const handleResize = useCallback(
+    (_e: MouseEvent | TouchEvent, _direction: string, ref: HTMLElement, _delta: { height: number; width: number }, position: { x: number; y: number }) => {
+      const rawWidth = Math.max(COLUMN_WIDTH, ref.offsetWidth);
+      setRndPosition({ x: position.x, y: 6 });
+      setRndSize({ width: rawWidth, height: 48 });
+    },
+    []
+  );
+
+  // Manejar resize stop - snap al grid solo al soltar, luego calcular fechas y persistir
   const handleResizeStop = useCallback(
     (
       _e: MouseEvent | TouchEvent,
       direction: string,
       ref: HTMLElement,
-      delta: { height: number; width: number },
+      _delta: { height: number; width: number },
       position: { x: number; y: number }
     ) => {
       const rawWidth = ref.offsetWidth;
+      const rawX = position.x;
 
-      // Snap al grid: múltiplos de 60px, mínimo 1 día
+      // Snap al grid solo al soltar
       const snappedWidth = Math.max(COLUMN_WIDTH, Math.round(rawWidth / COLUMN_WIDTH) * COLUMN_WIDTH);
-      const deltaDays = Math.round(delta.width / COLUMN_WIDTH);
+      let snappedX: number;
 
-      if (deltaDays === 0) return;
-
-      let newStartDate: Date;
-      let newEndDate: Date;
-
-      if (direction === 'left') {
-        // Izquierda: start_date se mueve; end_date fijo
-        const daysToMove = Math.round(delta.width / COLUMN_WIDTH);
-        newStartDate = addDays(localStartDate, -daysToMove);
-        newEndDate = localEndDate;
-      } else if (direction === 'right') {
-        // Derecha: start_date fijo; solo duration
-        newStartDate = localStartDate;
-        const newDurationDays = Math.max(1, Math.round(snappedWidth / COLUMN_WIDTH));
-        newEndDate = addDays(localStartDate, newDurationDays - 1);
+      if (direction.includes('left')) {
+        const rightEdge = rawX + rawWidth;
+        snappedX = Math.round((rightEdge - snappedWidth) / COLUMN_WIDTH) * COLUMN_WIDTH;
       } else {
-        return;
+        snappedX = Math.round(rawX / COLUMN_WIDTH) * COLUMN_WIDTH;
       }
 
-      // Normalizar a mediodía UTC para consistencia
-      const norm = (d: Date) =>
-        new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
-      newStartDate = norm(newStartDate);
-      newEndDate = norm(newEndDate);
+      setRndPosition({ x: snappedX, y: 6 });
+      setRndSize({ width: snappedWidth, height: 48 });
 
-      const durationInclusive = Math.max(1, differenceInCalendarDays(newEndDate, newStartDate) + 1);
-      if (durationInclusive < 1) return;
+      const newStartDate = getDateFromPosition(snappedX, dateRange);
+      const newDurationDays = Math.max(1, Math.round(snappedWidth / COLUMN_WIDTH));
+      const newEndDate = addDays(newStartDate, newDurationDays - 1);
 
       if (!isDateInRange(newStartDate, dateRange) || !isDateInRange(newEndDate, dateRange)) {
+        setIsResizing(false);
         return;
       }
 
-      // Actualización optimista inmediata
+      const norm = (d: Date) =>
+        new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+      const startNorm = norm(newStartDate);
+      const endNorm = norm(newEndDate);
+      const durationInclusive = Math.max(1, differenceInCalendarDays(endNorm, startNorm) + 1);
+
+      if (durationInclusive < 1) {
+        setIsResizing(false);
+        return;
+      }
+
+      setIsResizing(false);
       setIsUpdating(true);
-      setLocalStartDate(newStartDate);
-      setLocalEndDate(newEndDate);
+      setLocalStartDate(startNorm);
+      setLocalEndDate(endNorm);
       if (manualTask && onManualTaskPatch) {
         onManualTaskPatch(taskId, {
-          start_date: newStartDate,
-          end_date: newEndDate,
+          start_date: startNorm,
+          end_date: endNorm,
           duration_days: durationInclusive,
         });
       }
-      onUpdate(taskId, newStartDate, newEndDate).catch(() => {
+      onUpdate(taskId, startNorm, endNorm).catch(() => {
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
       }).finally(() => {
         setIsUpdating(false);
       });
     },
-    [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
+    [taskId, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -266,24 +282,20 @@ export const TaskBar = React.memo(({
         className="outer-drag-wrapper"
         data-bulk-id={taskId}
         data-in-bulk-segment={inBulkDragSegment ? 'true' : 'false'}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}
       >
         <Rnd
           key={`${taskId}-${itemId}-${localEndDate.getTime()}-${localStartDate.getTime()}`}
-        default={{
-          x: initialX,
-          y: 6,
-          width: Math.max(width, 60),
-          height: 48,
-        }}
-        minWidth={60}
-        onDragStart={handleDragStart}
-        onDragStop={handleDragStop}
-        onResizeStart={handleResizeStart}
-        onResizeStop={handleResizeStop}
+          position={position}
+          size={size}
+          minWidth={60}
+          onDragStart={handleDragStart}
+          onDragStop={handleDragStop}
+          onResizeStart={handleResizeStart}
+          onResize={handleResize}
+          onResizeStop={handleResizeStop}
         dragAxis="x"
         dragGrid={[60, 0]}
-        resizeGrid={[60, 0]}
         enableResizing={{
           top: false,
           bottom: false,
