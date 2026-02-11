@@ -321,7 +321,7 @@ export const TaskBar = React.memo(({
             className="w-full h-full flex items-center justify-between gap-1.5 px-1.5 pointer-events-none"
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
-          <span className="flex-1 truncate text-center text-xs font-medium">{taskName}</span>
+          <span className={`flex-1 truncate text-center text-xs ${isCompleted ? 'font-normal' : 'font-medium'}`}>{taskName}</span>
           {/* Indicador de sincronización: pequeño punto/icono en borde derecho cuando está sincronizado */}
           {item?.scheduler_task?.sync_status === 'INVITED' && (
             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0" title="Sincronizado con Google Calendar">

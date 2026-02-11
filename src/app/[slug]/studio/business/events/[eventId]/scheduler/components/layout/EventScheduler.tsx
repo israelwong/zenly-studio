@@ -67,6 +67,7 @@ interface ItemMetadata {
   categoriaNombre: string;
   servicioNombre: string;
   servicioId: string;
+  hideBadge?: boolean;
 }
 
 interface EventSchedulerProps {
@@ -2505,6 +2506,13 @@ export const EventScheduler = React.memo(function EventScheduler({
   // Renderizar item en sidebar
   const renderSidebarItem = (item: CotizacionItem, metadata: ItemMetadata) => {
     const isCompleted = !!item.scheduler_task?.completed_at;
+    const st = item.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
+    let durationDays = st?.duration_days;
+    if ((durationDays ?? 0) <= 0 && st?.start_date && st?.end_date) {
+      const start = st.start_date instanceof Date ? st.start_date : new Date(st.start_date);
+      const end = st.end_date instanceof Date ? st.end_date : new Date(st.end_date);
+      durationDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
+    }
 
     // Construir objeto crew member con category basado en tipo
     const assignedCrewMember = item.assigned_to_crew_member ? {
@@ -2522,6 +2530,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         servicio={metadata.servicioNombre}
         isCompleted={isCompleted}
         assignedCrewMember={assignedCrewMember}
+        duration={durationDays}
+        hideBadge={metadata.hideBadge}
       />
     );
   };

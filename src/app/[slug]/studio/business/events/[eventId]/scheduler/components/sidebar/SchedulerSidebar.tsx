@@ -43,7 +43,7 @@ import { SchedulerItemPopover } from './SchedulerItemPopover';
 import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
 import { TaskForm } from './TaskForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarFallback, ZenBadge, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
 import {
@@ -68,6 +68,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import { differenceInCalendarDays } from 'date-fns';
 import { MoveTaskModal } from './MoveTaskModal';
 import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 
@@ -78,6 +79,8 @@ interface ItemMetadata {
   categoriaNombre: string;
   servicioNombre: string;
   servicioId: string;
+  /** Si true, SchedulerAgrupacionCell oculta badge (se muestra en rightSlot) */
+  hideBadge?: boolean;
 }
 
 
@@ -225,7 +228,7 @@ function SchedulerDragOverlayRow({
             </ZenAvatarFallback>
           )}
         </ZenAvatar>
-        <p className={`flex-1 min-w-0 text-sm font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+        <p className={`flex-1 min-w-0 text-sm truncate ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : 'font-medium text-zinc-200'}`}>
           {name}
         </p>
       </div>
@@ -308,7 +311,7 @@ function SortableTaskRow({
       </button>
       {!hasParentId && <SchedulerRamaLine isManual={isManual} />}
       <div
-        className={`flex-1 min-w-0 flex items-center gap-2 pl-2 pr-4 py-2 h-full overflow-hidden ${isDragging ? 'pointer-events-none' : ''}`}
+        className={`flex-1 min-w-0 flex items-center gap-2 pl-2 pr-2 py-2 h-full overflow-hidden ${isDragging ? 'pointer-events-none' : ''}`}
       >
         <div className="flex-1 min-w-0 overflow-hidden">{children}</div>
         {rightSlot}
@@ -583,8 +586,19 @@ function ManualTaskRow({
   const upEnabled = (onReorderUp != null && canMoveUp) || onMoveToPreviousCategory != null;
   const downEnabled = (onReorderDown != null && canMoveDown) || onMoveToNextCategory != null;
 
+  const taskDurationDays = (() => {
+    const t = localTask as { duration_days?: number; start_date?: Date | string; end_date?: Date | string };
+    let days = t.duration_days ?? 0;
+    if (days <= 0 && t.start_date && t.end_date) {
+      const start = t.start_date instanceof Date ? t.start_date : new Date(t.start_date);
+      const end = t.end_date instanceof Date ? t.end_date : new Date(t.end_date);
+      days = Math.max(1, differenceInCalendarDays(end, start) + 1);
+    }
+    return days;
+  })();
   const actionsSlot = (
-    <div className="flex items-center gap-0.5 shrink-0 pl-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="flex items-center gap-0.5 shrink-0 pl-1 pr-0 ml-auto">
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
       {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
         <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
           <PopoverTrigger asChild>
@@ -715,6 +729,15 @@ function ManualTaskRow({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
+      {taskDurationDays > 0 && (
+        <ZenBadge
+          variant="secondary"
+          className="shrink-0 font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+        >
+          {taskDurationDays}d
+        </ZenBadge>
+      )}
     </div>
   );
 
@@ -768,7 +791,7 @@ function ManualTaskRow({
               )}
             </ZenAvatar>
           )}
-          <p className={`flex-1 min-w-0 text-sm font-medium leading-tight line-clamp-2 ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
+          <p className={`flex-1 min-w-0 text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : 'font-medium text-zinc-200'}`}>
             {localTask.name}
           </p>
         </div>
@@ -810,9 +833,18 @@ function SchedulerItem({
   const { localItem } = useSchedulerItemSync(item, onItemUpdate);
   const isCompleted = !!localItem.scheduler_task?.completed_at;
 
+  const st = localItem.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
+  let itemDurationDays = st?.duration_days;
+  if ((itemDurationDays ?? 0) <= 0 && st?.start_date && st?.end_date) {
+    const start = st.start_date instanceof Date ? st.start_date : new Date(st.start_date);
+    const end = st.end_date instanceof Date ? st.end_date : new Date(st.end_date);
+    itemDurationDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
+  }
+  const hasDuration = (itemDurationDays ?? 0) > 0;
+
   /** Misma coordenada X que la tarea manual: avatar primero (h-7 w-7), luego texto */
   const DefaultItemRender = () => (
-    <div className="w-full flex items-center gap-2">
+    <div className="w-full flex items-center gap-2 min-w-0">
       <ZenAvatar className="h-7 w-7 shrink-0">
         {localItem.assigned_to_crew_member ? (
           <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
@@ -825,15 +857,23 @@ function SchedulerItem({
         )}
       </ZenAvatar>
       <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-        <p className={`text-sm font-medium leading-tight line-clamp-2 ${isCompleted ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-200'}`}>
+        <p className={`text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : 'font-medium text-zinc-200'}`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
-          <p className={`text-xs truncate leading-tight ${isCompleted ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-500'}`}>
+          <p className={`text-xs truncate leading-tight ${isCompleted ? 'font-normal italic text-zinc-600 line-through decoration-2 decoration-zinc-600' : 'text-zinc-500'}`}>
             {localItem.assigned_to_crew_member.name}
           </p>
         )}
       </div>
+      {hasDuration && (
+        <ZenBadge
+          variant="secondary"
+          className="shrink-0 ml-auto font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+        >
+          {itemDurationDays}d
+        </ZenBadge>
+      )}
     </div>
   );
 
@@ -1425,6 +1465,14 @@ export const SchedulerSidebar = React.memo(({
                       const itemTaskParentId = (row.item.scheduler_task as { parent_id?: string | null })?.parent_id;
                       const itemTaskName = row.item.scheduler_task?.name ?? row.servicioNombre ?? 'Tarea';
                       const showAddSubtaskForItem = !itemTaskParentId && onAddManualTaskSubmit && row.item.scheduler_task?.id;
+                      const st = row.item.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
+                      let itemDurationDays = st?.duration_days;
+                      if ((itemDurationDays ?? 0) <= 0 && st?.start_date && st?.end_date) {
+                        const start = st.start_date instanceof Date ? st.start_date : new Date(st.start_date);
+                        const end = st.end_date instanceof Date ? st.end_date : new Date(st.end_date);
+                        itemDurationDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
+                      }
+                      const hasItemDuration = (itemDurationDays ?? 0) > 0;
                       return (
                         <SortableTaskRow
                           key={row.item.id}
@@ -1437,18 +1485,30 @@ export const SchedulerSidebar = React.memo(({
                           isSynced={(row.item.scheduler_task as { sync_status?: string } | undefined)?.sync_status === 'INVITED'}
                           hasParentId={(itemTaskParentId ?? null) != null}
                           rightSlot={
-                            showAddSubtaskForItem ? (
-                              <AddSubtaskButton
-                                parentId={row.item.scheduler_task!.id}
-                                parentName={itemTaskName}
-                                sectionId={row.sectionId}
-                                stage={stageRow.category}
-                                catalogCategoryId={itemEffectiveCatalogCategoryId}
-                                sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category] ?? stageRow.label)}
-                                studioSlug={studioSlug}
-                                eventId={eventId}
-                                onAddManualTaskSubmit={onAddManualTaskSubmit}
-                              />
+                            hasItemDuration || showAddSubtaskForItem ? (
+                              <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+                                {showAddSubtaskForItem && (
+                                  <AddSubtaskButton
+                                    parentId={row.item.scheduler_task!.id}
+                                    parentName={itemTaskName}
+                                    sectionId={row.sectionId}
+                                    stage={stageRow.category}
+                                    catalogCategoryId={itemEffectiveCatalogCategoryId}
+                                    sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category] ?? stageRow.label)}
+                                    studioSlug={studioSlug}
+                                    eventId={eventId}
+                                    onAddManualTaskSubmit={onAddManualTaskSubmit}
+                                  />
+                                )}
+                                {hasItemDuration && (
+                                  <ZenBadge
+                                    variant="secondary"
+                                    className="shrink-0 font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+                                  >
+                                    {itemDurationDays}d
+                                  </ZenBadge>
+                                )}
+                              </div>
                             ) : null
                           }
                         >
@@ -1463,6 +1523,7 @@ export const SchedulerSidebar = React.memo(({
                                 categoriaNombre: row.categoriaNombre,
                                 servicioNombre: row.servicioNombre,
                                 servicioId: row.catalogItemId,
+                                hideBadge: hasItemDuration,
                               }}
                               studioSlug={studioSlug}
                               eventId={eventId}

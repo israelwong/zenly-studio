@@ -1,5 +1,5 @@
 import { User } from 'lucide-react';
-import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarFallback, ZenBadge } from '@/components/ui/zen';
 
 interface SchedulerAgrupacionCellProps {
     servicio: string;
@@ -14,9 +14,11 @@ interface SchedulerAgrupacionCellProps {
         } | null;
     } | null;
     duration?: number; // Duración en días
+    /** Si true, no se muestra el badge (se renderiza en rightSlot del sidebar) */
+    hideBadge?: boolean;
 }
 
-export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration }: SchedulerAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration, hideBadge = false }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
 
     // Generar iniciales del nombre
@@ -65,22 +67,25 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
                 )}
             </ZenAvatar>
 
-            {/* Nombre del servicio con duración */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                    <p className={`text-sm line-clamp-2 cursor-pointer transition-colors ${isCompleted
-                        ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400'
-                        : 'text-zinc-300 hover:text-zinc-200'
-                        }`}>
-                        {servicio}
-                    </p>
-                    {duration && duration > 0 && (
-                        <span className="ml-1.5 text-zinc-600 text-xs font-normal">
-                            {duration}d
-                        </span>
-                    )}
-                </div>
+            {/* Nombre del servicio */}
+            <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+                <p className={`text-sm leading-tight line-clamp-2 cursor-pointer transition-colors ${isCompleted
+                    ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500 hover:text-zinc-400'
+                    : 'font-medium text-zinc-300 hover:text-zinc-200'
+                    }`}>
+                    {servicio}
+                </p>
             </div>
+
+            {/* Badge duración (mismo estilo que ManualTaskRow) */}
+            {!hideBadge && duration != null && duration > 0 && (
+                <ZenBadge
+                    variant="secondary"
+                    className="shrink-0 ml-auto font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+                >
+                    {duration}d
+                </ZenBadge>
+            )}
         </div>
     );
 }

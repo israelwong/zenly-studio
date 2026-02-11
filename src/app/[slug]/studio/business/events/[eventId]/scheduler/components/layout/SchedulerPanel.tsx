@@ -15,6 +15,7 @@ interface ItemMetadata {
   categoriaNombre: string;
   servicioNombre: string;
   servicioId: string;
+  hideBadge?: boolean;
 }
 
 interface SchedulerPanelProps {
