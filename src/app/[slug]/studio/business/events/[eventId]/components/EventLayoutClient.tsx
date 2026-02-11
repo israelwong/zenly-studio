@@ -34,6 +34,7 @@ export function EventLayoutClient({
   
   // Verificar si estamos en la ruta base (sin sub-rutas como /scheduler)
   const isBaseRoute = pathname && !pathname.includes('/scheduler') && pathname.endsWith(`/events/${eventId}`);
+  const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
   const [eventData, setEventData] = useState<EventoDetalle>(initialEventData);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -117,25 +118,27 @@ export function EventLayoutClient({
           }}
           onCancelClick={handleCancelClick}
         />
-        <EventDetailToolbar
-          studioSlug={studioSlug}
-          eventId={eventId}
-          promiseId={eventData?.promise?.id || null}
-          contactId={eventData?.promise?.contact?.id || null}
-          contactPhone={eventData?.promise?.contact?.phone || null}
-          contactName={eventData?.promise?.contact?.name || null}
-          rightContent={
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => setCrewManagerOpen(true)}
-              className="gap-2"
-            >
-              <Users className="h-4 w-4" />
-              Personal
-            </ZenButton>
-          }
-        />
+        {!isSchedulerRoute && (
+          <EventDetailToolbar
+            studioSlug={studioSlug}
+            eventId={eventId}
+            promiseId={eventData?.promise?.id || null}
+            contactId={eventData?.promise?.contact?.id || null}
+            contactPhone={eventData?.promise?.contact?.phone || null}
+            contactName={eventData?.promise?.contact?.name || null}
+            rightContent={
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setCrewManagerOpen(true)}
+                className="gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Personal
+              </ZenButton>
+            }
+          />
+        )}
         <ZenCardContent className="p-6">
           {isBaseRoute ? (
             <EventPanel
