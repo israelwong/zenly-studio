@@ -239,7 +239,8 @@ export async function actualizarSchedulerTareasBulkFechas(
             ...(u.sync_status && { sync_status: u.sync_status }),
           },
         })
-      )
+      ),
+      { timeout: 15_000, maxWait: 5_000 }
     );
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -1181,7 +1182,8 @@ export async function crearTareaManualScheduler(
             where: { id: t.id },
             data: { order: i },
           })
-        )
+        ),
+        { timeout: 15_000, maxWait: 5_000 }
       );
     }
 
@@ -1456,7 +1458,7 @@ export async function moveSchedulerTask(
         data: { order: i },
       })
     );
-    await prisma.$transaction(tx);
+    await prisma.$transaction(tx, { timeout: 15_000, maxWait: 5_000 });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -1518,7 +1520,7 @@ export async function reorderSchedulerTasksToOrder(
         },
       });
     });
-    await prisma.$transaction(tx);
+    await prisma.$transaction(tx, { timeout: 15_000, maxWait: 5_000 });
 
     return { success: true };
   } catch (error) {

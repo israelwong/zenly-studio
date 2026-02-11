@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
+import { addDays, differenceInCalendarDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenButton, ZenBadge, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { asignarCrewAItem, obtenerCrewMembers, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
+import { actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { X, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
@@ -68,7 +70,7 @@ function getSalaryType(member: CrewMember | undefined): 'fixed' | 'variable' | n
 export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete }: SchedulerItemPopoverProps) {
     const router = useRouter();
     // Hook de sincronización (optimista + servidor)
-    const { localItem, updateCrewMember, updateCompletionStatus } = useSchedulerItemSync(item, onItemUpdate);
+    const { localItem, updateCrewMember, updateCompletionStatus, updateSchedulerTaskDates } = useSchedulerItemSync(item, onItemUpdate);
 
     const [open, setOpen] = useState(false);
     const [members, setMembers] = useState<CrewMember[]>([]);
@@ -77,6 +79,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const [isUpdatingCompletion, setIsUpdatingCompletion] = useState(false);
     const [assignCrewModalOpen, setAssignCrewModalOpen] = useState(false);
     const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
+    const [isSavingDates, setIsSavingDates] = useState(false);
+    const [durationDays, setDurationDays] = useState(1);
 
     // Usar localItem (sincronizado con servidor)
     const selectedMemberId = localItem.assigned_to_crew_member_id;
@@ -376,6 +380,44 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const hasTask = !!localItem.scheduler_task;
     const taskStartDate = localItem.scheduler_task ? new Date(localItem.scheduler_task.start_date) : null;
     const taskEndDate = localItem.scheduler_task ? new Date(localItem.scheduler_task.end_date) : null;
+    const taskDuration =
+        (localItem.scheduler_task as { duration_days?: number })?.duration_days ??
+        (taskStartDate && taskEndDate ? Math.max(1, differenceInCalendarDays(taskEndDate, taskStartDate) + 1) : 1);
+
+    useEffect(() => {
+        if (hasTask) setDurationDays(taskDuration);
+    }, [hasTask, taskDuration]);
+
+    const durationChanged = hasTask && durationDays !== taskDuration;
+    const computedEndDate = taskStartDate && durationChanged ? addDays(taskStartDate, Math.max(1, Math.min(365, durationDays)) - 1) : taskEndDate;
+
+    const handleSaveDates = useCallback(async () => {
+        if (!localItem.scheduler_task || !taskStartDate || !durationChanged) return;
+        const days = Math.max(1, Math.min(365, durationDays));
+        const anchorStart = taskStartDate;
+        const newEndDate = addDays(anchorStart, days - 1);
+        const snapshot = { ...localItem }; // Para rollback si falla el servidor
+
+        setIsSavingDates(true);
+        try {
+            await updateSchedulerTaskDates(anchorStart, newEndDate, days, async () => {
+                const res = await actualizarSchedulerTaskFechas(studioSlug, eventId, localItem.scheduler_task!.id, {
+                    start_date: anchorStart,
+                    end_date: newEndDate,
+                });
+                if (!res.success) {
+                    onItemUpdate?.(snapshot);
+                    throw new Error(res.error ?? 'Error al actualizar fechas');
+                }
+            });
+            toast.success('Fechas actualizadas');
+            setOpen(false);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Error al actualizar fechas');
+        } finally {
+            setIsSavingDates(false);
+        }
+    }, [localItem, taskStartDate, durationChanged, durationDays, studioSlug, eventId, updateSchedulerTaskDates, onItemUpdate]);
 
     return (
         <>
@@ -423,17 +465,45 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                             <>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-zinc-400">
-                                        Programación:
+                                        Programación
                                     </label>
-                                    <div className="text-xs text-zinc-500">
-                                        {taskStartDate && taskEndDate ? (
-                                            <span className="text-zinc-300">
-                                                {format(taskStartDate, "d MMM", { locale: es })} - {format(taskEndDate, "d MMM", { locale: es })}
-                                            </span>
-                                        ) : (
-                                            <span className="text-zinc-400">—</span>
-                                        )}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-zinc-500">Duración (días)</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={365}
+                                                value={durationDays}
+                                                onChange={(e) => setDurationDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
+                                                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-zinc-500">Rango</label>
+                                            <div className="text-xs text-zinc-500 py-2">
+                                                {taskStartDate && (computedEndDate ?? taskEndDate) ? (
+                                                    <span className="text-zinc-300">
+                                                        {format(taskStartDate, "d MMM", { locale: es })} - {format(computedEndDate ?? taskEndDate!, "d MMM", { locale: es })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-zinc-400">—</span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
+                                    {durationChanged && (
+                                        <ZenButton
+                                            type="button"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() => void handleSaveDates()}
+                                            loading={isSavingDates}
+                                            disabled={isSavingDates}
+                                        >
+                                            Guardar fechas
+                                        </ZenButton>
+                                    )}
 
                                     {/* Checkbox de completado */}
                                     <div className="flex items-center gap-2 py-2">

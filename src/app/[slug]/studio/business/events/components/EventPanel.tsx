@@ -4,9 +4,8 @@ import React from 'react';
 import { ResumenEvento } from '../[eventId]/components/ResumenEvento';
 import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancialSummaryCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
-import { EventCronogramaCard } from '../[eventId]/components/EventCronogramaCard';
+import { EventSchedulerControlCard } from '../[eventId]/components/EventSchedulerControlCard';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
-import { EventTodoList } from '../[eventId]/components/EventTodoList';
 import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/QuickNoteCard';
 // import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
@@ -54,6 +53,9 @@ export function EventPanel({
             studioSlug={studioSlug}
             cotizacionId={eventData.cotizacion?.id ?? null}
             onPaymentAdded={onEventUpdated}
+            contractValueFallback={eventData.contract_value}
+            paidAmountFallback={eventData.paid_amount}
+            pendingAmountFallback={eventData.pending_amount}
           />
           {eventData.promise_id && (
             <QuickNoteCard
@@ -80,23 +82,14 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 3: Cronograma + TODO */}
+        {/* Columna 3: Cronograma */}
         <div className="lg:col-span-1 space-y-6">
-          <EventCronogramaCard
+          <EventSchedulerControlCard
             studioSlug={studioSlug}
             eventId={eventId}
-            eventData={eventData}
+            eventDate={eventData.promise?.event_date || eventData.event_date || null}
             onUpdated={onEventUpdated}
           />
-          <EventTodoList studioSlug={studioSlug} eventId={eventId} onSynced={onEventUpdated} />
-
-          {/* TODO: Funcionalidad futura - EventItinerarioCard
-          <EventItinerarioCard
-            studioSlug={studioSlug}
-            eventId={eventId}
-          />
-          */}
-
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
-import { obtenerEventoDetalle, getEventPipelineStages } from '@/lib/actions/studio/business/events';
+import { obtenerEventoDetalle } from '@/lib/actions/studio/business/events';
+// DESACTIVADO: pipeline stages - reducir carga para evitar timeout
+// import { getEventPipelineStages } from '@/lib/actions/studio/business/events';
 import { EventLayoutClient } from './components/EventLayoutClient';
 
 interface EventLayoutProps {
@@ -17,43 +19,26 @@ export default async function EventLayout({
 }: EventLayoutProps) {
   const { slug: studioSlug, eventId } = await params;
 
-  // Cachear pipeline stages (Basic Data - cambian poco)
-  const getCachedPipelineStages = unstable_cache(
-    async () => {
-      return getEventPipelineStages(studioSlug);
-    },
-    ['event-pipeline-stages', studioSlug],
-    {
-      tags: [`event-pipeline-stages-${studioSlug}`],
-      revalidate: 3600, // 1 hora
-    }
-  );
-
-  // Cachear detalle del evento (Basic Data - necesario para layout)
+  // Solo cargar detalle del evento (nombre + finanzas). Pipeline stages desactivado.
   const getCachedEventDetail = unstable_cache(
-    async () => {
-      return obtenerEventoDetalle(studioSlug, eventId);
-    },
+    async () => obtenerEventoDetalle(studioSlug, eventId),
     ['event-detail', studioSlug, eventId],
     {
       tags: ['evento-detalle', `evento-${eventId}`],
-      revalidate: false, // Invalidación manual por tags
+      revalidate: false,
     }
   );
 
-  const [eventResult, stagesResult] = await Promise.all([
-    getCachedEventDetail(),
-    getCachedPipelineStages(),
-  ]);
+  const eventResult = await getCachedEventDetail();
 
+  // Redirect solo cuando falla la carga crítica (evento no encontrado, sin promesa).
   if (!eventResult.success || !eventResult.data) {
+    console.error('[EventLayout SERVER] REDIRECT:', !eventResult.success ? eventResult.error : 'eventResult.data ausente');
     redirect(`/${studioSlug}/studio/business/events`);
   }
 
   const eventData = eventResult.data;
-  const pipelineStages = stagesResult.success && stagesResult.data
-    ? stagesResult.data
-    : [];
+  const pipelineStages: { id: string; name: string; slug: string; order: number }[] = [];
 
   return (
     <EventLayoutClient

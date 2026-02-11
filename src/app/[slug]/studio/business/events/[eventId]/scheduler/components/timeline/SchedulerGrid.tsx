@@ -269,9 +269,10 @@ function SchedulerGridInner(
           : [];
 
         const taskId = item.scheduler_task?.id;
+        const itemEndDate = item.scheduler_task ? new Date(item.scheduler_task.end_date) : null;
         return (
           <SchedulerRow
-            key={item.id}
+            key={item.id + (itemEndDate ? `-${itemEndDate.getTime()}` : '')}
             itemId={item.id}
             catalogItemId={row.catalogItemId}
             itemName={item.name || row.servicioNombre}

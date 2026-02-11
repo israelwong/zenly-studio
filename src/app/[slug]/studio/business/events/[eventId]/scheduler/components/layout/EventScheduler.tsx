@@ -30,6 +30,10 @@ import {
   crearTareaManualScheduler,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { COLUMN_WIDTH } from '../../utils/coordinate-utils';
+
+const EDGE_SCROLL_THRESHOLD = 100;
+const SIDEBAR_WIDTH = 360;
+const EDGE_SCROLL_VELOCITY = 10;
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
@@ -190,6 +194,8 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   /** Power Bar: ref al grid; capa de proyección (clones) y tooltip. */
   const gridRef = useRef<HTMLDivElement>(null);
+  /** Contenedor con overflow-auto para Edge Scrolling (scroll horizontal real). */
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const projectionLayerRef = useRef<HTMLDivElement>(null);
   const bulkDragTooltipRef = useRef<HTMLDivElement>(null);
   const bulkDragRef = useRef<{
@@ -1354,12 +1360,14 @@ export const EventScheduler = React.memo(function EventScheduler({
             ...cotizacion,
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
               if (item.scheduler_task?.id === taskId) {
+                const durationDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
                 return {
                   ...item,
                   scheduler_task: item.scheduler_task ? {
                     ...item.scheduler_task,
                     start_date: startDate,
                     end_date: endDate,
+                    duration_days: durationDays,
                   } : null,
                 };
               }
@@ -1421,9 +1429,10 @@ export const EventScheduler = React.memo(function EventScheduler({
             if (!item.scheduler_task) return item;
             const up = byId.get(item.scheduler_task.id);
             if (!up) return item;
+            const durationDays = Math.max(1, differenceInCalendarDays(up.end, up.start) + 1);
             return {
               ...item,
-              scheduler_task: { ...item.scheduler_task, start_date: up.start, end_date: up.end },
+              scheduler_task: { ...item.scheduler_task, start_date: up.start, end_date: up.end, duration_days: durationDays },
             };
           }),
         }));
@@ -1444,6 +1453,11 @@ export const EventScheduler = React.memo(function EventScheduler({
     [onDataChange]
   );
 
+  const getScrollLeft = useCallback(
+    () => scrollContainerRef.current?.scrollLeft ?? gridRef.current?.scrollLeft ?? 0,
+    []
+  );
+
   /** Inicio de arrastre masivo (Power Bar): un solo setState; offset se maneja por CSS var en mousemove. */
   const onBulkDragStart = useCallback((segmentKey: string, taskIds: string[], clientX: number, clientY: number) => {
     bulkDragRef.current = {
@@ -1452,10 +1466,10 @@ export const EventScheduler = React.memo(function EventScheduler({
       startClientX: clientX,
       startClientY: clientY,
       lastDaysOffset: 0,
-      startScrollLeft: gridRef.current?.scrollLeft ?? 0,
+      startScrollLeft: getScrollLeft(),
     };
     setBulkDragState({ segmentKey, taskIds, daysOffset: 0 });
-  }, []);
+  }, [getScrollLeft]);
 
   useEffect(() => {
     if (!bulkDragState || hasCapturedRects.current) return;
@@ -1532,7 +1546,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     const onMove = (e: MouseEvent) => {
       const r = bulkDragRef.current;
       if (!r) return;
-      const scrollLeft = gridRef.current?.scrollLeft ?? 0;
+      const scrollLeft = getScrollLeft();
       const offsetPx = e.clientX - r.startClientX + (scrollLeft - r.startScrollLeft);
       const layerEl = projectionLayerRef.current;
       if (layerEl) {
@@ -1553,7 +1567,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       bulkDragRef.current = null;
       hasCapturedRects.current = false;
       if (!ref) return;
-      const scrollLeft = gridRef.current?.scrollLeft ?? 0;
+      const scrollLeft = getScrollLeft();
       const offsetPx = e.clientX - ref.startClientX + (scrollLeft - ref.startScrollLeft);
       const finalDays = Math.round(offsetPx / COLUMN_WIDTH);
 
@@ -1623,7 +1637,60 @@ export const EventScheduler = React.memo(function EventScheduler({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [bulkDragState, studioSlug, eventId, handleBulkTasksMoved]);
+  }, [bulkDragState, studioSlug, eventId, handleBulkTasksMoved, getScrollLeft]);
+
+  /** Edge Scrolling: scroll automático cerca de los bordes durante drag (bulk o individual). */
+  useEffect(() => {
+    const isDragging = !!bulkDragState || !!activeDragData;
+    if (!isDragging) return;
+
+    const lastMouseRef = { current: { clientX: 0, clientY: 0 } };
+    const edgeScrollDirRef = { current: 0 as -1 | 0 | 1 };
+    let rafId: number;
+
+    const onEdgeMove = (e: MouseEvent) => {
+      lastMouseRef.current = { clientX: e.clientX, clientY: e.clientY };
+      const scrollEl = scrollContainerRef.current;
+      if (!scrollEl) return;
+      const rect = scrollEl.getBoundingClientRect();
+      const gridViewportLeft = rect.left + SIDEBAR_WIDTH;
+      const gridViewportRight = rect.right;
+      const { clientX } = e;
+      if (clientX < gridViewportLeft + EDGE_SCROLL_THRESHOLD) {
+        edgeScrollDirRef.current = -1;
+      } else if (clientX > gridViewportRight - EDGE_SCROLL_THRESHOLD) {
+        edgeScrollDirRef.current = 1;
+      } else {
+        edgeScrollDirRef.current = 0;
+      }
+    };
+
+    const tick = () => {
+      const scrollEl = scrollContainerRef.current;
+      const dir = edgeScrollDirRef.current;
+      if (scrollEl && dir !== 0) {
+        const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+        scrollEl.scrollLeft = Math.max(0, Math.min(maxScroll, scrollEl.scrollLeft + dir * EDGE_SCROLL_VELOCITY));
+
+        if (bulkDragState && bulkDragRef.current) {
+          const r = bulkDragRef.current;
+          const scrollLeft = getScrollLeft();
+          const offsetPx =
+            lastMouseRef.current.clientX - r.startClientX + (scrollLeft - r.startScrollLeft);
+          projectionLayerRef.current?.style.setProperty('--bulk-drag-offset', `${offsetPx}px`);
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    window.addEventListener('mousemove', onEdgeMove);
+
+    return () => {
+      window.removeEventListener('mousemove', onEdgeMove);
+      cancelAnimationFrame(rafId);
+    };
+  }, [bulkDragState, activeDragData, getScrollLeft]);
 
   // Manejar creación de tareas (click en slot vacío)
   const handleTaskCreate = useCallback(
@@ -2489,6 +2556,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         overlayPosition={overlayPosition}
         updatingTaskId={updatingTaskId}
         gridRef={gridRef}
+        scrollContainerRef={scrollContainerRef}
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
       />

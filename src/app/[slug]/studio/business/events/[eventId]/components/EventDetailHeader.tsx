@@ -114,7 +114,7 @@ export const EventDetailHeader = function EventDetailHeader({
 
     setIsChangingStage(true);
     try {
-      const { moveEvent, obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events');
+      const { moveEvent, obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
       const result = await moveEvent(studioSlug, {
         event_id: eventId,
         new_stage_id: newStageId,

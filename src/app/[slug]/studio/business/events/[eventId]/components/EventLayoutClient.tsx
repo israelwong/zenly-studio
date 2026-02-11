@@ -31,7 +31,7 @@ export function EventLayoutClient({
 }: EventLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  
+
   // Verificar si estamos en la ruta base (sin sub-rutas como /scheduler)
   const isBaseRoute = pathname && !pathname.includes('/scheduler') && pathname.endsWith(`/events/${eventId}`);
   const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
@@ -51,10 +51,10 @@ export function EventLayoutClient({
     window.dispatchEvent(new CustomEvent('close-overlays'));
   }, []);
 
-  // Cargar datos adicionales
+  // Cargar datos adicionales (import directo para evitar HMR con barrel)
   useEffect(() => {
     const loadAdditionalData = async () => {
-      const { obtenerCotizacionesAutorizadasCount } = await import('@/lib/actions/studio/business/events');
+      const { obtenerCotizacionesAutorizadasCount } = await import('@/lib/actions/studio/business/events/events.actions');
       const countResult = await obtenerCotizacionesAutorizadasCount(studioSlug, eventId);
       if (countResult.success && countResult.count !== undefined) {
         setCotizacionesCount(countResult.count);
@@ -79,7 +79,7 @@ export function EventLayoutClient({
     const targetSlug = eventData?.promise_id ? 'pending' : undefined;
     setIsCancelling(true);
     try {
-      const { cancelarEvento } = await import('@/lib/actions/studio/business/events');
+      const { cancelarEvento } = await import('@/lib/actions/studio/business/events/events.actions');
       const result = await cancelarEvento(studioSlug, eventId, targetSlug ? { promiseTargetStageSlug: targetSlug } : undefined);
       if (result.success) {
         toast.success('Evento cancelado correctamente');
@@ -146,7 +146,7 @@ export function EventLayoutClient({
               eventId={eventId}
               eventData={eventData}
               onEventUpdated={async () => {
-                const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events');
+                const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
                 const result = await obtenerEventoDetalle(studioSlug, eventId);
                 if (result.success && result.data) {
                   setEventData(result.data);

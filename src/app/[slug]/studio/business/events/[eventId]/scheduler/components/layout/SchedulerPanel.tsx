@@ -68,6 +68,8 @@ interface SchedulerPanelProps {
   overlayPosition?: { x: number; y: number } | null;
   updatingTaskId?: string | null;
   gridRef?: React.RefObject<HTMLDivElement | null>;
+  /** Ref al contenedor con overflow-auto (scroll horizontal) para Edge Scrolling */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
 }
@@ -123,12 +125,20 @@ export const SchedulerPanel = React.memo(({
   overlayPosition = null,
   updatingTaskId = null,
   gridRef,
+  scrollContainerRef,
   bulkDragState = null,
   onBulkDragStart,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // No necesitamos sincronización, todo usa el mismo scroll
+  const setScrollRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      (timelineRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+      if (scrollContainerRef) (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    },
+    [scrollContainerRef]
+  );
+
   const handleTimelineScroll = () => {
     // El scroll es unificado en el contenedor padre
   };
@@ -159,7 +169,7 @@ export const SchedulerPanel = React.memo(({
     <div className="overflow-hidden bg-zinc-950">
       {/* Contenedor principal: overflow-visible durante drag para que la fila no se recorte */}
       <div
-        ref={timelineRef}
+        ref={setScrollRef}
         onScroll={handleTimelineScroll}
         className={`flex h-[calc(100vh-300px)] bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'}`}
       >

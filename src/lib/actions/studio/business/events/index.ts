@@ -1,6 +1,7 @@
 export {
   obtenerEventos,
   obtenerEventoDetalle,
+  checkSchedulerStatus,
   cancelarEvento,
   getEvents,
   moveEvent,
@@ -54,6 +55,7 @@ export type {
 export type {
   EventoBasico,
   EventoDetalle,
+  CheckSchedulerStatusResult,
   EventosListResponse,
   EventoDetalleResponse,
   CancelarEventoResponse,

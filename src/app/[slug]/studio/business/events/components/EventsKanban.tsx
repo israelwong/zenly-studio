@@ -372,23 +372,16 @@ export function EventsKanban({
   const handleEventClick = (event: EventWithContact) => {
     const routeId = event.id;
 
-    // Cerrar overlays globales antes de navegar
     window.dispatchEvent(new CustomEvent('close-overlays'));
 
-    // Activar flag de navegación
     if (setIsNavigating) {
       setIsNavigating(routeId);
     }
 
-    // Usar startTransition para dar prioridad a la navegación
     startTransition(() => {
       router.push(`/${studioSlug}/studio/business/events/${routeId}`);
-
-      // Limpiar flag después de un delay
       setTimeout(() => {
-        if (setIsNavigating) {
-          setIsNavigating(null);
-        }
+        if (setIsNavigating) setIsNavigating(null);
       }, 1000);
     });
   };

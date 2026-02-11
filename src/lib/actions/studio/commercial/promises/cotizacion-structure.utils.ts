@@ -131,10 +131,10 @@ export function construirEstructuraJerarquicaCotizacion(
   const seccionOrdenMap = new Map<string, number>();
   const categoriaOrdenMap = new Map<string, number>();
 
-  // Procesar cada item
-  items.forEach((item) => {
+  // Procesar cada item (omitir null/undefined; arrays vacíos no entran)
+  (items ?? []).forEach((item) => {
+    if (!item) return;
     // Usar snapshots primero (más confiables), luego campos operacionales como fallback
-    // ⚠️ HIGIENE DE DATOS: Mantener nombres originales para mostrar (la normalización se hace antes de llamar esta función)
     const seccionNombre = item.seccion_name_snapshot || item.seccion_name || "Sin sección";
     const categoriaNombre = item.category_name_snapshot || item.category_name || "Sin categoría";
     const itemNombre = item.name_snapshot || item.name || "Item sin nombre";
@@ -220,7 +220,8 @@ export function construirEstructuraJerarquicaCotizacion(
     }
 
     // Agregar item a la categoría
-    const categoriaData = seccionesMap.get(seccionNombre)!.categorias.get(categoriaNombre)!;
+    const categoriaData = seccionesMap.get(seccionNombre)?.categorias.get(categoriaNombre);
+    if (!categoriaData) return;
     
     const itemData: {
       nombre: string;
@@ -274,23 +275,23 @@ export function construirEstructuraJerarquicaCotizacion(
     });
   });
 
-  // Convertir a formato final y ordenar
+  // Convertir a formato final y ordenar (secciones/categorías sin ítems se mantienen; items vacíos = [])
   const secciones = Array.from(seccionesMap.values())
     .sort((a, b) => a.orden - b.orden)
     .map(seccion => ({
-      nombre: seccion.nombre,
-      orden: seccion.orden,
-      categorias: Array.from(seccion.categorias.values())
-        .sort((a, b) => a.orden - b.orden)
+      nombre: seccion?.nombre ?? 'Sin sección',
+      orden: seccion?.orden ?? 999,
+      categorias: Array.from(seccion?.categorias?.values() ?? [])
+        .sort((a, b) => (a?.orden ?? 999) - (b?.orden ?? 999))
         .map(categoria => ({
-          nombre: categoria.nombre,
-          orden: categoria.orden,
-          items: categoria.items,
+          nombre: categoria?.nombre ?? 'Sin categoría',
+          orden: categoria?.orden ?? 999,
+          items: categoria?.items ?? [],
         })),
     }));
 
   // Calcular total
-  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const total = (items ?? []).reduce((sum, item) => sum + (item?.subtotal ?? 0), 0);
 
   return {
     secciones,
@@ -304,10 +305,14 @@ export function construirEstructuraJerarquicaCotizacion(
  */
 export function aplanarEstructuraAOrdenIds(estructura: EstructuraJerarquica): string[] {
   const ids: string[] = [];
-  for (const s of estructura.secciones) {
-    for (const c of s.categorias) {
-      for (const item of c.items) {
-        if (item.id != null) ids.push(item.id);
+  for (const s of estructura.secciones ?? []) {
+    const categorias = s?.categorias ?? [];
+    if (categorias.length === 0) continue;
+    for (const c of categorias) {
+      const items = c?.items ?? [];
+      if (items.length === 0) continue;
+      for (const item of items) {
+        if (item?.id != null) ids.push(item.id);
       }
     }
   }

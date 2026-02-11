@@ -72,12 +72,15 @@ export function EventKanbanCard({
       e.stopPropagation();
       return;
     }
-    if (e.ctrlKey || e.metaKey) return;
+    if (e.ctrlKey || e.metaKey) return; // Permitir Cmd/Ctrl+click para nueva pestaña
     if ((e.target as HTMLElement).closest('[data-drag-handle]')) {
       e.preventDefault();
       return;
     }
-    onClick?.(event);
+    if (onClick) {
+      e.preventDefault();
+      onClick(event);
+    }
   };
 
   const href = studioSlug ? `/${studioSlug}/studio/business/events/${event.id}` : '#';

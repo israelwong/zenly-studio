@@ -19,19 +19,29 @@ export function useSchedulerItemSync(
 ) {
   const [localItem, setLocalItem] = useState(initialItem);
 
-  // Extraer valores clave del scheduler_task para detectar cambios
+  // Extraer valores clave del scheduler_task para detectar cambios (incluye fechas para sincronización bidireccional)
   const taskKey = useMemo(() => {
+    const st = initialItem.scheduler_task;
+    const start = st?.start_date != null ? (st.start_date instanceof Date ? st.start_date.getTime() : new Date(st.start_date).getTime()) : null;
+    const end = st?.end_date != null ? (st.end_date instanceof Date ? st.end_date.getTime() : new Date(st.end_date).getTime()) : null;
+    const days = (st as { duration_days?: number })?.duration_days ?? null;
     return JSON.stringify({
-      completed_at: initialItem.scheduler_task?.completed_at,
-      status: initialItem.scheduler_task?.status,
-      progress_percent: initialItem.scheduler_task?.progress_percent,
-      id: initialItem.scheduler_task?.id,
+      completed_at: st?.completed_at,
+      status: st?.status,
+      progress_percent: st?.progress_percent,
+      id: st?.id,
+      start_date: start,
+      end_date: end,
+      duration_days: days,
     });
   }, [
     initialItem.scheduler_task?.completed_at,
     initialItem.scheduler_task?.status,
     initialItem.scheduler_task?.progress_percent,
     initialItem.scheduler_task?.id,
+    initialItem.scheduler_task?.start_date,
+    initialItem.scheduler_task?.end_date,
+    (initialItem.scheduler_task as { duration_days?: number })?.duration_days,
   ]);
 
   // Sincronizar con item prop cuando cambie
@@ -83,6 +93,37 @@ export function useSchedulerItemSync(
   };
 
   /**
+   * Actualizar fechas (start_date, end_date, duration_days) del scheduler_task y sincronizar con servidor.
+   * Mismo patrón que manual tasks: anclaje en start_date, end_date = addDays(start, duration - 1).
+   */
+  const updateSchedulerTaskDates = async (
+    startDate: Date,
+    endDate: Date,
+    durationDays: number,
+    syncFn: () => Promise<void>
+  ) => {
+    if (!localItem.scheduler_task) return;
+
+    const updatedItem: CotizacionItem = {
+      ...localItem,
+      scheduler_task: {
+        ...localItem.scheduler_task,
+        start_date: startDate,
+        end_date: endDate,
+        duration_days: durationDays,
+      } as CotizacionItem['scheduler_task'],
+    };
+
+    setLocalItem(updatedItem);
+
+    if (onItemUpdate) {
+      onItemUpdate(updatedItem);
+    }
+
+    await syncFn();
+  };
+
+  /**
    * Actualizar completion status localmente y sincronizar
    */
   const updateCompletionStatus = async (
@@ -126,5 +167,6 @@ export function useSchedulerItemSync(
     localItem,
     updateCrewMember,
     updateCompletionStatus,
+    updateSchedulerTaskDates,
   };
 }

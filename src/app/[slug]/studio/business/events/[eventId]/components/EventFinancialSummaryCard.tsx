@@ -37,6 +37,10 @@ interface EventFinancialSummaryCardProps {
   cotizacionId?: string | null;
   /** Callback tras agregar/eliminar pago para que el padre revalide. */
   onPaymentAdded?: () => void;
+  /** Fallback cuando no hay cotizaciones (modo dieta): valores de getPromiseFinancials. */
+  contractValueFallback?: number | null;
+  paidAmountFallback?: number | null;
+  pendingAmountFallback?: number | null;
 }
 
 function toPaymentItem(p: PaymentSummaryItem): PaymentItem {
@@ -60,6 +64,9 @@ export function EventFinancialSummaryCard({
   studioSlug,
   cotizacionId,
   onPaymentAdded,
+  contractValueFallback,
+  paidAmountFallback,
+  pendingAmountFallback,
 }: EventFinancialSummaryCardProps) {
   const [payments, setPayments] = useState<PaymentItem[]>(() =>
     initialPayments.map(toPaymentItem)
@@ -87,17 +94,28 @@ export function EventFinancialSummaryCard({
               !q.status || APPROVED_STATUSES.includes(String(q.status).toLowerCase())
             )
           : [initialQuote];
-    const contractTotal = computeContractTotalFromQuotes(quotes);
-    const { totalPaid, balanceDue } = computeFinancialSummary(
+    let contractTotal = computeContractTotalFromQuotes(quotes);
+    if (quotes.length === 0 && contractValueFallback != null) {
+      contractTotal = contractValueFallback;
+    }
+    const fromQuotes = computeFinancialSummary(
       contractTotal,
       payments.map((p) => ({ amount: p.amount }))
     );
+    const totalPaid =
+      paidAmountFallback != null && quotes.length === 0
+        ? paidAmountFallback
+        : fromQuotes.totalPaid;
+    const balanceDue =
+      pendingAmountFallback != null && quotes.length === 0
+        ? pendingAmountFallback
+        : fromQuotes.balanceDue;
     return {
       totalContract: contractTotal,
       totalPaid,
       balanceDue,
     };
-  }, [initialQuote, payments]);
+  }, [initialQuote, payments, contractValueFallback, paidAmountFallback, pendingAmountFallback]);
 
   const handleAddNew = () => {
     if (!cotizacionId) {
