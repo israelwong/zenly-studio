@@ -14,6 +14,7 @@ import {
   groupRowsIntoBlocks,
   isTaskRow,
   isManualTaskRow,
+  type TaskCategoryStage,
 } from '../../utils/scheduler-section-stages';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
@@ -68,6 +69,8 @@ interface ItemMetadata {
   servicioNombre: string;
   servicioId: string;
   hideBadge?: boolean;
+  isSubtask?: boolean;
+  stageCategory?: TaskCategoryStage;
 }
 
 interface EventSchedulerProps {
@@ -135,6 +138,41 @@ export const EventScheduler = React.memo(function EventScheduler({
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() =>
     new Set(secciones.flatMap((s) => STAGE_ORDER.map((st) => `${s.id}-${st}`)))
   );
+  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const key = `scheduler-collapsed-categories-${eventId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw) as string[];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `scheduler-collapsed-categories-${eventId}`;
+      localStorage.setItem(key, JSON.stringify([...collapsedCategoryIds]));
+    } catch {
+      // ignore
+    }
+  }, [eventId, collapsedCategoryIds]);
+  useEffect(() => {
+    setCollapsedCategoryIds(() => {
+      if (typeof window === 'undefined') return new Set();
+      try {
+        const key = `scheduler-collapsed-categories-${eventId}`;
+        const raw = localStorage.getItem(key);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw) as string[];
+        return new Set(Array.isArray(arr) ? arr : []);
+      } catch {
+        return new Set();
+      }
+    });
+  }, [eventId]);
   const [googleCalendarEnabled, setGoogleCalendarEnabled] = useState(false);
 
   useEffect(() => {
@@ -1205,11 +1243,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleToggleTaskHierarchy = useCallback(
     async (taskId: string, parentId: string | null) => {
-      const result = await toggleTaskHierarchy(studioSlug, eventId, taskId, parentId);
-      if (!result.success) {
-        toast.error(result.error ?? 'Error al actualizar jerarquía');
-        return;
-      }
+      let nextData: SchedulerViewData | null = null;
       setLocalEventData((prev) => {
         const next = { ...prev };
         if (prev.scheduler?.tasks) {
@@ -1230,27 +1264,19 @@ export const EventScheduler = React.memo(function EventScheduler({
             ) ?? [],
           }));
         }
+        nextData = next;
         return next;
       });
-      const next = {
-        ...localEventData,
-        scheduler: localEventData.scheduler?.tasks
-          ? { ...localEventData.scheduler, tasks: localEventData.scheduler.tasks.map((t) => (t.id === taskId ? { ...t, parent_id: parentId } : t)) }
-          : localEventData.scheduler,
-        cotizaciones: localEventData.cotizaciones?.map((cot) => ({
-          ...cot,
-          cotizacion_items: cot.cotizacion_items?.map((item) =>
-            item?.scheduler_task?.id === taskId
-              ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, parent_id: parentId } : null }
-              : item
-          ) ?? [],
-        })) ?? localEventData.cotizaciones,
-      };
-      onDataChange?.(next);
+      const result = await toggleTaskHierarchy(studioSlug, eventId, taskId, parentId);
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al actualizar jerarquía');
+        return;
+      }
+      if (nextData) onDataChange?.(nextData);
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       toast.success(parentId ? 'Convertida en tarea secundaria' : 'Convertida en tarea principal');
     },
-    [studioSlug, eventId, localEventData, onDataChange]
+    [studioSlug, eventId, onDataChange]
   );
 
   const handleAddManualTaskSubmit = useCallback(
@@ -2529,9 +2555,11 @@ export const EventScheduler = React.memo(function EventScheduler({
       <SchedulerAgrupacionCell
         servicio={metadata.servicioNombre}
         isCompleted={isCompleted}
+        isSubtask={metadata.isSubtask}
         assignedCrewMember={assignedCrewMember}
         duration={durationDays}
         hideBadge={metadata.hideBadge}
+        stageCategory={metadata.stageCategory}
       />
     );
   };
@@ -2637,6 +2665,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         expandedStages={expandedStages}
         onExpandedSectionsChange={setExpandedSections}
         onExpandedStagesChange={setExpandedStages}
+        collapsedCategoryIds={collapsedCategoryIds}
+        onCollapsedCategoryIdsChange={setCollapsedCategoryIds}
         onSchedulerDragStart={handleSchedulerDragStart}
         onSchedulerDragMove={handleSchedulerDragMove}
         onSchedulerDragOver={handleSchedulerDragOver}

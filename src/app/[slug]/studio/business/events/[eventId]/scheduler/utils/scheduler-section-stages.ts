@@ -20,7 +20,7 @@ export const STAGE_LABELS: Record<TaskCategoryStage, string> = {
 };
 
 export const STAGE_COLORS: Record<TaskCategoryStage, string> = {
-  PLANNING: 'border-l-violet-500/60 bg-violet-950/20',
+  PLANNING: 'border-l-blue-500/60 bg-blue-950/20',
   PRODUCTION: 'border-l-purple-500/70 bg-purple-950/25',
   POST_PRODUCTION: 'border-l-amber-500/60 bg-amber-950/20',
   DELIVERY: 'border-l-emerald-500/60 bg-emerald-950/20',
@@ -31,23 +31,51 @@ export const POWER_BAR_STAGE_CLASSES: Record<
   TaskCategoryStage,
   { bg: string; border: string; icon: string }
 > = {
-  PLANNING: { bg: 'bg-violet-500/20', border: 'border-t-violet-500', icon: 'text-violet-400' },
+  PLANNING: { bg: 'bg-blue-500/20', border: 'border-t-blue-500', icon: 'text-blue-400' },
   PRODUCTION: { bg: 'bg-purple-500/20', border: 'border-t-purple-500', icon: 'text-purple-400' },
   POST_PRODUCTION: { bg: 'bg-amber-500/20', border: 'border-t-amber-500', icon: 'text-amber-400' },
   DELIVERY: { bg: 'bg-emerald-500/20', border: 'border-t-emerald-500', icon: 'text-emerald-400' },
 };
 
-/** Alturas fijas unificadas: todo 48px. 1 fila Sidebar = 1 fila Grid. box-sizing: border-box. */
-export const SECTION_HEIGHT = 48;
-export const STAGE_HEIGHT = 48;
-export const CATEGORY_HEIGHT = 48;
+/** Clases para badge de duración en sidebar (alineado con powerbar por stage) */
+export const BADGE_STAGE_CLASSES: Record<TaskCategoryStage, string> = {
+  PLANNING: 'bg-blue-500/20 text-blue-400 border-blue-700/50',
+  PRODUCTION: 'bg-purple-500/20 text-purple-400 border-purple-700/50',
+  POST_PRODUCTION: 'bg-amber-500/20 text-amber-400 border-amber-700/50',
+  DELIVERY: 'bg-emerald-500/20 text-emerald-400 border-emerald-700/50',
+};
+
+/** Sangrado uniforme: múltiplos de 24px */
+export const INDENT_STEP = 24;
+
+/** padding-left por nivel (px) */
+export const INDENT = {
+  SECTION: 0,
+  STAGE: 24,
+  CATEGORY: 48,
+  TASK: 58,
+  SUBTASK_EXTRA: 16,
+} as const;
+
+/** Posición X de guías verticales: centro del chevron = N*24 + 8 */
+export const BRANCH_LEFT = {
+  SECTION: '8px',
+  STAGE: '32px',
+  CATEGORY: '56px',
+  TASK: '80px',
+} as const;
+
+/** Alturas fijas. Headers (Section, Stage, Category): 36px. Tareas: 48px. box-sizing: border-box. */
+export const SECTION_HEIGHT = 36;
+export const STAGE_HEIGHT = 36;
+export const CATEGORY_HEIGHT = 36;
 export const ITEM_HEIGHT = 48;
 export const ACTION_HEIGHT = 48;
 
 export const ROW_HEIGHTS = {
-  SECTION: 48,
-  STAGE: 48,
-  CATEGORY_HEADER: 48,
+  SECTION: 36,
+  STAGE: 36,
+  CATEGORY_HEADER: 36,
   TASK_ROW: 48,
   PHANTOM: 48,
 } as const;
@@ -800,6 +828,42 @@ export function filterRowsByExpandedStages(
       continue;
     }
     if (currentStageExpanded) {
+      result.push(row);
+    }
+  }
+  return result;
+}
+
+/**
+ * Filtra filas según categorías expandidas. Si una categoría está colapsada,
+ * se incluye su fila de categoría pero no sus tareas ni el add_phantom.
+ * Debe aplicarse después de filterRowsByExpandedStages.
+ * @param collapsedCategoryIds Set de IDs de categoría (row.id) colapsadas
+ */
+export function filterRowsByExpandedCategories(
+  rows: SchedulerRowDescriptor[],
+  collapsedCategoryIds: Set<string>
+): SchedulerRowDescriptor[] {
+  const result: SchedulerRowDescriptor[] = [];
+  let currentCategoryCollapsed = false;
+
+  for (const row of rows) {
+    if (isSectionRow(row) || isStageRow(row)) {
+      result.push(row);
+      currentCategoryCollapsed = false;
+      continue;
+    }
+    if (isCategoryRow(row)) {
+      currentCategoryCollapsed = collapsedCategoryIds.has(row.id);
+      result.push(row);
+      continue;
+    }
+    if (isAddCategoryPhantomRow(row)) {
+      result.push(row);
+      currentCategoryCollapsed = false;
+      continue;
+    }
+    if (!currentCategoryCollapsed) {
       result.push(row);
     }
   }

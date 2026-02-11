@@ -33,6 +33,7 @@ interface SchedulerTimelineProps {
   ) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
+  collapsedCategoryIds?: Set<string>;
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
@@ -58,6 +59,7 @@ export const SchedulerTimeline = React.memo(({
   onAddManualTaskSubmit,
   expandedSections = new Set(),
   expandedStages = new Set(),
+  collapsedCategoryIds = new Set(),
   activeSectionIds,
   explicitlyActivatedStageIds,
   customCategoriesBySectionStage,
@@ -96,6 +98,7 @@ export const SchedulerTimeline = React.memo(({
         onAddManualTaskSubmit={onAddManualTaskSubmit}
         expandedSections={expandedSections}
         expandedStages={expandedStages}
+        collapsedCategoryIds={collapsedCategoryIds}
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
       />
@@ -123,11 +126,12 @@ export const SchedulerTimeline = React.memo(({
   const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
+  const collapsedCategoryIdsEqual = prevProps.collapsedCategoryIds === nextProps.collapsedCategoryIds;
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && isMaximizedEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && isMaximizedEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

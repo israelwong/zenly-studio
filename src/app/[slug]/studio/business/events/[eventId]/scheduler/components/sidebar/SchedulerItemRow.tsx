@@ -58,6 +58,7 @@ export function SchedulerItemRow({
 
     // Determinar si la tarea está completada
     const isCompleted = !!localItem.scheduler_task?.completed_at;
+    const isSubtask = (localItem.scheduler_task as { parent_id?: string | null })?.parent_id != null;
 
     return (
         <tr className="border-b border-zinc-800 hover:bg-zinc-900/50 transition-colors group">
@@ -72,6 +73,7 @@ export function SchedulerItemRow({
                         <SchedulerAgrupacionCell
                             servicio={itemData.servicioNombre}
                             isCompleted={isCompleted}
+                            isSubtask={isSubtask}
                             assignedCrewMember={localItem.assigned_to_crew_member}
                             duration={duration}
                         />

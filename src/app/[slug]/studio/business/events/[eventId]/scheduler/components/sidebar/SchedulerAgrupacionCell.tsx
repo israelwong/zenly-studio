@@ -1,9 +1,11 @@
 import { User } from 'lucide-react';
 import { ZenAvatar, ZenAvatarFallback, ZenBadge } from '@/components/ui/zen';
+import { BADGE_STAGE_CLASSES, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 
 interface SchedulerAgrupacionCellProps {
     servicio: string;
     isCompleted?: boolean;
+    isSubtask?: boolean;
     assignedCrewMember?: {
         id: string;
         name: string;
@@ -16,9 +18,11 @@ interface SchedulerAgrupacionCellProps {
     duration?: number; // Duración en días
     /** Si true, no se muestra el badge (se renderiza en rightSlot del sidebar) */
     hideBadge?: boolean;
+    /** Stage para color del badge (alineado con powerbar) */
+    stageCategory?: TaskCategoryStage;
 }
 
-export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration, hideBadge = false }: SchedulerAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, isSubtask = false, assignedCrewMember, duration, hideBadge = false, stageCategory }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
 
     // Generar iniciales del nombre
@@ -71,6 +75,8 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
             <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
                 <p className={`text-sm leading-tight line-clamp-2 cursor-pointer transition-colors ${isCompleted
                     ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500 hover:text-zinc-400'
+                    : isSubtask
+                    ? 'font-normal text-zinc-300 hover:text-zinc-200'
                     : 'font-medium text-zinc-300 hover:text-zinc-200'
                     }`}>
                     {servicio}
@@ -81,7 +87,7 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
             {!hideBadge && duration != null && duration > 0 && (
                 <ZenBadge
                     variant="secondary"
-                    className="shrink-0 ml-auto font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+                    className={`shrink-0 ml-auto font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center ${stageCategory ? BADGE_STAGE_CLASSES[stageCategory] : 'bg-zinc-800/50 text-zinc-400 border-zinc-700/50'}`}
                 >
                     {duration}d
                 </ZenBadge>

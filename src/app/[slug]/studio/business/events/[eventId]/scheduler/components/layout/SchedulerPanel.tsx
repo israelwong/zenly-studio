@@ -53,6 +53,8 @@ interface SchedulerPanelProps {
   expandedStages?: Set<string>;
   onExpandedSectionsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  collapsedCategoryIds?: Set<string>;
+  onCollapsedCategoryIdsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -114,6 +116,8 @@ export const SchedulerPanel = React.memo(({
   expandedStages = new Set(),
   onExpandedSectionsChange,
   onExpandedStagesChange,
+  collapsedCategoryIds,
+  onCollapsedCategoryIdsChange,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -218,6 +222,8 @@ export const SchedulerPanel = React.memo(({
             expandedStages={expandedStages}
             onExpandedSectionsChange={onExpandedSectionsChange}
             onExpandedStagesChange={onExpandedStagesChange}
+            collapsedCategoryIds={collapsedCategoryIds}
+            onCollapsedCategoryIdsChange={onCollapsedCategoryIdsChange}
             customCategoriesBySectionStage={customCategoriesBySectionStage}
             onSchedulerDragStart={onSchedulerDragStart}
             onSchedulerDragMove={onSchedulerDragMove}
@@ -252,6 +258,7 @@ export const SchedulerPanel = React.memo(({
             onAddManualTaskSubmit={onAddManualTaskSubmit}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
+            collapsedCategoryIds={collapsedCategoryIds}
             gridRef={gridRef}
             bulkDragState={bulkDragState}
             onBulkDragStart={onBulkDragStart}
@@ -273,6 +280,12 @@ export const SchedulerPanel = React.memo(({
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
+  const collapsedCategoryIdsEqual =
+    prevProps.collapsedCategoryIds === nextProps.collapsedCategoryIds ||
+    (prevProps.collapsedCategoryIds?.size === nextProps.collapsedCategoryIds?.size &&
+      prevProps.collapsedCategoryIds &&
+      nextProps.collapsedCategoryIds &&
+      [...prevProps.collapsedCategoryIds].every((id) => nextProps.collapsedCategoryIds!.has(id)));
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
@@ -284,7 +297,7 @@ export const SchedulerPanel = React.memo(({
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

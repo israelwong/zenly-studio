@@ -7,7 +7,7 @@ import type { DateRange } from 'react-day-picker';
 import { addDays } from 'date-fns';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isAddCategoryPhantomRow, isManualTaskRow, ROW_HEIGHTS, POWER_BAR_STAGE_CLASSES, STAGE_LABELS, type ManualTaskPayload, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
+import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, filterRowsByExpandedCategories, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isAddCategoryPhantomRow, isManualTaskRow, ROW_HEIGHTS, POWER_BAR_STAGE_CLASSES, STAGE_LABELS, type ManualTaskPayload, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth, getPositionFromDate, getWidthFromDuration, getTotalDays, COLUMN_WIDTH, toLocalDateOnly } from '../../utils/coordinate-utils';
 import { GripVertical, Plus } from 'lucide-react';
@@ -31,6 +31,7 @@ interface SchedulerGridProps {
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
+  collapsedCategoryIds?: Set<string>;
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
@@ -61,6 +62,7 @@ function SchedulerGridInner(
     onManualTaskPatch,
     expandedSections = new Set(),
     expandedStages = new Set(),
+    collapsedCategoryIds = new Set(),
     activeSectionIds,
     explicitlyActivatedStageIds,
     customCategoriesBySectionStage,
@@ -85,11 +87,14 @@ function SchedulerGridInner(
   );
   const filteredRows = useMemo(
     () =>
-      filterRowsByExpandedStages(
-        filterRowsByExpandedSections(rows, expandedSections),
-        expandedStages
+      filterRowsByExpandedCategories(
+        filterRowsByExpandedStages(
+          filterRowsByExpandedSections(rows, expandedSections),
+          expandedStages
+        ),
+        collapsedCategoryIds
       ),
-    [rows, expandedSections, expandedStages]
+    [rows, expandedSections, expandedStages, collapsedCategoryIds]
   );
 
   const getSegmentTaskIds = useCallback((fromIndex: number): string[] => {
@@ -437,6 +442,12 @@ function schedulerGridPropsEqual(
       prevProps.expandedStages &&
       nextProps.expandedStages &&
       [...prevProps.expandedStages].every((id) => nextProps.expandedStages!.has(id)));
+  const collapsedCategoryIdsEqual =
+    prevProps.collapsedCategoryIds === nextProps.collapsedCategoryIds ||
+    (prevProps.collapsedCategoryIds?.size === nextProps.collapsedCategoryIds?.size &&
+      prevProps.collapsedCategoryIds &&
+      nextProps.collapsedCategoryIds &&
+      [...prevProps.collapsedCategoryIds].every((id) => nextProps.collapsedCategoryIds!.has(id)));
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
@@ -446,7 +457,7 @@ function schedulerGridPropsEqual(
       prevProps.bulkDragState?.segmentKey === nextProps.bulkDragState?.segmentKey &&
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const onAddManualTaskSubmitEqual = prevProps.onAddManualTaskSubmit === nextProps.onAddManualTaskSubmit;
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && bulkDragEqual && onAddManualTaskSubmitEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && bulkDragEqual && onAddManualTaskSubmitEqual;
 }
 
 export const SchedulerGrid = React.memo(
