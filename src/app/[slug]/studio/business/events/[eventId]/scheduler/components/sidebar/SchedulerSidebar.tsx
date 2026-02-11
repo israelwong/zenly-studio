@@ -94,7 +94,8 @@ interface SchedulerSidebarProps {
     sectionId: string,
     stage: string,
     catalogCategoryId: string | null,
-    data: { name: string; durationDays: number; budgetAmount?: number }
+    data: { name: string; durationDays: number; budgetAmount?: number },
+    startDate?: Date
   ) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
@@ -335,7 +336,7 @@ function CategoryDroppableHeader({
   return (
     <div
       ref={setNodeRef}
-      className={`group flex items-center pl-8 pr-4 border-b border-white/5 transition-colors box-border overflow-hidden ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-zinc-800/30 bg-zinc-900/30'}`}
+      className={`group flex items-center pl-8 pr-4 border-b border-white/5 transition-colors box-border overflow-hidden gap-1 ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-zinc-800/30 bg-zinc-900/30'}`}
       style={{ height: ROW_HEIGHTS.CATEGORY_HEADER, minHeight: ROW_HEIGHTS.CATEGORY_HEADER, maxHeight: ROW_HEIGHTS.CATEGORY_HEADER, boxSizing: 'border-box' }}
       data-section-id={sectionId}
       title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
@@ -1006,6 +1007,7 @@ export const SchedulerSidebar = React.memo(({
                       name: r.label,
                     }));
                     const catRow = categoryRow && isCategoryRow(categoryRow) ? categoryRow : null;
+                    const segments = stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS;
                     return (
                       <React.Fragment key={catRow?.id ?? `seg-${segIdx}`}>
                         {catRow && (() => {
@@ -1013,10 +1015,9 @@ export const SchedulerSidebar = React.memo(({
                           const categoryId = catRow.id.startsWith(catPrefix) ? catRow.id.slice(catPrefix.length) : '';
                           const catalogCategoryId = getCatalogCategoryIdFromCategoryRow(catRow, stageRow.sectionId, secciones);
                           const customList = customCategoriesBySectionStage.get(catRow.stageId) ?? [];
-                          const catIdx = customList.findIndex((c) => c.id === categoryId);
-                          const isCustomCategory = catIdx >= 0;
-                          const canMoveUp = isCustomCategory && onMoveCategory && catIdx > 0;
-                          const canMoveDown = isCustomCategory && onMoveCategory && catIdx < customList.length - 1;
+                          const isCustomCategory = customList.some((c) => c.id === categoryId);
+                          const canMoveUp = onMoveCategory && catalogCategoryId && segIdx > 0;
+                          const canMoveDown = onMoveCategory && catalogCategoryId && segIdx < segments.length - 1;
                           const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
                           const catCollapseKey = categoryCollapseKey(stageRow.id, catalogCategoryId);
                           const isCategoryCollapsed = collapsedCategoryKeys.has(catCollapseKey);
@@ -1056,7 +1057,7 @@ export const SchedulerSidebar = React.memo(({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          onMoveCategory?.(catRow.stageId, categoryId, 'up');
+                                          if (catalogCategoryId) onMoveCategory?.(catRow.stageId, catalogCategoryId, 'up');
                                         }}
                                         className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
                                         aria-label="Mover categoría arriba"
@@ -1069,7 +1070,7 @@ export const SchedulerSidebar = React.memo(({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          onMoveCategory?.(catRow.stageId, categoryId, 'down');
+                                          if (catalogCategoryId) onMoveCategory?.(catRow.stageId, catalogCategoryId, 'down');
                                         }}
                                         className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
                                         aria-label="Mover categoría abajo"

@@ -422,10 +422,10 @@ export function EventSchedulerControlCard({
               variant="ghost"
               size="sm"
               onClick={handleViewCronograma}
-              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
+              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0 gap-1"
             >
-              <Calendar className="h-3 w-3 mr-1" />
               Cronograma
+              <span className="text-[10px] opacity-80">→</span>
             </ZenButton>
           )}
         </div>
@@ -469,12 +469,15 @@ export function EventSchedulerControlCard({
                 <div className="flex-1 min-w-0 space-y-0.5">
                   {status?.startDate && status?.endDate && (
                     <p className="text-xs text-zinc-300">
-                      Periodo: {formatDisplayDateShort(status.startDate)} - {formatDisplayDateShort(status.endDate)}
+                      Periodo: {formatDisplayDateShort(status.startDate)} → {formatDisplayDateShort(status.endDate)}
                     </p>
                   )}
                   {status && status.taskCount > 0 && (
                     <p className="text-xs text-zinc-500">
-                      {status.taskCount} tarea{status.taskCount !== 1 ? 's' : ''} en el cronograma
+                      <span className="text-amber-400">
+                        {status.taskCount} tarea{status.taskCount !== 1 ? 's' : ''}
+                      </span>{' '}
+                      en el cronograma
                     </p>
                   )}
                 </div>

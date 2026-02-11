@@ -54,6 +54,50 @@ export default function EventSchedulerPage() {
     return getStageIdsWithDataBySectionFromEventData(payload, payload.secciones);
   }, [payload]);
 
+  const loadScheduler = useCallback(async () => {
+    if (!eventId || !studioSlug) return;
+    try {
+      setLoading(true);
+      const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
+      if (result.success && result.data) {
+        const data = result.data;
+        setPayload(data);
+        setDateRange(prev => {
+          if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
+            return {
+              from: new Date(data.scheduler.start_date),
+              to: new Date(data.scheduler.end_date),
+            };
+          }
+          return prev;
+        });
+        setExplicitlyActivatedStageIds(prev => {
+          const fromPayload = data.explicitlyActivatedStageIds;
+          if (fromPayload?.length) return fromPayload;
+          const staging = getSchedulerStaging(eventId);
+          return staging?.explicitlyActivatedStageIds ?? prev;
+        });
+        setCustomCategoriesBySectionStage(prev => {
+          const fromPayload = data.customCategoriesBySectionStage;
+          if (fromPayload?.length) return customCategoriesMapFromStaging(fromPayload);
+          const staging = getSchedulerStaging(eventId);
+          if (staging?.customCategoriesBySectionStage?.length) {
+            return customCategoriesMapFromStaging(staging.customCategoriesBySectionStage);
+          }
+          return prev;
+        });
+      } else {
+        toast.error(result.error || 'Evento no encontrado');
+        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+      }
+    } catch (error) {
+      toast.error('Error al cargar el cronograma');
+      router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, studioSlug, cotizacionId, router]);
+
   const handleToggleStage = useCallback((sectionId: string, stage: string, enabled: boolean) => {
     const stageKey = `${sectionId}-${stage}`;
     if (enabled && !isValidStageKey(stageKey)) return;
@@ -111,11 +155,11 @@ export default function EventSchedulerPage() {
     [studioSlug, persistStagingCustomCats]
   );
 
-  const handleMoveCategory = useCallback(
-    (stageKey: string, categoryId: string, direction: 'up' | 'down') => {
+  const doSwapCustom = useCallback(
+    (stageKey: string, catalogCategoryId: string, direction: 'up' | 'down') => {
       setCustomCategoriesBySectionStage((prev) => {
         const list = prev.get(stageKey) ?? [];
-        const idx = list.findIndex((c) => c.id === categoryId);
+        const idx = list.findIndex((c) => c.id === catalogCategoryId);
         if (idx < 0) return prev;
         const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
         if (swapIdx < 0 || swapIdx >= list.length) return prev;
@@ -132,6 +176,65 @@ export default function EventSchedulerPage() {
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [eventId]
+  );
+
+  const doSwapCatalog = useCallback(
+    (sectionId: string, catalogCategoryId: string, direction: 'up' | 'down') => {
+      setPayload((prev) => {
+        if (!prev?.secciones) return prev;
+        const secIdx = prev.secciones.findIndex((s) => s.id === sectionId);
+        if (secIdx < 0) return prev;
+        const sec = prev.secciones[secIdx]!;
+        const cats = sec.categorias ?? [];
+        const sorted = [...cats].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+        const idx = sorted.findIndex((c) => c.id === catalogCategoryId);
+        if (idx < 0) return prev;
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= sorted.length) return prev;
+        const ordenMap = new Map(cats.map((c) => [c.id, c.orden ?? 0]));
+        const orderA = ordenMap.get(catalogCategoryId) ?? sorted[idx]!.orden ?? 0;
+        const orderB = ordenMap.get(sorted[swapIdx]!.id) ?? sorted[swapIdx]!.orden ?? 0;
+        const nextCats = cats.map((c) =>
+          c.id === catalogCategoryId ? { ...c, orden: orderB } : c.id === sorted[swapIdx]!.id ? { ...c, orden: orderA } : c
+        );
+        const nextSecs = [...prev.secciones];
+        nextSecs[secIdx] = { ...sec, categorias: nextCats };
+        return { ...prev, secciones: nextSecs };
+      });
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+    },
+    []
+  );
+
+  const handleMoveCategory = useCallback(
+    async (stageKey: string, catalogCategoryId: string, direction: 'up' | 'down') => {
+      const stageMatch = stageKey.match(/-((?:PLANNING|PRODUCTION|POST_PRODUCTION|DELIVERY))$/);
+      const sectionId = stageMatch ? stageKey.slice(0, -stageMatch[1].length - 1) : stageKey;
+
+      const customList = customCategoriesBySectionStage.get(stageKey) ?? [];
+      const isCustom = customList.some((c) => c.id === catalogCategoryId);
+
+      if (isCustom) {
+        doSwapCustom(stageKey, catalogCategoryId, direction);
+      } else {
+        doSwapCatalog(sectionId, catalogCategoryId, direction);
+      }
+
+      try {
+        const { reorderCategory } = await import('@/lib/actions/studio/business/events/scheduler-actions');
+        const result = await reorderCategory(studioSlug, sectionId, catalogCategoryId, direction);
+        if (!result.success) {
+          toast.error(result.error ?? 'Error al reordenar');
+          if (isCustom) doSwapCustom(stageKey, catalogCategoryId, direction);
+          else doSwapCatalog(sectionId, catalogCategoryId, direction);
+        }
+      } catch {
+        toast.error('Error al reordenar categoría');
+        if (isCustom) doSwapCustom(stageKey, catalogCategoryId, direction);
+        else doSwapCatalog(sectionId, catalogCategoryId, direction);
+      }
+    },
+    [eventId, studioSlug, customCategoriesBySectionStage, doSwapCustom, doSwapCatalog]
   );
 
   const handleRenameCustomCategory = useCallback(
@@ -217,50 +320,6 @@ export default function EventSchedulerPage() {
   useEffect(() => {
     document.title = 'Zenly Studio - Scheduler';
   }, []);
-
-  const loadScheduler = useCallback(async () => {
-    if (!eventId || !studioSlug) return;
-    try {
-      setLoading(true);
-      const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
-      if (result.success && result.data) {
-        const data = result.data;
-        setPayload(data);
-        setDateRange(prev => {
-          if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
-            return {
-              from: new Date(data.scheduler.start_date),
-              to: new Date(data.scheduler.end_date),
-            };
-          }
-          return prev;
-        });
-        setExplicitlyActivatedStageIds(prev => {
-          const fromPayload = data.explicitlyActivatedStageIds;
-          if (fromPayload?.length) return fromPayload;
-          const staging = getSchedulerStaging(eventId);
-          return staging?.explicitlyActivatedStageIds ?? prev;
-        });
-        setCustomCategoriesBySectionStage(prev => {
-          const fromPayload = data.customCategoriesBySectionStage;
-          if (fromPayload?.length) return customCategoriesMapFromStaging(fromPayload);
-          const staging = getSchedulerStaging(eventId);
-          if (staging?.customCategoriesBySectionStage?.length) {
-            return customCategoriesMapFromStaging(staging.customCategoriesBySectionStage);
-          }
-          return prev;
-        });
-      } else {
-        toast.error(result.error || 'Evento no encontrado');
-        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-      }
-    } catch (error) {
-      toast.error('Error al cargar el cronograma');
-      router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId, studioSlug, cotizacionId, router]);
 
   useEffect(() => {
     if (!eventId || !studioSlug) return;

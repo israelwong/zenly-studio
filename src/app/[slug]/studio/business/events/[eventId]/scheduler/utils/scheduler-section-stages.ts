@@ -593,7 +593,13 @@ export function buildSchedulerRows(
           stageId,
         });
       } else {
-        for (const categoryKey of categoryKeys) {
+        const sec = sectionId !== SIN_CATEGORIA_SECTION_ID ? secciones.find((s) => s.id === sectionId) : null;
+        const ordenMap = new Map<string, number>();
+        sec?.categorias?.forEach((c, i) => ordenMap.set(c.nombre, c.orden ?? i));
+        const sortedCategoryKeys = [...categoryKeys].sort(
+          (a, b) => (ordenMap.get(a) ?? 999) - (ordenMap.get(b) ?? 999)
+        );
+        for (const categoryKey of sortedCategoryKeys) {
           const list = byCat.get(categoryKey)!;
           const sorted = [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
           rows.push({

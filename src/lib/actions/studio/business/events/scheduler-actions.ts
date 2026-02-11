@@ -3,7 +3,7 @@
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import { obtenerCatalogo, actualizarOrdenCategorias } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
@@ -1013,6 +1013,8 @@ export async function crearTareaManualScheduler(
     catalog_category_id?: string | null;
     /** Costo estimado (budget_amount). Opcional. */
     budget_amount?: number | null;
+    /** Fecha de inicio (celda clicada en grid). Si se omite, usa cascada (hoy en rango o inicio evento). */
+    start_date?: Date;
   }
 ): Promise<{
   success: boolean;
@@ -1112,11 +1114,15 @@ export async function crearTareaManualScheduler(
 
     const toUTCNoon = (d: Date) =>
       new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
-    const todayNoon = toUTCNoon(new Date());
     const eventStart = toUTCNoon(instance.start_date);
     const eventEnd = toUTCNoon(instance.end_date);
-    const isTodayInRange = todayNoon.getTime() >= eventStart.getTime() && todayNoon.getTime() <= eventEnd.getTime();
-    const startDate = isTodayInRange ? todayNoon : eventStart;
+    const startDate = params.start_date
+      ? toUTCNoon(params.start_date)
+      : (() => {
+          const todayNoon = toUTCNoon(new Date());
+          const isTodayInRange = todayNoon.getTime() >= eventStart.getTime() && todayNoon.getTime() <= eventEnd.getTime();
+          return isTodayInRange ? todayNoon : eventStart;
+        })();
     const durationDays = Math.max(1, Math.min(365, Math.round(params.durationDays) || 1));
     const endDate = addDays(startDate, durationDays - 1);
 
@@ -1723,6 +1729,54 @@ export async function clasificarTareaScheduler(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al clasificar la tarea',
+    };
+  }
+}
+
+/**
+ * Reordena una categoría dentro de una sección (swap con la vecina).
+ * Persiste en BD para que la Tarjeta de Flujo de Trabajo refleje el mismo orden.
+ */
+export async function reorderCategory(
+  studioSlug: string,
+  sectionId: string,
+  catalogCategoryId: string,
+  direction: 'up' | 'down'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const sectionCats = await prisma.studio_section_categories.findMany({
+      where: { section_id: sectionId },
+      include: { service_categories: { select: { id: true, order: true } } },
+    });
+    const sorted = [...sectionCats].sort(
+      (a, b) => a.service_categories.order - b.service_categories.order
+    );
+    const idx = sorted.findIndex((sc) => sc.category_id === catalogCategoryId);
+    if (idx < 0) {
+      return { success: false, error: 'Categoría no encontrada en la sección' };
+    }
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) {
+      return { success: false, error: 'No se puede mover más en esa dirección' };
+    }
+    const catA = sorted[idx]!.service_categories;
+    const catB = sorted[swapIdx]!.service_categories;
+    const orderA = catA.order;
+    const orderB = catB.order;
+    const result = await actualizarOrdenCategorias(studioSlug, {
+      categorias: [
+        { id: catA.id, orden: orderB },
+        { id: catB.id, orden: orderA },
+      ],
+    });
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al reordenar categoría',
     };
   }
 }

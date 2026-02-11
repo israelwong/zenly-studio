@@ -1183,7 +1183,8 @@ export const EventScheduler = React.memo(function EventScheduler({
       sectionId: string,
       stage: string,
       catalogCategoryId: string | null,
-      data: { name: string; durationDays: number; budgetAmount?: number }
+      data: { name: string; durationDays: number; budgetAmount?: number },
+      startDate?: Date
     ) => {
       const result = await crearTareaManualScheduler(studioSlug, eventId, {
         sectionId,
@@ -1192,6 +1193,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         durationDays: data.durationDays,
         catalog_category_id: catalogCategoryId,
         budget_amount: data.budgetAmount != null && data.budgetAmount >= 0 ? data.budgetAmount : null,
+        start_date: startDate,
       });
       if (!result.success || !result.data) {
         toast.error(result.error ?? 'Error al crear la tarea');

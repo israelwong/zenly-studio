@@ -24,6 +24,13 @@ interface SchedulerTimelineProps {
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
+  onAddManualTaskSubmit?: (
+    sectionId: string,
+    stage: string,
+    catalogCategoryId: string | null,
+    data: { name: string; durationDays: number; budgetAmount?: number },
+    startDate?: Date
+  ) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
   activeSectionIds?: Set<string>;
@@ -47,6 +54,7 @@ export const SchedulerTimeline = React.memo(({
   onTaskToggleComplete,
   onItemUpdate,
   onManualTaskPatch,
+  onAddManualTaskSubmit,
   expandedSections = new Set(),
   expandedStages = new Set(),
   activeSectionIds,
@@ -82,6 +90,7 @@ export const SchedulerTimeline = React.memo(({
         onTaskToggleComplete={onTaskToggleComplete}
         onItemUpdate={onItemUpdate}
         onManualTaskPatch={onManualTaskPatch}
+        onAddManualTaskSubmit={onAddManualTaskSubmit}
         expandedSections={expandedSections}
         expandedStages={expandedStages}
         bulkDragState={bulkDragState}

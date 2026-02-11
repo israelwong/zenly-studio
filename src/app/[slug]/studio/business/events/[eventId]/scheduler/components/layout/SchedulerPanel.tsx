@@ -34,7 +34,8 @@ interface SchedulerPanelProps {
     sectionId: string,
     stage: string,
     catalogCategoryId: string | null,
-    data: { name: string; durationDays: number; budgetAmount?: number }
+    data: { name: string; durationDays: number; budgetAmount?: number },
+    startDate?: Date
   ) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
@@ -237,6 +238,7 @@ export const SchedulerPanel = React.memo(({
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
             onManualTaskPatch={onManualTaskPatch}
+            onAddManualTaskSubmit={onAddManualTaskSubmit}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
             gridRef={gridRef}
