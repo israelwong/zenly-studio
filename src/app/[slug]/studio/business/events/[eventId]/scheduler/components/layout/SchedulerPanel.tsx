@@ -73,6 +73,7 @@ interface SchedulerPanelProps {
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
+  isMaximized?: boolean;
 }
 
 /**
@@ -129,6 +130,7 @@ export const SchedulerPanel = React.memo(({
   scrollContainerRef,
   bulkDragState = null,
   onBulkDragStart,
+  isMaximized,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -167,12 +169,12 @@ export const SchedulerPanel = React.memo(({
   }
 
   return (
-    <div className="overflow-hidden bg-zinc-950">
+    <div className={isMaximized ? 'overflow-hidden bg-zinc-950 flex flex-col flex-1 min-h-0' : 'overflow-hidden bg-zinc-950'}>
       {/* Contenedor principal: overflow-visible durante drag para que la fila no se recorte */}
       <div
         ref={setScrollRef}
         onScroll={handleTimelineScroll}
-        className={`flex h-[calc(100vh-300px)] bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'}`}
+        className={`flex bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'} ${isMaximized ? 'flex-1 min-h-0' : 'h-[calc(100vh-300px)]'}`}
       >
         {/* Sidebar Sticky Left */}
         <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-20 overflow-visible">
@@ -221,7 +223,7 @@ export const SchedulerPanel = React.memo(({
         </div>
 
         {/* Timeline */}
-        <div className="flex-1">
+        <div className={`flex-1 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}>
           <SchedulerTimeline
             secciones={secciones}
             itemsMap={itemsMap}
@@ -229,6 +231,7 @@ export const SchedulerPanel = React.memo(({
             dateRange={dateRange}
             studioSlug={studioSlug}
             eventId={eventId}
+            isMaximized={isMaximized}
             activeSectionIds={activeSectionIds}
             explicitlyActivatedStageIds={explicitlyActivatedStageIds}
             customCategoriesBySectionStage={customCategoriesBySectionStage}
@@ -271,8 +274,9 @@ export const SchedulerPanel = React.memo(({
     (!!prevProps.bulkDragState === !!nextProps.bulkDragState &&
       prevProps.bulkDragState?.segmentKey === nextProps.bulkDragState?.segmentKey &&
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
+  const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

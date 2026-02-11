@@ -33,6 +33,7 @@ interface SchedulerWrapperProps {
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
+  isMaximized?: boolean;
 }
 
 /**
@@ -58,6 +59,7 @@ export function SchedulerWrapper({
   onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
+  isMaximized,
 }: SchedulerWrapperProps) {
   const filteredCotizaciones = useMemo(() => {
     if (!cotizacionId || !eventData.cotizaciones) return eventData.cotizaciones ?? [];
@@ -91,6 +93,7 @@ export function SchedulerWrapper({
         onMoveCategory={onMoveCategory}
         onRenameCustomCategory={onRenameCustomCategory}
         onRemoveCustomCategory={onRemoveCustomCategory}
+        isMaximized={isMaximized}
       />
       <PublicationBar
         studioSlug={studioSlug}

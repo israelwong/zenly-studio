@@ -87,6 +87,7 @@ interface EventSchedulerProps {
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
+  isMaximized?: boolean;
 }
 
 export const EventScheduler = React.memo(function EventScheduler({
@@ -107,6 +108,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
+  isMaximized,
 }: EventSchedulerProps) {
   const router = useRouter();
 
@@ -2468,7 +2470,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   }
 
   return (
-    <div className="w-full relative">
+    <div className={isMaximized ? 'w-full relative flex flex-col flex-1 min-h-0' : 'w-full relative'}>
       {bulkDragState && (
         <>
           <div
@@ -2561,6 +2563,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         scrollContainerRef={scrollContainerRef}
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
+        isMaximized={isMaximized}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

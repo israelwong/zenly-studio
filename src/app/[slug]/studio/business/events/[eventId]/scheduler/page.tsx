@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
 import {
   obtenerTareasScheduler,
@@ -24,6 +24,8 @@ import {
   isValidStageKey,
 } from './utils/scheduler-staging-storage';
 import { type DateRange } from 'react-day-picker';
+import { SchedulerPortal } from '@/components/SchedulerPortal';
+import { cn } from '@/lib/utils';
 
 export default function EventSchedulerPage() {
   const params = useParams();
@@ -35,6 +37,7 @@ export default function EventSchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
 
@@ -322,6 +325,19 @@ export default function EventSchedulerPage() {
   }, []);
 
   useEffect(() => {
+    if (!isMaximized) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMaximized(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
+    };
+  }, [isMaximized]);
+
+  useEffect(() => {
     if (!eventId || !studioSlug) return;
     loadScheduler();
   }, [eventId, studioSlug, loadScheduler]);
@@ -454,10 +470,44 @@ export default function EventSchedulerPage() {
     ? payload.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
     : 'Cronograma';
 
-  return (
-    <div className="w-full max-w-7xl mx-auto">
-      <ZenCard variant="default" padding="none">
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-4 flex items-center justify-between gap-2 flex-wrap">
+  const schedulerContent = (
+    <div
+      className={cn(
+        isMaximized
+          ? 'fixed inset-0 z-[9999] bg-zinc-950 flex flex-col p-0'
+          : 'w-full max-w-7xl mx-auto'
+      )}
+      style={
+        isMaximized
+          ? {
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              maxWidth: '100vw',
+              maxHeight: '100vh',
+              margin: 0,
+              padding: 0,
+            }
+          : undefined
+      }
+    >
+      <ZenCard
+        variant="default"
+        padding="none"
+        className={cn(
+          'flex flex-col',
+          isMaximized && 'h-full w-full rounded-none border-none m-0 bg-zinc-950 overflow-hidden'
+        )}
+        style={
+          isMaximized
+            ? { height: '100%', maxHeight: '100%', width: '100%', maxWidth: '100%' }
+            : undefined
+        }
+      >
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-4 flex items-center justify-between gap-2 flex-wrap shrink-0">
           {/* Izquierda: volver + label */}
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <ZenButton
@@ -509,15 +559,26 @@ export default function EventSchedulerPage() {
                 eventId={eventId}
               />
             </div>
+            <ZenButton
+              variant={isMaximized ? 'outline' : 'ghost'}
+              size="sm"
+              onClick={() => setIsMaximized((v) => !v)}
+              className={isMaximized ? 'gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 shrink-0 border-zinc-600 bg-zinc-800/80 hover:bg-zinc-700' : 'gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 shrink-0'}
+              aria-label={isMaximized ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            >
+              {isMaximized ? <Minimize2 className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" /> : <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />}
+            </ZenButton>
           </div>
         </ZenCardHeader>
 
-        <ZenCardContent className="p-0 overflow-hidden">
+        <ZenCardContent className={isMaximized ? 'p-0 overflow-hidden flex-1 min-h-0 flex flex-col' : 'p-0 overflow-hidden'}>
+          <div className={isMaximized ? 'flex-1 min-h-0 overflow-hidden flex flex-col [&>*:first-child]:flex-1 [&>*:first-child]:min-h-0 [&>*:first-child]:overflow-hidden' : ''}>
           <SchedulerWrapper
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventDataForWrapper as EventoDetalle}
             dateRange={dateRange}
+            isMaximized={isMaximized}
             initialSecciones={payload.secciones}
             activeSectionIds={activeSectionIds}
             explicitlyActivatedStageIds={explicitlyActivatedStageIds}
@@ -546,6 +607,7 @@ export default function EventSchedulerPage() {
             onPublished={handlePublished}
             cotizacionId={cotizacionId || undefined}
           />
+          </div>
         </ZenCardContent>
       </ZenCard>
 
@@ -557,5 +619,7 @@ export default function EventSchedulerPage() {
       />
     </div>
   );
+
+  return <SchedulerPortal isMaximized={isMaximized}>{schedulerContent}</SchedulerPortal>;
 }
 

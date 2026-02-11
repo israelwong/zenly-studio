@@ -39,6 +39,7 @@ interface SchedulerTimelineProps {
   gridRef?: React.RefObject<HTMLDivElement | null>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
+  isMaximized?: boolean;
 }
 
 export const SchedulerTimeline = React.memo(({
@@ -63,16 +64,18 @@ export const SchedulerTimeline = React.memo(({
   gridRef,
   bulkDragState = null,
   onBulkDragStart,
+  isMaximized,
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
   const todayPosition = getTodayPosition(dateRange);
 
   return (
-    <div className="flex flex-col border-l border-zinc-800 w-full relative">
+    <div className={`flex flex-col border-l border-zinc-800 w-full relative ${isMaximized ? 'flex-1 min-h-0' : ''}`}>
       {/* Header con fechas */}
       <SchedulerHeader dateRange={dateRange} />
 
       {/* Grid con tareas (ref para --bulk-drag-offset) */}
+      <div className={isMaximized ? 'flex-1 min-h-0 flex flex-col' : ''}>
       <SchedulerGrid
         ref={gridRef}
         secciones={secciones}
@@ -96,6 +99,7 @@ export const SchedulerTimeline = React.memo(({
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
       />
+      </div>
 
       {/* Línea vertical "HOY" */}
       {todayPosition !== null && (
@@ -116,13 +120,14 @@ export const SchedulerTimeline = React.memo(({
   const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
   const manualTasksEqual = prevProps.manualTasks === nextProps.manualTasks;
   const seccionesEqual = prevProps.secciones === nextProps.secciones;
+  const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
   const expandedSectionsEqual = prevProps.expandedSections === nextProps.expandedSections;
   const expandedStagesEqual = prevProps.expandedStages === nextProps.expandedStages;
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && isMaximizedEqual && expandedSectionsEqual && expandedStagesEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

@@ -31,6 +31,7 @@ interface EventSchedulerViewProps {
   onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
+  isMaximized?: boolean;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -52,6 +53,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
+  isMaximized,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -167,6 +169,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         eventData={eventData}
         dateRange={defaultDateRange}
         secciones={secciones}
+        isMaximized={isMaximized}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
         activeSectionIds={activeSectionIds}
@@ -202,7 +205,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
 
-  return datesEqual && eventDataEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual;
+  return datesEqual && eventDataEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && isMaximizedEqual;
 });
 
