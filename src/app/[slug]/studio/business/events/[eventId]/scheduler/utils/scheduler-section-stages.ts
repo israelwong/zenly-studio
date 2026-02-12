@@ -52,7 +52,7 @@ export const INDENT_STEP = 24;
 export const INDENT = {
   SECTION: 0,
   STAGE: 24,
-  CATEGORY: 48,
+  CATEGORY: 18,
   TASK: 58,
   SUBTASK_EXTRA: 16,
 } as const;
@@ -60,7 +60,7 @@ export const INDENT = {
 /** Posición X de guías verticales: centro del chevron = N*24 + 8 */
 export const BRANCH_LEFT = {
   SECTION: '8px',
-  STAGE: '32px',
+  STAGE: '28px',
   CATEGORY: '56px',
   TASK: '80px',
 } as const;
@@ -314,7 +314,7 @@ export function getStageIdsWithDataBySectionFromEventData(
       if (!task) continue;
       const catalogCategoryId = (item as { catalog_category_id?: string | null }).catalog_category_id ?? task.catalog_category_id ?? null;
       const sectionId = resolveSection(catalogCategoryId);
-      if (sectionId) add(sectionId, normalizeCategory(task.category));
+      if (sectionId) add(sectionId, normalizeCategory(task.category ?? undefined));
     }
   }
   const firstSectionId = secciones[0]?.id;
@@ -547,7 +547,7 @@ export function buildSchedulerRows(
       ? task.catalog_category.name
       : resolvedCategory;
     const stage = normalizeCategory(task.category as string | undefined);
-    const servicioNombre = item.name || item.name_snapshot || 'Sin nombre';
+    const servicioNombre = item.name || (item as { name_snapshot?: string }).name_snapshot || 'Sin nombre';
     const catalogItemId = item.item_id || item.id;
     const categoryKey = categoryNombre;
 

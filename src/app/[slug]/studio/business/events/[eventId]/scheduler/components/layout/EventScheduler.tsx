@@ -34,7 +34,6 @@ import {
 import { COLUMN_WIDTH } from '../../utils/coordinate-utils';
 
 const EDGE_SCROLL_THRESHOLD = 100;
-const SIDEBAR_WIDTH = 360;
 const EDGE_SCROLL_VELOCITY = 10;
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
@@ -270,6 +269,9 @@ export const EventScheduler = React.memo(function EventScheduler({
   }>>([]);
   /** True mientras la capa de proyección hace fade-out antes de desmontar. */
   const [bulkDragFadingOut, setBulkDragFadingOut] = useState(false);
+
+  /** Ancho del sidebar (resizable 280–520px). */
+  const [sidebarWidth, setSidebarWidth] = useState(340);
 
   // Limpieza del debounce al desmontar
   useEffect(() => {
@@ -1759,7 +1761,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       const scrollEl = scrollContainerRef.current;
       if (!scrollEl) return;
       const rect = scrollEl.getBoundingClientRect();
-      const gridViewportLeft = rect.left + SIDEBAR_WIDTH;
+      const gridViewportLeft = rect.left + sidebarWidth;
       const gridViewportRight = rect.right;
       const { clientX } = e;
       if (clientX < gridViewportLeft + EDGE_SCROLL_THRESHOLD) {
@@ -1796,7 +1798,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       window.removeEventListener('mousemove', onEdgeMove);
       cancelAnimationFrame(rafId);
     };
-  }, [bulkDragState, activeDragData, getScrollLeft]);
+  }, [bulkDragState, activeDragData, getScrollLeft, sidebarWidth]);
 
   // Manejar creación de tareas (click en slot vacío)
   const handleTaskCreate = useCallback(
@@ -2628,6 +2630,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         </>
       )}
       <SchedulerPanel
+        sidebarWidth={sidebarWidth}
+        onSidebarWidthChange={setSidebarWidth}
         secciones={seccionesFiltradasConItems}
         itemsMap={itemsMap}
         manualTasks={manualTasks}

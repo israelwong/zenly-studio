@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
@@ -19,6 +20,8 @@ interface ItemMetadata {
 }
 
 interface SchedulerPanelProps {
+  sidebarWidth?: number;
+  onSidebarWidthChange?: (width: number) => void;
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
   manualTasks?: ManualTaskPayload[];
@@ -88,7 +91,12 @@ interface SchedulerPanelProps {
  * Utiliza CSS Grid para sincronizar scroll entre sidebar y timeline
  * Opción A: Contenedor único con display: grid que incluye sidebar y timeline
  */
+const SIDEBAR_MIN = 280;
+const SIDEBAR_MAX = 520;
+
 export const SchedulerPanel = React.memo(({
+  sidebarWidth = 340,
+  onSidebarWidthChange,
   secciones,
   itemsMap,
   manualTasks = [],
@@ -143,6 +151,66 @@ export const SchedulerPanel = React.memo(({
   googleCalendarEnabled = false,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [ghostPortalEl, setGhostPortalEl] = useState<HTMLDivElement | null>(null);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(sidebarWidth);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizerBounds, setResizerBounds] = useState({ top: 0, left: 0, height: 0 });
+
+  const updateResizerBounds = useCallback(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setResizerBounds({
+      top: rect.top,
+      left: rect.left + sidebarWidth,
+      height: rect.height,
+    });
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    updateResizerBounds();
+    const ro = new ResizeObserver(updateResizerBounds);
+    ro.observe(el);
+    const onScroll = () => updateResizerBounds();
+    el.addEventListener('scroll', onScroll);
+    window.addEventListener('resize', updateResizerBounds);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      ro.disconnect();
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', updateResizerBounds);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [updateResizerBounds, isMaximized]);
+
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onSidebarWidthChange) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsResizing(true);
+      document.body.style.userSelect = 'none';
+      resizeStartX.current = e.clientX;
+      resizeStartWidth.current = sidebarWidth;
+      const onMove = (ev: MouseEvent) => {
+        const delta = ev.clientX - resizeStartX.current;
+        const next = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, resizeStartWidth.current + delta));
+        onSidebarWidthChange(next);
+      };
+      const onUp = () => {
+        setIsResizing(false);
+        document.body.style.userSelect = '';
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    },
+    [onSidebarWidthChange, sidebarWidth]
+  );
 
   const setScrollRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -186,9 +254,21 @@ export const SchedulerPanel = React.memo(({
         onScroll={handleTimelineScroll}
         className={`flex bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'} ${isMaximized ? 'flex-1 min-h-0' : 'h-[calc(100vh-300px)]'}`}
       >
+        {/* Ghost portal: dentro del contenedor para que sidebar z-30 quede por encima */}
+        <div
+          ref={setGhostPortalEl}
+          className="absolute inset-0 pointer-events-none z-20"
+          style={{ left: sidebarWidth }}
+          aria-hidden
+        />
         {/* Sidebar Sticky Left */}
-        <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-20 overflow-visible">
+        <div
+          className="flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-30 overflow-visible"
+          style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+        >
           <SchedulerSidebar
+            ghostPortalEl={ghostPortalEl}
+            sidebarWidth={sidebarWidth}
             secciones={secciones}
             itemsMap={itemsMap}
             manualTasks={manualTasks}
@@ -237,7 +317,7 @@ export const SchedulerPanel = React.memo(({
         </div>
 
         {/* Timeline */}
-        <div className={`flex-1 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}>
+        <div className={`flex-1 min-w-0 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}>
           <SchedulerTimeline
             secciones={secciones}
             itemsMap={itemsMap}
@@ -265,6 +345,27 @@ export const SchedulerPanel = React.memo(({
           />
         </div>
       </div>
+      {/* Resizer vía Portal: fixed con bounds explícitos del contenedor visible */}
+      {onSidebarWidthChange &&
+        resizerBounds.height > 0 &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="separator"
+            aria-label="Redimensionar sidebar"
+            onMouseDown={handleResizeMouseDown}
+            className={`fixed cursor-col-resize z-40 transition-colors bg-transparent hover:bg-amber-500/50 ${isResizing ? 'bg-amber-500/50' : ''}`}
+            style={{
+              left: resizerBounds.left,
+              top: resizerBounds.top,
+              width: 4,
+              height: resizerBounds.height,
+            }}
+          >
+            <div className="absolute inset-y-0 -left-2 -right-2" aria-hidden />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -296,8 +397,9 @@ export const SchedulerPanel = React.memo(({
       prevProps.bulkDragState?.segmentKey === nextProps.bulkDragState?.segmentKey &&
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
+  const sidebarWidthEqual = prevProps.sidebarWidth === nextProps.sidebarWidth;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual && sidebarWidthEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

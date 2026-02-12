@@ -144,6 +144,9 @@ interface SchedulerSidebarProps {
   overlayPosition?: { x: number; y: number } | null;
   updatingTaskId?: string | null;
   googleCalendarEnabled?: boolean;
+  sidebarWidth?: number;
+  /** DOM del contenedor para el ghost del drag (portal dentro del scheduler para z-index correcto). Sin fallback a body. */
+  ghostPortalEl?: HTMLDivElement | null;
 }
 
 
@@ -172,9 +175,6 @@ export function parseSchedulerCategoryDroppableId(
   return { stageKey: stageKey || '', catalogCategoryId };
 }
 
-/** Ancho del sidebar para que el overlay coincida exactamente (misma ilusión de "sacar la fila") */
-const SIDEBAR_WIDTH_PX = 360;
-
 /** Layout: handle 2rem + línea 1px + contenido con pl-4. */
 
 /** Fila clonada para DragOverlay: 60px, avatar, nombre, fondo sólido, sombra potente, cursor grabbing */
@@ -183,11 +183,13 @@ function SchedulerDragOverlayRow({
   isManual,
   itemsMap,
   manualTasks,
+  sidebarWidth = 340,
 }: {
   taskId: string;
   isManual: boolean;
   itemsMap: Map<string, CotizacionItem>;
   manualTasks: ManualTaskPayload[];
+  sidebarWidth?: number;
 }) {
   let name = '';
   let initials: string | null = null;
@@ -219,8 +221,8 @@ function SchedulerDragOverlayRow({
         height: ROW_HEIGHTS.TASK_ROW,
         minHeight: ROW_HEIGHTS.TASK_ROW,
         maxHeight: ROW_HEIGHTS.TASK_ROW,
-        width: SIDEBAR_WIDTH_PX,
-        minWidth: SIDEBAR_WIDTH_PX,
+        width: sidebarWidth,
+        minWidth: sidebarWidth,
         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
       }}
     >
@@ -288,6 +290,9 @@ function SortableTaskRow({
   });
 
   const isAmber = isManual || hasParentId;
+  const branchPx = parseFloat(BRANCH_LEFT.CATEGORY) || 56;
+  const handleWidthPx = 32;
+  const contentOffsetPx = Math.max(0, branchPx - handleWidthPx) + 6;
 
   const style = {
     height: ROW_HEIGHTS.TASK_ROW,
@@ -297,7 +302,6 @@ function SortableTaskRow({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
-    paddingLeft: hasParentId ? INDENT.TASK + INDENT.SUBTASK_EXTRA : INDENT.TASK,
   };
 
   return (
@@ -307,21 +311,12 @@ function SortableTaskRow({
       className={`group relative flex items-center min-h-[32px] box-border overflow-hidden transition-colors border-b border-white/5 hover:bg-zinc-800/40 ${isSynced ? 'bg-blue-500/5' : ''} ${className}`}
       data-scheduler-task-id={taskId}
     >
-      {/* Rama vertical: amber para manual/subtarea, zinc para catálogo */}
-      <div
-        className={`absolute top-0 w-[1px] pointer-events-none z-0 ${isAmber ? 'bg-amber-500/40' : 'bg-zinc-800'}`}
-        style={{
-          left: BRANCH_LEFT.CATEGORY,
-          ...(isLastTaskInSegment ? { height: ROW_HEIGHTS.TASK_ROW / 2 } : { bottom: 0 }),
-        }}
-        aria-hidden
-      />
-      {/* Handle: touch-none evita que el scroll del contenedor capture el gesto; isSaving muestra Loader2 y desactiva interacción. */}
+      {/* Handle: primero absoluto, w-8 fijo, zona de agarre uniforme para tareas y subtareas */}
       <button
         type="button"
         aria-label={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
         title={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
-        className={`w-8 shrink-0 flex items-center justify-center rounded touch-none ${isSaving ? 'cursor-wait pointer-events-none' : disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'cursor-grab active:cursor-grabbing'}`}
+        className={`w-8 shrink-0 flex items-center justify-center rounded touch-none ${isSaving ? 'cursor-wait pointer-events-none' : disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'cursor-grab active:cursor-grabbing opacity-50 group-hover:opacity-100 transition-opacity'}`}
         style={{ touchAction: 'none' }}
         {...(disableDrag || isSaving ? {} : attributes)}
         {...(disableDrag || isSaving ? {} : listeners)}
@@ -333,10 +328,21 @@ function SortableTaskRow({
           <GripVertical className="h-4 w-4 text-zinc-500 shrink-0 pointer-events-none" aria-hidden />
         )}
       </button>
+      {/* Rama vertical: amber para manual/subtarea, zinc para catálogo */}
       <div
-        className={`flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 h-full overflow-hidden min-h-[32px] ${isDragging ? 'pointer-events-none' : ''} ${hasParentId ? 'pl-1' : 'pl-0'}`}
+        className={`absolute top-0 w-[1px] pointer-events-none z-10 ${isAmber ? 'bg-amber-500/40' : 'bg-zinc-800'}`}
+        style={{
+          left: BRANCH_LEFT.CATEGORY,
+          height: ROW_HEIGHTS.TASK_ROW,
+        }}
+        aria-hidden
+      />
+      {/* Contenido: gana espacio al tener handle a la izquierda, truncate para nombres largos */}
+      <div
+        className={`flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 h-full overflow-hidden min-h-[32px] ${isDragging ? 'pointer-events-none' : ''}`}
+        style={{ paddingLeft: contentOffsetPx + (hasParentId ? 8 : 0) }}
       >
-        <div className="flex-1 min-w-0 overflow-hidden">{children}</div>
+        <div className="flex-1 min-w-0 overflow-hidden truncate">{children}</div>
         {rightSlot}
       </div>
     </div>
@@ -655,36 +661,6 @@ function ManualTaskRow({
           </PopoverContent>
         </Popover>
       )}
-      {showUp && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (canMoveUp && onReorderUp) onReorderUp(localTask.id);
-            else if (onMoveToPreviousCategory) onMoveToPreviousCategory();
-          }}
-          disabled={!upEnabled}
-          className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
-          aria-label="Subir"
-        >
-          <ChevronUp className="h-4 w-4" />
-        </button>
-      )}
-      {showDown && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (canMoveDown && onReorderDown) onReorderDown(localTask.id);
-            else if (onMoveToNextCategory) onMoveToNextCategory();
-          }}
-          disabled={!downEnabled}
-          className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40 disabled:pointer-events-none transition-colors focus:outline-none"
-          aria-label="Bajar"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
-      )}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
@@ -697,6 +673,35 @@ function ManualTaskRow({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
+          {showUp && (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canMoveUp && onReorderUp) onReorderUp(localTask.id);
+                else if (onMoveToPreviousCategory) onMoveToPreviousCategory();
+              }}
+              disabled={!upEnabled}
+              className="gap-2"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+              Subir
+            </DropdownMenuItem>
+          )}
+          {showDown && (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canMoveDown && onReorderDown) onReorderDown(localTask.id);
+                else if (onMoveToNextCategory) onMoveToNextCategory();
+              }}
+              disabled={!downEnabled}
+              className="gap-2"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+              Bajar
+            </DropdownMenuItem>
+          )}
+          {(showUp || showDown) && <DropdownMenuSeparator />}
           <DropdownMenuItem onClick={() => setPopoverOpen(true)} className="gap-2">
             <Pencil className="h-3.5 w-3.5" />
             Editar
@@ -963,6 +968,8 @@ export const SchedulerSidebar = React.memo(({
   overlayPosition = null,
   updatingTaskId = null,
   googleCalendarEnabled = false,
+  sidebarWidth = 340,
+  ghostPortalEl,
 }: SchedulerSidebarProps) => {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -1216,13 +1223,15 @@ export const SchedulerSidebar = React.memo(({
                     style={{ left: 12, ...(isLastSection ? { bottom: ROW_HEIGHTS.TASK_ROW / 2 } : {}) }}
                     aria-hidden
                   />
-                  {stageBlocks.map((block) => {
+                  {stageBlocks
+                    .filter((b): b is { type: 'stage_block'; block: StageBlock } => b.type === 'stage_block')
+                    .map((block) => {
           const { stageRow, contentRows, phantomRow } = block.block;
           const isExpanded = expandedStages.has(stageRow.id);
-          const taskRowsCount = contentRows.filter((r) => isTaskRow(r) || isManualTaskRow(r)).length;
+          const taskRowsCount = contentRows.filter((r: SchedulerRowDescriptor) => isTaskRow(r) || isManualTaskRow(r)).length;
           const taskIds = contentRows
             .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
-            .map((t) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
+            .map((t: import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow) => (t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
             .filter(Boolean) as string[];
 
           const stageBlockIdx = stageBlocks.indexOf(block);
@@ -1231,7 +1240,7 @@ export const SchedulerSidebar = React.memo(({
           return (
             <React.Fragment key={stageRow.id}>
                 <div
-                  className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden rounded-sm ${POWER_BAR_STAGE_CLASSES[stageRow.category].bg}`}
+                  className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden rounded-sm ${POWER_BAR_STAGE_CLASSES[stageRow.category as TaskCategoryStage].bg}`}
                   style={{ height: ROW_HEIGHTS.STAGE, minHeight: ROW_HEIGHTS.STAGE, maxHeight: ROW_HEIGHTS.STAGE, boxSizing: 'border-box' }}
                 >
                 <button
@@ -1270,7 +1279,7 @@ export const SchedulerSidebar = React.memo(({
                     />
                     {(stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS).map((segment, segIdx) => {
                     const segmentTaskIds = segment.rows
-                      .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
+                      .filter((r: SchedulerRowDescriptor): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
                       .map((t) => String(t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
                       .filter((id) => id && id !== 'undefined');
                     const categoryRow = segment.categoryRow;
@@ -1504,7 +1513,7 @@ export const SchedulerSidebar = React.memo(({
                             }
                             sectionId={row.sectionId}
                             catalogCategoryId={manualCatalogCategoryId}
-                            sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category] ?? stageRow.label)}
+                            sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label)}
                             onAddManualTaskSubmit={onAddManualTaskSubmit}
                           />
                         </SortableTaskRow>
@@ -1563,7 +1572,7 @@ export const SchedulerSidebar = React.memo(({
                                     sectionId={row.sectionId}
                                     stage={stageRow.category}
                                     catalogCategoryId={itemEffectiveCatalogCategoryId}
-                                    sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category] ?? stageRow.label)}
+                                    sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label)}
                                     studioSlug={studioSlug}
                                     eventId={eventId}
                                     onAddManualTaskSubmit={onAddManualTaskSubmit}
@@ -1572,7 +1581,7 @@ export const SchedulerSidebar = React.memo(({
                                 {hasItemDuration && (
                                   <ZenBadge
                                     variant="secondary"
-                                    className={`shrink-0 font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center ${BADGE_STAGE_CLASSES[stageRow.category]}`}
+                                    className={`shrink-0 font-mono text-[10px] px-1.5 py-0 h-5 min-w-[1.75rem] justify-center ${BADGE_STAGE_CLASSES[stageRow.category as TaskCategoryStage]}`}
                                   >
                                     {itemDurationDays}d
                                   </ZenBadge>
@@ -1672,8 +1681,8 @@ export const SchedulerSidebar = React.memo(({
                     }
                     if (isAddPhantomRow(row)) {
                       const sectionLabel = row.categoryLabel
-                        ? `${STAGE_LABELS[stageRow.category] ?? stageRow.label} · ${row.categoryLabel}`
-                        : (STAGE_LABELS[stageRow.category] ?? stageRow.label);
+                        ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${row.categoryLabel}`
+                        : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label);
                       const isThisPopoverOpen =
                         addPopoverContext?.type === 'add_task' &&
                         addPopoverContext.sectionId === row.sectionId &&
@@ -1759,10 +1768,10 @@ export const SchedulerSidebar = React.memo(({
         })}
 
         <DragOverlay dropAnimation={null}>{null}</DragOverlay>
-        {/* Overlay flotante vía Portal (document.body) para que no quede recortado por contenedores */}
+        {/* Overlay flotante portaleado al contenedor interno (sin fallback a body) para que sidebar z-30 lo tape */}
         {activeDragData &&
           overlayPosition &&
-          typeof document !== 'undefined' &&
+          ghostPortalEl &&
           Number.isFinite(overlayPosition.x) &&
           Number.isFinite(overlayPosition.y) &&
           createPortal(
@@ -1772,7 +1781,7 @@ export const SchedulerSidebar = React.memo(({
                 position: 'fixed',
                 left: overlayPosition.x,
                 top: overlayPosition.y,
-                zIndex: 99999,
+                zIndex: 20,
                 touchAction: 'none',
                 pointerEvents: 'none',
               }}
@@ -1782,9 +1791,10 @@ export const SchedulerSidebar = React.memo(({
                 isManual={activeDragData.isManual}
                 itemsMap={itemsMap}
                 manualTasks={manualTasks}
+                sidebarWidth={sidebarWidth}
               />
             </div>,
-            document.body
+            ghostPortalEl
           )}
       </DndContext>
       )}
