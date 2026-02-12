@@ -44,6 +44,7 @@ interface SchedulerPanelProps {
     parentId?: string | null
   ) => Promise<void>;
   onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => void;
+  onConvertSubtasksToPrincipal?: (childIds: string[]) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -87,6 +88,8 @@ interface SchedulerPanelProps {
   schedulerDateReminders?: Array<{ id: string; reminder_date: Date | string; subject_text: string; description: string | null }>;
   onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
   onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
+  onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
   onReminderDelete?: (reminderId: string) => Promise<void>;
 }
 
@@ -117,6 +120,7 @@ export const SchedulerPanel = React.memo(({
   onItemUpdate,
   onAddManualTaskSubmit,
   onToggleTaskHierarchy,
+  onConvertSubtasksToPrincipal,
   onManualTaskPatch,
   onManualTaskDelete,
   onManualTaskReorder,
@@ -158,6 +162,8 @@ export const SchedulerPanel = React.memo(({
   schedulerDateReminders = [],
   onReminderAdd,
   onReminderUpdate,
+  onReminderMoveDateOptimistic,
+  onReminderMoveDateRevert,
   onReminderDelete,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -299,6 +305,7 @@ export const SchedulerPanel = React.memo(({
             onDeleteCustomCategory={onDeleteCustomCategory}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
             onToggleTaskHierarchy={onToggleTaskHierarchy}
+            onConvertSubtasksToPrincipal={onConvertSubtasksToPrincipal}
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
             onManualTaskReorder={onManualTaskReorder}
@@ -359,6 +366,8 @@ export const SchedulerPanel = React.memo(({
             schedulerDateReminders={schedulerDateReminders}
             onReminderAdd={onReminderAdd}
             onReminderUpdate={onReminderUpdate}
+            onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+            onReminderMoveDateRevert={onReminderMoveDateRevert}
             onReminderDelete={onReminderDelete}
           />
         </div>

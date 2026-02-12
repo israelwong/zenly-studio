@@ -18,7 +18,7 @@ import {
   deleteSchedulerDateReminder,
 } from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { toast } from 'sonner';
-import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { formatDisplayDate, formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly, dateToDateOnlyString } from '@/lib/utils/date-only';
 import type { AlertItem } from '@/app/[slug]/studio/components/layout/HeaderDataLoader';
 
@@ -446,7 +446,7 @@ function AlertItemRow({
   const formatDate = (date: Date | string | null) => {
     if (!date) return '';
     const normalized = toUtcDateOnly(date);
-    return normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '';
+    return normalized ? formatDisplayDateShort(normalized) : '';
   };
 
   const isScheduler = isSchedulerReminder(reminder);
@@ -505,7 +505,16 @@ function AlertItemRow({
             ) : (
               <AlarmClockCheck className="h-3 w-3 text-zinc-500 flex-shrink-0" />
             )}
-            <span className="text-xs text-zinc-400 line-clamp-1">{subjectText}</span>
+            <span className="text-xs text-zinc-400 line-clamp-1">
+              {isScheduler ? (
+                <>
+                  <span className="font-semibold text-amber-400/90">Cronograma: </span>
+                  {subjectText}
+                </>
+              ) : (
+                subjectText
+              )}
+            </span>
             <span className="text-xs text-zinc-600">•</span>
             <span className="text-xs text-zinc-500">{formatDate(reminderDate)}</span>
           </div>

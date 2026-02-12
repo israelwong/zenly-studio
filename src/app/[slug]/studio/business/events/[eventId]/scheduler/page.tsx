@@ -448,31 +448,51 @@ export default function EventSchedulerPage() {
             }
           : prev
       );
-      try {
-        const result = await updateSchedulerDateReminder(studioSlug, { reminderId, subjectText: subjectText.trim(), description: description?.trim() || undefined });
-        if (result.success) {
-          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
-        }
-        if (!result.success) {
+      updateSchedulerDateReminder(studioSlug, { reminderId, subjectText: subjectText.trim(), description: description?.trim() || undefined })
+        .then((result) => {
+          if (result.success) window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+          else {
+            setPayload((prev) =>
+              prev ? { ...prev, schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)) } : prev
+            );
+            toast.error(result.error ?? 'Error al actualizar');
+          }
+        })
+        .catch(() => {
           setPayload((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)),
-                }
-              : prev
+            prev ? { ...prev, schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)) } : prev
           );
-          toast.error(result.error ?? 'Error al actualizar');
-        }
-      } catch {
-        setPayload((prev) =>
-          prev ? { ...prev, schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)) } : prev
-        );
-        toast.error('Error al actualizar');
-      }
+          toast.error('Error al actualizar');
+        });
     },
     [studioSlug, payload?.schedulerDateReminders]
   );
+
+  const handleReminderMoveDateOptimistic = useCallback((reminderId: string, newDate: Date) => {
+    setPayload((prev) =>
+      prev
+        ? {
+            ...prev,
+            schedulerDateReminders: (prev.schedulerDateReminders ?? []).map((r) =>
+              r.id === reminderId ? { ...r, reminder_date: newDate } : r
+            ),
+          }
+        : prev
+    );
+  }, []);
+
+  const handleReminderMoveDateRevert = useCallback((reminderId: string, previousDate: Date) => {
+    setPayload((prev) =>
+      prev
+        ? {
+            ...prev,
+            schedulerDateReminders: (prev.schedulerDateReminders ?? []).map((r) =>
+              r.id === reminderId ? { ...r, reminder_date: previousDate } : r
+            ),
+          }
+        : prev
+    );
+  }, []);
 
   const handleReminderDelete = useCallback(
     async (reminderId: string) => {
@@ -482,23 +502,22 @@ export default function EventSchedulerPage() {
       setPayload((prev) =>
         prev ? { ...prev, schedulerDateReminders: (prev.schedulerDateReminders ?? []).filter((r) => r.id !== reminderId) } : prev
       );
-      try {
-        const result = await deleteSchedulerDateReminder(studioSlug, reminderId);
-        if (result.success) {
-          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
-        }
-        if (!result.success) {
+      deleteSchedulerDateReminder(studioSlug, reminderId)
+        .then((result) => {
+          if (result.success) window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+          else {
+            setPayload((prev) =>
+              prev ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), prevReminder] } : prev
+            );
+            toast.error(result.error ?? 'Error al eliminar');
+          }
+        })
+        .catch(() => {
           setPayload((prev) =>
             prev ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), prevReminder] } : prev
           );
-          toast.error(result.error ?? 'Error al eliminar');
-        }
-      } catch {
-        setPayload((prev) =>
-          prev ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), prevReminder] } : prev
-        );
-        toast.error('Error al eliminar');
-      }
+          toast.error('Error al eliminar');
+        });
     },
     [studioSlug, payload?.schedulerDateReminders]
   );
@@ -818,6 +837,8 @@ export default function EventSchedulerPage() {
             onRemoveCustomCategory={handleRemoveCustomCategory}
             onReminderAdd={handleReminderAdd}
             onReminderUpdate={handleReminderUpdate}
+            onReminderMoveDateOptimistic={handleReminderMoveDateOptimistic}
+            onReminderMoveDateRevert={handleReminderMoveDateRevert}
             onReminderDelete={handleReminderDelete}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {

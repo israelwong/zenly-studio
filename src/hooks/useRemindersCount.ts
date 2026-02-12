@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { useRouter } from 'next/navigation';
 
 interface UseRemindersCountOptions {
   studioSlug: string;
@@ -24,6 +24,7 @@ export function useRemindersCount({
   enabled = true,
   initialCount, // ✅ OPTIMIZACIÓN: Pre-cargado en servidor
 }: UseRemindersCountOptions): UseRemindersCountReturn {
+  const router = useRouter();
   // ✅ OPTIMIZACIÓN: Inicializar con datos del servidor si están disponibles
   const [count, setCount] = useState(initialCount ?? 0);
   const [loading, setLoading] = useState(initialCount === undefined); // Solo loading si no hay datos iniciales
@@ -75,12 +76,13 @@ export function useRemindersCount({
     }
   }, [loadCount, initialCount]);
 
-  // Escuchar eventos de actualización de seguimientos
+  // Escuchar eventos de actualización: revalidar contador y caché de Next.js
   useEffect(() => {
     if (!enabled) return;
 
     const handleReminderUpdate = () => {
       loadCount();
+      router.refresh();
     };
 
     window.addEventListener('reminder-updated', handleReminderUpdate);
@@ -89,7 +91,7 @@ export function useRemindersCount({
       window.removeEventListener('reminder-updated', handleReminderUpdate);
       window.removeEventListener('scheduler-reminder-updated', handleReminderUpdate);
     };
-  }, [enabled, loadCount]);
+  }, [enabled, loadCount, router]);
 
   return {
     count,

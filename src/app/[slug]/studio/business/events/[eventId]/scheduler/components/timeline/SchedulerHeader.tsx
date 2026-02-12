@@ -19,6 +19,8 @@ interface SchedulerHeaderProps {
   schedulerDateReminders?: ReminderItem[];
   onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
   onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
+  onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
   onReminderDelete?: (reminderId: string) => Promise<void>;
 }
 
@@ -28,7 +30,7 @@ function dateToKey(d: Date | string): string {
   return normalized ? dateToDateOnlyString(normalized) ?? '' : '';
 }
 
-export const SchedulerHeader = React.memo(({ dateRange, columnWidth = 60, studioSlug, eventId, schedulerDateReminders = [], onReminderAdd, onReminderUpdate, onReminderDelete }: SchedulerHeaderProps) => {
+export const SchedulerHeader = React.memo(({ dateRange, columnWidth = 60, studioSlug, eventId, schedulerDateReminders = [], onReminderAdd, onReminderUpdate, onReminderMoveDateOptimistic, onReminderMoveDateRevert, onReminderDelete }: SchedulerHeaderProps) => {
   const remindersByDate = useMemo(() => {
     const map = new Map<string, ReminderItem>();
     for (const r of schedulerDateReminders) {
@@ -59,7 +61,7 @@ export const SchedulerHeader = React.memo(({ dateRange, columnWidth = 60, studio
 
   return (
     <div
-      className="flex h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex-shrink-0 sticky top-0 z-10 box-border"
+      className="flex h-12 min-h-12 max-h-12 bg-zinc-950/80 backdrop-blur-md border-b border-white/5 flex-shrink-0 sticky top-0 z-[25] box-border"
       style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px` }}
     >
       {days.map((day, index) => {
@@ -110,6 +112,8 @@ export const SchedulerHeader = React.memo(({ dateRange, columnWidth = 60, studio
             existingReminder={reminder}
             onReminderAdd={onReminderAdd}
             onReminderUpdate={onReminderUpdate}
+            onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+            onReminderMoveDateRevert={onReminderMoveDateRevert}
             onReminderDelete={onReminderDelete}
           >
             {cellContent}

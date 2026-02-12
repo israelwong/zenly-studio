@@ -111,6 +111,7 @@ interface SchedulerSidebarProps {
     parentId?: string | null
   ) => Promise<void>;
   onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => Promise<void>;
+  onConvertSubtasksToPrincipal?: (childIds: string[]) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('./SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -564,6 +565,8 @@ function ManualTaskRow({
   onMoveToStage,
   onDuplicate,
   onToggleTaskHierarchy,
+  onConvertSubtasksToPrincipal,
+  childTaskIds = [],
   previousPrincipalId,
   avatarRingClassName,
   sectionId,
@@ -587,6 +590,9 @@ function ManualTaskRow({
   onMoveToStage?: (taskId: string, category: TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onDuplicate?: (taskId: string) => void;
   onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => void;
+  onConvertSubtasksToPrincipal?: (childIds: string[]) => Promise<void>;
+  /** IDs de tareas secundarias (para "Convertir subtareas en principales") */
+  childTaskIds?: string[];
   /** ID de la tarea principal más cercana hacia arriba (para "Convertir en tarea secundaria") */
   previousPrincipalId?: string | null;
   /** Anillo amber para identidad visual de tarea manual */
@@ -721,6 +727,18 @@ function ManualTaskRow({
           {onToggleTaskHierarchy && (
             <>
               <DropdownMenuSeparator />
+              {childTaskIds.length > 0 && !localTask.parent_id && (
+                <DropdownMenuItem
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds);
+                    else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null);
+                  }}
+                  className="gap-2"
+                >
+                  Convertir subtareas en principales
+                </DropdownMenuItem>
+              )}
               {localTask.parent_id ? (
                 <DropdownMenuItem
                   onClick={async () => {
@@ -935,6 +953,7 @@ export const SchedulerSidebar = React.memo(({
   onItemUpdate,
   onAddManualTaskSubmit,
   onToggleTaskHierarchy,
+  onConvertSubtasksToPrincipal,
   onManualTaskPatch,
   onManualTaskDelete,
   onManualTaskReorder,
@@ -1113,10 +1132,10 @@ export const SchedulerSidebar = React.memo(({
       if (taskIds.length > 0) {
         setDeleteModal({ open: true, sectionId, stageCategory, taskIds });
       } else {
-        onDeleteStage?.(sectionId, stageCategory, []);
+        onRemoveEmptyStage?.(sectionId, stageCategory);
       }
     },
-    [onDeleteStage]
+    [onDeleteStage, onRemoveEmptyStage]
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -1257,7 +1276,7 @@ export const SchedulerSidebar = React.memo(({
                     {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
                   </span>
                 )}
-                {onDeleteStage && (
+                {(onDeleteStage || onRemoveEmptyStage) && (
                   <button
                     type="button"
                     onClick={() => handleDeleteStageClick(stageRow.sectionId, stageRow.category, taskIds)}
@@ -1292,6 +1311,70 @@ export const SchedulerSidebar = React.memo(({
                     const segments = stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS;
                     return (
                       <React.Fragment key={catRow?.id ?? `seg-${segIdx}`}>
+                        {!catRow &&
+                          segment.rows
+                            .filter((r) => isAddPhantomRow(r) || isAddCategoryPhantomRow(r))
+                            .map((row) => {
+                              if (isAddCategoryPhantomRow(row)) {
+                                const isThisAddCatOpen =
+                                  addPopoverContext?.type === 'add_category' &&
+                                  addPopoverContext.sectionId === row.sectionId &&
+                                  addPopoverContext.stage === row.stageCategory;
+                                return (
+                                  <div
+                                    key={row.id}
+                                    className="border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors text-xs"
+                                    style={{ paddingLeft: INDENT.CATEGORY, height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
+                                  >
+                                    <div className="w-4 shrink-0" aria-hidden />
+                                    <div className="flex-1 min-w-0 flex items-center gap-2 pr-4">
+                                      {onAddCustomCategory && row.sectionId ? (
+                                        <Popover
+                                          open={isThisAddCatOpen}
+                                          onOpenChange={(open) => {
+                                            if (!open) setAddPopoverContext(null);
+                                          }}
+                                        >
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setAddPopoverContext({
+                                                  type: 'add_category',
+                                                  sectionId: row.sectionId,
+                                                  stage: row.stageCategory,
+                                                })
+                                              }
+                                              className="flex items-center gap-1.5 w-full text-left"
+                                            >
+                                              <Plus className="h-3.5 w-3.5 shrink-0" />
+                                              <span>Añadir categoría personalizada</span>
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                                            <AddCustomCategoryForm
+                                              sectionId={row.sectionId}
+                                              stage={row.stageCategory}
+                                              onAdd={async (name) => {
+                                                await onAddCustomCategory(row.sectionId, row.stageCategory, name);
+                                                setAddPopoverContext(null);
+                                              }}
+                                              onCancel={() => setAddPopoverContext(null)}
+                                            />
+                                          </PopoverContent>
+                                        </Popover>
+                                      ) : (
+                                        <span className="flex items-center gap-1.5">
+                                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                                          Añadir categoría personalizada
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })}
                         {catRow && (() => {
                           const catPrefix = `${catRow.stageId}-cat-`;
                           const categoryId = catRow.id.startsWith(catPrefix) ? catRow.id.slice(catPrefix.length) : '';
@@ -1458,6 +1541,13 @@ export const SchedulerSidebar = React.memo(({
                       const prevCat = categoryIndex > 0 ? orderedCategories[categoryIndex - 1] : null;
                       const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
                       const manualCatalogCategoryId = (row.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+                      const currentTaskId = row.task.id;
+                      const childTaskIds = segment.rows
+                        .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerManualTaskRow | import('../../utils/scheduler-section-stages').SchedulerTaskRow =>
+                          (isManualTaskRow(r) && (r.task.parent_id ?? null) === currentTaskId) ||
+                          (isTaskRow(r) && ((r.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null) === currentTaskId)
+                        )
+                        .map((r) => (isManualTaskRow(r) ? r.task.id : r.item.scheduler_task!.id));
                       return (
                         <SortableTaskRow
                           key={`${row.task.id}-${(row.task as { parent_id?: string | null }).parent_id ?? 'none'}`}
@@ -1495,6 +1585,8 @@ export const SchedulerSidebar = React.memo(({
                             onMoveToStage={onManualTaskMoveStage}
                             onDuplicate={onManualTaskDuplicate}
                             onToggleTaskHierarchy={onToggleTaskHierarchy}
+                            onConvertSubtasksToPrincipal={onConvertSubtasksToPrincipal}
+                            childTaskIds={childTaskIds}
                             previousPrincipalId={
                               (() => {
                                 for (let i = pos - 1; i >= 0; i--) {
@@ -1542,6 +1634,16 @@ export const SchedulerSidebar = React.memo(({
                       const itemTaskParentId = (row.item.scheduler_task as { parent_id?: string | null })?.parent_id;
                       const itemTaskName = row.item.scheduler_task?.name ?? row.servicioNombre ?? 'Tarea';
                       const showAddSubtaskForItem = !itemTaskParentId && onAddManualTaskSubmit && row.item.scheduler_task?.id;
+                      const itemTaskId = row.item.scheduler_task?.id;
+                      const itemChildTaskIds =
+                        itemTaskId && (onConvertSubtasksToPrincipal || onToggleTaskHierarchy)
+                          ? segment.rows
+                              .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerManualTaskRow | import('../../utils/scheduler-section-stages').SchedulerTaskRow =>
+                                (isManualTaskRow(r) && (r.task.parent_id ?? null) === itemTaskId) ||
+                                (isTaskRow(r) && ((r.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null) === itemTaskId)
+                              )
+                              .map((r) => (isManualTaskRow(r) ? r.task.id : r.item.scheduler_task!.id))
+                          : [];
                       const st = row.item.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
                       let itemDurationDays = st?.duration_days;
                       if ((itemDurationDays ?? 0) <= 0 && st?.start_date && st?.end_date) {
@@ -1563,8 +1665,36 @@ export const SchedulerSidebar = React.memo(({
                           hasParentId={(itemTaskParentId ?? null) != null}
                           isLastTaskInSegment={pos === taskRowsInOrder.length - 1}
                           rightSlot={
-                            hasItemDuration || showAddSubtaskForItem ? (
+                            hasItemDuration || showAddSubtaskForItem || itemChildTaskIds.length > 0 ? (
                               <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {itemChildTaskIds.length > 0 && (onConvertSubtasksToPrincipal || onToggleTaskHierarchy) && (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="p-1.5 rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors focus:opacity-100 focus:outline-none"
+                                          aria-label="Acciones"
+                                        >
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
+                                        <DropdownMenuItem
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(itemChildTaskIds);
+                                            else for (const childId of itemChildTaskIds) await onToggleTaskHierarchy!(childId, null);
+                                          }}
+                                          className="gap-2"
+                                        >
+                                          Convertir subtareas en principales
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  )}
+                                </div>
                                 {showAddSubtaskForItem && (
                                   <AddSubtaskButton
                                     parentId={row.item.scheduler_task!.id}
@@ -1804,7 +1934,7 @@ export const SchedulerSidebar = React.memo(({
         onClose={() => setDeleteModal((p) => ({ ...p, open: false }))}
         onConfirm={handleDeleteConfirm}
         title="Eliminar etapa"
-        description="¿Eliminar etapa y sus tareas? Esta acción no se puede deshacer."
+        description="Al eliminar el estado se mantendrá pero las categorías e items se eliminarán. ¿Deseas eliminar?"
         confirmText="Eliminar"
         variant="destructive"
       />

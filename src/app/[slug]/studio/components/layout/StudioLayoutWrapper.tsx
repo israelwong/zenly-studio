@@ -94,6 +94,18 @@ function StudioLayoutContent({
   const [showEventTypesModal, setShowEventTypesModal] = useState(false);
   const [showAutomationModal, setShowAutomationModal] = useState(false);
 
+  // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
+  const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
+  useEffect(() => {
+    const handleReminderUpdate = () => setHeaderRefreshKey((k) => k + 1);
+    window.addEventListener('reminder-updated', handleReminderUpdate);
+    window.addEventListener('scheduler-reminder-updated', handleReminderUpdate);
+    return () => {
+      window.removeEventListener('reminder-updated', handleReminderUpdate);
+      window.removeEventListener('scheduler-reminder-updated', handleReminderUpdate);
+    };
+  }, []);
+
   // Escuchar eventos del catálogo de configuración
   useEffect(() => {
     const handleOpenTerminos = () => setShowTerminosManager(true);
@@ -338,9 +350,10 @@ function StudioLayoutContent({
           onPromisesConfigClick={handlePromisesConfigClick}
         />
         
-        {/* ✅ OPTIMIZACIÓN: Cargar datos no críticos después del primer render */}
-        <HeaderDataLoader 
-          studioSlug={studioSlug} 
+        {/* ✅ OPTIMIZACIÓN: Cargar datos no críticos después del primer render. key cambia al actualizar recordatorios. */}
+        <HeaderDataLoader
+          key={headerRefreshKey}
+          studioSlug={studioSlug}
           onDataLoaded={setHeaderData}
         />
 

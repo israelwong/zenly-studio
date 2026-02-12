@@ -95,6 +95,8 @@ interface EventSchedulerProps {
   isMaximized?: boolean;
   onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
   onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
+  onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
   scrollToDate?: string;
@@ -122,6 +124,8 @@ export const EventScheduler = React.memo(function EventScheduler({
   isMaximized,
   onReminderAdd,
   onReminderUpdate,
+  onReminderMoveDateOptimistic,
+  onReminderMoveDateRevert,
   onReminderDelete,
   scrollToDate,
 }: EventSchedulerProps) {
@@ -1325,6 +1329,52 @@ export const EventScheduler = React.memo(function EventScheduler({
       if (nextData) onDataChange?.(nextData);
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
       toast.success(parentId ? 'Convertida en tarea secundaria' : 'Convertida en tarea principal');
+    },
+    [studioSlug, eventId, onDataChange]
+  );
+
+  const handleConvertSubtasksToPrincipal = useCallback(
+    async (childIds: string[]) => {
+      if (childIds.length === 0) return;
+      let nextData: SchedulerViewData | null = null;
+      const childSet = new Set(childIds);
+      setLocalEventData((prev) => {
+        const next = { ...prev };
+        if (prev.scheduler?.tasks) {
+          next.scheduler = {
+            ...prev.scheduler,
+            tasks: prev.scheduler.tasks.map((t) =>
+              childSet.has(t.id) ? { ...t, parent_id: null } : t
+            ),
+          };
+        }
+        if (prev.cotizaciones) {
+          next.cotizaciones = prev.cotizaciones.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) =>
+              item?.scheduler_task?.id && childSet.has(item.scheduler_task.id)
+                ? { ...item, scheduler_task: item.scheduler_task ? { ...item.scheduler_task, parent_id: null } : null }
+                : item
+            ) ?? [],
+          }));
+        }
+        nextData = next;
+        return next;
+      });
+      let failed = false;
+      for (const childId of childIds) {
+        const result = await toggleTaskHierarchy(studioSlug, eventId, childId, null);
+        if (!result.success) {
+          toast.error(result.error ?? 'Error al actualizar jerarquía');
+          failed = true;
+          break;
+        }
+      }
+      if (!failed) {
+        if (nextData) onDataChange?.(nextData);
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        toast.success(childIds.length === 1 ? 'Convertida en tarea principal' : `${childIds.length} tareas convertidas en principales`);
+      }
     },
     [studioSlug, eventId, onDataChange]
   );
@@ -2705,6 +2755,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onItemUpdate={handleItemUpdate}
         onAddManualTaskSubmit={handleAddManualTaskSubmit}
         onToggleTaskHierarchy={handleToggleTaskHierarchy}
+        onConvertSubtasksToPrincipal={handleConvertSubtasksToPrincipal}
         onManualTaskPatch={handleManualTaskPatch}
         onManualTaskDelete={handleManualTaskDelete}
         onManualTaskReorder={handleReorder}
@@ -2717,6 +2768,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         schedulerDateReminders={eventData?.schedulerDateReminders ?? []}
         onReminderAdd={onReminderAdd}
         onReminderUpdate={onReminderUpdate}
+        onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+        onReminderMoveDateRevert={onReminderMoveDateRevert}
         onReminderDelete={onReminderDelete}
         expandedSections={expandedSections}
         expandedStages={expandedStages}

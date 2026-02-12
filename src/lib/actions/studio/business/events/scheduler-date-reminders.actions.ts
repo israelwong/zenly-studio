@@ -21,6 +21,11 @@ const updateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
 });
 
+const moveDateSchema = z.object({
+  reminderId: z.string().cuid(),
+  reminderDate: z.coerce.date(),
+});
+
 export type SchedulerDateReminder = {
   id: string;
   studio_id: string;
@@ -83,7 +88,6 @@ export async function createSchedulerDateReminder(
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${v.eventId}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio`);
 
     return {
       success: true,
@@ -230,7 +234,6 @@ export async function completeSchedulerDateReminder(
     if (!updated) return { success: false, error: 'Error al actualizar' };
 
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio`);
     return { success: true, data: updated as SchedulerDateReminder };
   } catch (e) {
     if (e instanceof z.ZodError) return { success: false, error: 'ID inválido' };
@@ -259,11 +262,40 @@ export async function updateSchedulerDateReminder(
     if (!updated) return { success: false, error: 'Error al actualizar' };
 
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio`);
     return { success: true, data: updated as SchedulerDateReminder };
   } catch (e) {
     if (e instanceof z.ZodError) return { success: false, error: e.errors[0]?.message ?? 'Datos inválidos' };
     return { success: false, error: e instanceof Error ? e.message : 'Error al actualizar' };
+  }
+}
+
+export async function updateSchedulerDateReminderDate(
+  studioSlug: string,
+  reminderId: string,
+  reminderDate: Date
+): Promise<ActionResponse<SchedulerDateReminder>> {
+  try {
+    const reminderDateNorm = toUtcDateOnly(reminderDate);
+    if (!reminderDateNorm) return { success: false, error: 'Fecha inválida' };
+
+    const studio = await prisma.studios.findUnique({ where: { slug: studioSlug }, select: { id: true } });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const existing = await prisma.studio_scheduler_date_reminders.findFirst({
+      where: { id: reminderId, studio_id: studio.id },
+      select: { id: true, event_id: true },
+    });
+    if (!existing) return { success: false, error: 'Recordatorio no encontrado' };
+
+    const updated = await prisma.studio_scheduler_date_reminders.update({
+      where: { id: reminderId },
+      data: { reminder_date: reminderDateNorm },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
+    return { success: true, data: updated as SchedulerDateReminder };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Error al mover fecha' };
   }
 }
 
@@ -285,7 +317,6 @@ export async function deleteSchedulerDateReminder(
     if (count === 0) return { success: false, error: 'Recordatorio no encontrado' };
 
     if (existing?.event_id) revalidatePath(`/${studioSlug}/studio/business/events/${existing.event_id}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio`);
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Error al eliminar' };

@@ -35,6 +35,8 @@ interface EventSchedulerViewProps {
   isMaximized?: boolean;
   onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
   onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
+  onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
   scrollToDate?: string;
@@ -63,6 +65,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   isMaximized,
   onReminderAdd,
   onReminderUpdate,
+  onReminderMoveDateOptimistic,
+  onReminderMoveDateRevert,
   onReminderDelete,
   scrollToDate,
 }: EventSchedulerViewProps) {
@@ -196,6 +200,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onRemoveCustomCategory={onRemoveCustomCategory}
         onReminderAdd={onReminderAdd}
         onReminderUpdate={onReminderUpdate}
+        onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+        onReminderMoveDateRevert={onReminderMoveDateRevert}
         onReminderDelete={onReminderDelete}
         scrollToDate={scrollToDate}
       />
