@@ -2020,6 +2020,7 @@ export interface SchedulerCotizacionItem {
     assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
     sync_status?: string;
     invitation_status?: string | null;
+    notes_count?: number;
   } | null;
 }
 
@@ -2057,6 +2058,7 @@ export interface TareasSchedulerPayload {
       budget_amount: unknown;
       assigned_to_crew_member_id: string | null;
       assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
+      notes_count?: number;
     }>;
   } | null;
   secciones: SeccionData[];
@@ -2137,6 +2139,10 @@ export async function obtenerTareasScheduler(
               assigned_to_crew_member: {
                 select: { id: true, name: true, email: true, tipo: true },
               },
+              activity_log: {
+                where: { action: 'NOTE_ADDED' },
+                select: { id: true },
+              },
             },
             orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
           },
@@ -2212,6 +2218,10 @@ export async function obtenerTareasScheduler(
                   },
                   sync_status: true,
                   invitation_status: true,
+                  activity_log: {
+                    where: { action: 'NOTE_ADDED' },
+                    select: { id: true },
+                  },
                 },
               },
             },
@@ -2277,17 +2287,21 @@ export async function obtenerTareasScheduler(
             assigned_to_crew_member_id: item.assigned_to_crew_member_id,
             assigned_to_crew_member: item.assigned_to_crew_member,
             scheduler_task: item.scheduler_task
-              ? {
-                  ...item.scheduler_task,
-                  catalog_category_id: effectiveCatalogCategoryId ?? item.scheduler_task.catalog_category_id,
-                  catalog_category: item.scheduler_task.catalog_category,
-                  progress_percent: item.scheduler_task.progress_percent,
-                  completed_at: item.scheduler_task.completed_at,
-                  assigned_to_crew_member: item.scheduler_task.assigned_to_crew_member,
-                  sync_status: item.scheduler_task.sync_status,
-                  invitation_status: item.scheduler_task.invitation_status,
-                  parent_id: item.scheduler_task.parent_id,
-                }
+              ? (() => {
+                  const { activity_log, ...stRest } = item.scheduler_task as typeof item.scheduler_task & { activity_log?: { id: string }[] };
+                  return {
+                    ...stRest,
+                    catalog_category_id: effectiveCatalogCategoryId ?? item.scheduler_task.catalog_category_id,
+                    catalog_category: item.scheduler_task.catalog_category,
+                    progress_percent: item.scheduler_task.progress_percent,
+                    completed_at: item.scheduler_task.completed_at,
+                    assigned_to_crew_member: item.scheduler_task.assigned_to_crew_member,
+                    sync_status: item.scheduler_task.sync_status,
+                    invitation_status: item.scheduler_task.invitation_status,
+                    parent_id: item.scheduler_task.parent_id,
+                    notes_count: activity_log?.length ?? 0,
+                  };
+                })()
               : null,
           };
         }),
@@ -2322,15 +2336,19 @@ export async function obtenerTareasScheduler(
             id: schedulerInstance.id,
             start_date: schedulerInstance.start_date,
             end_date: schedulerInstance.end_date,
-            tasks: tasks.map((t) => ({
-              ...t,
-              catalog_category_nombre: t.catalog_category?.name ?? null,
-              catalog_section_id: getSectionIdForCategory(t.catalog_category_id ?? null),
-              progress_percent: t.progress_percent,
-              completed_at: t.completed_at,
-              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-              assigned_to_crew_member: t.assigned_to_crew_member,
-            })),
+            tasks: tasks.map((t) => {
+              const { activity_log, ...taskRest } = t as typeof t & { activity_log?: { id: string }[] };
+              return {
+                ...taskRest,
+                catalog_category_nombre: t.catalog_category?.name ?? null,
+                catalog_section_id: getSectionIdForCategory(t.catalog_category_id ?? null),
+                progress_percent: t.progress_percent,
+                completed_at: t.completed_at,
+                budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+                assigned_to_crew_member: t.assigned_to_crew_member,
+                notes_count: activity_log?.length ?? 0,
+              };
+            }),
           }
         : null,
       secciones: seccionesForPayload,
@@ -2398,6 +2416,133 @@ export async function toggleTaskHierarchy(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar jerarquía',
+    };
+  }
+}
+
+/**
+ * Añade una nota a una tarea del Scheduler. Inserta en studio_scheduler_task_activity con action NOTE_ADDED.
+ */
+export async function addSchedulerTaskNote(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  content: string
+): Promise<{ success: boolean; data?: { id: string; created_at: Date }; error?: string }> {
+  try {
+    const trimmed = content.trim();
+    if (!trimmed) return { success: false, error: 'El contenido de la nota es requerido' };
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId, event: { studio_id: studio.id } },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento no encontrado' };
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: { id: taskId, scheduler_instance_id: instance.id },
+      select: { id: true },
+    });
+    if (!task) return { success: false, error: 'Tarea no encontrada' };
+
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return { success: false, error: 'Sesión no válida' };
+
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: authUser.id },
+      select: { id: true },
+    });
+    if (!dbUser) return { success: false, error: 'Usuario no encontrado' };
+
+    const userRole = await prisma.user_studio_roles.findFirst({
+      where: { user_id: dbUser.id, studio_id: studio.id, is_active: true },
+      select: { id: true },
+    });
+    if (!userRole) return { success: false, error: 'Sin acceso al estudio' };
+
+    const activity = await prisma.studio_scheduler_task_activity.create({
+      data: {
+        task_id: taskId,
+        user_id: userRole.id,
+        action: 'NOTE_ADDED',
+        notes: trimmed,
+      },
+      select: { id: true, created_at: true },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+
+    const { toUtcDateOnly } = await import('@/lib/utils/date-only');
+    const createdNorm = toUtcDateOnly(activity.created_at);
+
+    return {
+      success: true,
+      data: {
+        id: activity.id,
+        created_at: createdNorm ?? activity.created_at,
+      },
+    };
+  } catch (error) {
+    console.error('[addSchedulerTaskNote] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al añadir nota',
+    };
+  }
+}
+
+/** Obtiene las notas (NOTE_ADDED) de una tarea para el historial. */
+export async function getSchedulerTaskNotes(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; data?: Array<{ id: string; notes: string | null; created_at: Date }>; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId, event: { studio_id: studio.id } },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento no encontrado' };
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: { id: taskId, scheduler_instance_id: instance.id },
+      select: { id: true },
+    });
+    if (!task) return { success: false, error: 'Tarea no encontrada' };
+
+    const notes = await prisma.studio_scheduler_task_activity.findMany({
+      where: { task_id: taskId, action: 'NOTE_ADDED' },
+      orderBy: { created_at: 'desc' },
+      select: { id: true, notes: true, created_at: true },
+    });
+
+    const { toUtcDateOnly } = await import('@/lib/utils/date-only');
+    const normalized = notes.map((n) => ({
+      id: n.id,
+      notes: n.notes,
+      created_at: (toUtcDateOnly(n.created_at) ?? n.created_at) as Date,
+    }));
+
+    return { success: true, data: normalized };
+  } catch (error) {
+    console.error('[getSchedulerTaskNotes] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cargar notas',
     };
   }
 }

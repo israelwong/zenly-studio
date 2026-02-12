@@ -264,7 +264,7 @@ export function SchedulerManualTaskPopover({
   };
 
   const triggerContent = rightSlot != null ? (
-    <div className="h-[60px] min-h-[60px] w-full min-w-0 flex items-center gap-2 hover:bg-zinc-900/50 transition-colors cursor-pointer group">
+    <div className="h-12 min-h-12 w-full min-w-0 flex items-center gap-2 hover:bg-zinc-900/50 transition-colors cursor-pointer group">
       <PopoverTrigger asChild>
         <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer outline-none">{children}</div>
       </PopoverTrigger>

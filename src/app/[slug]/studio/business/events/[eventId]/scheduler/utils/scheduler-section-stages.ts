@@ -45,6 +45,14 @@ export const BADGE_STAGE_CLASSES: Record<TaskCategoryStage, string> = {
   DELIVERY: 'bg-emerald-500/20 text-emerald-400 border-emerald-700/50',
 };
 
+/** Solo color de texto para duración en sidebar (sin envoltura) */
+export const DURATION_TEXT_CLASSES: Record<TaskCategoryStage, string> = {
+  PLANNING: 'text-blue-400',
+  PRODUCTION: 'text-purple-400',
+  POST_PRODUCTION: 'text-amber-400',
+  DELIVERY: 'text-emerald-400',
+};
+
 /** Sangrado uniforme: múltiplos de 24px */
 export const INDENT_STEP = 24;
 
@@ -188,6 +196,8 @@ export interface ManualTaskPayload {
     tipo: string;
   } | null;
   parent_id?: string | null;
+  /** Número de notas (activity_log con action NOTE_ADDED) para indicador en UI. */
+  notes_count?: number;
 }
 
 export interface SchedulerManualTaskRow {

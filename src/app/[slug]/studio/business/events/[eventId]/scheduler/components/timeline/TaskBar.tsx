@@ -16,7 +16,9 @@ import {
   getStatusColor,
 } from '../../utils/task-status-utils';
 import { TaskBarContextMenu } from '../task-actions/TaskBarContextMenu';
+import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
 import { ZenBadge } from '@/components/ui/zen';
+import { MessageSquare } from 'lucide-react';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 
@@ -72,6 +74,7 @@ export const TaskBar = React.memo(({
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
   const [isResizing, setIsResizing] = useState(false);
+  const [notesSheetOpen, setNotesSheetOpen] = useState(false);
   const [rndPosition, setRndPosition] = useState({ x: 0, y: 6 });
   const [rndSize, setRndSize] = useState({ width: columnWidth, height: 48 });
 
@@ -91,6 +94,7 @@ export const TaskBar = React.memo(({
   });
 
   const isSubtask = (manualTask as { parent_id?: string | null })?.parent_id != null || (item?.scheduler_task as { parent_id?: string | null })?.parent_id != null;
+  const notesCount = (item?.scheduler_task as { notes_count?: number })?.notes_count ?? manualTask?.notes_count ?? 0;
   const statusColor = getStatusColor(status, hasCrewMember, isSubtask);
   const computedX = getPositionFromDate(localStartDate, dateRange, columnWidth);
   const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate, columnWidth), columnWidth);
@@ -262,6 +266,7 @@ export const TaskBar = React.memo(({
   }, [onToggleComplete]);
 
   return (
+    <>
     <TaskBarContextMenu
       taskId={taskId}
       taskName={taskName}
@@ -309,7 +314,7 @@ export const TaskBar = React.memo(({
         }}
         bounds="parent"
         className={`
-          ${statusColor}
+          group ${statusColor}
           rounded px-2 py-1 shadow-md cursor-grab active:cursor-grabbing
           transition-colors
           ${isUpdating ? 'opacity-75' : 'opacity-100'}
@@ -323,17 +328,46 @@ export const TaskBar = React.memo(({
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
           <span className={`flex-1 truncate text-center text-xs ${isCompleted ? 'font-normal' : 'font-medium'}`}>{taskName}</span>
-          {/* Indicador de sincronización: pequeño punto/icono en borde derecho cuando está sincronizado */}
-          {item?.scheduler_task?.sync_status === 'INVITED' && (
-            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0" title="Sincronizado con Google Calendar">
-              <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
-            </div>
-          )}
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0 flex items-center gap-1">
+            {item?.scheduler_task?.sync_status === 'INVITED' && (
+              <div title="Sincronizado con Google Calendar">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+              </div>
+            )}
+            {studioSlug && eventId && (
+              <div
+                className="flex items-center gap-0.5 pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotesSheetOpen(true);
+                }}
+                title="Notas de seguimiento"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                {notesCount > 0 && (
+                  <span className="min-w-[1rem] h-4 px-1 rounded text-[10px] font-medium bg-amber-500/90 text-zinc-900 flex items-center justify-center">
+                    {notesCount}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         </div>
       </Rnd>
       </div>
     </TaskBarContextMenu>
+    {studioSlug && eventId && (
+      <TaskNotesSheet
+        open={notesSheetOpen}
+        onOpenChange={setNotesSheetOpen}
+        taskId={taskId}
+        taskName={taskName}
+        studioSlug={studioSlug}
+        eventId={eventId}
+      />
+    )}
+    </>
   );
 });
 

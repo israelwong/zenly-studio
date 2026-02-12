@@ -28,6 +28,8 @@ export {
   obtenerSchedulerTareas,
   clasificarTareaScheduler,
   obtenerTareasScheduler,
+  addSchedulerTaskNote,
+  getSchedulerTaskNotes,
 } from './scheduler-actions';
 export type { TareasSchedulerPayload, SchedulerData, SchedulerCotizacionItem, SchedulerItemForView } from './scheduler-actions';
 
