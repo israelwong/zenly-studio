@@ -40,28 +40,24 @@ export function useRemindersCount({
       setError(null);
 
       // ✅ OPTIMIZACIÓN: Usar count() en lugar de cargar arrays completos
-      const { getRemindersDueCount } = await import('@/lib/actions/studio/commercial/promises/reminders.actions');
-      
-      const [overdueResult, todayResult] = await Promise.all([
-        getRemindersDueCount(studioSlug, {
-          includeCompleted: false,
-          dateRange: 'overdue',
-        }),
-        getRemindersDueCount(studioSlug, {
-          includeCompleted: false,
-          dateRange: 'today',
-        }),
+      const [
+        { getRemindersDueCount },
+        { getSchedulerDateRemindersCountForBadge },
+      ] = await Promise.all([
+        import('@/lib/actions/studio/commercial/promises/reminders.actions'),
+        import('@/lib/actions/studio/business/events/scheduler-date-reminders.actions'),
+      ]);
+
+      const [overdueResult, todayResult, schedulerResult] = await Promise.all([
+        getRemindersDueCount(studioSlug, { includeCompleted: false, dateRange: 'overdue' }),
+        getRemindersDueCount(studioSlug, { includeCompleted: false, dateRange: 'today' }),
+        getSchedulerDateRemindersCountForBadge(studioSlug),
       ]);
 
       let totalCount = 0;
-      
-      if (overdueResult.success && overdueResult.data !== undefined) {
-        totalCount += overdueResult.data;
-      }
-      
-      if (todayResult.success && todayResult.data !== undefined) {
-        totalCount += todayResult.data;
-      }
+      if (overdueResult.success && overdueResult.data !== undefined) totalCount += overdueResult.data;
+      if (todayResult.success && todayResult.data !== undefined) totalCount += todayResult.data;
+      if (schedulerResult.success && schedulerResult.data !== undefined) totalCount += schedulerResult.data;
 
       setCount(totalCount);
     } catch (err) {
@@ -88,8 +84,10 @@ export function useRemindersCount({
     };
 
     window.addEventListener('reminder-updated', handleReminderUpdate);
+    window.addEventListener('scheduler-reminder-updated', handleReminderUpdate);
     return () => {
       window.removeEventListener('reminder-updated', handleReminderUpdate);
+      window.removeEventListener('scheduler-reminder-updated', handleReminderUpdate);
     };
   }, [enabled, loadCount]);
 

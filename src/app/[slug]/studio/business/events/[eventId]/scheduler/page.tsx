@@ -2,13 +2,18 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
 import {
   obtenerTareasScheduler,
   type TareasSchedulerPayload,
   type SchedulerData,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
+import {
+  createSchedulerDateReminder,
+  updateSchedulerDateReminder,
+  deleteSchedulerDateReminder,
+} from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { toast } from 'sonner';
 import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
 import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDateRangeConfig';
@@ -23,8 +28,10 @@ import {
   customCategoriesToStaging,
   isValidStageKey,
 } from './utils/scheduler-staging-storage';
+import { COLUMN_WIDTH, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX } from './utils/coordinate-utils';
 import { type DateRange } from 'react-day-picker';
 import { SchedulerPortal } from '@/components/SchedulerPortal';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import { cn } from '@/lib/utils';
 
 export default function EventSchedulerPage() {
@@ -38,6 +45,33 @@ export default function EventSchedulerPage() {
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [columnWidth, setColumnWidth] = useState(() => {
+    if (typeof window === 'undefined') return 60;
+    try {
+      const v = parseInt(localStorage.getItem('scheduler-column-width') ?? '60', 10);
+      return Math.max(COLUMN_WIDTH_MIN, Math.min(COLUMN_WIDTH_MAX, isNaN(v) ? 60 : v));
+    } catch {
+      return 60;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('scheduler-column-width', String(columnWidth));
+    } catch {
+      // ignore
+    }
+  }, [columnWidth]);
+
+  const resetZoom = useCallback(() => {
+    setColumnWidth(COLUMN_WIDTH);
+    try {
+      localStorage.setItem('scheduler-column-width', String(COLUMN_WIDTH));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
 
@@ -347,6 +381,128 @@ export default function EventSchedulerPage() {
     loadScheduler();
   }, [eventId, loadScheduler]);
 
+  type SchedulerReminderItem = NonNullable<TareasSchedulerPayload['schedulerDateReminders']>[0];
+  const handleReminderAdd = useCallback(
+    async (reminderDate: Date, subjectText: string, description: string | null) => {
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: SchedulerReminderItem = {
+        id: tempId,
+        reminder_date: reminderDate,
+        subject_text: subjectText,
+        description,
+      };
+      setPayload((prev) =>
+        prev
+          ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), optimistic] }
+          : prev
+      );
+      try {
+        const result = await createSchedulerDateReminder(studioSlug, {
+          eventId,
+          reminderDate,
+          subjectText: subjectText.trim(),
+          description: description?.trim() || undefined,
+        });
+        if (result.success && result.data) {
+          setPayload((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  schedulerDateReminders: (prev.schedulerDateReminders ?? []).map((r) =>
+                    r.id === tempId
+                      ? { id: result.data!.id, reminder_date: result.data!.reminder_date, subject_text: result.data!.subject_text, description: result.data!.description }
+                      : r
+                  ),
+                }
+              : prev
+          );
+          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        } else {
+          setPayload((prev) =>
+            prev ? { ...prev, schedulerDateReminders: (prev.schedulerDateReminders ?? []).filter((r) => r.id !== tempId) } : prev
+          );
+          toast.error(result.error ?? 'Error al crear');
+        }
+      } catch {
+        setPayload((prev) =>
+          prev ? { ...prev, schedulerDateReminders: (prev.schedulerDateReminders ?? []).filter((r) => r.id !== tempId) } : prev
+        );
+        toast.error('Error al crear recordatorio');
+      }
+    },
+    [studioSlug, eventId]
+  );
+
+  const handleReminderUpdate = useCallback(
+    async (reminderId: string, subjectText: string, description: string | null) => {
+      const prevList = payload?.schedulerDateReminders ?? [];
+      const prevReminder = prevList.find((r) => r.id === reminderId);
+      if (!prevReminder) return;
+      setPayload((prev) =>
+        prev
+          ? {
+              ...prev,
+              schedulerDateReminders: prevList.map((r) =>
+                r.id === reminderId ? { ...r, subject_text: subjectText, description } : r
+              ),
+            }
+          : prev
+      );
+      try {
+        const result = await updateSchedulerDateReminder(studioSlug, { reminderId, subjectText: subjectText.trim(), description: description?.trim() || undefined });
+        if (result.success) {
+          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        }
+        if (!result.success) {
+          setPayload((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)),
+                }
+              : prev
+          );
+          toast.error(result.error ?? 'Error al actualizar');
+        }
+      } catch {
+        setPayload((prev) =>
+          prev ? { ...prev, schedulerDateReminders: prevList.map((r) => (r.id === reminderId ? prevReminder : r)) } : prev
+        );
+        toast.error('Error al actualizar');
+      }
+    },
+    [studioSlug, payload?.schedulerDateReminders]
+  );
+
+  const handleReminderDelete = useCallback(
+    async (reminderId: string) => {
+      const prevList = payload?.schedulerDateReminders ?? [];
+      const prevReminder = prevList.find((r) => r.id === reminderId);
+      if (!prevReminder) return;
+      setPayload((prev) =>
+        prev ? { ...prev, schedulerDateReminders: (prev.schedulerDateReminders ?? []).filter((r) => r.id !== reminderId) } : prev
+      );
+      try {
+        const result = await deleteSchedulerDateReminder(studioSlug, reminderId);
+        if (result.success) {
+          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        }
+        if (!result.success) {
+          setPayload((prev) =>
+            prev ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), prevReminder] } : prev
+          );
+          toast.error(result.error ?? 'Error al eliminar');
+        }
+      } catch {
+        setPayload((prev) =>
+          prev ? { ...prev, schedulerDateReminders: [...(prev.schedulerDateReminders ?? []), prevReminder] } : prev
+        );
+        toast.error('Error al eliminar');
+      }
+    },
+    [studioSlug, payload?.schedulerDateReminders]
+  );
+
   if (loading) {
     return (
       <div className="w-full max-w-7xl mx-auto">
@@ -464,6 +620,7 @@ export default function EventSchedulerPage() {
     promise: payload.promise,
     cotizaciones: payload.cotizaciones,
     scheduler: payload.scheduler,
+    schedulerDateReminders: payload.schedulerDateReminders ?? [],
   };
 
   const cronogramaLabel = cotizacionId
@@ -550,6 +707,73 @@ export default function EventSchedulerPage() {
               )}
             </div>
             <div className="w-px h-4 bg-zinc-800 shrink-0 hidden sm:block" aria-hidden />
+            {/* Zoom: ancho de columnas 20–150px */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0 max-w-[200px]">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setColumnWidth((w) => Math.max(COLUMN_WIDTH_MIN, w - 20))}
+                    disabled={columnWidth <= COLUMN_WIDTH_MIN}
+                    className="size-7 shrink-0 text-zinc-400 hover:text-amber-400 disabled:opacity-40"
+                    aria-label="Alejar"
+                  >
+                    <ZoomOut className="h-3.5 w-3.5" />
+                  </ZenButton>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Alejar
+                </TooltipContent>
+              </Tooltip>
+              <input
+                type="range"
+                min={COLUMN_WIDTH_MIN}
+                max={COLUMN_WIDTH_MAX}
+                value={columnWidth}
+                step={5}
+                onChange={(e) => setColumnWidth(parseInt(e.target.value, 10))}
+                className="flex-1 h-1 rounded-lg appearance-none cursor-pointer bg-zinc-700/50 accent-amber-500 min-w-0 transition-[background] duration-150"
+                style={{
+                  background: `linear-gradient(to right, rgb(245 158 11) 0%, rgb(245 158 11) ${((columnWidth - COLUMN_WIDTH_MIN) / (COLUMN_WIDTH_MAX - COLUMN_WIDTH_MIN)) * 100}%, rgb(63 63 70) ${((columnWidth - COLUMN_WIDTH_MIN) / (COLUMN_WIDTH_MAX - COLUMN_WIDTH_MIN)) * 100}%, rgb(63 63 70) 100%)`,
+                }}
+                aria-label="Zoom del grid"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setColumnWidth((w) => Math.min(COLUMN_WIDTH_MAX, w + 20))}
+                    disabled={columnWidth >= COLUMN_WIDTH_MAX}
+                    className="size-7 shrink-0 text-zinc-400 hover:text-amber-400 disabled:opacity-40"
+                    aria-label="Acercar"
+                  >
+                    <ZoomIn className="h-3.5 w-3.5" />
+                  </ZenButton>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Acercar
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="icon"
+                    onClick={resetZoom}
+                    className="size-7 shrink-0 text-zinc-400 hover:text-amber-400"
+                    aria-label="Restaurar zoom por defecto (60px)"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </ZenButton>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Restaurar zoom por defecto (60px)
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="w-px h-4 bg-zinc-800 shrink-0 hidden sm:block" aria-hidden />
             <div className="shrink-0">
               <SchedulerDateRangeConfig
                 dateRange={dateRange}
@@ -578,6 +802,8 @@ export default function EventSchedulerPage() {
             eventId={eventId}
             eventData={eventDataForWrapper as EventoDetalle}
             dateRange={dateRange}
+            scrollToDate={searchParams.get('date') ?? undefined}
+            columnWidth={columnWidth}
             isMaximized={isMaximized}
             initialSecciones={payload.secciones}
             activeSectionIds={activeSectionIds}
@@ -590,6 +816,9 @@ export default function EventSchedulerPage() {
             onMoveCategory={handleMoveCategory}
             onRenameCustomCategory={handleRenameCustomCategory}
             onRemoveCustomCategory={handleRemoveCustomCategory}
+            onReminderAdd={handleReminderAdd}
+            onReminderUpdate={handleReminderUpdate}
+            onReminderDelete={handleReminderDelete}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
                 setPayload(prev =>

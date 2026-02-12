@@ -14,6 +14,13 @@ import {
   completeReminder,
   type ReminderWithPromise
 } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { dateToDateOnlyString, toUtcDateOnly } from '@/lib/utils/date-only';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import {
+  getSchedulerDateRemindersDue,
+  completeSchedulerDateReminder,
+  type SchedulerDateReminder
+} from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { logWhatsAppSent } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -34,23 +41,28 @@ export function RemindersSideSheet({
 }: RemindersSideSheetProps) {
   const router = useRouter();
   const [reminders, setReminders] = useState<ReminderWithPromise[]>([]);
+  const [schedulerReminders, setSchedulerReminders] = useState<SchedulerDateReminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
+  const [completingSchedulerIds, setCompletingSchedulerIds] = useState<Set<string>>(new Set());
 
   const loadReminders = useCallback(async () => {
     if (!open) return;
 
     setLoading(true);
     try {
-      const result = await getRemindersDue(studioSlug, {
-        includeCompleted: false,
-        dateRange: 'all',
-      });
+      const [promiseResult, schedulerResult] = await Promise.all([
+        getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' }),
+        getSchedulerDateRemindersDue(studioSlug),
+      ]);
 
-      if (result.success && result.data) {
-        setReminders(result.data);
+      if (promiseResult.success && promiseResult.data) {
+        setReminders(promiseResult.data);
       } else {
-        toast.error(result.error || 'Error al cargar seguimientos');
+        toast.error(promiseResult.error || 'Error al cargar seguimientos');
+      }
+      if (schedulerResult.success && schedulerResult.data) {
+        setSchedulerReminders(schedulerResult.data);
       }
     } catch (error) {
       console.error('Error cargando seguimientos:', error);
@@ -74,38 +86,37 @@ export function RemindersSideSheet({
     };
 
     window.addEventListener('reminder-updated', handleReminderUpdate);
+    window.addEventListener('scheduler-reminder-updated', handleReminderUpdate);
     return () => {
       window.removeEventListener('reminder-updated', handleReminderUpdate);
+      window.removeEventListener('scheduler-reminder-updated', handleReminderUpdate);
     };
   }, [open, loadReminders]);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(todayStart);
-  todayEnd.setDate(todayEnd.getDate() + 1);
-
+  // SSoT: mismo criterio que AlertsPopover (MASTER_DATE_SSOT_GUIDE)
   const categorizeReminders = (reminders: ReminderWithPromise[]) => {
+    const todayKey = dateToDateOnlyString(toUtcDateOnly(new Date()) ?? new Date()) ?? '';
+    const overdue: ReminderWithPromise[] = [];
     const today: ReminderWithPromise[] = [];
     const upcoming: ReminderWithPromise[] = [];
 
-    reminders.forEach(r => {
-      const date = new Date(r.reminder_date);
-      date.setHours(0, 0, 0, 0);
-      if (date < todayEnd) {
-        // Incluye vencidos y de hoy
+    reminders.forEach((r) => {
+      const key = dateToDateOnlyString(toUtcDateOnly(r.reminder_date) ?? new Date()) ?? '';
+      if (key < todayKey) {
+        overdue.push(r);
+      } else if (key === todayKey) {
         today.push(r);
       } else {
         upcoming.push(r);
       }
     });
-
-    return { today, upcoming };
+    return { overdue, today, upcoming };
   };
 
-  const { today: todayReminders, upcoming: upcomingReminders } =
+  const { overdue: overdueReminders, today: todayReminders, upcoming: upcomingReminders } =
     categorizeReminders(reminders);
 
-  const totalReminders = reminders.length;
+  const totalReminders = reminders.length + schedulerReminders.length;
 
   const handleComplete = async (reminderId: string) => {
     setReminders(prev => prev.filter(r => r.id !== reminderId));
@@ -160,6 +171,36 @@ export function RemindersSideSheet({
   const handleView = (promiseId: string) => {
     router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     onOpenChange(false);
+  };
+
+  const handleViewScheduler = (eventId: string) => {
+    router.push(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    onOpenChange(false);
+  };
+
+  const handleCompleteScheduler = async (reminderId: string) => {
+    setSchedulerReminders(prev => prev.filter(r => r.id !== reminderId));
+    setCompletingSchedulerIds(prev => new Set(prev).add(reminderId));
+    try {
+      const result = await completeSchedulerDateReminder(studioSlug, reminderId);
+      if (result.success) {
+        toast.success('Recordatorio completado');
+        window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        loadReminders();
+      } else {
+        loadReminders();
+        toast.error(result.error ?? 'Error al completar');
+      }
+    } catch {
+      loadReminders();
+      toast.error('Error al completar recordatorio');
+    } finally {
+      setCompletingSchedulerIds(prev => {
+        const next = new Set(prev);
+        next.delete(reminderId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -246,10 +287,65 @@ export function RemindersSideSheet({
               </div>
             ) : (
               <>
+                {schedulerReminders.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <h3 className="text-sm font-semibold text-zinc-200">Scheduler</h3>
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded text-amber-400 bg-amber-500/10">
+                        {schedulerReminders.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {schedulerReminders.map((r) => (
+                        <ZenCard
+                          key={r.id}
+                          className="border-amber-800/50 hover:border-amber-700/50 cursor-pointer transition-colors"
+                          onClick={() => handleViewScheduler(r.event_id)}
+                        >
+                          <ZenCardContent className="p-3 flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-zinc-200 truncate">{r.subject_text}</p>
+                              <p className="text-xs text-amber-400/90">
+                                {formatDisplayDate(toUtcDateOnly(r.reminder_date), {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                                {r.event?.name && ` · ${r.event.name}`}
+                              </p>
+                            </div>
+                            <ZenButton
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCompleteScheduler(r.id);
+                              }}
+                              disabled={completingSchedulerIds.has(r.id)}
+                            >
+                              {completingSchedulerIds.has(r.id) ? '...' : 'Completar'}
+                            </ZenButton>
+                          </ZenCardContent>
+                        </ZenCard>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <ReminderSideSheetSection
                   title="Hoy"
                   variant="warning"
                   reminders={todayReminders}
+                  studioSlug={studioSlug}
+                  completingIds={completingIds}
+                  onView={handleView}
+                  onComplete={handleComplete}
+                  onWhatsApp={handleWhatsApp}
+                />
+                <ReminderSideSheetSection
+                  title="Vencidos"
+                  variant="destructive"
+                  reminders={overdueReminders}
                   studioSlug={studioSlug}
                   completingIds={completingIds}
                   onView={handleView}

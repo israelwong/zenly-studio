@@ -2064,6 +2064,13 @@ export interface TareasSchedulerPayload {
   explicitlyActivatedStageIds?: string[];
   /** Categorías manuales por etapa (keys `${sectionId}-${stage}`). Si viene del servidor, hidrata la UI tras refresh. */
   customCategoriesBySectionStage?: Array<[string, Array<{ id: string; name: string }>]>;
+  /** Recordatorios por fecha (scheduler). Incluidos en la carga inicial para UX fluida. */
+  schedulerDateReminders?: Array<{
+    id: string;
+    reminder_date: Date | string;
+    subject_text: string;
+    description: string | null;
+  }>;
 }
 
 /** Lo que la vista Scheduler necesita: evento + cotizaciones + scheduler (sin secciones). Acepta EventoDetalle o payload de obtenerTareasScheduler. */
@@ -2100,7 +2107,7 @@ export async function obtenerTareasScheduler(
     });
     if (!event) return { success: false, error: 'Evento no encontrado' };
 
-    const [schedulerInstance, cotizacionesRows, seccionesResult] = await Promise.all([
+    const [schedulerInstance, cotizacionesRows, seccionesResult, remindersRows] = await Promise.all([
       prisma.studio_scheduler_event_instances.findFirst({
         where: { event_id: eventId },
         select: {
@@ -2212,6 +2219,11 @@ export async function obtenerTareasScheduler(
         },
       }),
       obtenerCatalogo(studioSlug, true),
+      prisma.studio_scheduler_date_reminders.findMany({
+        where: { studio_id: studio.id, event_id: eventId, is_completed: false },
+        select: { id: true, reminder_date: true, subject_text: true, description: true },
+        orderBy: { reminder_date: 'asc' },
+      }),
     ]);
 
     const secciones = seccionesResult.success && seccionesResult.data ? seccionesResult.data : [];
@@ -2322,6 +2334,12 @@ export async function obtenerTareasScheduler(
           }
         : null,
       secciones: seccionesForPayload,
+      schedulerDateReminders: remindersRows.map((r) => ({
+        id: r.id,
+        reminder_date: r.reminder_date,
+        subject_text: r.subject_text,
+        description: r.description,
+      })),
     };
 
     return { success: true, data: payload };

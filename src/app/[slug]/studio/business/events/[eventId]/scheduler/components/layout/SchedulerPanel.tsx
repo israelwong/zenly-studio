@@ -22,6 +22,7 @@ interface ItemMetadata {
 interface SchedulerPanelProps {
   sidebarWidth?: number;
   onSidebarWidthChange?: (width: number) => void;
+  columnWidth?: number;
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
   manualTasks?: ManualTaskPayload[];
@@ -83,6 +84,10 @@ interface SchedulerPanelProps {
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
   isMaximized?: boolean;
   googleCalendarEnabled?: boolean;
+  schedulerDateReminders?: Array<{ id: string; reminder_date: Date | string; subject_text: string; description: string | null }>;
+  onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
+  onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderDelete?: (reminderId: string) => Promise<void>;
 }
 
 /**
@@ -97,6 +102,7 @@ const SIDEBAR_MAX = 520;
 export const SchedulerPanel = React.memo(({
   sidebarWidth = 340,
   onSidebarWidthChange,
+  columnWidth = 60,
   secciones,
   itemsMap,
   manualTasks = [],
@@ -149,6 +155,10 @@ export const SchedulerPanel = React.memo(({
   onBulkDragStart,
   isMaximized,
   googleCalendarEnabled = false,
+  schedulerDateReminders = [],
+  onReminderAdd,
+  onReminderUpdate,
+  onReminderDelete,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [ghostPortalEl, setGhostPortalEl] = useState<HTMLDivElement | null>(null);
@@ -316,8 +326,11 @@ export const SchedulerPanel = React.memo(({
           />
         </div>
 
-        {/* Timeline */}
-        <div className={`flex-1 min-w-0 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}>
+        {/* Timeline: --column-width para zoom dinámico en Grid y TaskBars */}
+        <div
+          className={`flex-1 min-w-0 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}
+          style={{ ['--column-width' as string]: `${columnWidth}px` }}
+        >
           <SchedulerTimeline
             secciones={secciones}
             itemsMap={itemsMap}
@@ -342,6 +355,11 @@ export const SchedulerPanel = React.memo(({
             gridRef={gridRef}
             bulkDragState={bulkDragState}
             onBulkDragStart={onBulkDragStart}
+            columnWidth={columnWidth}
+            schedulerDateReminders={schedulerDateReminders}
+            onReminderAdd={onReminderAdd}
+            onReminderUpdate={onReminderUpdate}
+            onReminderDelete={onReminderDelete}
           />
         </div>
       </div>
@@ -398,8 +416,10 @@ export const SchedulerPanel = React.memo(({
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
   const sidebarWidthEqual = prevProps.sidebarWidth === nextProps.sidebarWidth;
+  const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
+  const remindersEqual = prevProps.schedulerDateReminders === nextProps.schedulerDateReminders;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual && sidebarWidthEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual && sidebarWidthEqual && columnWidthEqual && remindersEqual;
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

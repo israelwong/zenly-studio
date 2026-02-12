@@ -10,7 +10,6 @@ import {
   getDateFromPosition,
   getWidthFromDuration,
   isDateInRange,
-  COLUMN_WIDTH,
 } from '../../utils/coordinate-utils';
 import {
   calculateTaskStatus,
@@ -44,6 +43,7 @@ interface TaskBarProps {
   onClick?: (e: React.MouseEvent) => void;
   /** Power Bar: si true, aplica translateX(var(--bulk-drag-offset, 0px)) para arrastre por CSS */
   inBulkDragSegment?: boolean;
+  columnWidth?: number;
 }
 
 export const TaskBar = React.memo(({
@@ -66,13 +66,14 @@ export const TaskBar = React.memo(({
   onManualTaskPatch,
   onClick,
   inBulkDragSegment,
+  columnWidth = 60,
 }: TaskBarProps) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
   const [isResizing, setIsResizing] = useState(false);
   const [rndPosition, setRndPosition] = useState({ x: 0, y: 6 });
-  const [rndSize, setRndSize] = useState({ width: 60, height: 48 });
+  const [rndSize, setRndSize] = useState({ width: columnWidth, height: 48 });
 
   // Track movimiento real para prevenir context menu durante drag/resize
   const dragStartPosRef = React.useRef<{ x: number; width: number }>({ x: 0, width: 0 });
@@ -91,8 +92,8 @@ export const TaskBar = React.memo(({
 
   const isSubtask = (manualTask as { parent_id?: string | null })?.parent_id != null || (item?.scheduler_task as { parent_id?: string | null })?.parent_id != null;
   const statusColor = getStatusColor(status, hasCrewMember, isSubtask);
-  const computedX = getPositionFromDate(localStartDate, dateRange);
-  const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate), COLUMN_WIDTH);
+  const computedX = getPositionFromDate(localStartDate, dateRange, columnWidth);
+  const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate, columnWidth), columnWidth);
   const position = isResizing ? rndPosition : { x: computedX, y: 6 };
   const size = isResizing ? rndSize : { width: computedWidth, height: 48 };
 
@@ -111,7 +112,7 @@ export const TaskBar = React.memo(({
         return; // No hubo movimiento, ignorar
       }
 
-      const newStartDate = getDateFromPosition(d.x, dateRange);
+      const newStartDate = getDateFromPosition(d.x, dateRange, columnWidth);
 
       // Validar que esté dentro del rango
       if (!isDateInRange(newStartDate, dateRange)) {
@@ -158,27 +159,27 @@ export const TaskBar = React.memo(({
         setIsUpdating(false);
       });
     },
-    [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate]
+    [taskId, localStartDate, localEndDate, dateRange, columnWidth, onUpdate, startDate, endDate]
   );
 
   // Manejar resize start - guardar ancho y posición inicial
   const handleResizeStart = useCallback((_e: React.SyntheticEvent, _direction: string, ref: HTMLElement) => {
     setIsResizing(true);
-    const startX = getPositionFromDate(localStartDate, dateRange);
+    const startX = getPositionFromDate(localStartDate, dateRange, columnWidth);
     const width = ref.offsetWidth;
     setRndPosition({ x: startX, y: 6 });
     setRndSize({ width, height: 48 });
     dragStartPosRef.current = { x: startX, width };
-  }, [localStartDate, dateRange]);
+  }, [localStartDate, dateRange, columnWidth]);
 
   // Durante el drag: sin resizeGrid, valores raw de react-rnd para feedback visual fluido
   const handleResize = useCallback(
     (_e: MouseEvent | TouchEvent, _direction: string, ref: HTMLElement, _delta: { height: number; width: number }, position: { x: number; y: number }) => {
-      const rawWidth = Math.max(COLUMN_WIDTH, ref.offsetWidth);
+      const rawWidth = Math.max(columnWidth, ref.offsetWidth);
       setRndPosition({ x: position.x, y: 6 });
       setRndSize({ width: rawWidth, height: 48 });
     },
-    []
+    [columnWidth]
   );
 
   // Manejar resize stop - snap al grid solo al soltar, luego calcular fechas y persistir
@@ -193,22 +194,22 @@ export const TaskBar = React.memo(({
       const rawWidth = ref.offsetWidth;
       const rawX = position.x;
 
-      // Snap al grid solo al soltar
-      const snappedWidth = Math.max(COLUMN_WIDTH, Math.round(rawWidth / COLUMN_WIDTH) * COLUMN_WIDTH);
+      // Snap al grid solo al soltar (usa columnWidth actual para zoom)
+      const snappedWidth = Math.max(columnWidth, Math.round(rawWidth / columnWidth) * columnWidth);
       let snappedX: number;
 
       if (direction.includes('left')) {
         const rightEdge = rawX + rawWidth;
-        snappedX = Math.round((rightEdge - snappedWidth) / COLUMN_WIDTH) * COLUMN_WIDTH;
+        snappedX = Math.round((rightEdge - snappedWidth) / columnWidth) * columnWidth;
       } else {
-        snappedX = Math.round(rawX / COLUMN_WIDTH) * COLUMN_WIDTH;
+        snappedX = Math.round(rawX / columnWidth) * columnWidth;
       }
 
       setRndPosition({ x: snappedX, y: 6 });
       setRndSize({ width: snappedWidth, height: 48 });
 
-      const newStartDate = getDateFromPosition(snappedX, dateRange);
-      const newDurationDays = Math.max(1, Math.round(snappedWidth / COLUMN_WIDTH));
+      const newStartDate = getDateFromPosition(snappedX, dateRange, columnWidth);
+      const newDurationDays = Math.max(1, Math.round(snappedWidth / columnWidth));
       const newEndDate = addDays(newStartDate, newDurationDays - 1);
 
       if (!isDateInRange(newStartDate, dateRange) || !isDateInRange(newEndDate, dateRange)) {
@@ -245,7 +246,7 @@ export const TaskBar = React.memo(({
         setIsUpdating(false);
       });
     },
-    [taskId, dateRange, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
+    [taskId, dateRange, columnWidth, onUpdate, startDate, endDate, manualTask, onManualTaskPatch]
   );
 
   const handleDelete = useCallback(async (id: string) => {
@@ -288,14 +289,14 @@ export const TaskBar = React.memo(({
           key={`${taskId}-${itemId}-${localEndDate.getTime()}-${localStartDate.getTime()}`}
           position={position}
           size={size}
-          minWidth={60}
+          minWidth={columnWidth}
           onDragStart={handleDragStart}
           onDragStop={handleDragStop}
           onResizeStart={handleResizeStart}
           onResize={handleResize}
           onResizeStop={handleResizeStop}
         dragAxis="x"
-        dragGrid={[60, 0]}
+        dragGrid={[columnWidth, 0]}
         enableResizing={{
           top: false,
           bottom: false,

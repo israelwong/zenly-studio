@@ -30,6 +30,7 @@ import type { IdentidadData } from '@/app/[slug]/studio/business/identity/types'
 import type { StorageStats } from '@/lib/actions/shared/calculate-storage.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import type { AlertItem } from './HeaderDataLoader';
 
 /** Perfil de usuario para el header (nombre + avatar). Origen: users + studio_user_profiles (obtenerPerfil). */
 export interface InitialUserProfile {
@@ -47,7 +48,7 @@ interface StudioLayoutWrapperProps {
   initialRemindersCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POSTs del cliente)
   initialHeaderUserId?: string | null; // ✅ PASO 4: Pre-cargado en servidor (para useStudioNotifications)
   initialAgendaEvents?: AgendaItem[]; // ✅ 6 eventos más próximos para AgendaPopover
-  initialRemindersAlerts?: ReminderWithPromise[]; // ✅ Recordatorios de hoy + próximos (sin vencidos) para AlertsPopover
+  initialRemindersAlerts?: AlertItem[]; // ✅ Recordatorios promesas + scheduler (hoy + próximos) para AlertsPopover
 }
 
 function StudioLayoutContent({
@@ -71,7 +72,7 @@ function StudioLayoutContent({
     remindersCount: initialRemindersCount,
     agendaEvents: initialAgendaEvents,
     remindersAlerts: initialRemindersAlerts,
-    reminders: [] as ReminderWithPromise[],
+    reminders: [] as AlertItem[],
   });
   const { toggleChat } = useZenMagicChat();
   const { isOpen: contactsOpen, openContactsSheet, closeContactsSheet, initialContactId } = useContactsSheet();

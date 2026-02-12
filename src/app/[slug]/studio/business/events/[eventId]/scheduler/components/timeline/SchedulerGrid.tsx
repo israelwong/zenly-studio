@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, filterRowsByExpandedCategories, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isAddCategoryPhantomRow, isManualTaskRow, ROW_HEIGHTS, POWER_BAR_STAGE_CLASSES, STAGE_LABELS, type ManualTaskPayload, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
-import { getTotalGridWidth, getPositionFromDate, getWidthFromDuration, getTotalDays, COLUMN_WIDTH, toLocalDateOnly } from '../../utils/coordinate-utils';
+import { getTotalGridWidth, getPositionFromDate, getWidthFromDuration, getTotalDays, toLocalDateOnly } from '../../utils/coordinate-utils';
 import { GripVertical, Plus } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen';
 import { TaskForm } from '../sidebar/TaskForm';
@@ -37,6 +37,7 @@ interface SchedulerGridProps {
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
+  columnWidth?: number;
   onAddManualTaskSubmit?: (
     sectionId: string,
     stage: string,
@@ -68,11 +69,12 @@ function SchedulerGridInner(
     customCategoriesBySectionStage,
     bulkDragState = null,
     onBulkDragStart,
+    columnWidth = 60,
     onAddManualTaskSubmit,
   }: SchedulerGridProps,
   ref: React.ForwardedRef<HTMLDivElement>
 ) {
-  const totalWidth = getTotalGridWidth(dateRange);
+  const totalWidth = getTotalGridWidth(dateRange, columnWidth);
   const rows = useMemo(
     () =>
       buildSchedulerRows(
@@ -190,7 +192,8 @@ function SchedulerGridInner(
               <button
                 key={dayIndex}
                 type="button"
-                className="group w-[60px] min-w-[60px] flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0 hover:bg-zinc-800/30 transition-colors flex items-center justify-center cursor-pointer focus:outline-none focus:ring-1 focus:ring-violet-500/50 focus:ring-inset"
+                className="group flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0 hover:bg-zinc-800/30 transition-colors flex items-center justify-center cursor-pointer focus:outline-none focus:ring-1 focus:ring-violet-500/50 focus:ring-inset"
+                style={{ width: columnWidth, minWidth: columnWidth }}
                 onClick={() => setPhantomPopover({ rowId: row.id, sectionId: row.sectionId, stageCategory: row.stageCategory, catalogCategoryId: row.catalogCategoryId, categoryLabel: row.categoryLabel, startDate, dayIndex })}
                 aria-label={`Añadir tarea el ${startDate.toLocaleDateString('es')}`}
               >
@@ -201,7 +204,7 @@ function SchedulerGridInner(
         </div>
       );
     },
-    [onAddManualTaskSubmit, dateRange, studioSlug, eventId, daysArray]
+    [onAddManualTaskSubmit, dateRange, studioSlug, eventId, daysArray, columnWidth]
   );
 
   /** add_category_phantom: celdas estáticas, sin hover ni +. Las categorías no se asocian a fecha. */
@@ -216,13 +219,14 @@ function SchedulerGridInner(
         {daysArray.map((dayIndex) => (
           <div
             key={dayIndex}
-            className="w-[60px] min-w-[60px] flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0"
+            className="flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0"
+            style={{ width: columnWidth, minWidth: columnWidth }}
             role="presentation"
           />
         ))}
       </div>
     ),
-    [daysArray]
+    [daysArray, columnWidth]
   );
 
   return (
@@ -257,11 +261,11 @@ function SchedulerGridInner(
           const stageClasses = POWER_BAR_STAGE_CLASSES[stageCategory];
           const barLeft =
             bounds.minStartDate && bounds.maxEndDate && dateRange?.from
-              ? getPositionFromDate(bounds.minStartDate, dateRange)
+              ? getPositionFromDate(bounds.minStartDate, dateRange, columnWidth)
               : 0;
           const barWidth =
             bounds.minStartDate && bounds.maxEndDate
-              ? getWidthFromDuration(bounds.minStartDate, bounds.maxEndDate)
+              ? getWidthFromDuration(bounds.minStartDate, bounds.maxEndDate, columnWidth)
               : 0;
           const isDraggingThisSegment = bulkDragState?.segmentKey === row.id;
           const daysOffset = isDraggingThisSegment ? (bulkDragState?.daysOffset ?? 0) : 0;
@@ -281,7 +285,7 @@ function SchedulerGridInner(
                   className={`absolute inset-y-2 flex items-center justify-center cursor-grab active:cursor-grabbing rounded border-t ${stageClasses.bg} ${stageClasses.border} hover:opacity-90 transition-opacity`}
                   style={{
                     left: barLeft,
-                    width: Math.max(barWidth, COLUMN_WIDTH),
+                    width: Math.max(barWidth, columnWidth),
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
@@ -345,6 +349,7 @@ function SchedulerGridInner(
               onItemUpdate={onItemUpdate}
               onManualTaskPatch={onManualTaskPatch}
               inBulkDragSegment={isTaskInBulkSegment(t.id)}
+              columnWidth={columnWidth}
             />
           );
         }
@@ -382,6 +387,7 @@ function SchedulerGridInner(
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
             inBulkDragSegment={!!(taskId && isTaskInBulkSegment(taskId))}
+            columnWidth={columnWidth}
           />
         );
       })}
@@ -457,7 +463,8 @@ function schedulerGridPropsEqual(
       prevProps.bulkDragState?.segmentKey === nextProps.bulkDragState?.segmentKey &&
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const onAddManualTaskSubmitEqual = prevProps.onAddManualTaskSubmit === nextProps.onAddManualTaskSubmit;
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && bulkDragEqual && onAddManualTaskSubmitEqual;
+  const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && bulkDragEqual && onAddManualTaskSubmitEqual && columnWidthEqual;
 }
 
 export const SchedulerGrid = React.memo(

@@ -833,6 +833,7 @@ model studios {
   promises                                        studio_promises[]
   reminders                                       studio_reminders[]
   reminder_subjects                               studio_reminder_subjects[]
+  scheduler_date_reminders                         studio_scheduler_date_reminders[]
   short_urls                                      studio_short_urls[]
   recurring_expenses                              studio_recurring_expenses[]
   revenue_transactions                            studio_revenue_transactions[]
@@ -1650,6 +1651,7 @@ model studio_events {
   notifications          studio_notifications[]
   scheduler              studio_scheduler_event_instances?
   external_service_sales studio_external_service_sales[]
+  scheduler_date_reminders studio_scheduler_date_reminders[]
 
   @@index([contact_id])
   @@index([cotizacion_id])
@@ -1924,6 +1926,29 @@ model studio_scheduler_event_tasks {
   @@index([google_event_id])
   @@index([parent_id])
   @@index([scheduler_instance_id, status], map: "studio_gantt_event_tasks_gantt_instance_id_status_idx")
+}
+
+/// Recordatorios por fecha en el Scheduler (Amber). Sincronizan con panel de notificaciones.
+model studio_scheduler_date_reminders {
+  id                   String       @id @default(cuid())
+  studio_id            String
+  event_id             String
+  reminder_date        DateTime     @db.Date
+  subject_text         String
+  description          String?
+  is_completed         Boolean      @default(false)
+  completed_at         DateTime?
+  completed_by_user_id String?
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+
+  studio     studios      @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  event      studio_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  completed_by studio_users? @relation("SchedulerReminderCompletedBy", fields: [completed_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([studio_id, event_id])
+  @@index([reminder_date])
+  @@index([studio_id, is_completed, reminder_date])
 }
 
 /// Plantillas de checklist por estudio y categoría de tarea (Workflows Inteligentes)
@@ -3130,6 +3155,7 @@ model studio_users {
   promise_logs                                 studio_promise_logs[]
   promise_status_history                       studio_promise_status_history[] @relation("PromiseStatusHistoryUser")
   completed_reminders                          studio_reminders[]         @relation("ReminderCompletedBy")
+  scheduler_date_reminders_completed           studio_scheduler_date_reminders[] @relation("SchedulerReminderCompletedBy")
   platform_user_profiles                       platform_user_profiles?     @relation(fields: [platform_user_id], references: [id])
   studio                                       studios                     @relation(fields: [studio_id], references: [id])
   sales_agent_promises                         studio_promises[]          @relation("PromiseSalesAgent")

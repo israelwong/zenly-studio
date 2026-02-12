@@ -16,6 +16,7 @@ interface EventSchedulerViewProps {
   eventData: SchedulerViewData;
   schedulerInstance?: SchedulerViewData['scheduler'];
   dateRange?: DateRange;
+  columnWidth?: number;
   onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
   /** Si se pasa, no se llama a obtenerCatalogo (carga atómica desde obtenerTareasScheduler). */
@@ -32,6 +33,11 @@ interface EventSchedulerViewProps {
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
+  onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
+  onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderDelete?: (reminderId: string) => Promise<void>;
+  /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
+  scrollToDate?: string;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -40,6 +46,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   eventData,
   schedulerInstance,
   dateRange: propDateRange,
+  columnWidth = 60,
   onDataChange,
   onRefetchEvent,
   initialSecciones,
@@ -54,6 +61,10 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
+  onReminderAdd,
+  onReminderUpdate,
+  onReminderDelete,
+  scrollToDate,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -169,6 +180,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         eventData={eventData}
         dateRange={defaultDateRange}
         secciones={secciones}
+        columnWidth={columnWidth}
         isMaximized={isMaximized}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
@@ -182,6 +194,10 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onMoveCategory={onMoveCategory}
         onRenameCustomCategory={onRenameCustomCategory}
         onRemoveCustomCategory={onRemoveCustomCategory}
+        onReminderAdd={onReminderAdd}
+        onReminderUpdate={onReminderUpdate}
+        onReminderDelete={onReminderDelete}
+        scrollToDate={scrollToDate}
       />
     );
   }
@@ -206,7 +222,9 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   const stageIdsBySectionEqual = prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
   const isMaximizedEqual = prevProps.isMaximized === nextProps.isMaximized;
+  const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
+  const scrollToDateEqual = prevProps.scrollToDate === nextProps.scrollToDate;
 
-  return datesEqual && eventDataEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && isMaximizedEqual;
+  return datesEqual && eventDataEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && isMaximizedEqual && columnWidthEqual && scrollToDateEqual;
 });
 

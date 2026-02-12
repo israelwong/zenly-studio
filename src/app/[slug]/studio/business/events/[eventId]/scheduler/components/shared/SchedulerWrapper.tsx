@@ -13,6 +13,7 @@ interface SchedulerWrapperProps {
   eventId: string;
   eventData: EventoDetalle | SchedulerData;
   dateRange?: DateRange;
+  columnWidth?: number;
   onDateRangeChange?: (range: DateRange | undefined) => void;
   onDataChange?: (data: EventoDetalle | SchedulerData) => void;
   onRefetchEvent?: () => Promise<void>;
@@ -34,6 +35,11 @@ interface SchedulerWrapperProps {
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
+  onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
+  onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderDelete?: (reminderId: string) => Promise<void>;
+  /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
+  scrollToDate?: string;
 }
 
 /**
@@ -44,6 +50,7 @@ export function SchedulerWrapper({
   eventId,
   eventData,
   dateRange,
+  columnWidth = 60,
   onDataChange,
   onRefetchEvent,
   onPublished,
@@ -60,6 +67,10 @@ export function SchedulerWrapper({
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
+  onReminderAdd,
+  onReminderUpdate,
+  onReminderDelete,
+  scrollToDate,
 }: SchedulerWrapperProps) {
   const filteredCotizaciones = useMemo(() => {
     if (!cotizacionId || !eventData.cotizaciones) return eventData.cotizaciones ?? [];
@@ -70,7 +81,7 @@ export function SchedulerWrapper({
 
   const filteredEventData = useMemo((): SchedulerViewData => {
     return { ...eventData, cotizaciones: filteredCotizaciones } as SchedulerViewData;
-  }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, cotizacionesIds]);
+  }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, eventData?.schedulerDateReminders, cotizacionesIds]);
 
   return (
     <>
@@ -80,6 +91,7 @@ export function SchedulerWrapper({
         eventData={filteredEventData}
         schedulerInstance={eventData.scheduler || undefined}
         dateRange={dateRange}
+        columnWidth={columnWidth}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
         initialSecciones={initialSecciones}
@@ -94,6 +106,10 @@ export function SchedulerWrapper({
         onRenameCustomCategory={onRenameCustomCategory}
         onRemoveCustomCategory={onRemoveCustomCategory}
         isMaximized={isMaximized}
+        onReminderAdd={onReminderAdd}
+        onReminderUpdate={onReminderUpdate}
+        onReminderDelete={onReminderDelete}
+        scrollToDate={scrollToDate}
       />
       <PublicationBar
         studioSlug={studioSlug}

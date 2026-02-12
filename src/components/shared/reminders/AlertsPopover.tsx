@@ -2,34 +2,76 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlarmClockCheck, Trash2, Loader2, Calendar, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { AlarmClockCheck, Trash2, Loader2, CalendarClock, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import {
   ZenDropdownMenu,
   ZenDropdownMenuContent,
   ZenDropdownMenuItem,
-  ZenDropdownMenuSeparator,
   ZenDropdownMenuTrigger,
 } from '@/components/ui/zen/overlays/ZenDropdownMenu';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { RemindersSideSheet } from './RemindersSideSheet';
 import { deleteReminder, completeReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import {
+  completeSchedulerDateReminder,
+  deleteSchedulerDateReminder,
+} from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { toast } from 'sonner';
-import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
-import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { toUtcDateOnly, dateToDateOnlyString } from '@/lib/utils/date-only';
+import type { AlertItem } from '@/app/[slug]/studio/components/layout/HeaderDataLoader';
+
+function isSchedulerReminder(item: AlertItem): item is AlertItem & { event_id: string } {
+  return 'event_id' in item && typeof (item as { event_id?: string }).event_id === 'string';
+}
+
+function AlertsPopoverSkeleton() {
+  const SkeletonRow = () => (
+    <div className="px-3 py-3 flex flex-col gap-2">
+      <div className="h-3.5 w-40 bg-zinc-800 rounded animate-pulse" />
+      <div className="h-3 w-24 bg-zinc-800/60 rounded animate-pulse" />
+    </div>
+  );
+  return (
+    <>
+      <div className="px-3 py-2.5 border-b border-zinc-800">
+        <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
+          Hoy (…)
+        </h4>
+      </div>
+      <div className="py-1">
+        {[1, 2, 3].map((i) => <SkeletonRow key={`hoy-${i}`} />)}
+      </div>
+      <div className="px-3 py-2.5 border-b border-zinc-800">
+        <h4 className="text-[10px] font-medium text-red-400/90 uppercase tracking-wide">
+          Vencidos (…)
+        </h4>
+      </div>
+      <div className="py-1">
+        {[1, 2].map((i) => <SkeletonRow key={`vencidos-${i}`} />)}
+      </div>
+      <div className="px-3 py-2.5 border-b border-zinc-800">
+        <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
+          Próximos (…)
+        </h4>
+      </div>
+      <div className="py-1">
+        <SkeletonRow key="proximos-1" />
+      </div>
+    </>
+  );
+}
 
 interface AlertsPopoverProps {
   studioSlug: string;
-  initialAlerts?: ReminderWithPromise[]; // ✅ Pre-cargado en servidor (hoy + próximos, sin vencidos)
-  initialCount?: number; // ✅ Pre-cargado en servidor
-  onRemindersClick?: () => void; // Para abrir el sheet completo
+  initialAlerts?: AlertItem[];
+  initialCount?: number;
+  onRemindersClick?: () => void;
 }
 
-export function AlertsPopover({ 
-  studioSlug, 
+export function AlertsPopover({
+  studioSlug,
   initialAlerts = [],
   initialCount = 0,
   onRemindersClick,
@@ -38,113 +80,128 @@ export function AlertsPopover({
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [alerts, setAlerts] = useState<ReminderWithPromise[]>(initialAlerts);
+  const [alerts, setAlerts] = useState<AlertItem[]>(initialAlerts);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [reminderToDelete, setReminderToDelete] = useState<ReminderWithPromise | null>(null);
+  const [reminderToDelete, setReminderToDelete] = useState<AlertItem | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
     setAlerts(initialAlerts);
   }, [initialAlerts]);
 
-  // Refrescar lista cuando se añade/quita un recordatorio (ej. desde SeguimientoMinimalCard)
+  // Refrescar lista cuando se añade/quita un recordatorio (promesas o scheduler)
   useEffect(() => {
     const handleReminderUpdate = async () => {
       try {
-        const { getRemindersDue } = await import('@/lib/actions/studio/commercial/promises/reminders.actions');
-        const result = await getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' });
-        if (result.success && result.data) {
-          const now = new Date();
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const todayTime = todayStart.getTime();
-          const filtered = result.data.filter((r) => {
-            const d = new Date(r.reminder_date);
-            const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            return reminderDay.getTime() >= todayTime;
-          });
-          const sorted = filtered.sort((a, b) => {
-            const dateA = new Date(a.reminder_date).getTime();
-            const dateB = new Date(b.reminder_date).getTime();
-            return dateA - dateB;
-          });
-          setAlerts(sorted);
+        const [promiseResult, schedulerResult] = await Promise.all([
+          import('@/lib/actions/studio/commercial/promises/reminders.actions').then((m) =>
+            m.getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' })
+          ),
+          import('@/lib/actions/studio/business/events/scheduler-date-reminders.actions').then((m) =>
+            m.getSchedulerDateRemindersDue(studioSlug)
+          ),
+        ]);
+
+        const promiseAlerts: AlertItem[] = [];
+        if (promiseResult.success && promiseResult.data) {
+          promiseResult.data
+            .sort((a, b) => new Date(a.reminder_date).getTime() - new Date(b.reminder_date).getTime())
+            .forEach((r) => promiseAlerts.push(r));
         }
+
+        const schedulerAlerts: AlertItem[] = [];
+        if (schedulerResult.success && schedulerResult.data) {
+          schedulerResult.data.forEach((r) => schedulerAlerts.push({ ...r, event_id: r.event_id }));
+        }
+
+        const merged = [...promiseAlerts, ...schedulerAlerts].sort(
+          (a, b) => new Date(a.reminder_date).getTime() - new Date(b.reminder_date).getTime()
+        );
+        setAlerts(merged);
       } catch (err) {
         console.error('[AlertsPopover] Error refetching reminders:', err);
       }
     };
     window.addEventListener('reminder-updated', handleReminderUpdate);
-    return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
+    window.addEventListener('scheduler-reminder-updated', handleReminderUpdate);
+    return () => {
+      window.removeEventListener('reminder-updated', handleReminderUpdate);
+      window.removeEventListener('scheduler-reminder-updated', handleReminderUpdate);
+    };
   }, [studioSlug]);
 
-  // Categorizar recordatorios: Hoy vs Próximos (comparar por día local para evitar desfase UTC)
+  // Categorizar: Vencidos vs Hoy vs Próximos (SSoT dateToDateOnlyString UTC)
   const categorizeReminders = () => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayKey = dateToDateOnlyString(toUtcDateOnly(new Date()) ?? new Date()) ?? '';
+    const overdue: AlertItem[] = [];
+    const today: AlertItem[] = [];
+    const upcoming: AlertItem[] = [];
 
-    const today: ReminderWithPromise[] = [];
-    const upcoming: ReminderWithPromise[] = [];
-
-    alerts.forEach(r => {
-      const d = new Date(r.reminder_date);
-      const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      const reminderTime = reminderDay.getTime();
-      const todayTime = todayStart.getTime();
-      if (reminderTime === todayTime) {
+    alerts.forEach((r) => {
+      const key = dateToDateOnlyString(toUtcDateOnly(r.reminder_date) ?? new Date()) ?? '';
+      if (key < todayKey) {
+        overdue.push(r);
+      } else if (key === todayKey) {
         today.push(r);
-      } else if (reminderTime > todayTime) {
+      } else {
         upcoming.push(r);
       }
     });
-
-    return { today, upcoming };
+    return { overdue, today, upcoming };
   };
 
-  const { today: todayReminders, upcoming: upcomingReminders } = categorizeReminders();
-  const totalCount = todayReminders.length + upcomingReminders.length; // Total global para el contador
-  const MAX_UPCOMING_DISPLAY = 5; // Límite de próximos a mostrar
-  const displayedUpcoming = upcomingReminders.slice(0, MAX_UPCOMING_DISPLAY);
-  const hasMoreUpcoming = upcomingReminders.length > MAX_UPCOMING_DISPLAY;
+  const { overdue: overdueReminders, today: todayReminders, upcoming: upcomingReminders } = categorizeReminders();
+  const totalCount = overdueReminders.length + todayReminders.length + upcomingReminders.length;
+  const badgeCount = totalCount > 0 ? totalCount : initialCount;
+  const isLoading = badgeCount > 0 && alerts.length === 0;
 
-  const handleReminderClick = (reminder: ReminderWithPromise) => {
-    if (reminder.promise_id) {
+  const handleReminderClick = (reminder: AlertItem) => {
+    if (isSchedulerReminder(reminder)) {
+      const dateStr = dateToDateOnlyString(toUtcDateOnly(reminder.reminder_date) ?? new Date());
+      const qs = dateStr ? `?date=${dateStr}` : '';
+      router.push(`/${studioSlug}/studio/business/events/${reminder.event_id}/scheduler${qs}`);
+    } else if (reminder.promise_id) {
       router.push(`/${studioSlug}/studio/commercial/promises/${reminder.promise_id}`);
     }
     setOpen(false);
   };
 
-  const handleCompleteClick = async (reminder: ReminderWithPromise, e: React.MouseEvent) => {
+  const handleCompleteClick = async (reminder: AlertItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    
     setCompletingId(reminder.id);
-    
-    // Actualización optimista
-    setAlerts(prev => prev.filter(r => r.id !== reminder.id));
-    
-    try {
-      const result = await completeReminder(studioSlug, reminder.id);
+    setAlerts((prev) => prev.filter((r) => r.id !== reminder.id));
 
-      if (result.success) {
-        toast.success('Recordatorio completado');
-        window.dispatchEvent(new CustomEvent('reminder-updated'));
+    try {
+      if (isSchedulerReminder(reminder)) {
+        const result = await completeSchedulerDateReminder(studioSlug, reminder.id);
+        if (result.success) {
+          toast.success('Recordatorio completado');
+          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        } else {
+          setAlerts(initialAlerts);
+          toast.error(result.error ?? 'Error al completar');
+        }
       } else {
-        // Revertir si falla
-        setAlerts(initialAlerts);
-        toast.error(result.error || 'Error al completar recordatorio');
+        const result = await completeReminder(studioSlug, reminder.id);
+        if (result.success) {
+          toast.success('Recordatorio completado');
+          window.dispatchEvent(new CustomEvent('reminder-updated'));
+        } else {
+          setAlerts(initialAlerts);
+          toast.error(result.error ?? 'Error al completar');
+        }
       }
     } catch (error) {
-      // Revertir si falla
       setAlerts(initialAlerts);
-      console.error('Error completando recordatorio:', error);
       toast.error('Error al completar recordatorio');
     } finally {
       setCompletingId(null);
     }
   };
 
-  const handleDeleteClick = (reminder: ReminderWithPromise, e: React.MouseEvent) => {
+  const handleDeleteClick = (reminder: AlertItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setReminderToDelete(reminder);
     setShowDeleteModal(true);
@@ -154,24 +211,32 @@ export function AlertsPopover({
     if (!reminderToDelete) return;
 
     setDeletingId(reminderToDelete.id);
-    
     try {
-      const result = await deleteReminder(studioSlug, reminderToDelete.id);
-
-      if (result.success) {
-        setAlerts(prev => prev.filter(r => r.id !== reminderToDelete.id));
-        toast.success('Recordatorio eliminado');
-        window.dispatchEvent(new CustomEvent('reminder-updated'));
-        setShowDeleteModal(false);
-        setReminderToDelete(null);
+      if (isSchedulerReminder(reminderToDelete)) {
+        const result = await deleteSchedulerDateReminder(studioSlug, reminderToDelete.id);
+        if (result.success) {
+          setAlerts((prev) => prev.filter((r) => r.id !== reminderToDelete.id));
+          toast.success('Recordatorio eliminado');
+          window.dispatchEvent(new CustomEvent('scheduler-reminder-updated'));
+        } else {
+          toast.error(result.error ?? 'Error al eliminar');
+        }
       } else {
-        toast.error(result.error || 'Error al eliminar recordatorio');
+        const result = await deleteReminder(studioSlug, reminderToDelete.id);
+        if (result.success) {
+          setAlerts((prev) => prev.filter((r) => r.id !== reminderToDelete.id));
+          toast.success('Recordatorio eliminado');
+          window.dispatchEvent(new CustomEvent('reminder-updated'));
+        } else {
+          toast.error(result.error ?? 'Error al eliminar');
+        }
       }
     } catch (error) {
-      console.error('Error eliminando recordatorio:', error);
       toast.error('Error al eliminar recordatorio');
     } finally {
       setDeletingId(null);
+      setShowDeleteModal(false);
+      setReminderToDelete(null);
     }
   };
 
@@ -184,7 +249,6 @@ export function AlertsPopover({
     }
   };
 
-  // Renderizar solo después del mount para evitar problemas de hidratación
   if (!isMounted) {
     return (
       <ZenButton
@@ -216,9 +280,9 @@ export function AlertsPopover({
             title="Recordatorios"
           >
             <AlarmClockCheck className="h-5 w-5" />
-            {totalCount > 0 && (
+            {badgeCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                {totalCount > 9 ? '9+' : totalCount}
+                {badgeCount > 9 ? '9+' : badgeCount}
               </span>
             )}
             <span className="sr-only">Recordatorios</span>
@@ -230,86 +294,99 @@ export function AlertsPopover({
         >
           <div className="px-3 py-2 border-b border-zinc-700 flex-shrink-0">
             <h3 className="text-sm font-semibold text-zinc-200">Recordatorios</h3>
-            {totalCount > 0 && (
+            {isLoading ? (
+              <p className="text-xs text-zinc-500 mt-1 animate-pulse">Cargando...</p>
+            ) : totalCount > 0 ? (
               <p className="text-xs text-zinc-400 mt-1">
                 {totalCount} {totalCount === 1 ? 'recordatorio pendiente' : 'recordatorios pendientes'}
               </p>
-            )}
+            ) : null}
           </div>
 
           <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
-            {/* Sección Hoy */}
-            <div className="px-3 py-2.5 border-b border-zinc-800">
-              <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
-                Hoy ({todayReminders.length})
-              </h4>
-            </div>
-            {todayReminders.length === 0 ? (
-              <div className="px-3 py-8 text-center text-xs text-zinc-500">
-                No hay recordatorios
-              </div>
+            {isLoading ? (
+              <AlertsPopoverSkeleton />
             ) : (
-              <div className="py-1">
-                {todayReminders.map((reminder) => (
-                  <ReminderItem
-                    key={reminder.id}
-                    reminder={reminder}
-                    open={open}
-                    isToday={true}
-                    onReminderClick={handleReminderClick}
-                    onCompleteClick={handleCompleteClick}
-                    onDeleteClick={handleDeleteClick}
-                    isCompleting={completingId === reminder.id}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Sección Próximos */}
-            {upcomingReminders.length > 0 && (
               <>
-                <ZenDropdownMenuSeparator />
+                {/* 1. Hoy */}
+                <div className="px-3 py-2.5 border-b border-zinc-800">
+                  <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
+                    Hoy ({todayReminders.length})
+                  </h4>
+                </div>
+                {todayReminders.length > 0 ? (
+                  <div className="py-1">
+                    {todayReminders.map((reminder) => (
+                      <AlertItemRow
+                        key={reminder.id}
+                        reminder={reminder}
+                        open={open}
+                        isToday={true}
+                        onReminderClick={handleReminderClick}
+                        onCompleteClick={handleCompleteClick}
+                        onDeleteClick={handleDeleteClick}
+                        isCompleting={completingId === reminder.id}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-zinc-500">Ninguno</div>
+                )}
+
+                {/* 2. Vencidos */}
+                <div className="px-3 py-2.5 border-b border-zinc-800">
+                  <h4 className="text-[10px] font-medium text-red-400/90 uppercase tracking-wide">
+                    Vencidos ({overdueReminders.length})
+                  </h4>
+                </div>
+                {overdueReminders.length > 0 ? (
+                  <div className="py-1">
+                    {overdueReminders.map((reminder) => (
+                      <AlertItemRow
+                        key={reminder.id}
+                        reminder={reminder}
+                        open={open}
+                        isToday={true}
+                        onReminderClick={handleReminderClick}
+                        onCompleteClick={handleCompleteClick}
+                        onDeleteClick={handleDeleteClick}
+                        isCompleting={completingId === reminder.id}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-zinc-500">Ninguno</div>
+                )}
+
+                {/* 3. Próximos */}
                 <div className="px-3 py-2.5 border-b border-zinc-800">
                   <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
                     Próximos ({upcomingReminders.length})
                   </h4>
                 </div>
-                <div className="py-1">
-                  {displayedUpcoming.map((reminder) => (
-                    <ReminderItem
-                      key={reminder.id}
-                      reminder={reminder}
-                      open={open}
-                      isToday={false}
-                      onReminderClick={handleReminderClick}
-                      onCompleteClick={handleCompleteClick}
-                      onDeleteClick={handleDeleteClick}
-                      isCompleting={completingId === reminder.id}
-                    />
-                  ))}
-                </div>
-                {hasMoreUpcoming && (
-                  <div className="px-3 py-2 border-t border-zinc-800">
-                    <button
-                      onClick={handleViewMore}
-                      className="text-xs text-zinc-400 hover:text-zinc-200 w-full text-left transition-colors font-medium"
-                    >
-                      Ver todos los próximos ({upcomingReminders.length - MAX_UPCOMING_DISPLAY} más)
-                    </button>
+                {upcomingReminders.length > 0 ? (
+                  <div className="py-1">
+                    {upcomingReminders.map((reminder) => (
+                      <AlertItemRow
+                        key={reminder.id}
+                        reminder={reminder}
+                        open={open}
+                        isToday={false}
+                        onReminderClick={handleReminderClick}
+                        onCompleteClick={handleCompleteClick}
+                        onDeleteClick={handleDeleteClick}
+                        isCompleting={completingId === reminder.id}
+                      />
+                    ))}
                   </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-zinc-500">Ninguno</div>
                 )}
               </>
             )}
-
-            {todayReminders.length === 0 && upcomingReminders.length === 0 && (
-              <div className="px-3 py-8 text-center text-sm text-zinc-400">
-                No hay recordatorios
-              </div>
-            )}
           </div>
 
-          {(!hasMoreUpcoming || (todayReminders.length === 0 && upcomingReminders.length <= MAX_UPCOMING_DISPLAY)) && (
-            <div className="flex-shrink-0 border-t border-zinc-700">
+          <div className="flex-shrink-0 border-t border-zinc-700">
               <div className="px-3 py-2">
                 <button
                   onClick={handleViewMore}
@@ -319,7 +396,6 @@ export function AlertsPopover({
                 </button>
               </div>
             </div>
-          )}
         </ZenDropdownMenuContent>
       </ZenDropdownMenu>
       {!onRemindersClick && (
@@ -350,8 +426,7 @@ export function AlertsPopover({
   );
 }
 
-// Componente separado para cada recordatorio
-function ReminderItem({
+function AlertItemRow({
   reminder,
   open,
   isToday,
@@ -360,45 +435,40 @@ function ReminderItem({
   onDeleteClick,
   isCompleting,
 }: {
-  reminder: ReminderWithPromise;
+  reminder: AlertItem;
   open: boolean;
   isToday: boolean;
-  onReminderClick: (reminder: ReminderWithPromise) => void;
-  onCompleteClick: (reminder: ReminderWithPromise, e: React.MouseEvent) => void;
-  onDeleteClick: (reminder: ReminderWithPromise, e: React.MouseEvent) => void;
+  onReminderClick: (reminder: AlertItem) => void;
+  onCompleteClick: (reminder: AlertItem, e: React.MouseEvent) => void;
+  onDeleteClick: (reminder: AlertItem, e: React.MouseEvent) => void;
   isCompleting: boolean;
 }) {
-  const relativeTime = useRelativeTime(reminder.reminder_date, open);
-  
-  // Formatear fecha (SSoT UTC)
   const formatDate = (date: Date | string | null) => {
     if (!date) return '';
     const normalized = toUtcDateOnly(date);
     return normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '';
   };
 
-  const eventName = reminder.promise?.name || reminder.promise?.contact?.name || 'Evento';
-  const eventTypeName = reminder.promise?.event_type?.name || null;
-  const eventDate = reminder.promise?.event_date;
+  const isScheduler = isSchedulerReminder(reminder);
+  const eventName = isScheduler
+    ? (reminder.event?.name ?? 'Scheduler')
+    : (reminder.promise?.name ?? reminder.promise?.contact?.name ?? 'Evento');
+  const eventTypeName = !isScheduler ? reminder.promise?.event_type?.name ?? null : null;
+  const eventDate = !isScheduler ? reminder.promise?.event_date : null;
   const subjectText = reminder.subject_text || 'Recordatorio';
   const reminderDate = reminder.reminder_date;
 
   return (
     <ZenDropdownMenuItem
-      className={cn(
-        'flex flex-col items-start gap-1 px-3 py-3 cursor-pointer relative group'
-      )}
+      className="flex flex-col items-start gap-1 px-3 py-3 cursor-pointer relative group"
       onClick={() => onReminderClick(reminder)}
     >
       <div className="absolute top-2 right-2 flex items-center gap-1">
-        {/* Botón Completar - Solo en sección Hoy */}
         {isToday && (
           <button
             onClick={(e) => onCompleteClick(reminder, e)}
             disabled={isCompleting}
-            className={cn(
-              "p-1.5 rounded hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
-            )}
+            className="p-1.5 rounded hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
             title="Completar recordatorio"
           >
             {isCompleting ? (
@@ -408,12 +478,9 @@ function ReminderItem({
             )}
           </button>
         )}
-        {/* Botón Eliminar */}
         <button
           onClick={(e) => onDeleteClick(reminder, e)}
-          className={cn(
-            "p-1.5 rounded hover:bg-zinc-700 text-red-400 hover:text-red-300 transition-colors"
-          )}
+          className="p-1.5 rounded hover:bg-zinc-700 text-red-400 hover:text-red-300 transition-colors"
           title="Eliminar recordatorio"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -421,35 +488,26 @@ function ReminderItem({
       </div>
       <div className="flex items-start gap-2 w-full pr-20">
         <div className="flex-1 min-w-0">
-          {/* Nombre del evento */}
-          <p className="text-sm font-medium text-zinc-200 line-clamp-2">
-            {eventName}
-          </p>
-          
-          {/* Tipo evento • Fecha de evento {fecha evento} */}
+          <p className="text-sm font-medium text-zinc-200 line-clamp-2">{eventName}</p>
+
           {eventTypeName && eventDate && (
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs text-zinc-400">
-                {eventTypeName}
-              </span>
+              <span className="text-xs text-zinc-400">{eventTypeName}</span>
               <span className="text-xs text-zinc-600">•</span>
               <span className="text-xs text-zinc-500">Fecha de evento</span>
-              <span className="text-xs text-zinc-500">
-                {formatDate(eventDate)}
-              </span>
+              <span className="text-xs text-zinc-500">{formatDate(eventDate)}</span>
             </div>
           )}
-          
-          {/* Icono reloj asunto • fecha de recordatorio */}
+
           <div className="flex items-center gap-1.5 mt-1">
-            <AlarmClockCheck className="h-3 w-3 text-zinc-500 flex-shrink-0" />
-            <span className="text-xs text-zinc-400 line-clamp-1">
-              {subjectText}
-            </span>
+            {isScheduler ? (
+              <CalendarClock className="h-3 w-3 text-amber-500 flex-shrink-0" />
+            ) : (
+              <AlarmClockCheck className="h-3 w-3 text-zinc-500 flex-shrink-0" />
+            )}
+            <span className="text-xs text-zinc-400 line-clamp-1">{subjectText}</span>
             <span className="text-xs text-zinc-600">•</span>
-            <span className="text-xs text-zinc-500">
-              {formatDate(reminderDate)}
-            </span>
+            <span className="text-xs text-zinc-500">{formatDate(reminderDate)}</span>
           </div>
         </div>
       </div>

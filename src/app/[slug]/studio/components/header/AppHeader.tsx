@@ -23,6 +23,7 @@ import type { InitialUserProfile } from '@/app/[slug]/studio/components/layout/S
 import type { StorageStats } from '@/lib/actions/shared/calculate-storage.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import type { AlertItem } from '@/app/[slug]/studio/components/layout/HeaderDataLoader';
 
 interface AppHeaderProps {
     studioSlug: string;
@@ -33,7 +34,7 @@ interface AppHeaderProps {
     initialRemindersCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POSTs del cliente)
     initialHeaderUserId?: string | null; // ✅ PASO 4: Pre-cargado en servidor (para useStudioNotifications)
     initialAgendaEvents?: AgendaItem[]; // ✅ 6 eventos más próximos para AgendaPopover
-    initialRemindersAlerts?: ReminderWithPromise[]; // ✅ Recordatorios de hoy + próximos (sin vencidos) para AlertsPopover
+    initialRemindersAlerts?: AlertItem[]; // ✅ Recordatorios promesas + scheduler para AlertsPopover
     onCommandOpen?: () => void;
     onAgendaClick?: () => void;
     onTareasOperativasClick?: () => void;

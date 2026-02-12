@@ -2,12 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { getAgendaCount } from '@/lib/actions/shared/agenda-unified.actions';
-import { getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { getRemindersDueCount, getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { getSchedulerDateRemindersDue, getSchedulerDateRemindersCountForBadge } from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { getCurrentUserId } from '@/lib/actions/studio/notifications/notifications.actions';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
+import { dateToDateOnlyString, toUtcDateOnly } from '@/lib/utils/date-only';
 import { useStudioReady } from '@/app/[slug]/studio/components/init/StudioReadyContext';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import type { SchedulerDateReminder } from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
+
+export type AlertItem = ReminderWithPromise | (SchedulerDateReminder & { event_id: string });
 
 interface HeaderDataLoaderProps {
   studioSlug: string;
@@ -16,7 +21,8 @@ interface HeaderDataLoaderProps {
     agendaCount: number;
     remindersCount: number;
     agendaEvents: AgendaItem[];
-    remindersAlerts: ReminderWithPromise[]; // ✅ Recordatorios de hoy + próximos (sin vencidos) para AlertsPopover
+    remindersAlerts: AlertItem[];
+    reminders: AlertItem[];
   }) => void;
 }
 
@@ -32,7 +38,7 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
 
     const loadData = async () => {
       try {
-        const [headerUserIdResult, agendaCountResult, agendaEventsResult, remindersResult] = await Promise.all([
+        const [headerUserIdResult, agendaCountResult, agendaEventsResult, remindersResult, schedulerResult, overdueCount, todayCount, schedulerTodayCount] = await Promise.all([
           getCurrentUserId(studioSlug).catch(() => ({ success: false as const, error: 'Error' })),
           getAgendaCount(studioSlug).catch(() => ({ success: false as const, count: 0, error: 'Error' })),
           obtenerAgendaUnificada(studioSlug, { filtro: 'all', startDate: new Date() }).then(result => {
@@ -75,31 +81,39 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
             return [];
           }).catch(() => []),
           getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' }).then((result) => {
-            if (!result.success || !result.data) return { alerts: [], reminders: [] };
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const todayTime = todayStart.getTime();
-            const filtered = result.data.filter((r) => {
-              const d = new Date(r.reminder_date);
-              const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-              return reminderDay.getTime() >= todayTime;
-            });
-            const sorted = filtered.sort((a, b) => {
+            if (!result.success || !result.data) return [] as AlertItem[];
+            return result.data.sort((a, b) => {
               const dateA = new Date(a.reminder_date).getTime();
               const dateB = new Date(b.reminder_date).getTime();
               return dateA - dateB;
             });
-            return { alerts: sorted, reminders: sorted };
-          }).catch(() => ({ alerts: [] as ReminderWithPromise[], reminders: [] as ReminderWithPromise[] })),
+          }).catch(() => [] as AlertItem[]),
+          getSchedulerDateRemindersDue(studioSlug).then((result) => {
+            if (!result.success || !result.data) return [] as AlertItem[];
+            return result.data.map((r) => ({ ...r, event_id: r.event_id })) as AlertItem[];
+          }).catch(() => [] as AlertItem[]),
+          getRemindersDueCount(studioSlug, { includeCompleted: false, dateRange: 'overdue' }).then((r) => r.success && r.data !== undefined ? r.data : 0),
+          getRemindersDueCount(studioSlug, { includeCompleted: false, dateRange: 'today' }).then((r) => r.success && r.data !== undefined ? r.data : 0),
+          getSchedulerDateRemindersCountForBadge(studioSlug).then((r) => r.success && r.data !== undefined ? r.data : 0),
         ]);
+
+        const promiseAlerts = Array.isArray(remindersResult) ? remindersResult : [];
+        const schedulerAlerts = schedulerResult as AlertItem[];
+        const mergedAlerts: AlertItem[] = [...promiseAlerts, ...schedulerAlerts].sort((a, b) => {
+          const dateA = new Date(a.reminder_date).getTime();
+          const dateB = new Date(b.reminder_date).getTime();
+          return dateA - dateB;
+        });
+
+        const badgeCount = (overdueCount as number) + (todayCount as number) + (schedulerTodayCount as number);
 
         const loadedData = {
           headerUserId: headerUserIdResult.success ? headerUserIdResult.data : null,
           agendaCount: agendaCountResult.success ? (agendaCountResult.count || 0) : 0,
-          remindersCount: remindersResult.alerts.length,
+          remindersCount: badgeCount,
           agendaEvents: agendaEventsResult,
-          remindersAlerts: remindersResult.alerts,
-          reminders: remindersResult.reminders,
+          remindersAlerts: mergedAlerts,
+          reminders: mergedAlerts,
         };
         
         onDataLoaded(loadedData);

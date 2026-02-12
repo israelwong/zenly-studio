@@ -368,23 +368,23 @@ export async function eliminarCategoria(
             };
         }
 
+        // Obtener studioSlug ANTES de eliminar (para invalidar caché)
+        const mediaWithStudio = await prisma.studio_category_media.findFirst({
+            where: { category_id: categoriaId },
+            select: { studio: { select: { slug: true } } },
+        });
+        const cotizacionWithStudio = !mediaWithStudio
+            ? await prisma.studio_cotizacion_items.findFirst({
+                  where: { service_category_id: categoriaId },
+                  select: { cotizaciones: { select: { studio: { select: { slug: true } } } } },
+              })
+            : null;
+
+        const studioSlug = mediaWithStudio?.studio?.slug ?? cotizacionWithStudio?.cotizaciones?.studio?.slug;
+
         // Eliminar relación con sección
         await prisma.studio_section_categories.deleteMany({
             where: { category_id: categoriaId },
-        });
-
-        // Obtener studioSlug antes de eliminar (para invalidar caché)
-        const sectionCategory = await prisma.studio_section_categories.findFirst({
-            where: { category_id: categoriaId },
-            include: {
-                sections: {
-                    include: {
-                        studios: {
-                            select: { slug: true },
-                        },
-                    },
-                },
-            },
         });
 
         // Eliminar categoría
@@ -392,9 +392,7 @@ export async function eliminarCategoria(
             where: { id: categoriaId },
         });
 
-        // Invalidar caché si tenemos studioSlug
-        if (sectionCategory?.sections?.studios?.slug) {
-            const studioSlug = sectionCategory.sections.studios.slug;
+        if (studioSlug) {
             revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
             revalidateTag(`catalog-shell-${studioSlug}`);
         }

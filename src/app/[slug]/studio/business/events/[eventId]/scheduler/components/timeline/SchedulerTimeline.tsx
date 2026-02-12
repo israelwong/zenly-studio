@@ -41,6 +41,11 @@ interface SchedulerTimelineProps {
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
   isMaximized?: boolean;
+  columnWidth?: number;
+  schedulerDateReminders?: Array<{ id: string; reminder_date: Date | string; subject_text: string; description: string | null }>;
+  onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
+  onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderDelete?: (reminderId: string) => Promise<void>;
 }
 
 export const SchedulerTimeline = React.memo(({
@@ -67,14 +72,28 @@ export const SchedulerTimeline = React.memo(({
   bulkDragState = null,
   onBulkDragStart,
   isMaximized,
+  columnWidth = 60,
+  schedulerDateReminders = [],
+  onReminderAdd,
+  onReminderUpdate,
+  onReminderDelete,
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
-  const todayPosition = getTodayPosition(dateRange);
+  const todayPosition = getTodayPosition(dateRange, columnWidth);
 
   return (
     <div className={`flex flex-col border-l border-zinc-800 w-full relative ${isMaximized ? 'flex-1 min-h-0' : ''}`}>
       {/* Header con fechas */}
-      <SchedulerHeader dateRange={dateRange} />
+      <SchedulerHeader
+        dateRange={dateRange}
+        columnWidth={columnWidth}
+        studioSlug={studioSlug}
+        eventId={eventId}
+        schedulerDateReminders={schedulerDateReminders}
+        onReminderAdd={onReminderAdd}
+        onReminderUpdate={onReminderUpdate}
+        onReminderDelete={onReminderDelete}
+      />
 
       {/* Grid con tareas (ref para --bulk-drag-offset) */}
       <div className={isMaximized ? 'flex-1 min-h-0 flex flex-col' : ''}>
@@ -101,6 +120,7 @@ export const SchedulerTimeline = React.memo(({
         collapsedCategoryIds={collapsedCategoryIds}
         bulkDragState={bulkDragState}
         onBulkDragStart={onBulkDragStart}
+        columnWidth={columnWidth}
       />
       </div>
 
@@ -130,8 +150,10 @@ export const SchedulerTimeline = React.memo(({
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
+  const remindersEqual = prevProps.schedulerDateReminders === nextProps.schedulerDateReminders;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && isMaximizedEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && isMaximizedEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && columnWidthEqual && remindersEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

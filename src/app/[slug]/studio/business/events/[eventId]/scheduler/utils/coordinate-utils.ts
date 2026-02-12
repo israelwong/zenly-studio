@@ -1,26 +1,28 @@
 import { differenceInDays, addDays } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 
-export const COLUMN_WIDTH = 60; // px
+export const COLUMN_WIDTH = 60; // px (valor por defecto, usar columnWidth dinámico para zoom)
+export const COLUMN_WIDTH_MIN = 20;
+export const COLUMN_WIDTH_MAX = 150;
 
 /**
  * Posición X de una fecha en el grid. Usa toLocalDateOnly para que la columna
  * coincida con el día local (misma lógica que calculateTaskStatus y el Header).
  */
-export function getPositionFromDate(date: Date, dateRange: DateRange): number {
+export function getPositionFromDate(date: Date, dateRange: DateRange, columnWidth = COLUMN_WIDTH): number {
   if (!dateRange?.from) return 0;
   const dateLocal = toLocalDateOnly(date);
   const fromLocal = toLocalDateOnly(dateRange.from);
   const dayIndex = differenceInDays(dateLocal, fromLocal);
-  return dayIndex * COLUMN_WIDTH;
+  return dayIndex * columnWidth;
 }
 
 /**
  * Fecha correspondiente a una posición X. Misma lógica local que getPositionFromDate.
  */
-export function getDateFromPosition(x: number, dateRange: DateRange): Date {
+export function getDateFromPosition(x: number, dateRange: DateRange, columnWidth = COLUMN_WIDTH): Date {
   if (!dateRange?.from) return new Date();
-  const dayIndex = Math.floor(x / COLUMN_WIDTH);
+  const dayIndex = Math.floor(x / columnWidth);
   const fromLocal = toLocalDateOnly(dateRange.from);
   return addDays(fromLocal, dayIndex);
 }
@@ -28,11 +30,11 @@ export function getDateFromPosition(x: number, dateRange: DateRange): Date {
 /**
  * Ancho en píxeles de una tarea por duración. Días en local para coincidir con posición y estado.
  */
-export function getWidthFromDuration(startDate: Date, endDate: Date): number {
+export function getWidthFromDuration(startDate: Date, endDate: Date, columnWidth = COLUMN_WIDTH): number {
   const startLocal = toLocalDateOnly(startDate);
   const endLocal = toLocalDateOnly(endDate);
   const days = differenceInDays(endLocal, startLocal) + 1;
-  return days * COLUMN_WIDTH;
+  return days * columnWidth;
 }
 
 /**
@@ -90,15 +92,15 @@ export function getTotalDays(dateRange: DateRange): number {
 /**
  * Obtiene el ancho total del grid (en píxeles)
  */
-export function getTotalGridWidth(dateRange: DateRange): number {
-  return getTotalDays(dateRange) * COLUMN_WIDTH;
+export function getTotalGridWidth(dateRange: DateRange, columnWidth = COLUMN_WIDTH): number {
+  return getTotalDays(dateRange) * columnWidth;
 }
 
 /**
  * Posición X de la línea "HOY": (días desde inicio del scheduler hasta hoy local) * ancho de columna.
  * Usa la misma noción de "hoy" que el Header (toLocalDateOnly / getTodayLocalDateOnly).
  */
-export function getTodayPosition(dateRange: DateRange): number | null {
+export function getTodayPosition(dateRange: DateRange, columnWidth = COLUMN_WIDTH): number | null {
   if (!dateRange?.from || !dateRange?.to) return null;
 
   const today = getTodayLocalDateOnly();
@@ -110,6 +112,6 @@ export function getTodayPosition(dateRange: DateRange): number | null {
   }
 
   const dayIndex = differenceInDays(today, fromLocal);
-  return dayIndex * COLUMN_WIDTH;
+  return dayIndex * columnWidth;
 }
 

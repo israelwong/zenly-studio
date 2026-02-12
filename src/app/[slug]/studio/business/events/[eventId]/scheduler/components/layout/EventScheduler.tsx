@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { type DateRange } from 'react-day-picker';
 import type { SchedulerData, SchedulerCotizacionItem } from '@/lib/actions/studio/business/events';
@@ -17,6 +17,7 @@ import {
   type TaskCategoryStage,
 } from '../../utils/scheduler-section-stages';
 import { addDays, differenceInCalendarDays } from 'date-fns';
+import { getPositionFromDate, isDateInRange } from '../../utils/coordinate-utils';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import { SchedulerPanel } from './SchedulerPanel';
 import {
@@ -31,7 +32,6 @@ import {
   crearTareaManualScheduler,
   toggleTaskHierarchy,
 } from '@/lib/actions/studio/business/events/scheduler-actions';
-import { COLUMN_WIDTH } from '../../utils/coordinate-utils';
 
 const EDGE_SCROLL_THRESHOLD = 100;
 const EDGE_SCROLL_VELOCITY = 10;
@@ -78,6 +78,7 @@ interface EventSchedulerProps {
   eventData: SchedulerViewData;
   dateRange?: DateRange;
   secciones: SeccionData[];
+  columnWidth?: number;
   onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
   /** Secciones activas (solo se muestran estas). */
@@ -92,6 +93,11 @@ interface EventSchedulerProps {
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
+  onReminderAdd?: (reminderDate: Date, subjectText: string, description: string | null) => Promise<void>;
+  onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
+  onReminderDelete?: (reminderId: string) => Promise<void>;
+  /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
+  scrollToDate?: string;
 }
 
 export const EventScheduler = React.memo(function EventScheduler({
@@ -100,6 +106,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   eventData,
   dateRange,
   secciones,
+  columnWidth = 60,
   onDataChange,
   onRefetchEvent,
   activeSectionIds,
@@ -113,6 +120,10 @@ export const EventScheduler = React.memo(function EventScheduler({
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
+  onReminderAdd,
+  onReminderUpdate,
+  onReminderDelete,
+  scrollToDate,
 }: EventSchedulerProps) {
   const router = useRouter();
 
@@ -270,8 +281,28 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** True mientras la capa de proyección hace fade-out antes de desmontar. */
   const [bulkDragFadingOut, setBulkDragFadingOut] = useState(false);
 
-  /** Ancho del sidebar (resizable 280–520px). */
+  /** Ancho del sidebar (resizable 280–520px). Persistido en localStorage. */
   const [sidebarWidth, setSidebarWidth] = useState(340);
+
+  // Inicializar desde localStorage antes del primer paint (evita flicker)
+  useLayoutEffect(() => {
+    try {
+      const v = parseInt(localStorage.getItem('scheduler-sidebar-width') ?? '340', 10);
+      const w = Math.max(280, Math.min(520, isNaN(v) ? 340 : v));
+      if (w !== 340) setSidebarWidth(w);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persistir cuando cambie el ancho
+  useEffect(() => {
+    try {
+      localStorage.setItem('scheduler-sidebar-width', String(sidebarWidth));
+    } catch {
+      // ignore
+    }
+  }, [sidebarWidth]);
 
   // Limpieza del debounce al desmontar
   useEffect(() => {
@@ -286,6 +317,23 @@ export const EventScheduler = React.memo(function EventScheduler({
     if (reorderInFlightRef.current) return;
     setLocalEventData(eventData);
   }, [eventData]);
+
+  // Scroll suave a la fecha indicada en URL (ej. desde AlertsPopover)
+  useEffect(() => {
+    if (!scrollToDate || !dateRange?.from || !dateRange?.to) return;
+    const [y, m, d] = scrollToDate.split('-').map(Number);
+    if (!y || !m || isNaN(d)) return;
+    const targetDate = new Date(y, m - 1, d);
+    if (!isDateInRange(targetDate, dateRange)) return;
+    const pos = getPositionFromDate(targetDate, dateRange, columnWidth);
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // Pequeño delay para que el layout esté estable
+    const t = requestAnimationFrame(() => {
+      el.scrollTo({ left: Math.max(0, pos - el.clientWidth / 2), behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [scrollToDate, dateRange?.from?.getTime(), dateRange?.to?.getTime(), columnWidth]);
 
   // Cargar preferencia de crew al montar
   useEffect(() => {
@@ -1664,7 +1712,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         bulkDragTooltipRef.current.style.left = `${e.clientX + 12}px`;
         bulkDragTooltipRef.current.style.top = `${e.clientY + 12}px`;
       }
-      const days = Math.round(offsetPx / COLUMN_WIDTH);
+      const days = Math.round(offsetPx / columnWidth);
       if (days !== r.lastDaysOffset) {
         r.lastDaysOffset = days;
         setBulkDragState(prev => (prev ? { ...prev, daysOffset: days } : null));
@@ -1677,7 +1725,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       if (!ref) return;
       const scrollLeft = getScrollLeft();
       const offsetPx = e.clientX - ref.startClientX + (scrollLeft - ref.startScrollLeft);
-      const finalDays = Math.round(offsetPx / COLUMN_WIDTH);
+      const finalDays = Math.round(offsetPx / columnWidth);
 
       if (finalDays !== 0) {
         const data = localEventDataRef.current;
@@ -1745,7 +1793,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [bulkDragState, studioSlug, eventId, handleBulkTasksMoved, getScrollLeft]);
+  }, [bulkDragState, studioSlug, eventId, handleBulkTasksMoved, getScrollLeft, columnWidth]);
 
   /** Edge Scrolling: scroll automático cerca de los bordes durante drag (bulk o individual). */
   useEffect(() => {
@@ -2632,6 +2680,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       <SchedulerPanel
         sidebarWidth={sidebarWidth}
         onSidebarWidthChange={setSidebarWidth}
+        columnWidth={columnWidth}
         secciones={seccionesFiltradasConItems}
         itemsMap={itemsMap}
         manualTasks={manualTasks}
@@ -2665,6 +2714,10 @@ export const EventScheduler = React.memo(function EventScheduler({
         onManualTaskDuplicate={handleManualTaskDuplicate}
         onManualTaskUpdate={() => onRefetchEvent?.()}
         onDeleteStage={handleDeleteStage}
+        schedulerDateReminders={eventData?.schedulerDateReminders ?? []}
+        onReminderAdd={onReminderAdd}
+        onReminderUpdate={onReminderUpdate}
+        onReminderDelete={onReminderDelete}
         expandedSections={expandedSections}
         expandedStages={expandedStages}
         onExpandedSectionsChange={setExpandedSections}
@@ -2759,6 +2812,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     prevProps.stageIdsWithDataBySection === nextProps.stageIdsWithDataBySection;
   const customCatsEqual =
     prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
 
   return (
     datesEqual &&
@@ -2767,7 +2821,8 @@ export const EventScheduler = React.memo(function EventScheduler({
     explicitStagesEqual &&
     activeSectionIdsEqual &&
     stageIdsBySectionEqual &&
-    customCatsEqual
+    customCatsEqual &&
+    columnWidthEqual
   );
 });
 

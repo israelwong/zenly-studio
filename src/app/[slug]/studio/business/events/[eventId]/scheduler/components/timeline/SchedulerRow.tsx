@@ -35,6 +35,7 @@ interface SchedulerRowProps {
   onClick?: (e: React.MouseEvent) => void;
   /** Power Bar: si true, la barra usa --bulk-drag-offset para el translate */
   inBulkDragSegment?: boolean;
+  columnWidth?: number;
 }
 
 export const SchedulerRow = React.memo(({
@@ -55,8 +56,9 @@ export const SchedulerRow = React.memo(({
   onManualTaskPatch,
   onClick,
   inBulkDragSegment,
+  columnWidth = 60,
 }: SchedulerRowProps) => {
-  const totalWidth = getTotalGridWidth(dateRange);
+  const totalWidth = getTotalGridWidth(dateRange, columnWidth);
   const hasTask = tasks.length > 0;
 
   const handleTaskUpdate = useCallback(
@@ -80,7 +82,7 @@ export const SchedulerRow = React.memo(({
       const clickX = e.clientX - rect.left;
 
       // Calcular fecha desde posición
-      const clickedDate = getDateFromPosition(clickX, dateRange);
+      const clickedDate = getDateFromPosition(clickX, dateRange, columnWidth);
 
       // Crear tarea
       onTaskCreate(itemId, catalogItemId, itemName, clickedDate);
@@ -88,7 +90,7 @@ export const SchedulerRow = React.memo(({
       // Llamar onClick adicional si existe
       onClick?.(e);
     },
-    [hasTask, onTaskCreate, itemId, catalogItemId, itemName, dateRange, onClick]
+    [hasTask, onTaskCreate, itemId, catalogItemId, itemName, dateRange, columnWidth, onClick]
   );
 
   return (
@@ -99,10 +101,11 @@ export const SchedulerRow = React.memo(({
     >
       {/* Background grid lines (opcional, para referencia visual) */}
       <div className="absolute inset-0 flex pointer-events-none">
-        {Array.from({ length: Math.ceil(totalWidth / 60) }).map((_, i) => (
+        {Array.from({ length: Math.ceil(totalWidth / columnWidth) }).map((_, i) => (
           <div
             key={i}
-            className="w-[60px] flex-shrink-0 border-r border-zinc-800/30"
+            className="flex-shrink-0 border-r border-zinc-800/30"
+            style={{ width: columnWidth, minWidth: columnWidth }}
           />
         ))}
       </div>
@@ -130,6 +133,7 @@ export const SchedulerRow = React.memo(({
             onToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
             inBulkDragSegment={inBulkDragSegment}
+            columnWidth={columnWidth}
           />
         ))}
       </div>
