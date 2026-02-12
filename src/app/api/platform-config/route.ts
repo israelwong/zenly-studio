@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const PLATFORM_CONFIG_TIMEOUT_MS = 3000;
+
 // GET - Obtener configuración de la plataforma
 export async function GET() {
     try {
-        // Intentar obtener con todos los campos primero
+        // Timeout 3s: liberar hilo si la DB no responde
         let config;
         try {
-            config = await prisma.platform_config.findFirst({
-                orderBy: { createdAt: 'desc' }
-            })
+            config = await Promise.race([
+                prisma.platform_config.findFirst({
+                    orderBy: { createdAt: 'desc' }
+                }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Platform config timeout')), PLATFORM_CONFIG_TIMEOUT_MS)
+                ),
+            ])
         } catch (prismaError: any) {
-            // Si falla por campos que no existen, intentar con select explícito
+            // Si falla por campos que no existen, intentar con select explícito (también con timeout)
             if (prismaError?.code === 'P2022' || prismaError?.message?.includes('does not exist')) {
                 console.warn('Algunos campos nuevos no existen, usando select explícito');
-                config = await prisma.platform_config.findFirst({
+                config = await Promise.race([
+                    prisma.platform_config.findFirst({
                     orderBy: { createdAt: 'desc' },
                     select: {
                         id: true,
@@ -49,7 +57,11 @@ export async function GET() {
                         createdAt: true,
                         updatedAt: true,
                     }
-                })
+                }),
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error('Platform config timeout')), PLATFORM_CONFIG_TIMEOUT_MS)
+                    ),
+                ])
                 // Agregar campos nuevos con valores null si no existen
                 if (config) {
                     config = {

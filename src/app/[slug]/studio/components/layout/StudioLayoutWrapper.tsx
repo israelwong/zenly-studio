@@ -20,6 +20,7 @@ import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Z
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import { TerminosCondicionesEditor } from '@/components/shared/terminos-condiciones';
+import { InfrastructureStatusBanner } from '@/components/shared/InfrastructureStatusBanner';
 import { AvisoPrivacidadManager } from '@/components/shared/avisos-privacidad/AvisoPrivacidadManager';
 import { PaymentMethodsModal } from '@/components/shared/payments/PaymentMethodsModal';
 import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
@@ -349,6 +350,7 @@ function StudioLayoutContent({
           onRemindersClick={handleRemindersClick}
           onPromisesConfigClick={handlePromisesConfigClick}
         />
+        <InfrastructureStatusBanner />
         
         {/* ✅ OPTIMIZACIÓN: Cargar datos no críticos después del primer render. key cambia al actualizar recordatorios. */}
         <HeaderDataLoader

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Switch } from '@/components/ui/shadcn/switch';
-import { Settings } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import { STAGE_ORDER, STAGE_LABELS, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 
 interface SchedulerSectionStagesConfigPopoverProps {
@@ -52,7 +52,7 @@ export function SchedulerSectionStagesConfigPopover({
           className={triggerClassName ?? 'p-1 rounded hover:bg-zinc-700/50 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0'}
           aria-label="Configurar estados de la sección"
         >
-          <Settings className="h-3.5 w-3.5" />
+          <Settings2 className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent

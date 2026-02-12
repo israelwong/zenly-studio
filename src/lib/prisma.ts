@@ -23,11 +23,11 @@ function normalizeConnectionString(url: string, isPgbouncer: boolean): string {
   try {
     const urlObj = new URL(url);
     
-    // Si es pgbouncer, asegurar parámetros críticos
     if (isPgbouncer) {
       urlObj.searchParams.set('pgbouncer', 'true');
       urlObj.searchParams.set('connection_limit', '1');
     }
+    urlObj.searchParams.set('connect_timeout', '3');
     
     return urlObj.toString();
   } catch {
@@ -95,10 +95,10 @@ const pgPool = globalThis.__pgPool || new Pool({
   connectionString,
   max: poolMax,
   idleTimeoutMillis: process.env.NODE_ENV === 'development' ? 10000 : 30000, // 10s en dev, 30s en prod
-  connectionTimeoutMillis: 20000, // 20s timeout (reducido para fallar rápido en dev)
+  connectionTimeoutMillis: 3000, // 3s max: evita bloqueos de 20s
   allowExitOnIdle: true, // Permitir que el proceso termine cuando no hay conexiones activas
   // ⚠️ OPTIMIZACIÓN: Configuración adicional para reducir overhead
-  statement_timeout: process.env.NODE_ENV === 'development' ? 20000 : 30000, // 20s en dev, 30s en prod
+  statement_timeout: process.env.NODE_ENV === 'development' ? 10000 : 15000, // 10s dev, 15s prod
 });
 
 // ✅ Aumentar límite de listeners para evitar MaxListenersExceededWarning

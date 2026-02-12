@@ -15,6 +15,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 
+type NoteEntry = { id: string; notes: string | null; created_at: Date };
+
 interface TaskNotesSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,7 +24,8 @@ interface TaskNotesSheetProps {
   taskName: string;
   studioSlug: string;
   eventId: string;
-  onNoteAdded?: () => void;
+  /** Llamado al añadir (delta=1) o revertir por error (delta=-1). */
+  onNoteAdded?: (taskId: string, delta: number) => void;
 }
 
 export function TaskNotesSheet({
@@ -34,7 +37,7 @@ export function TaskNotesSheet({
   eventId,
   onNoteAdded,
 }: TaskNotesSheetProps) {
-  const [notes, setNotes] = useState<Array<{ id: string; notes: string | null; created_at: Date }>>([]);
+  const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -58,17 +61,28 @@ export function TaskNotesSheet({
     e.preventDefault();
     const trimmed = content.trim();
     if (!trimmed) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticNote: NoteEntry = {
+      id: tempId,
+      notes: trimmed,
+      created_at: new Date(),
+    };
+
+    setContent('');
+    onNoteAdded?.(taskId, 1);
+    setNotes((prev) => [optimisticNote, ...prev]);
+
     startTransition(async () => {
       const res = await addSchedulerTaskNote(studioSlug, eventId, taskId, trimmed);
       if (res.success) {
-        setContent('');
-        setNotes((prev) => [
-          { id: res.data!.id, notes: trimmed, created_at: res.data!.created_at },
-          ...prev,
-        ]);
-        onNoteAdded?.();
+        const realNote: NoteEntry = { id: res.data!.id, notes: trimmed, created_at: res.data!.created_at };
+        setNotes((prev) => prev.map((n) => (n.id === tempId ? realNote : n)));
+        window.dispatchEvent(new CustomEvent('scheduler-note-updated', { detail: { taskId } }));
         toast.success('Nota añadida');
       } else {
+        setNotes((prev) => prev.filter((n) => n.id !== tempId));
+        onNoteAdded?.(taskId, -1);
         toast.error(res.error ?? 'Error al añadir nota');
       }
     });

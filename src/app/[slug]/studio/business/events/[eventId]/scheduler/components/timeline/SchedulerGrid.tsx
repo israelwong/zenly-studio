@@ -4,15 +4,10 @@ import React, { useMemo, useCallback, useState } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
-import { addDays } from 'date-fns';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { buildSchedulerRows, filterRowsByExpandedSections, filterRowsByExpandedStages, filterRowsByExpandedCategories, isSectionRow, isStageRow, isCategoryRow, isTaskRow, isAddPhantomRow, isAddCategoryPhantomRow, isManualTaskRow, ROW_HEIGHTS, POWER_BAR_STAGE_CLASSES, STAGE_LABELS, type ManualTaskPayload, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth, getPositionFromDate, getWidthFromDuration, getTotalDays, toLocalDateOnly } from '../../utils/coordinate-utils';
-import { GripVertical, Plus } from 'lucide-react';
-import { ZenDialog } from '@/components/ui/zen';
-import { TaskForm } from '../sidebar/TaskForm';
+import { GripVertical } from 'lucide-react';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -28,6 +23,7 @@ interface SchedulerGridProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
@@ -60,6 +56,7 @@ function SchedulerGridInner(
     onTaskDelete,
     onTaskToggleComplete,
     onItemUpdate,
+    onNoteAdded,
     onManualTaskPatch,
     expandedSections = new Set(),
     expandedStages = new Set(),
@@ -152,59 +149,32 @@ function SchedulerGridInner(
     [bulkDragState?.taskIds]
   );
 
-  const [phantomPopover, setPhantomPopover] = useState<{
-    rowId: string;
-    sectionId: string;
-    stageCategory: TaskCategoryStage;
-    catalogCategoryId: string | null;
-    categoryLabel: string;
-    startDate: Date;
-    dayIndex: number;
-  } | null>(null);
-
   const totalDays = getTotalDays(dateRange);
   const daysArray = useMemo(
     () => (dateRange?.from ? Array.from({ length: totalDays }, (_, i) => i) : []),
     [totalDays, dateRange?.from]
   );
 
-  /** Solo add_phantom: celdas clicables con hover y + para añadir tarea en fecha. */
+  /** add_phantom: celdas estáticas. El clic para añadir tarea es solo en el bloque (+ texto) del sidebar. */
   const renderAddTaskPhantomRow = useCallback(
-    (row: { id: string; sectionId: string; stageCategory: TaskCategoryStage; catalogCategoryId: string | null; categoryLabel: string }) => {
-      if (!onAddManualTaskSubmit || !dateRange?.from || !studioSlug || !eventId) {
-        return (
+    (row: { id: string; sectionId: string; stageCategory: TaskCategoryStage; catalogCategoryId: string | null; categoryLabel: string }) => (
+      <div
+        key={row.id}
+        className="border-b border-white/5 flex-shrink-0 flex box-border overflow-hidden"
+        style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
+        aria-hidden
+      >
+        {daysArray.map((dayIndex) => (
           <div
-            key={row.id}
-            className="border-b border-white/5 flex-shrink-0 box-border overflow-hidden"
-            style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
+            key={dayIndex}
+            className="flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0"
+            style={{ width: columnWidth, minWidth: columnWidth }}
+            role="presentation"
           />
-        );
-      }
-      return (
-        <div
-          key={row.id}
-          className="border-b border-white/5 flex-shrink-0 flex box-border overflow-hidden"
-          style={{ height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
-        >
-          {daysArray.map((dayIndex) => {
-            const startDate = addDays(toLocalDateOnly(dateRange.from!), dayIndex);
-            return (
-              <button
-                key={dayIndex}
-                type="button"
-                className="group flex-shrink-0 h-full border-r border-zinc-800/30 last:border-r-0 hover:bg-zinc-800/30 transition-colors flex items-center justify-center cursor-pointer focus:outline-none focus:ring-1 focus:ring-violet-500/50 focus:ring-inset"
-                style={{ width: columnWidth, minWidth: columnWidth }}
-                onClick={() => setPhantomPopover({ rowId: row.id, sectionId: row.sectionId, stageCategory: row.stageCategory, catalogCategoryId: row.catalogCategoryId, categoryLabel: row.categoryLabel, startDate, dayIndex })}
-                aria-label={`Añadir tarea el ${startDate.toLocaleDateString('es')}`}
-              >
-                <Plus className="h-4 w-4 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            );
-          })}
-        </div>
-      );
-    },
-    [onAddManualTaskSubmit, dateRange, studioSlug, eventId, daysArray, columnWidth]
+        ))}
+      </div>
+    ),
+    [daysArray, columnWidth]
   );
 
   /** add_category_phantom: celdas estáticas, sin hover ni +. Las categorías no se asocian a fecha. */
@@ -347,6 +317,7 @@ function SchedulerGridInner(
               onTaskDelete={onTaskDelete}
               onTaskToggleComplete={onTaskToggleComplete}
               onItemUpdate={onItemUpdate}
+              onNoteAdded={onNoteAdded}
               onManualTaskPatch={onManualTaskPatch}
               inBulkDragSegment={isTaskInBulkSegment(t.id)}
               columnWidth={columnWidth}
@@ -386,40 +357,13 @@ function SchedulerGridInner(
             onTaskDelete={onTaskDelete}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            onNoteAdded={onNoteAdded}
             inBulkDragSegment={!!(taskId && isTaskInBulkSegment(taskId))}
             columnWidth={columnWidth}
           />
         );
       })}
 
-      {phantomPopover && onAddManualTaskSubmit && studioSlug && eventId && (
-        <ZenDialog
-          isOpen={!!phantomPopover}
-          onClose={() => setPhantomPopover(null)}
-          title="Nueva tarea manual"
-          description={`${phantomPopover.categoryLabel || STAGE_LABELS[phantomPopover.stageCategory]} · ${format(phantomPopover.startDate, 'd MMM yyyy', { locale: es })}`}
-          maxWidth="sm"
-          showCloseButton={true}
-        >
-          <TaskForm
-            mode="create"
-            studioSlug={studioSlug}
-            eventId={eventId}
-            sectionLabel={`${phantomPopover.categoryLabel || STAGE_LABELS[phantomPopover.stageCategory]} · ${format(phantomPopover.startDate, 'd MMM', { locale: es })}`}
-            onClose={() => setPhantomPopover(null)}
-            onSubmit={async (data) => {
-              await onAddManualTaskSubmit(
-                phantomPopover.sectionId,
-                phantomPopover.stageCategory,
-                phantomPopover.catalogCategoryId,
-                data,
-                phantomPopover.startDate
-              );
-              setPhantomPopover(null);
-            }}
-          />
-        </ZenDialog>
-      )}
     </div>
   );
 }

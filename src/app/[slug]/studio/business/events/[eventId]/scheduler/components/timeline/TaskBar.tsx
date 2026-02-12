@@ -17,6 +17,7 @@ import {
 } from '../../utils/task-status-utils';
 import { TaskBarContextMenu } from '../task-actions/TaskBarContextMenu';
 import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
+import { useTaskNotesSync } from '../../hooks/useTaskNotesSync';
 import { ZenBadge } from '@/components/ui/zen';
 import { MessageSquare } from 'lucide-react';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
@@ -41,6 +42,7 @@ interface TaskBarProps {
   onDelete?: (taskId: string) => Promise<void>;
   onToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
   /** Power Bar: si true, aplica translateX(var(--bulk-drag-offset, 0px)) para arrastre por CSS */
@@ -65,6 +67,7 @@ export const TaskBar = React.memo(({
   onDelete,
   onToggleComplete,
   onItemUpdate,
+  onNoteAdded,
   onManualTaskPatch,
   onClick,
   inBulkDragSegment,
@@ -95,6 +98,7 @@ export const TaskBar = React.memo(({
 
   const isSubtask = (manualTask as { parent_id?: string | null })?.parent_id != null || (item?.scheduler_task as { parent_id?: string | null })?.parent_id != null;
   const notesCount = (item?.scheduler_task as { notes_count?: number })?.notes_count ?? manualTask?.notes_count ?? 0;
+  const hasNotes = useTaskNotesSync(taskId, notesCount);
   const statusColor = getStatusColor(status, hasCrewMember, isSubtask);
   const computedX = getPositionFromDate(localStartDate, dateRange, columnWidth);
   const computedWidth = Math.max(getWidthFromDuration(localStartDate, localEndDate, columnWidth), columnWidth);
@@ -324,11 +328,11 @@ export const TaskBar = React.memo(({
       >
         <div className={`w-full h-full relative ${inBulkDragSegment ? 'opacity-40' : ''}`}>
           <div
-            className="w-full h-full flex items-center justify-between gap-1.5 px-1.5 pointer-events-none"
+            className="w-full h-full flex items-center justify-between gap-1 px-1.5 pointer-events-none"
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
-          <span className={`flex-1 truncate text-center text-xs ${isCompleted ? 'font-normal' : 'font-medium'}`}>{taskName}</span>
-          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0 flex items-center gap-1">
+          <span className={`flex-1 min-w-0 truncate text-center text-xs ${isCompleted ? 'font-normal' : 'font-medium'}`}>{taskName}</span>
+          <div className="shrink-0 flex items-center gap-1">
             {item?.scheduler_task?.sync_status === 'INVITED' && (
               <div title="Sincronizado con Google Calendar">
                 <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
@@ -336,19 +340,14 @@ export const TaskBar = React.memo(({
             )}
             {studioSlug && eventId && (
               <div
-                className="flex items-center gap-0.5 pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                className="flex items-center gap-0.5 pointer-events-auto transition-opacity cursor-pointer opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   setNotesSheetOpen(true);
                 }}
                 title="Notas de seguimiento"
               >
-                <MessageSquare className="h-3.5 w-3.5" />
-                {notesCount > 0 && (
-                  <span className="min-w-[1rem] h-4 px-1 rounded text-[10px] font-medium bg-amber-500/90 text-zinc-900 flex items-center justify-center">
-                    {notesCount}
-                  </span>
-                )}
+                <MessageSquare className={`h-3.5 w-3.5 ${hasNotes ? 'text-amber-500' : 'text-zinc-400'}`} />
               </div>
             )}
           </div>
@@ -365,6 +364,7 @@ export const TaskBar = React.memo(({
         taskName={taskName}
         studioSlug={studioSlug}
         eventId={eventId}
+        onNoteAdded={onNoteAdded}
       />
     )}
     </>

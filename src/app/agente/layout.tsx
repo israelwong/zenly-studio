@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
+import { InfrastructureStatusBanner } from '@/components/shared/InfrastructureStatusBanner';
 
 export default function AgenteLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -21,6 +22,7 @@ export default function AgenteLayout({ children }: { children: React.ReactNode }
             {/* Navbar superior */}
             <div>
                 <Navbar onMenuClick={() => setSidebarOpen(true)} />
+                <InfrastructureStatusBanner />
             </div>
 
             {/* Contenido principal con sidebar */}

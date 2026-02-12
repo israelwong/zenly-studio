@@ -249,6 +249,10 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** Posición del overlay en body (createPortal) para que la fila arrastrada sea visible. */
   const [overlayPosition, setOverlayPosition] = useState<{ x: number; y: number } | null>(null);
   const overlayStartRectRef = useRef<{ left: number; top: number } | null>(null);
+  const overlayPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  /** Indicador visual de drop: línea amber donde caerá la tarea. Solo en posiciones válidas. */
+  const [dropIndicator, setDropIndicator] = useState<{ overId: string; insertBefore: boolean } | null>(null);
 
   /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
   const lastOverIdRef = useRef<string | null>(null);
@@ -415,6 +419,46 @@ export const EventScheduler = React.memo(function EventScheduler({
       onDataChange(updatedData);
     }
   }, [onDataChange]);
+
+  /** Delta optimista de notes_count (Sidebar + TaskBar) sin refetch. delta=1 añadir, delta=-1 revertir. */
+  const handleNotesCountDelta = useCallback((taskId: string, delta: number) => {
+    setLocalEventData((prev) => {
+      const tasks = prev.scheduler?.tasks ?? [];
+      const manualMatch = tasks.find((t) => t.id === taskId && t.cotizacion_item_id == null);
+      if (manualMatch) {
+        const newTasks = tasks.map((t) =>
+          t.id === taskId && t.cotizacion_item_id == null
+            ? { ...t, notes_count: Math.max(0, ((t as { notes_count?: number }).notes_count ?? 0) + delta) }
+            : t
+        );
+        return { ...prev, scheduler: prev.scheduler ? { ...prev.scheduler, tasks: newTasks } : prev.scheduler };
+      }
+      const cotizaciones = prev.cotizaciones ?? [];
+      for (const cot of cotizaciones) {
+        for (const item of cot.cotizacion_items ?? []) {
+          if (item?.scheduler_task?.id === taskId) {
+            const st = item.scheduler_task as { notes_count?: number };
+            const updated = {
+              ...item,
+              scheduler_task: { ...item.scheduler_task, notes_count: Math.max(0, (st?.notes_count ?? 0) + delta) },
+            };
+            return {
+              ...prev,
+              cotizaciones: cotizaciones.map((c) =>
+                c.id === cot.id
+                  ? {
+                      ...c,
+                      cotizacion_items: c.cotizacion_items?.map((i) => (i?.id === item.id ? updated : i)) ?? [],
+                    }
+                  : c
+              ),
+            };
+          }
+        }
+      }
+      return prev;
+    });
+  }, []);
 
   // Patch central de tareas manuales: un solo lugar para actualizar estado y propagar al Grid. Por qué: end_date/duration_days se normalizan a Date y número aquí para que el Grid calcule ancho correcto; la sobrescritura explícita al final evita que valores crudos del patch (p. ej. string ISO) ganen sobre los calculados.
   const handleManualTaskPatch = useCallback((taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => {
@@ -826,9 +870,42 @@ export const EventScheduler = React.memo(function EventScheduler({
     [localEventData, getSectionIdFromCatalog]
   );
 
+  const taskIdToMeta = useMemo(() => {
+    const cotizaciones = localEventData.cotizaciones ?? [];
+    const manualTasksForRows = (localEventData.scheduler?.tasks ?? []).filter((t) => t.cotizacion_item_id == null);
+    const allItemsForMap: CotizacionItem[] = [];
+    cotizaciones.forEach((cot) => {
+      const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
+      if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
+    });
+    const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
+    const itemsMapForRows = new Map<string, CotizacionItem>();
+    sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+    const rows = buildSchedulerRows(secciones, itemsMapForRows, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage);
+    const blocks = groupRowsIntoBlocks(rows);
+    const map = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
+    for (const b of blocks) {
+      if (b.type !== 'stage_block') continue;
+      const stageId = b.block.stageRow.id;
+      for (const segment of getStageSegments(b.block.contentRows)) {
+        const taskRows = segment.rows.filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r));
+        for (const r of taskRows) {
+          const taskId = r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id);
+          if (!taskId || taskId === 'undefined') continue;
+          const catalogCategoryId = r.type === 'task'
+            ? (r.item as { catalog_category_id?: string | null }).catalog_category_id ?? (r.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+            : (r.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+          map.set(taskId, { stageKey: stageId, catalogCategoryId });
+        }
+      }
+    }
+    return map;
+  }, [localEventData, secciones, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage]);
+
   const handleSchedulerDragStart = useCallback(
     (event: DragStartEvent) => {
       if (updatingTaskId != null) return;
+      setDropIndicator(null);
       const taskId = String(event.active.id);
       const foundTask = resolveActiveDragDataById(taskId);
       if (foundTask) {
@@ -838,6 +915,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         if (rect) {
           overlayStartRectRef.current = { left: rect.left, top: rect.top };
           setOverlayPosition({ x: rect.left, y: rect.top });
+          overlayPositionRef.current = { x: rect.left, y: rect.top };
         }
       }
     },
@@ -848,12 +926,52 @@ export const EventScheduler = React.memo(function EventScheduler({
     const start = overlayStartRectRef.current;
     if (!start) return;
     if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
-    setOverlayPosition({ x: start.left + event.delta.x, y: start.top + event.delta.y });
+    const pos = { x: start.left + event.delta.x, y: start.top + event.delta.y };
+    setOverlayPosition(pos);
+    overlayPositionRef.current = pos;
   }, []);
+
+  const ROW_HEIGHTS = { TASK_ROW: 48 } as const;
+  const normCat = useCallback((v: string | null | undefined): string | null =>
+    v === '' || v == null || v === SIN_CATEGORIA_SECTION_ID ? null : v, []);
 
   const handleSchedulerDragOver = useCallback((event: DragOverEvent) => {
     if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
-  }, []);
+    const overId = event.over?.id ? String(event.over.id) : null;
+    const activeId = String(event.active.id);
+    if (!overId || overId === activeId || overId.startsWith('cat::')) {
+      setDropIndicator(null);
+      return;
+    }
+    const overEl = document.querySelector(`[data-scheduler-task-id="${overId}"]`);
+    if (!overEl) {
+      setDropIndicator(null);
+      return;
+    }
+    const rect = overEl.getBoundingClientRect();
+    const overlayPos = overlayPositionRef.current;
+    if (!overlayPos) {
+      setDropIndicator(null);
+      return;
+    }
+    const insertBefore = overlayPos.y + ROW_HEIGHTS.TASK_ROW / 2 < rect.top + rect.height / 2;
+    const meta = taskIdToMeta.get(overId);
+    if (!meta) {
+      setDropIndicator(null);
+      return;
+    }
+    const activeData = resolveActiveDragDataById(activeId);
+    if (!activeData) {
+      setDropIndicator(null);
+      return;
+    }
+    const isValid = activeData.isManual || (activeData.stageKey === meta.stageKey && normCat(activeData.catalogCategoryId) === normCat(meta.catalogCategoryId));
+    if (!isValid) {
+      setDropIndicator(null);
+      return;
+    }
+    setDropIndicator({ overId, insertBefore });
+  }, [taskIdToMeta, resolveActiveDragDataById, normCat]);
 
   const handleSchedulerDragEnd = useCallback(
     async (event: DragEndEvent) => {
@@ -1166,8 +1284,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         lastOverIdRef.current = null;
         setActiveDragData(null);
         setOverlayPosition(null);
+        overlayPositionRef.current = null;
         overlayStartRectRef.current = null;
-        setActiveDragData(null);
+        setDropIndicator(null);
       }
     },
     [
@@ -2764,6 +2883,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onItemTaskMoveCategory={handleItemTaskMoveCategory}
         onManualTaskDuplicate={handleManualTaskDuplicate}
         onManualTaskUpdate={() => onRefetchEvent?.()}
+        onNoteAdded={handleNotesCountDelta}
         onDeleteStage={handleDeleteStage}
         schedulerDateReminders={eventData?.schedulerDateReminders ?? []}
         onReminderAdd={onReminderAdd}
@@ -2783,6 +2903,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onSchedulerDragEnd={handleSchedulerDragEnd}
         activeDragData={activeDragData}
         overlayPosition={overlayPosition}
+        dropIndicator={dropIndicator}
         updatingTaskId={updatingTaskId}
         gridRef={gridRef}
         scrollContainerRef={scrollContainerRef}

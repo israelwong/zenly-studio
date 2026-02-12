@@ -50,6 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/
 import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
+import { useTaskNotesSync } from '../../hooks/useTaskNotesSync';
 import {
   ChevronRight,
   ChevronDown,
@@ -66,18 +67,12 @@ import {
   CornerDownRight,
   MessageSquare,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/shadcn/dropdown-menu';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { differenceInCalendarDays } from 'date-fns';
 import { MoveTaskModal } from './MoveTaskModal';
 import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
+import { SchedulerBackdropProvider, useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -121,6 +116,7 @@ interface SchedulerSidebarProps {
   onManualTaskMoveStage?: (taskId: string, category: TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
@@ -146,6 +142,7 @@ interface SchedulerSidebarProps {
   onSchedulerDragEnd?: (event: DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
+  dropIndicator?: { overId: string; insertBefore: boolean } | null;
   updatingTaskId?: string | null;
   googleCalendarEnabled?: boolean;
   sidebarWidth?: number;
@@ -267,6 +264,7 @@ function SortableTaskRow({
   isLastTaskInSegment = false,
   leftSlot,
   rightSlot,
+  dropIndicator,
 }: {
   taskId: string;
   isManual: boolean;
@@ -281,6 +279,7 @@ function SortableTaskRow({
   isLastTaskInSegment?: boolean;
   leftSlot?: React.ReactNode;
   rightSlot?: React.ReactNode;
+  dropIndicator?: { overId: string; insertBefore: boolean } | null;
 }) {
   const id = String(taskId);
   const {
@@ -311,6 +310,9 @@ function SortableTaskRow({
     opacity: isDragging ? 0.3 : 1,
   };
 
+  const showDropAbove = dropIndicator?.overId === taskId && dropIndicator.insertBefore;
+  const showDropBelow = dropIndicator?.overId === taskId && !dropIndicator.insertBefore;
+
   return (
     <div
       ref={setNodeRef}
@@ -318,6 +320,9 @@ function SortableTaskRow({
       className={`group relative flex items-center min-h-[32px] box-border overflow-hidden transition-colors border-b border-white/5 hover:bg-zinc-800/40 cursor-pointer ${isSynced ? 'bg-blue-500/5' : ''} ${className}`}
       data-scheduler-task-id={taskId}
     >
+      {showDropAbove && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-amber-500 z-50 pointer-events-none" aria-hidden />
+      )}
       {/* Handle: primero absoluto, w-8 fijo, zona de agarre uniforme para tareas y subtareas */}
       <button
         type="button"
@@ -342,6 +347,9 @@ function SortableTaskRow({
       >
         {leftSlot}
       </div>
+      {showDropBelow && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 z-50 pointer-events-none" aria-hidden />
+      )}
       {/* Rama vertical: amber para manual/subtarea, zinc para catálogo. Alineada con BRANCH_LEFT.CATEGORY. */}
       <div
         className={`absolute top-0 w-[1px] pointer-events-none z-10 ${isAmber ? 'bg-amber-500/40' : 'bg-zinc-800'}`}
@@ -356,7 +364,7 @@ function SortableTaskRow({
         className={`flex-1 min-w-0 flex items-center gap-1 pr-2 py-2 h-full overflow-hidden min-h-[32px] ${isDragging ? 'pointer-events-none' : ''}`}
         style={{ paddingLeft: 14 + (hasParentId ? 8 : 0) }}
       >
-        <div className="flex-1 min-w-0 overflow-hidden truncate">{children}</div>
+        <div className="flex-1 min-w-0 overflow-hidden">{children}</div>
         {rightSlot}
       </div>
     </div>
@@ -401,7 +409,7 @@ function CategoryDroppableHeader({
   return (
     <div
       ref={setNodeRef}
-      className={`group relative flex items-center pl-12 pr-4 border-b border-white/5 transition-colors min-h-[32px] box-border overflow-hidden gap-2 rounded-sm ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-transparent'}`}
+      className={`group relative flex items-center pl-12 pr-4 border-b border-white/5 transition-colors min-h-[32px] box-border overflow-hidden gap-2 ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-transparent'}`}
       style={{ height: ROW_HEIGHTS.CATEGORY_HEADER, minHeight: ROW_HEIGHTS.CATEGORY_HEADER, maxHeight: ROW_HEIGHTS.CATEGORY_HEADER, boxSizing: 'border-box' }}
       data-section-id={sectionId}
       title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
@@ -571,6 +579,7 @@ interface ManualTaskRowSortableProps {
   isSynced?: boolean;
   isLastTaskInSegment?: boolean;
   className?: string;
+  dropIndicator?: { overId: string; insertBefore: boolean } | null;
 }
 
 /** Fila manual: badge duración | avatar + nombre | notas (si >0) | HoverCard acciones. */
@@ -600,7 +609,9 @@ function ManualTaskRow({
   sectionLabel,
   onAddManualTaskSubmit,
   onManualTaskUpdate,
+  onNoteAdded,
   sortableProps,
+  activeDragData,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
@@ -637,13 +648,22 @@ function ManualTaskRow({
     parentId?: string | null
   ) => Promise<void>;
   onManualTaskUpdate?: () => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   sortableProps: ManualTaskRowSortableProps;
+  activeDragData?: { taskId: string; isManual: boolean } | null;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const { isBackdropVisible } = useSchedulerBackdrop() ?? {};
+  useEffect(() => {
+    if (activeDragData) setHoverOpen(false);
+  }, [activeDragData]);
+  useEffect(() => {
+    if (isBackdropVisible) setHoverOpen(false);
+  }, [isBackdropVisible]);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
   const { localTask } = useSchedulerManualTaskSync(task);
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
@@ -665,6 +685,7 @@ function ManualTaskRow({
     return days;
   })();
   const notesCount = (localTask as { notes_count?: number }).notes_count ?? 0;
+  const hasNotes = useTaskNotesSync(localTask.id, notesCount);
 
   const leftSlot = taskDurationDays > 0 ? (
     <span
@@ -676,7 +697,7 @@ function ManualTaskRow({
 
   const rightSlot = (
     <div className="flex items-center gap-0.5 shrink-0 pl-1">
-      {notesCount > 0 && (
+      {hasNotes && (
         <button
           type="button"
           onClick={(e) => {
@@ -690,121 +711,151 @@ function ManualTaskRow({
           <MessageSquare className="h-4 w-4" />
         </button>
       )}
-      <HoverCard openDelay={200} closeDelay={100}>
+    </div>
+  );
+
+  const hoverCardContent = (
+    <div className="flex flex-col gap-0 py-1">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); setHoverOpen(false); }}
+        className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+      >
+        <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
+        Añadir nota
+      </button>
+      {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
+        <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              Añadir subtarea
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+            <TaskForm
+              mode="create"
+              studioSlug={studioSlug}
+              eventId={eventId}
+              parentName={localTask.name}
+              onClose={() => setAddSubtaskOpen(false)}
+              onSubmit={async (data) => {
+                if (!onAddManualTaskSubmit) return;
+                await onAddManualTaskSubmit(sectionId, stageCategory, catalogCategoryId ?? null, data, undefined, localTask.id);
+                setAddSubtaskOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+      <div className="my-1 h-px bg-zinc-800" />
+      <HoverCard openDelay={150} closeDelay={80}>
         <HoverCardTrigger asChild>
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors focus:outline-none opacity-0 group-hover:opacity-100 shrink-0"
-            aria-label="Acciones"
+            className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors justify-between"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <span className="flex items-center gap-2">
+              <MoreHorizontal className="h-4 w-4 shrink-0" />
+              Más acciones
+            </span>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
           </button>
         </HoverCardTrigger>
-        <HoverCardContent align="end" side="left" className="w-48 p-4 bg-zinc-900 border-zinc-800">
-          <div className="flex flex-col gap-3">
-            {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
-              <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
-                <PopoverTrigger asChild>
+        <HoverCardContent
+          side="right"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          className="w-48 p-2 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
+        >
+          <div className="flex flex-col gap-0 py-1">
+            {showUp && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); if (canMoveUp && onReorderUp) onReorderUp(localTask.id); else if (onMoveToPreviousCategory) onMoveToPreviousCategory(); }}
+                disabled={!upEnabled}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
+              >
+                <ChevronUp className="h-3.5 w-3.5" /> Subir
+              </button>
+            )}
+            {showDown && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); if (canMoveDown && onReorderDown) onReorderDown(localTask.id); else if (onMoveToNextCategory) onMoveToNextCategory(); }}
+                disabled={!downEnabled}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
+              >
+                <ChevronDown className="h-3.5 w-3.5" /> Bajar
+              </button>
+            )}
+            {(showUp || showDown) && <div className="my-1 h-px bg-zinc-800" />}
+            {onDuplicate && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); onDuplicate(localTask.id); }}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+              >
+                <Copy className="h-3.5 w-3.5" /> Duplicar
+              </button>
+            )}
+            {onMoveToStage && stageCategory != null && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setMoveModalOpen(true); }}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+              >
+                <FolderInput className="h-3.5 w-3.5" /> Mover a…
+              </button>
+            )}
+            {onToggleTaskHierarchy && (
+              <>
+                <div className="my-1 h-px bg-zinc-800" />
+                {childTaskIds.length > 0 && !localTask.parent_id && (
                   <button
                     type="button"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds); else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null); }}
+                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
                   >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Añadir subtarea
+                    Convertir subtareas en principales
                   </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-                  <TaskForm
-                    mode="create"
-                    studioSlug={studioSlug}
-                    eventId={eventId}
-                    parentName={localTask.name}
-                    onClose={() => setAddSubtaskOpen(false)}
-                    onSubmit={async (data) => {
-                      if (!onAddManualTaskSubmit) return;
-                      await onAddManualTaskSubmit(sectionId, stageCategory, catalogCategoryId ?? null, data, undefined, localTask.id);
-                      setAddSubtaskOpen(false);
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
+                )}
+                {localTask.parent_id ? (
+                  <button
+                    type="button"
+                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); await onToggleTaskHierarchy(localTask.id, null); }}
+                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+                  >
+                    Convertir en tarea principal
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (previousPrincipalId == null) return; await onToggleTaskHierarchy(localTask.id, previousPrincipalId); }}
+                    disabled={previousPrincipalId == null}
+                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
+                  >
+                    Convertir en tarea secundaria
+                  </button>
+                )}
+              </>
             )}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setNotesSheetOpen(true);
-              }}
-              className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-            >
-              <MessageSquare className="h-4 w-4 shrink-0" />
-              Añadir nota
-            </button>
-            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-                >
-                  <MoreHorizontal className="h-4 w-4 shrink-0" />
-                  Más acciones
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800">
-                {showUp && (
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMenuOpen(false); if (canMoveUp && onReorderUp) onReorderUp(localTask.id); else if (onMoveToPreviousCategory) onMoveToPreviousCategory(); }} disabled={!upEnabled} className="gap-2">
-                    <ChevronUp className="h-3.5 w-3.5" /> Subir
-                  </DropdownMenuItem>
-                )}
-                {showDown && (
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMenuOpen(false); if (canMoveDown && onReorderDown) onReorderDown(localTask.id); else if (onMoveToNextCategory) onMoveToNextCategory(); }} disabled={!downEnabled} className="gap-2">
-                    <ChevronDown className="h-3.5 w-3.5" /> Bajar
-                  </DropdownMenuItem>
-                )}
-                {(showUp || showDown) && <DropdownMenuSeparator />}
-                <DropdownMenuItem onClick={() => { setMenuOpen(false); setPopoverOpen(true); }} className="gap-2">
-                  <Pencil className="h-3.5 w-3.5" /> Editar
-                </DropdownMenuItem>
-                {onDuplicate && (
-                  <DropdownMenuItem onClick={() => { setMenuOpen(false); onDuplicate(localTask.id); }} className="gap-2">
-                    <Copy className="h-3.5 w-3.5" /> Duplicar
-                  </DropdownMenuItem>
-                )}
-                {onMoveToStage && stageCategory != null && (
-                  <DropdownMenuItem onClick={() => { setMenuOpen(false); setMoveModalOpen(true); }} className="gap-2">
-                    <FolderInput className="h-3.5 w-3.5" /> Mover a…
-                  </DropdownMenuItem>
-                )}
-                {onToggleTaskHierarchy && (
-                  <>
-                    <DropdownMenuSeparator />
-                    {childTaskIds.length > 0 && !localTask.parent_id && (
-                      <DropdownMenuItem onClick={async () => { setMenuOpen(false); if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds); else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null); }} className="gap-2">
-                        Convertir subtareas en principales
-                      </DropdownMenuItem>
-                    )}
-                    {localTask.parent_id ? (
-                      <DropdownMenuItem onClick={async () => { setMenuOpen(false); await onToggleTaskHierarchy(localTask.id, null); }} className="gap-2">
-                        Convertir en tarea principal
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={async () => { if (previousPrincipalId == null) return; setMenuOpen(false); await onToggleTaskHierarchy(localTask.id, previousPrincipalId); }} disabled={previousPrincipalId == null} className="gap-2">
-                        Convertir en tarea secundaria
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                )}
-                <DropdownMenuSeparator />
-                {onManualTaskDelete && (
-                  <DropdownMenuItem variant="destructive" onClick={() => { setMenuOpen(false); setDeleteConfirmOpen(true); }} className="gap-2">
-                    <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {(onToggleTaskHierarchy || showUp || showDown) && <div className="my-1 h-px bg-zinc-800" />}
+            {onManualTaskDelete && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setDeleteConfirmOpen(true); }}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Eliminar
+              </button>
+            )}
           </div>
         </HoverCardContent>
       </HoverCard>
@@ -859,7 +910,7 @@ function ManualTaskRow({
             )}
           </ZenAvatar>
         )}
-        <p className={`flex-1 min-w-0 text-sm leading-tight truncate ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : (localTask.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
+        <p className={`flex-1 min-w-0 text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : (localTask.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
           {localTask.name}
         </p>
       </div>
@@ -868,13 +919,37 @@ function ManualTaskRow({
 
   return (
     <>
-      <SortableTaskRow
-        {...sortableProps}
-        leftSlot={leftSlot}
-        rightSlot={rightSlot}
+      <HoverCard
+        openDelay={200}
+        closeDelay={100}
+        open={hoverOpen && !isBackdropVisible}
+        onOpenChange={(open) => {
+          if (!isBackdropVisible) setHoverOpen(open);
+          else setHoverOpen(false);
+        }}
       >
-        {rowContent}
-      </SortableTaskRow>
+        <HoverCardTrigger asChild>
+          <div className="w-full">
+            <SortableTaskRow
+              {...sortableProps}
+              className={`${sortableProps.className ?? ''} ${hoverOpen ? 'bg-zinc-800/40' : ''}`.trim()}
+              leftSlot={leftSlot}
+              rightSlot={rightSlot}
+              dropIndicator={sortableProps.dropIndicator}
+            >
+              {rowContent}
+            </SortableTaskRow>
+          </div>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="bottom"
+          align="end"
+          sideOffset={4}
+          className="w-56 p-0 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
+        >
+          {hoverCardContent}
+        </HoverCardContent>
+      </HoverCard>
       {onMoveToStage && stageCategory != null && (
         <MoveTaskModal
           open={moveModalOpen}
@@ -895,7 +970,7 @@ function ManualTaskRow({
         taskName={localTask.name}
         studioSlug={studioSlug}
         eventId={eventId}
-        onNoteAdded={onManualTaskUpdate ?? undefined}
+        onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
       />
     </>
   );
@@ -912,9 +987,7 @@ function SchedulerItem({
   onNoteAdded,
   sortableProps,
   addSubtaskProps,
-  childTaskIds,
-  onConvertSubtasksToPrincipal,
-  onToggleTaskHierarchy,
+  activeDragData,
 }: {
   item: CotizacionItem;
   metadata: ItemMetadata;
@@ -923,7 +996,7 @@ function SchedulerItem({
   renderItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
-  onNoteAdded?: () => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   sortableProps?: ManualTaskRowSortableProps;
   addSubtaskProps?: {
     sectionId: string;
@@ -932,12 +1005,18 @@ function SchedulerItem({
     sectionLabel: string;
     onAddManualTaskSubmit: (sectionId: string, stage: string, catalogCategoryId: string | null, data: { name: string; durationDays: number; budgetAmount?: number }, startDate?: Date, parentId?: string | null) => Promise<void>;
   };
-  childTaskIds?: string[];
-  onConvertSubtasksToPrincipal?: (childIds: string[]) => void;
-  onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => Promise<void>;
+  activeDragData?: { taskId: string; isManual: boolean } | null;
 }) {
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
   const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const { isBackdropVisible } = useSchedulerBackdrop() ?? {};
+  useEffect(() => {
+    if (activeDragData) setHoverOpen(false);
+  }, [activeDragData]);
+  useEffect(() => {
+    if (isBackdropVisible) setHoverOpen(false);
+  }, [isBackdropVisible]);
   const { localItem } = useSchedulerItemSync(item, onItemUpdate);
   const isCompleted = !!localItem.scheduler_task?.completed_at;
 
@@ -951,6 +1030,7 @@ function SchedulerItem({
   const hasDuration = (itemDurationDays ?? 0) > 0;
   const taskId = localItem.scheduler_task?.id;
   const notesCount = (localItem.scheduler_task as { notes_count?: number })?.notes_count ?? 0;
+  const hasNotes = useTaskNotesSync(taskId ?? null, notesCount);
 
   const leftSlot = hasDuration ? (
     <span
@@ -962,7 +1042,7 @@ function SchedulerItem({
 
   const rightSlot = (
     <div className="flex items-center gap-0.5">
-      {notesCount > 0 && taskId && (
+      {hasNotes && taskId && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); }}
@@ -973,72 +1053,48 @@ function SchedulerItem({
           <MessageSquare className="h-4 w-4" />
         </button>
       )}
-      <HoverCard openDelay={200} closeDelay={100}>
-        <HoverCardTrigger asChild>
-          <button
-            type="button"
-            onClick={(e) => e.stopPropagation()}
-            className="p-1 rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors focus:outline-none opacity-0 group-hover:opacity-100 shrink-0"
-            aria-label="Acciones"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </HoverCardTrigger>
-        <HoverCardContent align="end" side="left" className="w-48 p-4 bg-zinc-900 border-zinc-800">
-          <div className="flex flex-col gap-3">
-            {taskId && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-              >
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                Añadir nota
-              </button>
-            )}
-            {addSubtaskProps && taskId && (
-              <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Añadir subtarea
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-                  <TaskForm
-                    mode="create"
-                    studioSlug={studioSlug}
-                    eventId={eventId}
-                    parentName={metadata.servicioNombre}
-                    onClose={() => setAddSubtaskOpen(false)}
-                    onSubmit={async (data) => {
-                      await addSubtaskProps.onAddManualTaskSubmit(addSubtaskProps.sectionId, addSubtaskProps.stage, addSubtaskProps.catalogCategoryId, data, undefined, taskId);
-                      setAddSubtaskOpen(false);
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-            {childTaskIds && childTaskIds.length > 0 && (onConvertSubtasksToPrincipal || onToggleTaskHierarchy) && (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (onConvertSubtasksToPrincipal) onConvertSubtasksToPrincipal(childTaskIds);
-                  else for (const childId of childTaskIds) await onToggleTaskHierarchy!(childId, null);
-                }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-0 rounded text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-              >
-                Convertir subtareas en principales
-              </button>
-            )}
-          </div>
-        </HoverCardContent>
-      </HoverCard>
+    </div>
+  );
+
+  const hoverCardContent = (
+    <div className="flex flex-col gap-0 py-1">
+      {taskId && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); setHoverOpen(false); }}
+          className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+        >
+          <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
+          Añadir nota
+        </button>
+      )}
+      {addSubtaskProps && taskId && (
+        <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              Añadir subtarea
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+            <TaskForm
+              mode="create"
+              studioSlug={studioSlug}
+              eventId={eventId}
+              parentName={metadata.servicioNombre}
+              onClose={() => setAddSubtaskOpen(false)}
+              onSubmit={async (data) => {
+                await addSubtaskProps.onAddManualTaskSubmit(addSubtaskProps.sectionId, addSubtaskProps.stage, addSubtaskProps.catalogCategoryId, data, undefined, taskId);
+                setAddSubtaskOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 
@@ -1058,12 +1114,12 @@ function SchedulerItem({
           </ZenAvatarFallback>
         )}
       </ZenAvatar>
-      <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-        <p className={`text-sm leading-tight truncate ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : ((localItem.scheduler_task as { parent_id?: string | null })?.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
+      <div className="flex-1 min-w-0 min-h-0 overflow-hidden line-clamp-2">
+        <p className={`text-sm leading-tight ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : ((localItem.scheduler_task as { parent_id?: string | null })?.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
-          <p className={`text-xs truncate leading-tight ${isCompleted ? 'font-normal italic text-zinc-600 line-through decoration-2 decoration-zinc-600' : 'text-zinc-500'}`}>
+          <p className={`text-[11px] leading-tight truncate ${isCompleted ? 'font-normal italic text-zinc-600 line-through decoration-2 decoration-zinc-600' : 'text-zinc-500'}`}>
             {localItem.assigned_to_crew_member.name}
           </p>
         )}
@@ -1088,9 +1144,36 @@ function SchedulerItem({
   if (sortableProps) {
     return (
       <>
-        <SortableTaskRow {...sortableProps} leftSlot={leftSlot} rightSlot={rightSlot}>
-          {rowContent}
-        </SortableTaskRow>
+        <HoverCard
+          openDelay={200}
+          closeDelay={100}
+          open={hoverOpen && !isBackdropVisible}
+          onOpenChange={(open) => {
+            if (!isBackdropVisible) setHoverOpen(open);
+            else setHoverOpen(false);
+          }}
+        >
+          <HoverCardTrigger asChild>
+            <div className="w-full">
+              <SortableTaskRow
+                {...sortableProps}
+                className={`${sortableProps.className ?? ''} ${hoverOpen ? 'bg-zinc-800/40' : ''}`.trim()}
+                leftSlot={leftSlot}
+                rightSlot={rightSlot}
+              >
+                {rowContent}
+              </SortableTaskRow>
+            </div>
+          </HoverCardTrigger>
+          <HoverCardContent
+            side="bottom"
+            align="end"
+            sideOffset={4}
+            className="w-56 p-0 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
+          >
+            {hoverCardContent}
+          </HoverCardContent>
+        </HoverCard>
         {taskId && (
           <TaskNotesSheet
             open={notesSheetOpen}
@@ -1144,6 +1227,7 @@ export const SchedulerSidebar = React.memo(({
   onManualTaskMoveStage,
   onManualTaskDuplicate,
   onManualTaskUpdate,
+  onNoteAdded,
   onDeleteStage,
   expandedSections = new Set(),
   expandedStages = new Set(),
@@ -1161,14 +1245,15 @@ export const SchedulerSidebar = React.memo(({
   onMoveCategory,
   onRenameCustomCategory,
   onDeleteCustomCategory,
-  onItemTaskReorder,
-  onItemTaskMoveCategory,
+  onItemTaskReorder: _onItemTaskReorder,
+  onItemTaskMoveCategory: _onItemTaskMoveCategory,
   onSchedulerDragStart,
   onSchedulerDragMove,
   onSchedulerDragOver,
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
+  dropIndicator = null,
   updatingTaskId = null,
   googleCalendarEnabled = false,
   sidebarWidth = 340,
@@ -1354,6 +1439,7 @@ export const SchedulerSidebar = React.memo(({
   }, []);
 
   return (
+    <SchedulerBackdropProvider>
     <div className="w-full bg-zinc-950 overflow-visible relative box-border" style={{ minHeight: totalMinHeight }}>
       <div className="h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30 box-border">
         <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
@@ -1385,7 +1471,7 @@ export const SchedulerSidebar = React.memo(({
             return (
               <div
                 key={block.row.id}
-                className="w-full border-b border-white/5 pl-3 pr-6 flex items-center min-h-[32px] rounded-sm box-border overflow-hidden"
+                className="w-full border-b border-white/5 pl-3 pr-2 flex items-center min-h-[32px] box-border overflow-hidden"
                 style={{ height: ROW_HEIGHTS.SECTION, minHeight: ROW_HEIGHTS.SECTION, maxHeight: ROW_HEIGHTS.SECTION, boxSizing: 'border-box' }}
               >
                 <button
@@ -1443,7 +1529,7 @@ export const SchedulerSidebar = React.memo(({
           return (
             <React.Fragment key={stageRow.id}>
                 <div
-                  className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden rounded-sm ${POWER_BAR_STAGE_CLASSES[stageRow.category as TaskCategoryStage].bg}`}
+                  className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden ${POWER_BAR_STAGE_CLASSES[stageRow.category as TaskCategoryStage].bg}`}
                   style={{ height: ROW_HEIGHTS.STAGE, minHeight: ROW_HEIGHTS.STAGE, maxHeight: ROW_HEIGHTS.STAGE, boxSizing: 'border-box' }}
                 >
                 <button
@@ -1507,7 +1593,7 @@ export const SchedulerSidebar = React.memo(({
                                 return (
                                   <div
                                     key={row.id}
-                                    className="border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors text-xs cursor-pointer"
+                                    className="border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 text-xs"
                                     style={{ paddingLeft: INDENT.CATEGORY, height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
                                   >
                                     <div className="w-4 shrink-0" aria-hidden />
@@ -1529,7 +1615,7 @@ export const SchedulerSidebar = React.memo(({
                                                   stage: row.stageCategory,
                                                 })
                                               }
-                                              className="flex items-center gap-1.5 w-full text-left cursor-pointer"
+                                              className="inline-flex items-center gap-1.5 text-left cursor-pointer rounded-md py-1.5 px-2 -ml-2 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors"
                                             >
                                               <Plus className="h-3.5 w-3.5 shrink-0" />
                                               <span>Añadir categoría personalizada</span>
@@ -1736,6 +1822,7 @@ export const SchedulerSidebar = React.memo(({
                         <ManualTaskRow
                           key={`${row.task.id}-${(row.task as { parent_id?: string | null }).parent_id ?? 'none'}`}
                             task={row.task}
+                            activeDragData={activeDragData}
                             studioSlug={studioSlug}
                             eventId={eventId}
                             stageCategory={stageRow.category}
@@ -1771,7 +1858,7 @@ export const SchedulerSidebar = React.memo(({
                                   if (!prevParentId) {
                                     return isManualTaskRow(prev)
                                       ? (prev as import('../../utils/scheduler-section-stages').SchedulerManualTaskRow).task.id
-                                      : (prev as import('../../utils/scheduler-section-stages').SchedulerTaskRow).item?.scheduler_task?.id ?? null;
+                                      : null;
                                   }
                                 }
                                 return null;
@@ -1782,6 +1869,7 @@ export const SchedulerSidebar = React.memo(({
                             sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label)}
                             onAddManualTaskSubmit={onAddManualTaskSubmit}
                             onManualTaskUpdate={onManualTaskUpdate}
+                            onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
                             sortableProps={{
                               taskId: String(row.task.id),
                               isManual: true,
@@ -1791,6 +1879,7 @@ export const SchedulerSidebar = React.memo(({
                               isSaving: updatingTaskId === String(row.task.id),
                               hasParentId: ((row.task as { parent_id?: string | null }).parent_id ?? null) != null,
                               isLastTaskInSegment: pos === taskRowsInOrder.length - 1,
+                              dropIndicator,
                             }}
                           />
                       );
@@ -1816,18 +1905,7 @@ export const SchedulerSidebar = React.memo(({
                           : (row.item as { service_category_id?: string | null }).service_category_id ?? (row.item.scheduler_task as { catalog_category_id?: string | null })?.catalog_category_id ?? null;
 
                       const itemTaskParentId = (row.item.scheduler_task as { parent_id?: string | null })?.parent_id;
-                      const itemTaskName = row.item.scheduler_task?.name ?? row.servicioNombre ?? 'Tarea';
                       const showAddSubtaskForItem = !itemTaskParentId && onAddManualTaskSubmit && row.item.scheduler_task?.id;
-                      const itemTaskId = row.item.scheduler_task?.id;
-                      const itemChildTaskIds =
-                        itemTaskId && (onConvertSubtasksToPrincipal || onToggleTaskHierarchy)
-                          ? segment.rows
-                              .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerManualTaskRow | import('../../utils/scheduler-section-stages').SchedulerTaskRow =>
-                                (isManualTaskRow(r) && (r.task.parent_id ?? null) === itemTaskId) ||
-                                (isTaskRow(r) && ((r.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null) === itemTaskId)
-                              )
-                              .map((r) => (isManualTaskRow(r) ? r.task.id : r.item.scheduler_task!.id))
-                          : [];
                       const st = row.item.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
                       let itemDurationDays = st?.duration_days;
                       if ((itemDurationDays ?? 0) <= 0 && st?.start_date && st?.end_date) {
@@ -1854,7 +1932,7 @@ export const SchedulerSidebar = React.memo(({
                           renderItem={renderItem}
                           onItemUpdate={onItemUpdate}
                           onTaskToggleComplete={onTaskToggleComplete}
-                          onNoteAdded={onManualTaskUpdate}
+                          onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
                           sortableProps={{
                             taskId: String(taskId!),
                             isManual: false,
@@ -1865,6 +1943,7 @@ export const SchedulerSidebar = React.memo(({
                             isSynced: (row.item.scheduler_task as { sync_status?: string } | undefined)?.sync_status === 'INVITED',
                             hasParentId: (itemTaskParentId ?? null) != null,
                             isLastTaskInSegment: pos === taskRowsInOrder.length - 1,
+                            dropIndicator,
                           }}
                           addSubtaskProps={
                             showAddSubtaskForItem
@@ -1877,9 +1956,7 @@ export const SchedulerSidebar = React.memo(({
                                 }
                               : undefined
                           }
-                          childTaskIds={itemChildTaskIds.length > 0 ? itemChildTaskIds : undefined}
-                          onConvertSubtasksToPrincipal={onConvertSubtasksToPrincipal}
-                          onToggleTaskHierarchy={onToggleTaskHierarchy}
+                          activeDragData={activeDragData}
                         />
                       );
                     }
@@ -1897,7 +1974,7 @@ export const SchedulerSidebar = React.memo(({
                       return (
                         <div
                           key={row.id}
-                          className="border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors text-xs cursor-pointer"
+                          className="border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 text-xs"
                           style={{ paddingLeft: INDENT.CATEGORY, height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
                         >
                           <div className="w-4 shrink-0" aria-hidden />
@@ -1919,7 +1996,7 @@ export const SchedulerSidebar = React.memo(({
                                       stage: row.stageCategory,
                                     })
                                   }
-                                  className="flex items-center gap-1.5 w-full text-left cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 text-left cursor-pointer rounded-md py-1.5 px-2 -ml-2 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors"
                                 >
                                   <Plus className="h-3.5 w-3.5 shrink-0" />
                                   <span>Añadir categoría personalizada</span>
@@ -1957,42 +2034,42 @@ export const SchedulerSidebar = React.memo(({
                         addPopoverContext.stage === row.stageCategory &&
                         addPopoverContext.catalogCategoryId === row.catalogCategoryId;
                       return (
-                        <Popover
+                        <div
                           key={row.id}
-                          open={isThisPopoverOpen}
-                          onOpenChange={(open) => {
-                            if (!open) setAddPopoverContext(null);
-                          }}
+                          className="relative border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 text-xs"
+                          style={{ paddingLeft: INDENT.TASK, height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
                         >
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setAddPopoverContext({
-                                  type: 'add_task',
-                                  sectionId: row.sectionId,
-                                  stage: row.stageCategory,
-                                  catalogCategoryId: row.catalogCategoryId,
-                                  sectionLabel,
-                                })
-                              }
-                              className="relative w-full border-b border-white/5 flex items-center min-h-[32px] box-border overflow-hidden text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors text-xs cursor-pointer"
-                              style={{ paddingLeft: INDENT.TASK, height: ROW_HEIGHTS.PHANTOM, minHeight: ROW_HEIGHTS.PHANTOM, maxHeight: ROW_HEIGHTS.PHANTOM, boxSizing: 'border-box' }}
-                            >
-                              {/* Rama gris: acción, no tarea existente */}
-                              <div
-                                className="absolute top-0 bottom-0 w-[1px] bg-zinc-700/40 pointer-events-none z-0"
-                                style={{ left: BRANCH_LEFT.CATEGORY }}
-                                aria-hidden
-                              />
-                              <div className="w-4 shrink-0" aria-hidden />
-                              <div className="flex-1 min-w-0 flex items-center gap-2 pl-0 pr-4">
+                          <div
+                            className="absolute top-0 bottom-0 w-[1px] bg-zinc-700/40 pointer-events-none z-0"
+                            style={{ left: BRANCH_LEFT.CATEGORY }}
+                            aria-hidden
+                          />
+                          <div className="w-4 shrink-0" aria-hidden />
+                          <Popover
+                            open={isThisPopoverOpen}
+                            onOpenChange={(open) => {
+                              if (!open) setAddPopoverContext(null);
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAddPopoverContext({
+                                    type: 'add_task',
+                                    sectionId: row.sectionId,
+                                    stage: row.stageCategory,
+                                    catalogCategoryId: row.catalogCategoryId,
+                                    sectionLabel,
+                                  })
+                                }
+                                className="inline-flex items-center gap-2 rounded-md py-1.5 px-2 -ml-2 cursor-pointer hover:bg-zinc-800/40 hover:text-zinc-300 transition-colors"
+                              >
                                 <Plus className="h-3.5 w-3.5 shrink-0" />
                                 <span>Añadir tarea personalizada</span>
-                              </div>
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
                             className="w-80 p-3 bg-zinc-900 border-zinc-800"
                             align="start"
                             side="bottom"
@@ -2010,8 +2087,9 @@ export const SchedulerSidebar = React.memo(({
                                 setAddPopoverContext(null);
                               }}
                             />
-                          </PopoverContent>
-                        </Popover>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
                       );
                     }
                     return null;
@@ -2090,6 +2168,7 @@ export const SchedulerSidebar = React.memo(({
         variant="destructive"
       />
     </div>
+    </SchedulerBackdropProvider>
   );
 });
 

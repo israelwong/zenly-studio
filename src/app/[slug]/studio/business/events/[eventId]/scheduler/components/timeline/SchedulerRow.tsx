@@ -31,6 +31,7 @@ interface SchedulerRowProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onClick?: (e: React.MouseEvent) => void;
   /** Power Bar: si true, la barra usa --bulk-drag-offset para el translate */
@@ -53,6 +54,7 @@ export const SchedulerRow = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  onNoteAdded,
   onManualTaskPatch,
   onClick,
   inBulkDragSegment,
@@ -132,6 +134,7 @@ export const SchedulerRow = React.memo(({
             onManualTaskPatch={onManualTaskPatch}
             onToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            onNoteAdded={onNoteAdded}
             inBulkDragSegment={inBulkDragSegment}
             columnWidth={columnWidth}
           />

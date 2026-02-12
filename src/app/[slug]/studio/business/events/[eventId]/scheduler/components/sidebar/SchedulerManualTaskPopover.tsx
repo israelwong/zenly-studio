@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 import { addDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { actualizarCostoTareaManual, actualizarNombreTareaManual, asignarCrewATareaScheduler, actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
@@ -95,9 +96,15 @@ export function SchedulerManualTaskPopover({
     }
   }, [studioSlug]);
 
+  const { registerBackdrop } = useSchedulerBackdrop() ?? {};
   useEffect(() => {
     if (open && members.length === 0 && !loadingMembers) loadMembers();
   }, [open, members.length, loadingMembers, loadMembers]);
+
+  useEffect(() => {
+    if (!open || !registerBackdrop) return;
+    return registerBackdrop();
+  }, [open, registerBackdrop]);
 
   useEffect(() => {
     if (!open) return;
@@ -278,7 +285,15 @@ export function SchedulerManualTaskPopover({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         {triggerContent}
-        <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4}>
+        <PopoverContent
+          className="w-80 p-3 bg-zinc-900 border-zinc-800"
+          align="start"
+          side="bottom"
+          sideOffset={4}
+          showBackdrop
+          open={open}
+          onOpenChange={setOpen}
+        >
           <TaskForm
             mode="edit"
             studioSlug={studioSlug}

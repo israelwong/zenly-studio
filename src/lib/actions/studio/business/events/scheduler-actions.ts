@@ -1472,6 +1472,7 @@ export async function moveSchedulerTask(
       select: {
         id: true,
         order: true,
+        parent_id: true,
         catalog_category_id: true,
         cotizacion_item_id: true,
         cotizacion_item: { select: { service_category_id: true } },
@@ -1483,18 +1484,26 @@ export async function moveSchedulerTask(
       t.cotizacion_item_id ? t.cotizacion_item?.service_category_id ?? t.catalog_category_id ?? null : t.catalog_category_id ?? null;
     const unified = siblings.filter((t) => (effectiveCat(t) ?? null) === (targetCatId ?? null));
 
-    const idx = unified.findIndex((s) => s.id === taskId);
+    const principalsOnly = unified.filter((t) => t.parent_id == null);
+    const idx = principalsOnly.findIndex((s) => s.id === taskId);
     if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
     if (direction === 'up' && idx === 0) return { success: true };
-    if (direction === 'down' && idx === unified.length - 1) return { success: true };
+    if (direction === 'down' && idx === principalsOnly.length - 1) return { success: true };
 
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    const reordered = [...unified];
-    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!];
+    const reorderedPrincipals = [...principalsOnly];
+    [reorderedPrincipals[idx], reorderedPrincipals[swapIdx]] = [reorderedPrincipals[swapIdx]!, reorderedPrincipals[idx]!];
 
-    const tx = reordered.map((s, i) =>
+    const flatOrdered: string[] = [];
+    for (const p of reorderedPrincipals) {
+      flatOrdered.push(p.id);
+      const children = unified.filter((t) => t.parent_id === p.id).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      for (const c of children) flatOrdered.push(c.id);
+    }
+
+    const tx = flatOrdered.map((id, i) =>
       prisma.studio_scheduler_event_tasks.update({
-        where: { id: s.id },
+        where: { id },
         data: { order: i },
       })
     );
@@ -1514,8 +1523,8 @@ export async function moveSchedulerTask(
 
 /**
  * Reordena tareas dentro del mismo stage (mismo instance, category).
- * Si la lista incluye tareas manuales que venían de otra categoría, se les asigna catalog_category_id del ámbito destino (targetCatId) de forma atómica.
- * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... y en manuales también catalog_category_id.
+ * Israel Algorithm: subtareas siguen al padre; el order aplica a la lista plana (padre, hijos, siguiente…).
+ * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... (serie continua).
  */
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
@@ -1613,11 +1622,16 @@ export async function moverTareaManualCategoria(
         cotizacion_item_id: null,
         scheduler_instance: { event_id: eventId },
       },
-      select: { id: true, scheduler_instance_id: true },
+      select: { id: true, scheduler_instance_id: true, category: true, catalog_category_id: true },
     });
     if (!task) {
       return { success: false, error: 'Tarea no encontrada' };
     }
+
+    const sameCategory =
+      task.category === validCategory &&
+      (task.catalog_category_id ?? null) === (catalogCategoryId ?? null);
+    if (sameCategory) return { success: true };
 
     const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
       where: {
@@ -1629,6 +1643,9 @@ export async function moverTareaManualCategoria(
       _max: { order: true },
     });
     const parentOrder = (maxOrder._max.order ?? -1) + 1;
+
+    const oldCategory = task.category;
+    const oldCatalogCategoryId = task.catalog_category_id ?? null;
 
     await prisma.$transaction(async (tx) => {
       await tx.studio_scheduler_event_tasks.update({
@@ -1660,6 +1677,27 @@ export async function moverTareaManualCategoria(
           )
         );
       }
+
+      const sourceSiblings = await tx.studio_scheduler_event_tasks.findMany({
+        where: {
+          scheduler_instance_id: task.scheduler_instance_id,
+          cotizacion_item_id: null,
+          parent_id: null,
+          category: oldCategory,
+          catalog_category_id: oldCatalogCategoryId,
+        },
+        select: { id: true },
+        orderBy: { order: 'asc' },
+      });
+
+      await Promise.all(
+        sourceSiblings.map((s, i) =>
+          tx.studio_scheduler_event_tasks.update({
+            where: { id: s.id },
+            data: { order: i },
+          })
+        )
+      );
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -2478,7 +2516,7 @@ export async function addSchedulerTaskNote(
       select: { id: true, created_at: true },
     });
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    // Sin revalidatePath: actualización optimista en cliente evita reconstrucción total del Scheduler
 
     const { toUtcDateOnly } = await import('@/lib/utils/date-only');
     const createdNorm = toUtcDateOnly(activity.created_at);

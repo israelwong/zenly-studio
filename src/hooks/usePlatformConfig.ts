@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useInfrastructure } from '@/contexts/InfrastructureContext';
 
 interface PlatformConfig {
     id: string;
@@ -89,11 +90,20 @@ const getDefaultConfig = (): PlatformConfig => ({
 });
 
 export function usePlatformConfig(): UsePlatformConfigReturn {
+    const { connectionStatus } = useInfrastructure();
     const [config, setConfig] = useState<PlatformConfig | null>(globalConfig);
     const [loading, setLoading] = useState(!globalConfig);
     const [error, setError] = useState<string | null>(null);
 
     const fetchConfig = async (): Promise<PlatformConfig | null> => {
+        // Bloquear si infraestructura down: no saturar con peticiones en cascada
+        if (connectionStatus === 'down') {
+            setConfig(getDefaultConfig());
+            setLoading(false);
+            setError(null);
+            return getDefaultConfig();
+        }
+
         // Si ya tenemos la configuración en cache, la devolvemos
         if (globalConfig) {
             setConfig(globalConfig);
@@ -190,7 +200,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
 
     useEffect(() => {
         fetchConfig();
-    }, []);
+    }, [connectionStatus]);
 
     return {
         config,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { addDays, differenceInCalendarDays } from 'date-fns';
@@ -38,6 +39,9 @@ interface SchedulerItemPopoverProps {
     children: React.ReactNode;
     onItemUpdate?: (updatedItem: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]) => void;
     onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+    /** Modo controlado: si se proporciona, el popover usa estos valores en lugar del estado interno */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 function formatCurrency(value: number) {
@@ -67,12 +71,15 @@ function getSalaryType(member: CrewMember | undefined): 'fixed' | 'variable' | n
     return null;
 }
 
-export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete }: SchedulerItemPopoverProps) {
+export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete, open: openProp, onOpenChange }: SchedulerItemPopoverProps) {
     const router = useRouter();
     // Hook de sincronización (optimista + servidor)
     const { localItem, updateCrewMember, updateCompletionStatus, updateSchedulerTaskDates } = useSchedulerItemSync(item, onItemUpdate);
 
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isControlled = openProp !== undefined && onOpenChange !== undefined;
+    const open = isControlled ? openProp : internalOpen;
+    const setOpen = isControlled ? onOpenChange : setInternalOpen;
     const [members, setMembers] = useState<CrewMember[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
     const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
@@ -105,12 +112,18 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
         }
     }, [studioSlug]);
 
+    const { registerBackdrop } = useSchedulerBackdrop() ?? {};
     // Cargar miembros cuando se abre el popover (solo para mostrar info del asignado)
     useEffect(() => {
         if (open && members.length === 0 && !loadingMembers) {
             loadMembers();
         }
     }, [open, members.length, loadingMembers, loadMembers]);
+
+    useEffect(() => {
+        if (!open || !registerBackdrop) return;
+        return registerBackdrop();
+    }, [open, registerBackdrop]);
 
     // Cerrar popover cuando se elimina la tarea (ya no tiene scheduler_task)
     useEffect(() => {
@@ -430,6 +443,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     align="start"
                     side="bottom"
                     sideOffset={4}
+                    showBackdrop
+                    open={open}
+                    onOpenChange={setOpen}
                 >
                     <div className="space-y-4">
                         {/* Resumen en línea */}

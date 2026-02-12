@@ -7,7 +7,8 @@ function isReservedPath(path: string): boolean {
   const reservedPaths = [
     "/admin", "/agente", "/api", "/login", "/sign-up", "/signin", "/signup",
     "/forgot-password", "/update-password", "/error", "/redirect", "/sign-up-success",
-    "/complete-profile", "/confirm", "/unauthorized", "/protected", "/about",
+    "/complete-profile", "/confirm", "/unauthorized", "/protected", "/incidencia-tecnica",
+    "/about",
     "/pricing", "/contact", "/features", "/blog", "/help", "/docs", "/demo",
     "/terms", "/privacy", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml",
     "/auth/callback", // Callback de Supabase Auth OAuth (servidor)

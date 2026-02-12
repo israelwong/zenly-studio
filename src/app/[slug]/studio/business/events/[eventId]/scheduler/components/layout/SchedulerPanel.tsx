@@ -53,6 +53,8 @@ interface SchedulerPanelProps {
   onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
   onManualTaskUpdate?: () => void;
+  /** Delta optimista de notes_count (taskId, delta). delta=1 añadir, delta=-1 revertir. */
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onDeleteStage?: (sectionId: string, stageCategory: string, taskIds: string[]) => Promise<void>;
   expandedSections?: Set<string>;
   expandedStages?: Set<string>;
@@ -77,6 +79,7 @@ interface SchedulerPanelProps {
   onSchedulerDragEnd?: (event: import('@dnd-kit/core').DragEndEvent) => void;
   activeDragData?: { taskId: string; isManual: boolean; catalogCategoryId: string | null; stageKey: string } | null;
   overlayPosition?: { x: number; y: number } | null;
+  dropIndicator?: { overId: string; insertBefore: boolean } | null;
   updatingTaskId?: string | null;
   gridRef?: React.RefObject<HTMLDivElement | null>;
   /** Ref al contenedor con overflow-auto (scroll horizontal) para Edge Scrolling */
@@ -129,6 +132,7 @@ export const SchedulerPanel = React.memo(({
   onItemTaskMoveCategory,
   onManualTaskDuplicate,
   onManualTaskUpdate,
+  onNoteAdded,
   onDeleteStage,
   expandedSections = new Set(),
   expandedStages = new Set(),
@@ -152,6 +156,7 @@ export const SchedulerPanel = React.memo(({
   onSchedulerDragEnd,
   activeDragData = null,
   overlayPosition = null,
+  dropIndicator = null,
   updatingTaskId = null,
   gridRef,
   scrollContainerRef,
@@ -180,7 +185,7 @@ export const SchedulerPanel = React.memo(({
     setResizerBounds({
       top: rect.top,
       left: rect.left + sidebarWidth,
-      height: rect.height,
+      height: Math.max(el.scrollHeight, rect.height),
     });
   }, [sidebarWidth]);
 
@@ -279,7 +284,7 @@ export const SchedulerPanel = React.memo(({
         />
         {/* Sidebar Sticky Left */}
         <div
-          className="flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-30 overflow-visible"
+          className={`flex-shrink-0 bg-zinc-950 sticky left-0 z-30 overflow-visible ${!onSidebarWidthChange ? 'border-r border-zinc-800' : ''}`}
           style={{ width: sidebarWidth, minWidth: sidebarWidth }}
         >
           <SchedulerSidebar
@@ -314,6 +319,7 @@ export const SchedulerPanel = React.memo(({
             onItemTaskMoveCategory={onItemTaskMoveCategory}
             onManualTaskDuplicate={onManualTaskDuplicate}
             onManualTaskUpdate={onManualTaskUpdate}
+            onNoteAdded={onNoteAdded}
             onDeleteStage={onDeleteStage}
             expandedSections={expandedSections}
             expandedStages={expandedStages}
@@ -328,6 +334,7 @@ export const SchedulerPanel = React.memo(({
             onSchedulerDragEnd={onSchedulerDragEnd}
             activeDragData={activeDragData}
             overlayPosition={overlayPosition}
+            dropIndicator={dropIndicator}
             updatingTaskId={updatingTaskId}
             googleCalendarEnabled={googleCalendarEnabled}
           />
@@ -354,6 +361,7 @@ export const SchedulerPanel = React.memo(({
             onTaskDelete={onTaskDelete}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
+            onNoteAdded={onNoteAdded}
             onManualTaskPatch={onManualTaskPatch}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
             expandedSections={expandedSections}
@@ -381,14 +389,15 @@ export const SchedulerPanel = React.memo(({
             role="separator"
             aria-label="Redimensionar sidebar"
             onMouseDown={handleResizeMouseDown}
-            className={`fixed cursor-col-resize z-40 transition-colors bg-transparent hover:bg-amber-500/50 ${isResizing ? 'bg-amber-500/50' : ''}`}
+            className="fixed cursor-col-resize z-40 group"
             style={{
               left: resizerBounds.left,
               top: resizerBounds.top,
-              width: 4,
+              width: 8,
               height: resizerBounds.height,
             }}
           >
+            <div className={`absolute inset-y-0 left-0 w-px transition-colors ${isResizing ? 'bg-amber-500/80' : 'bg-zinc-800 group-hover:bg-amber-500/80'}`} aria-hidden />
             <div className="absolute inset-y-0 -left-2 -right-2" aria-hidden />
           </div>,
           document.body

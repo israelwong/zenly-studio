@@ -24,6 +24,7 @@ interface SchedulerTimelineProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
+  onNoteAdded?: (taskId: string, delta: number) => void;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onAddManualTaskSubmit?: (
     sectionId: string,
@@ -63,6 +64,7 @@ export const SchedulerTimeline = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   onItemUpdate,
+  onNoteAdded,
   onManualTaskPatch,
   onAddManualTaskSubmit,
   expandedSections = new Set(),
@@ -121,7 +123,7 @@ export const SchedulerTimeline = React.memo(({
   }, [reminderPositions, todayPosition]);
 
   return (
-    <div className={`flex flex-col border-l border-zinc-800 w-full relative ${isMaximized ? 'flex-1 min-h-0' : ''}`}>
+    <div className={`flex flex-col w-full relative ${isMaximized ? 'flex-1 min-h-0' : ''}`}>
       {/* Header con fechas */}
       <SchedulerHeader
         dateRange={dateRange}
@@ -154,6 +156,7 @@ export const SchedulerTimeline = React.memo(({
         onTaskDelete={onTaskDelete}
         onTaskToggleComplete={onTaskToggleComplete}
         onItemUpdate={onItemUpdate}
+        onNoteAdded={onNoteAdded}
         onManualTaskPatch={onManualTaskPatch}
         onAddManualTaskSubmit={onAddManualTaskSubmit}
         expandedSections={expandedSections}

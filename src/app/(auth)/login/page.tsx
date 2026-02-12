@@ -8,29 +8,45 @@ import { LoginForm } from '@/components/forms/LoginForm'
 import { AuthHeader } from '@/components/auth/auth-header'
 import { AuthFooter } from '@/components/auth/auth-footer'
 
-export default async function LoginPage() {
+function isValidCallbackUrl(url: string): boolean {
+  return url.startsWith('/') && !url.startsWith('//')
+}
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
 
-  // Si hay sesión válida, redirigir directo al studio/dashboard (sin UI intermedia)
-  if (user && !error) {
-    let redirectPath = '/onboarding'
+  const params = searchParams ? await searchParams : {}
+  const callbackUrlParam = params?.callbackUrl
+  const callbackUrl = typeof callbackUrlParam === 'string' && isValidCallbackUrl(callbackUrlParam)
+    ? callbackUrlParam
+    : null
 
-    const metaResult = getRedirectPathForUser(user)
-    if (metaResult.shouldRedirect && metaResult.redirectPath && metaResult.redirectPath !== '/') {
-      redirectPath = metaResult.redirectPath
-    } else {
-      const dbPath = await resolveRedirectFromDb(user.id)
-      if (dbPath && dbPath !== '/') {
-        redirectPath = dbPath
+  // Si hay sesión válida, redirigir directo al studio/dashboard (o callbackUrl si existe)
+  if (user && !error) {
+    let redirectPath = callbackUrl ?? '/onboarding'
+
+    if (!callbackUrl) {
+      const metaResult = getRedirectPathForUser(user)
+      if (metaResult.shouldRedirect && metaResult.redirectPath && metaResult.redirectPath !== '/') {
+        redirectPath = metaResult.redirectPath
       } else {
-        const profileSlug = await getStudioSlugBySupabaseId(user.id)
-        if (profileSlug) {
-          redirectPath = getDefaultRoute('suscriptor', profileSlug)
+        const dbPath = await resolveRedirectFromDb(user.id)
+        if (dbPath && dbPath !== '/') {
+          redirectPath = dbPath
         } else {
-          const ownerSlug = await getStudioSlugByOwnerId(user.id)
-          if (ownerSlug) {
-            redirectPath = getDefaultRoute('suscriptor', ownerSlug)
+          const profileSlug = await getStudioSlugBySupabaseId(user.id)
+          if (profileSlug) {
+            redirectPath = getDefaultRoute('suscriptor', profileSlug)
+          } else {
+            const ownerSlug = await getStudioSlugByOwnerId(user.id)
+            if (ownerSlug) {
+              redirectPath = getDefaultRoute('suscriptor', ownerSlug)
+            }
           }
         }
       }
