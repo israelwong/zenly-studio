@@ -169,7 +169,7 @@ export async function crearEntregable(
     // Invalidar caché del cliente
     if (evento.contact_id) {
       const eventIdOrPromiseId = evento.promise_id || evento.id;
-      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${evento.contact_id}`);
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${evento.contact_id}`, 'page' as any);
     }
 
     return { success: true, data: entregable };
@@ -177,7 +177,7 @@ export async function crearEntregable(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors[0]?.message || 'Datos inválidos',
+        error: error.issues[0]?.message || 'Datos inválidos',
       };
     }
     console.error('Error creando entregable:', error);
@@ -255,7 +255,7 @@ export async function actualizarEntregable(
     // Invalidar caché del cliente
     if (entregable.event?.contact_id) {
       const eventIdOrPromiseId = entregable.event.promise_id || entregable.event.id;
-      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${entregable.event.contact_id}`);
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${entregable.event.contact_id}`, 'page' as any);
     }
 
     return { success: true, data: updated };
@@ -263,7 +263,7 @@ export async function actualizarEntregable(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors[0]?.message || 'Datos inválidos',
+        error: error.issues[0]?.message || 'Datos inválidos',
       };
     }
     console.error('Error actualizando entregable:', error);
@@ -334,7 +334,7 @@ export async function eliminarEntregable(
     // Invalidar caché del cliente
     if (contactId) {
       const eventIdOrPromiseId = entregable.event.promise_id || eventId;
-      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${contactId}`);
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${contactId}`, 'page' as any);
     }
 
     return { success: true };
@@ -466,7 +466,7 @@ export async function vincularCarpetaDrive(
           drive_metadata_cache: contenidoResult.data ? {
             fileCount: contenidoResult.data.length,
             lastSync: new Date().toISOString(),
-          } : null,
+          } : undefined,
         },
       });
 

@@ -154,7 +154,7 @@ export async function crearNominaDesdeTareaCompletada(
         let studioUser = await prisma.studio_users.findFirst({
           where: {
             studio_id: studio.id,
-            full_name: studioUserProfile.full_name,
+            full_name: studioUserProfile.full_name || '',
             is_active: true,
           },
           select: { id: true },
@@ -165,7 +165,7 @@ export async function crearNominaDesdeTareaCompletada(
           studioUser = await prisma.studio_users.create({
             data: {
               studio_id: studio.id,
-              full_name: studioUserProfile.full_name,
+              full_name: studioUserProfile.full_name || '',
               phone: null,
               type: 'EMPLEADO', // Tipo para suscriptores (PersonnelType solo tiene EMPLEADO | PROVEEDOR)
               role: 'owner', // Rol por defecto

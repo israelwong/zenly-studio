@@ -6,7 +6,6 @@ import { getPromiseFinancials } from '@/lib/utils/promise-financials';
 import {
   getEventsSchema,
   moveEventSchema,
-  updateEventDateSchema,
   updateEventNameSchema,
   type MoveEventData,
   type UpdateEventDateData,
@@ -16,12 +15,9 @@ import {
   type EventWithContact,
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
-import { toUtcDateOnly } from '@/lib/utils/date-only';
-import { ordenarCotizacionItemsPorCatalogo } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { validateStudio } from './helpers/studio-validator';
 import { serializeEventsWithContact, serializeEventWithContact } from './helpers/event-serializers';
 import { revalidateEventPaths, revalidateEventsListPaths } from './helpers/revalidation-utils';
-import { withTimeout, EVENTO_DETALLE_TIMEOUT_MS } from './helpers/action-utils';
 import type {
   EventoBasico,
   EventoDetalle,
@@ -333,8 +329,8 @@ export async function moveEvent(
     }
 
     // Usar helper de revalidación
-    revalidateEventPaths(studioSlug, evento.id);
-    revalidateEventsListPaths(studioSlug);
+    await revalidateEventPaths(studioSlug, evento.id);
+    await revalidateEventsListPaths(studioSlug);
 
     return {
       success: true,

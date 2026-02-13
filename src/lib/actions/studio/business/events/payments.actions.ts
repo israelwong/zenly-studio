@@ -296,7 +296,7 @@ export async function crearPago(
         // Invalidar caché del cliente
         if (cotizacion.promise?.contact_id && cotizacion.promise_id) {
           const eventIdOrPromiseId = validatedData.promise_id || cotizacion.promise_id;
-          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`);
+          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`, 'page' as any);
         }
 
         const item: PaymentItem = {
@@ -464,7 +464,7 @@ export async function actualizarPago(
         if (pagoExistente.cotizaciones?.promise?.contact_id) {
           const eventIdOrPromiseId = pagoExistente.promise_id || validatedData.promise_id;
           if (eventIdOrPromiseId) {
-            revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${pagoExistente.cotizaciones.promise.contact_id}`);
+            revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${pagoExistente.cotizaciones.promise.contact_id}`, 'page' as any);
           }
         }
 
@@ -756,7 +756,7 @@ export async function crearIngresoManual(
         let studioUser = await prisma.studio_users.findFirst({
             where: {
                 studio_id: studio.id,
-                full_name: studioUserProfile.full_name,
+                full_name: studioUserProfile.full_name || '',
                 is_active: true,
             },
             select: { id: true },
@@ -767,7 +767,7 @@ export async function crearIngresoManual(
             studioUser = await prisma.studio_users.create({
                 data: {
                     studio_id: studio.id,
-                    full_name: studioUserProfile.full_name,
+                    full_name: studioUserProfile.full_name || '',
                     phone: null,
                     type: 'EMPLEADO',
                     role: 'owner',

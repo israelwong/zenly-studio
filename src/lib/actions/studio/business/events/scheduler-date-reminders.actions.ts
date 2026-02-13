@@ -45,9 +45,7 @@ async function getCurrentStudioUserId(studioId: string): Promise<string | null> 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const dbUser = await prisma.users.findUnique({ where: { supabase_id: user.id }, select: { id: true } });
-    if (!dbUser) return null;
-    const profile = await prisma.platform_user_profiles.findUnique({ where: { user_id: dbUser.id }, select: { id: true } });
+    const profile = await prisma.platform_user_profiles.findUnique({ where: { supabaseUserId: user.id }, select: { id: true } });
     if (!profile) return null;
     const studioUser = await prisma.studio_users.findFirst({
       where: { studio_id: studioId, platform_user_id: profile.id, is_active: true },
@@ -103,7 +101,7 @@ export async function createSchedulerDateReminder(
       },
     };
   } catch (e) {
-    if (e instanceof z.ZodError) return { success: false, error: e.errors[0]?.message ?? 'Datos inválidos' };
+    if (e instanceof z.ZodError) return { success: false, error: e.issues[0]?.message ?? 'Datos inválidos' };
     return { success: false, error: e instanceof Error ? e.message : 'Error al crear recordatorio' };
   }
 }
@@ -264,7 +262,7 @@ export async function updateSchedulerDateReminder(
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
     return { success: true, data: updated as SchedulerDateReminder };
   } catch (e) {
-    if (e instanceof z.ZodError) return { success: false, error: e.errors[0]?.message ?? 'Datos inválidos' };
+    if (e instanceof z.ZodError) return { success: false, error: e.issues[0]?.message ?? 'Datos inválidos' };
     return { success: false, error: e instanceof Error ? e.message : 'Error al actualizar' };
   }
 }

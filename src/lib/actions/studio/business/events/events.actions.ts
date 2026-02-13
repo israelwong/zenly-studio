@@ -1,14 +1,11 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getPromiseFinancials } from '../../../../utils/promise-financials';
 import {
   getEventsSchema,
-  moveEventSchema,
   updateEventDateSchema,
-  updateEventNameSchema,
   type MoveEventData,
   type UpdateEventDateData,
   type UpdateEventNameData,
@@ -18,23 +15,253 @@ import {
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { ordenarCotizacionItemsPorCatalogo } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import {
-  construirEstructuraJerarquicaCotizacion,
-  aplanarEstructuraAOrdenIds,
-  ordenarCotizacionItemsPorCatalogo,
-  type CotizacionItemInput,
-} from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
+  EVENT_BASE_SELECT,
+  COMPLETED_PAYMENTS_SELECT,
+  EVENT_AGENDA_SELECT,
+  EVENT_CANCEL_INCLUDE,
+} from './helpers/event-queries';
 
 // ============================================================================
-// PATRÓN PROXY: Re-exportar funciones del dominio core desde events-core.actions.ts
-// Esto mantiene compatibilidad mientras completamos la migración
+// PATRÓN PROXY: Wrapper functions para mantener compatibilidad
+// Las funciones del dominio core se importan y se wrappean aquí
 // ============================================================================
-export {
-  getEvents,
-  moveEvent,
-  obtenerEventos,
-  actualizarNombreEvento,
+import {
+  getEvents as getEventsCore,
+  moveEvent as moveEventCore,
+  obtenerEventos as obtenerEventosCore,
+  actualizarNombreEvento as actualizarNombreEventoCore,
 } from './events-core.actions';
+
+import {
+  checkSchedulerStatus as checkSchedulerStatusCore,
+  crearSchedulerTask as crearSchedulerTaskCore,
+  actualizarSchedulerTask as actualizarSchedulerTaskCore,
+  eliminarSchedulerTask as eliminarSchedulerTaskCore,
+  obtenerSchedulerTask as obtenerSchedulerTaskCore,
+  actualizarRangoScheduler as actualizarRangoSchedulerCore,
+  type CheckSchedulerStatusResult,
+} from './scheduler-tasks.actions';
+
+// Re-exportar tipos de scheduler-tasks
+export type { CheckSchedulerStatusResult };
+
+import {
+  obtenerEventosConSchedulers as obtenerEventosConSchedulersCore,
+  sincronizarTareasEvento as sincronizarTareasEventoCore,
+  type EventoSchedulerItem,
+  type EventosSchedulerResponse,
+} from './scheduler-sync.actions';
+
+// Re-exportar tipos de scheduler-sync
+export type { EventoSchedulerItem, EventosSchedulerResponse };
+
+import {
+  obtenerCrewMembers as obtenerCrewMembersCore,
+  asignarCrewAItem as asignarCrewAItemCore,
+  obtenerCategoriasCrew as obtenerCategoriasCrewCore,
+} from './crew-assignment.actions';
+
+/**
+ * Obtener eventos con pipeline stages (para kanban)
+ * MIGRADO A: events-core.actions.ts
+ */
+export async function getEvents(
+  studioSlug: string,
+  params?: z.input<typeof getEventsSchema>
+): Promise<EventsListResponse> {
+  return getEventsCore(studioSlug, params);
+}
+
+/**
+ * Mover evento entre etapas del pipeline
+ * MIGRADO A: events-core.actions.ts
+ */
+export async function moveEvent(
+  studioSlug: string,
+  data: MoveEventData
+): Promise<EventResponse> {
+  return moveEventCore(studioSlug, data);
+}
+
+/**
+ * Obtener todos los eventos de un studio
+ * MIGRADO A: events-core.actions.ts
+ */
+export async function obtenerEventos(
+  studioSlug: string
+): Promise<EventosListResponse> {
+  return obtenerEventosCore(studioSlug);
+}
+
+/**
+ * Actualizar nombre del evento (campo name en studio_promises)
+ * MIGRADO A: events-core.actions.ts
+ */
+export async function actualizarNombreEvento(
+  studioSlug: string,
+  data: UpdateEventNameData
+): Promise<EventoDetalleResponse> {
+  return actualizarNombreEventoCore(studioSlug, data);
+}
+
+// ============================================================================
+// PATRÓN PROXY: Funciones del Scheduler
+// MIGRADO A: scheduler-tasks.actions.ts y scheduler-sync.actions.ts
+// ============================================================================
+
+/**
+ * Verifica si existe scheduler y cuántas tareas tiene
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function checkSchedulerStatus(
+  studioSlug: string,
+  eventId: string
+) {
+  return checkSchedulerStatusCore(studioSlug, eventId);
+}
+
+/**
+ * Crear tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function crearSchedulerTask(
+  studioSlug: string,
+  eventId: string,
+  data: {
+    itemId: string;
+    name: string;
+    description?: string;
+    startDate: Date;
+    endDate: Date;
+    assignedToCrewMemberId?: string | null;
+    notes?: string;
+    isCompleted?: boolean;
+  }
+) {
+  return crearSchedulerTaskCore(studioSlug, eventId, data);
+}
+
+/**
+ * Actualizar tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function actualizarSchedulerTask(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  data: {
+    name?: string;
+    description?: string;
+    startDate?: Date;
+    endDate?: Date;
+    assignedToCrewMemberId?: string | null;
+    notes?: string;
+    isCompleted?: boolean;
+    skipPayroll?: boolean;
+    checklist_items?: unknown;
+    itemData?: {
+      itemId: string;
+      personalId: string;
+      costo: number;
+      cantidad: number;
+      itemName?: string;
+    };
+  }
+) {
+  return actualizarSchedulerTaskCore(studioSlug, eventId, taskId, data);
+}
+
+/**
+ * Eliminar tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function eliminarSchedulerTask(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+) {
+  return eliminarSchedulerTaskCore(studioSlug, eventId, taskId);
+}
+
+/**
+ * Obtener tarea de Scheduler por ID
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function obtenerSchedulerTask(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+) {
+  return obtenerSchedulerTaskCore(studioSlug, eventId, taskId);
+}
+
+/**
+ * Actualizar rango de fechas de la instancia de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function actualizarRangoScheduler(
+  studioSlug: string,
+  eventId: string,
+  dateRange: { from: Date; to: Date }
+) {
+  return actualizarRangoSchedulerCore(studioSlug, eventId, dateRange);
+}
+
+/**
+ * Obtener eventos activos con schedulers
+ * MIGRADO A: scheduler-sync.actions.ts
+ */
+export async function obtenerEventosConSchedulers(
+  studioSlug: string
+) {
+  return obtenerEventosConSchedulersCore(studioSlug);
+}
+
+/**
+ * Sincronizar tareas del scheduler con ítems de cotización
+ * MIGRADO A: scheduler-sync.actions.ts (proxy temporal)
+ */
+export async function sincronizarTareasEvento(
+  studioSlug: string,
+  eventId: string
+) {
+  return sincronizarTareasEventoCore(studioSlug, eventId);
+}
+
+// ============================================================================
+// HELPERS INTERNOS - Serialización de Items
+// ============================================================================
+
+/**
+ * Serializa item de cotización (básico) - Convierte Decimal a number
+ * @param item - Item de cotización de Prisma
+ */
+function serializeCotizacionItemBasic(item: Record<string, unknown>) {
+  return {
+    ...(item as Record<string, unknown>),
+    name: (item.name as string) || '',
+    unit_price: item.unit_price ? Number(item.unit_price) : 0,
+    subtotal: item.subtotal ? Number(item.subtotal) : 0,
+  };
+}
+
+/**
+ * Serializa item de cotización (completo) - Incluye cost y delivery_days
+ * @param item - Item de cotización de Prisma con campos adicionales
+ */
+function serializeCotizacionItemComplete(item: Record<string, unknown>) {
+  return {
+    ...(item as Record<string, unknown>),
+    unit_price: item.unit_price ? Number(item.unit_price) : 0,
+    subtotal: item.subtotal ? Number(item.subtotal) : 0,
+    cost: item.cost ? Number(item.cost) : 0,
+    cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
+    internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
+    client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
+  };
+}
 
 export interface EventoBasico {
   id: string;
@@ -109,6 +336,7 @@ export interface EventoDetalle extends EventoBasico {
       phone: string;
       email: string | null;
       google_contact_id?: string | null;
+      address: string | null;
     };
   } | null;
   cotizacion?: {
@@ -290,536 +518,15 @@ export interface CancelarEventoResponse {
  * Obtener eventos con pipeline stages (para kanban)
  * MOVIDO A: events-core.actions.ts
  * Esta función se mantiene aquí temporalmente para referencia, pero se re-exporta desde events-core.actions.ts
- */
-/* COMENTADO - USAR events-core.actions.ts
-export async function getEvents(
-  studioSlug: string,
-  params?: z.input<typeof getEventsSchema>
-): Promise<EventsListResponse> {
-  try {
-    const validatedParams = getEventsSchema.parse(params || {});
-    const { page, limit, search, stage_id, status } = validatedParams;
-
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const where: Prisma.studio_eventsWhereInput = {
-      studio_id: studio.id,
-      // Solo mostrar eventos con cotización aprobada o autorizada
-      cotizacion_id: { not: null },
-      cotizacion: {
-        status: {
-          in: ['aprobada', 'autorizada', 'approved'],
-        },
-      },
-    };
-
-    if (status) {
-      where.status = status;
-    } else {
-      // Por defecto, excluir cancelados y archivados
-      where.status = { notIn: ['CANCELLED', 'ARCHIVED'] };
-    }
-
-    if (stage_id) {
-      where.stage_id = stage_id;
-    }
-
-    if (search) {
-      // Buscar en promise.name ya que name ya no existe en evento
-      where.promise = {
-        name: { contains: search, mode: 'insensitive' },
-      };
-    }
-
-    const [events, total] = await Promise.all([
-      prisma.studio_events.findMany({
-        where,
-        include: {
-          event_type: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          contact: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true,
-            },
-          },
-          promise: {
-            include: {
-              contact: {
-                select: { id: true, name: true, phone: true, email: true },
-              },
-              reminder: {
-                select: { id: true, subject_text: true, reminder_date: true, is_completed: true },
-              },
-              logs: {
-                orderBy: { created_at: 'desc' },
-                take: 1,
-                select: { content: true, created_at: true },
-              },
-            },
-          },
-          stage: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              color: true,
-              order: true,
-              stage_type: true,
-            },
-          },
-          agenda: {
-            select: {
-              id: true,
-              date: true,
-              time: true,
-              address: true,
-              concept: true,
-            },
-            take: 1,
-            orderBy: {
-              date: 'asc',
-            },
-          },
-        },
-        orderBy: {
-          event_date: 'desc',
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.studio_events.count({ where }),
-    ]);
-
-    // Calcular montos financieros para cada evento y mapear a EventWithContact
-    const eventsSerializados: EventWithContact[] = await Promise.all(
-      events.map(async (evento) => {
-        // Calcular montos desde promesa si existe
-        let contractValue = null;
-        let paidAmount = 0;
-        let pendingAmount = 0;
-
-        if (evento.promise_id) {
-          const financials = await getPromiseFinancials(evento.promise_id);
-          contractValue = financials.contractValue;
-          paidAmount = financials.paidAmount;
-          pendingAmount = financials.pendingAmount;
-        }
-
-        // Leer campos desde promesa
-        const eventName = evento.promise?.name || null;
-        const eventAddress = evento.promise?.address || null;
-        const eventDate = evento.promise?.event_date || evento.event_date;
-
-        return {
-          id: evento.id,
-          studio_id: evento.studio_id,
-          contact_id: evento.contact_id,
-          promise_id: evento.promise_id || null,
-          cotizacion_id: evento.cotizacion_id,
-          event_type_id: evento.event_type_id,
-          stage_id: evento.stage_id,
-          name: eventName,
-          event_date: eventDate,
-          address: eventAddress,
-          sede: evento.promise?.event_location || null,
-          status: evento.status,
-          contract_value: contractValue,
-          paid_amount: paidAmount,
-          pending_amount: pendingAmount,
-          created_at: evento.created_at,
-          updated_at: evento.updated_at,
-          event_type: evento.event_type,
-          contact: evento.contact,
-          promise: evento.promise,
-          stage: evento.stage,
-          agenda: evento.agenda[0] || null,
-          reminder:
-            evento.promise?.reminder && !evento.promise.reminder.is_completed
-              ? evento.promise.reminder
-              : null,
-          last_log: evento.promise?.logs?.[0] ?? null,
-        };
-      })
-    );
-
-    return {
-      success: true,
-      data: {
-        events: eventsSerializados,
-        total,
-      },
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error obteniendo eventos:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener eventos',
-    };
-  }
-}
-*/
-
-/**
+ * 
  * Mover evento entre etapas del pipeline
  * MOVIDO A: events-core.actions.ts
- */
-/* COMENTADO - USAR events-core.actions.ts
-export async function moveEvent(
-  studioSlug: string,
-  data: MoveEventData
-): Promise<EventResponse> {
-  try {
-    const validatedData = moveEventSchema.parse(data);
-
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Verificar que la etapa existe
-    const stage = await prisma.studio_manager_pipeline_stages.findUnique({
-      where: { id: validatedData.new_stage_id },
-      select: { studio_id: true },
-    });
-
-    if (!stage || stage.studio_id !== studio.id) {
-      return { success: false, error: 'Etapa no encontrada' };
-    }
-
-    // Obtener evento
-    const evento = await prisma.studio_events.findUnique({
-      where: { id: validatedData.event_id },
-      include: {
-        event_type: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            event_date: true,
-            event_location: true,
-            contact: {
-              select: {
-                id: true,
-                name: true,
-                phone: true,
-                email: true,
-              },
-            },
-          },
-        },
-        stage: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            color: true,
-            order: true,
-            stage_type: true,
-          },
-        },
-        agenda: {
-          select: {
-            id: true,
-            date: true,
-            time: true,
-            address: true,
-            concept: true,
-          },
-          take: 1,
-          orderBy: {
-            date: 'asc',
-          },
-        },
-      },
-    });
-
-    if (!evento) {
-      return { success: false, error: 'Evento no encontrado' };
-    }
-
-    // Actualizar evento
-    const updatedEvento = await prisma.studio_events.update({
-      where: { id: evento.id },
-      data: {
-        stage_id: validatedData.new_stage_id,
-      },
-      include: {
-        event_type: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            event_date: true,
-            event_location: true,
-            contact: {
-              select: {
-                id: true,
-                name: true,
-                phone: true,
-                email: true,
-              },
-            },
-          },
-        },
-        stage: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            color: true,
-            order: true,
-            stage_type: true,
-          },
-        },
-        agenda: {
-          select: {
-            id: true,
-            date: true,
-            time: true,
-            address: true,
-            concept: true,
-          },
-          take: 1,
-          orderBy: {
-            date: 'asc',
-          },
-        },
-      },
-    });
-
-    // Calcular montos desde promesa si existe
-    let contractValue = null;
-    let paidAmount = 0;
-    let pendingAmount = 0;
-
-    if (updatedEvento.promise_id) {
-      const financials = await getPromiseFinancials(updatedEvento.promise_id);
-      contractValue = financials.contractValue;
-      paidAmount = financials.paidAmount;
-      pendingAmount = financials.pendingAmount;
-    }
-
-    // Leer campos desde promesa
-    const eventName = updatedEvento.promise?.name || null;
-    const eventAddress = updatedEvento.promise?.address || null;
-    const eventDate = updatedEvento.promise?.event_date || updatedEvento.event_date;
-
-    // Convertir Decimal a number
-    const eventoSerializado: EventWithContact = {
-      id: updatedEvento.id,
-      studio_id: updatedEvento.studio_id,
-      contact_id: updatedEvento.contact_id,
-      promise_id: updatedEvento.promise_id || null,
-      cotizacion_id: updatedEvento.cotizacion_id,
-      event_type_id: updatedEvento.event_type_id,
-      stage_id: updatedEvento.stage_id,
-      name: eventName,
-      event_date: eventDate,
-      address: eventAddress,
-      sede: updatedEvento.promise?.event_location || null,
-      status: updatedEvento.status,
-      contract_value: contractValue,
-      paid_amount: paidAmount,
-      pending_amount: pendingAmount,
-      created_at: updatedEvento.created_at,
-      updated_at: updatedEvento.updated_at,
-      event_type: updatedEvento.event_type,
-      contact: updatedEvento.contact,
-      promise: updatedEvento.promise,
-      stage: updatedEvento.stage,
-      agenda: updatedEvento.agenda[0] || null,
-    };
-
-    // Notificar al cliente sobre cambio de etapa
-    try {
-      const { notifyEventStageChanged } = await import('@/lib/notifications/client');
-      const previousStageName = evento.stage?.name || undefined;
-      const newStageName = updatedEvento.stage?.name || 'Sin etapa';
-      await notifyEventStageChanged(
-        evento.id,
-        newStageName,
-        previousStageName
-      );
-    } catch (error) {
-      console.error('Error enviando notificación de cambio de etapa:', error);
-      // No fallar la operación si la notificación falla
-    }
-
-    // Revalidar paths
-    revalidatePath(`/${studioSlug}/studio/business/events`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${evento.id}`);
-
-    // Invalidar caché de lista (con studioSlug para aislamiento)
-    revalidateTag(`events-list-${studioSlug}`);
-
-    return {
-      success: true,
-      data: eventoSerializado,
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error moviendo evento:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al mover evento',
-    };
-  }
-}
-*/
-
-/**
+ 
  * Obtener todos los eventos de un studio
  * MOVIDO A: events-core.actions.ts
+ Timeout para queries de evento detalle (evita bloquear pool)
  */
-/* COMENTADO - USAR events-core.actions.ts
-export async function obtenerEventos(
-  studioSlug: string
-): Promise<EventosListResponse> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
 
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const eventos = await prisma.studio_events.findMany({
-      where: {
-        studio_id: studio.id,
-        status: 'ACTIVE',
-      },
-      include: {
-        event_type: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            event_date: true,
-            event_location: true,
-            contact: {
-              select: {
-                id: true,
-                name: true,
-                phone: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        event_date: 'desc',
-      },
-    });
-
-    // Calcular montos financieros para cada evento
-    const eventosSerializados = await Promise.all(
-      eventos.map(async (evento) => {
-        // Calcular montos desde promesa si existe
-        let contractValue = null;
-        let paidAmount = 0;
-        let pendingAmount = 0;
-
-        if (evento.promise_id) {
-          const financials = await getPromiseFinancials(evento.promise_id);
-          contractValue = financials.contractValue;
-          paidAmount = financials.paidAmount;
-          pendingAmount = financials.pendingAmount;
-        }
-
-        // Leer campos desde promesa
-        const eventName = evento.promise?.name || null;
-        const eventAddress = evento.promise?.address || null;
-        const eventDate = evento.promise?.event_date || evento.event_date;
-
-        return {
-          ...evento,
-          name: eventName,
-          event_date: eventDate,
-          address: eventAddress,
-          contract_value: contractValue,
-          paid_amount: paidAmount,
-          pending_amount: pendingAmount,
-        };
-      })
-    );
-
-    return {
-      success: true,
-      data: eventosSerializados,
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error obteniendo eventos:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener eventos',
-    };
-  }
-}
-*/
-
-/** Timeout para queries de evento detalle (evita bloquear pool) */
 const EVENTO_DETALLE_TIMEOUT_MS = 25_000;
 
 /** Select compartido para cotizacion_items en cotizaciones (estructura para ordenamiento por catálogo) */
@@ -903,64 +610,15 @@ const COTIZACIONES_ITEMS_SELECT = {
  * Obtener detalle de un evento
  * Query dividida: evento base ligero + cargas paralelas (cotizaciones, scheduler, agenda) para evitar timeout.
  */
-/** Respuesta ligera del estado del scheduler (sin cargar árbol de tareas) */
-export interface CheckSchedulerStatusResult {
-  success: boolean;
-  exists: boolean;
-  taskCount: number;
-  startDate?: Date | null;
-  endDate?: Date | null;
-  error?: string;
-}
+/** Respuesta ligera del estado del scheduler (sin cargar árbol de tareas) 
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
 
 /**
  * Verifica si existe scheduler y cuántas tareas tiene. Query ligera, sin includes pesados.
  * Usada en layout/cards para evitar timeout.
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function checkSchedulerStatus(
-  studioSlug: string,
-  eventId: string
-): Promise<CheckSchedulerStatusResult> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-    if (!studio) {
-      return { success: false, exists: false, taskCount: 0, error: 'Studio no encontrado' };
-    }
-
-    const instance = await prisma.studio_scheduler_event_instances.findFirst({
-      where: { event_id: eventId },
-      select: {
-        id: true,
-        start_date: true,
-        end_date: true,
-        _count: { select: { tasks: true } },
-      },
-    });
-
-    if (!instance) {
-      return { success: true, exists: false, taskCount: 0 };
-    }
-
-    return {
-      success: true,
-      exists: true,
-      taskCount: instance._count.tasks,
-      startDate: instance.start_date ?? null,
-      endDate: instance.end_date ?? null,
-    };
-  } catch (error) {
-    console.error('[checkSchedulerStatus] Error:', error);
-    return {
-      success: false,
-      exists: false,
-      taskCount: 0,
-      error: error instanceof Error ? error.message : 'Error al verificar cronograma',
-    };
-  }
-}
 
 export async function obtenerEventoDetalle(
   studioSlug: string,
@@ -979,79 +637,7 @@ export async function obtenerEventoDetalle(
     // Query 1: Evento base (event_type, contact, promise)
     const eventoBase = await prisma.studio_events.findFirst({
       where: { id: eventoId, studio_id: studio.id },
-      select: {
-        id: true,
-        event_date: true,
-        status: true,
-        event_type_id: true,
-        contact_id: true,
-        promise_id: true,
-        cotizacion_id: true,
-        stage_id: true,
-        event_type: { select: { id: true, name: true } },
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-            google_contact_id: true,
-            address: true,
-            avatar_url: true,
-            acquisition_channel_id: true,
-            social_network_id: true,
-            referrer_contact_id: true,
-            referrer_name: true,
-            acquisition_channel: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            social_network: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            referrer_contact: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            event_type_id: true,
-            event_location: true,
-            name: true,
-            address: true,
-            event_date: true,
-            tentative_dates: true,
-            contact: {
-              select: {
-                id: true,
-                name: true,
-                phone: true,
-                email: true,
-                google_contact_id: true,
-                address: true,
-                acquisition_channel_id: true,
-                social_network_id: true,
-                referrer_contact_id: true,
-                referrer_name: true,
-                acquisition_channel: { select: { id: true, name: true } },
-                social_network: { select: { id: true, name: true } },
-                referrer_contact: { select: { id: true, name: true, email: true } },
-              },
-            },
-          },
-        },
-      },
+      select: EVENT_BASE_SELECT,
     });
 
     if (!eventoBase) {
@@ -1082,15 +668,7 @@ export async function obtenerEventoDetalle(
         })),
         prisma.studio_pagos.findMany({
           where: { promise_id: promiseId, status: 'completed' },
-          select: {
-            id: true,
-            amount: true,
-            metodo_pago: true,
-            payment_date: true,
-            concept: true,
-            created_at: true,
-            cotizacion_id: true,
-          },
+          select: COMPLETED_PAYMENTS_SELECT,
           orderBy: { payment_date: 'desc' },
         }),
         Promise.resolve(null),
@@ -1099,17 +677,7 @@ export async function obtenerEventoDetalle(
         Promise.resolve(null),
         prisma.studio_agenda.findMany({
           where: { evento_id: eventoId },
-          select: {
-            id: true,
-            date: true,
-            time: true,
-            address: true,
-            concept: true,
-            type_scheduling: true,
-            link_meeting_url: true,
-            agenda_tipo: true,
-            created_at: true,
-          },
+          select: EVENT_AGENDA_SELECT,
           orderBy: { date: 'asc' },
         }),
       ]),
@@ -1136,13 +704,13 @@ export async function obtenerEventoDetalle(
 
     // Convertir Decimal a number para serialización y mapear promise
     const eventoSerializado = {
-      ...evento,
+      ...(evento as any),
       name: eventName, // Leer de promise.name
       event_date: eventDate, // Leer de promise.event_date o evento.event_date
       address: eventAddress, // Leer de promise.address
       event_location: evento.promise?.event_location || null, // Leer de promise.event_location
       contact: evento.contact ? {
-        ...evento.contact,
+        ...(evento.contact as any),
         avatar_url: evento.contact.avatar_url ?? null,
         acquisition_channel: evento.contact.acquisition_channel || null,
         social_network: evento.contact.social_network || null,
@@ -1172,27 +740,18 @@ export async function obtenerEventoDetalle(
       contract_value: financials.contractValue,
       paid_amount: financials.paidAmount,
       pending_amount: financials.pendingAmount,
-      cotizacion: evento.cotizacion ? {
-        ...evento.cotizacion,
-        price: evento.cotizacion.price ? Number(evento.cotizacion.price) : 0,
-        cotizacion_items: evento.cotizacion.cotizacion_items.map(item => ({
-          ...item,
-          name: item.name || '',
-          unit_price: item.unit_price ? Number(item.unit_price) : 0,
-          subtotal: item.subtotal ? Number(item.subtotal) : 0,
-        })),
-      } : null,
-      cotizaciones: todasLasCotizaciones.map(cot => {
+      cotizacion: evento.cotizacion ? (() => {
+        const cot = evento.cotizacion!;
+        return {
+          ...(cot as any),
+          price: cot.price ? Number(cot.price) : 0,
+          cotizacion_items: cot.cotizacion_items.map(serializeCotizacionItemBasic),
+        };
+      })() : null,
+      cotizaciones: todasLasCotizaciones.map((cotizacion) => {
+        const cot = cotizacion as any;
         // Orden estándar: seccion > categoria (catálogo) > item_order (catálogo) > order (cotización)
-        const itemsOrdenados = ordenarCotizacionItemsPorCatalogo(cot.cotizacion_items).map((item) => ({
-          ...item,
-          unit_price: item.unit_price ? Number(item.unit_price) : 0,
-          subtotal: item.subtotal ? Number(item.subtotal) : 0,
-          cost: item.cost ? Number(item.cost) : 0,
-          cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
-          internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
-          client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
-        }));
+        const itemsOrdenados = ordenarCotizacionItemsPorCatalogo(cot.cotizacion_items).map(serializeCotizacionItemComplete);
 
         return {
           ...cot,
@@ -1223,10 +782,11 @@ export async function obtenerEventoDetalle(
         concept: pago.concept,
       })),
       // Serializar scheduler.tasks: budget_amount como number y assigned_to_crew_member como objeto plano (persistencia en cliente)
-      scheduler: evento.scheduler
-        ? {
-          ...evento.scheduler,
-          tasks: evento.scheduler.tasks?.map((t) => {
+      scheduler: evento.scheduler ? (() => {
+        const scheduler = evento.scheduler!;
+        return {
+          ...(scheduler as any),
+          tasks: scheduler.tasks?.map((t) => {
             const resolvedCatalogCategoryId =
               t.catalog_category_id ??
               (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
@@ -1234,7 +794,7 @@ export async function obtenerEventoDetalle(
               null;
             const { catalog_category: _cat, cotizacion_item: _ci, ...rest } = t as typeof t & { cotizacion_item?: unknown };
             return {
-              ...rest,
+              ...(rest as any),
               budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
               order: t.order ?? 0,
               catalog_category_id: resolvedCatalogCategoryId,
@@ -1250,8 +810,8 @@ export async function obtenerEventoDetalle(
                 : null,
             };
           }),
-        }
-        : null,
+        };
+      })() : null,
     } as EventoDetalle;
 
     return {
@@ -1296,22 +856,7 @@ export async function cancelarEvento(
         id: eventoId,
         studio_id: studio.id,
       },
-      include: {
-        cotizacion: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            name: true,
-            pipeline_stage_id: true,
-          },
-        },
-      },
+      include: EVENT_CANCEL_INCLUDE,
     });
 
     if (!evento) {
@@ -1615,7 +1160,7 @@ export async function cancelarEvento(
         });
       }
     }, {
-      timeout: 10000, // Aumentar timeout a 10 segundos
+      maxWait: 10000,
     });
 
     // Registrar log en promise_logs (fuera de la transacción para no bloquear)
@@ -1643,7 +1188,7 @@ export async function cancelarEvento(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
 
     // Invalidar caché de lista (con studioSlug para aislamiento)
-    revalidateTag(`events-list-${studioSlug}`);
+    revalidateTag(`events-list-${studioSlug}`, 'page' as any);
 
     // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {
@@ -1982,9 +1527,12 @@ export async function actualizarFechaEvento(
     const agendaItem = evento.agenda && evento.agenda.length > 0 ? evento.agenda[0] : null;
 
     // Determinar si es fecha principal del evento
-    const isMainEventDate = evento.promise?.event_date && nuevaFechaNormalizada
-      ? new Date(evento.promise.event_date).toDateString() === nuevaFechaNormalizada.toDateString()
+    const promiseEventDate = evento.promise?.event_date;
+    const hasPromiseDate = !!promiseEventDate && !!nuevaFechaNormalizada;
+    const datesMatch = hasPromiseDate 
+      ? new Date(promiseEventDate).toDateString() === nuevaFechaNormalizada.toDateString()
       : false;
+    const isMainEventDate = datesMatch;
 
     // Construir metadata según tipo
     const metadata = agendaItem?.metadata
@@ -2153,52 +1701,6 @@ export async function actualizarFechaEvento(
  * Actualizar nombre del evento (campo name en studio_promises)
  * MOVIDO A: events-core.actions.ts
  */
-/* COMENTADO - USAR events-core.actions.ts
-export async function actualizarNombreEvento(
-  studioSlug: string,
-  data: UpdateEventNameData
-): Promise<EventoDetalleResponse> {
-  try {
-    const validatedData = updateEventNameSchema.parse(data);
-    const { event_id, name } = validatedData;
-
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const evento = await prisma.studio_events.findFirst({
-      where: { id: event_id, studio_id: studio.id },
-      select: { promise_id: true },
-    });
-
-    if (!evento?.promise_id) {
-      return { success: false, error: 'Evento sin promesa asociada' };
-    }
-
-    await prisma.studio_promises.update({
-      where: { id: evento.promise_id },
-      data: { name: name || '' },
-    });
-
-    const eventResult = await obtenerEventoDetalle(studioSlug, event_id);
-    if (!eventResult.success || !eventResult.data) {
-      return { success: true, data: undefined };
-    }
-    return { success: true, data: eventResult.data };
-  } catch (error) {
-    console.error('[EVENTOS] Error actualizando nombre del evento:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar nombre del evento',
-    };
-  }
-}
-*/
 
 /**
  * Obtener el número de cotizaciones autorizadas asociadas a un evento
@@ -2236,369 +1738,38 @@ export async function obtenerCotizacionesAutorizadasCount(
   }
 }
 
+// ============================================================================
+// PATRÓN PROXY: Crew Assignment (MIGRADO A crew-assignment.actions.ts)
+// ============================================================================
+
 /**
  * Obtener crew members de un studio
+ * MIGRADO A: crew-assignment.actions.ts
  */
 export async function obtenerCrewMembers(studioSlug: string) {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const crewMembers = await prisma.studio_crew_members.findMany({
-      where: {
-        studio_id: studio.id,
-        status: 'activo',
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        tipo: true,
-        status: true,
-        fixed_salary: true,
-        variable_salary: true,
-      },
-      orderBy: [
-        { name: 'asc' },
-      ],
-    });
-
-    return {
-      success: true,
-      data: crewMembers.map(member => ({
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        phone: member.phone,
-        tipo: member.tipo,
-        status: member.status,
-        fixed_salary: member.fixed_salary ? Number(member.fixed_salary) : null,
-        variable_salary: member.variable_salary ? Number(member.variable_salary) : null,
-      })),
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error obteniendo crew members:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener crew members',
-    };
-  }
+  return obtenerCrewMembersCore(studioSlug);
 }
 
 /**
  * Asignar crew member a un item de cotización
+ * MIGRADO A: crew-assignment.actions.ts
  */
 export async function asignarCrewAItem(
   studioSlug: string,
   itemId: string,
   crewMemberId: string | null
 ) {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Verificar que el item existe y pertenece al studio, obtener también el evento
-    const item = await prisma.studio_cotizacion_items.findFirst({
-      where: {
-        id: itemId,
-        cotizaciones: {
-          studio_id: studio.id,
-        },
-      },
-      select: {
-        id: true,
-        cotizacion_id: true,
-        cotizaciones: {
-          select: {
-            evento_id: true,
-          },
-        },
-      },
-    });
-
-    if (!item) {
-      return { success: false, error: 'Item no encontrado' };
-    }
-
-    // Si se está asignando un crew member, verificar que existe
-    if (crewMemberId) {
-      const crewMember = await prisma.studio_crew_members.findFirst({
-        where: {
-          id: crewMemberId,
-          studio_id: studio.id,
-        },
-      });
-
-      if (!crewMember) {
-        return { success: false, error: 'Crew member no encontrado' };
-      }
-    }
-
-    // Actualizar el item
-    await prisma.studio_cotizacion_items.update({
-      where: { id: itemId },
-      data: {
-        assigned_to_crew_member_id: crewMemberId,
-        assignment_date: crewMemberId ? new Date() : null,
-      },
-    });
-
-    // Obtener eventId desde evento_id de la cotización
-    const eventId = item.cotizaciones?.evento_id;
-
-    // Si se asignó personal, verificar si la tarea está completada para crear/actualizar nómina
-    let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
-    if (crewMemberId && eventId) {
-      // Buscar la tarea asociada al item
-      const task = await prisma.studio_scheduler_event_tasks.findFirst({
-        where: {
-          cotizacion_item_id: itemId,
-          scheduler_instance: {
-            event_id: eventId,
-          },
-        },
-        select: {
-          id: true,
-          completed_at: true,
-          status: true,
-        },
-      });
-
-      // Si la tarea está completada, crear/actualizar nómina
-      if (task && task.completed_at && task.status === 'COMPLETED') {
-        try {
-          // Importar dinámicamente para evitar dependencias circulares
-          const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
-
-          // Obtener datos del item para la nómina
-          const itemData = await prisma.studio_cotizacion_items.findUnique({
-            where: { id: itemId },
-            select: {
-              cost: true,
-              cost_snapshot: true,
-              quantity: true,
-              name: true,
-              name_snapshot: true,
-            },
-          });
-
-          const costo = itemData?.cost ?? itemData?.cost_snapshot ?? 0;
-          const cantidad = itemData?.quantity ?? 1;
-          const itemName = itemData?.name || itemData?.name_snapshot || 'Servicio sin nombre';
-
-          const result = await crearNominaDesdeTareaCompletada(
-            studioSlug,
-            eventId,
-            task.id,
-            {
-              itemId,
-              personalId: crewMemberId,
-              costo,
-              cantidad,
-              itemName,
-            }
-          );
-
-          if (result.success && result.data) {
-            // Obtener nombre del personal
-            const crewMember = await prisma.studio_crew_members.findUnique({
-              where: { id: crewMemberId },
-              select: { name: true },
-            });
-            payrollResult = {
-              success: true,
-              personalNombre: crewMember?.name || result.data.personalNombre,
-            };
-          } else {
-            console.warn('[EVENTOS] ⚠️ No se pudo crear/actualizar nómina automática:', result.error);
-            payrollResult = {
-              success: false,
-              error: result.error,
-            };
-          }
-        } catch (error) {
-          console.error('[EVENTOS] ❌ Error creando/actualizando nómina automática (no crítico):', error);
-          payrollResult = {
-            success: false,
-            error: error instanceof Error ? error.message : 'Error desconocido',
-          };
-        }
-      }
-    }
-
-    revalidatePath(`/${studioSlug}/studio/business/events`);
-    if (eventId) {
-      revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
-      revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    }
-
-    // Marcar tarea como DRAFT si se asignó o removió personal (NO sincronizar automáticamente)
-    // El usuario debe usar "Publicar Cronograma" para sincronizar con Google Calendar
-    if (eventId) {
-      try {
-        const task = await prisma.studio_scheduler_event_tasks.findFirst({
-          where: {
-            cotizacion_item_id: itemId,
-            scheduler_instance: {
-              event_id: eventId,
-            },
-          },
-          select: {
-            id: true,
-            sync_status: true,
-            google_event_id: true,
-            google_calendar_id: true,
-          },
-        });
-
-        if (task) {
-          // Si la tarea estaba sincronizada/publicada y cambió el personal, marcar como DRAFT
-          if (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED') {
-            // Si se removió personal y la tarea estaba INVITED, cancelar invitación en Google Calendar
-            if (crewMemberId === null && task.sync_status === 'INVITED' && task.google_event_id && task.google_calendar_id) {
-              try {
-                const {
-                  tieneGoogleCalendarHabilitado,
-                  eliminarEventoEnBackground,
-                } = await import('@/lib/integrations/google/clients/calendar/helpers');
-                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-                  // Cancelar invitación en segundo plano (no bloquea la respuesta)
-                  await eliminarEventoEnBackground(
-                    task.google_calendar_id,
-                    task.google_event_id
-                  );
-                }
-              } catch (error) {
-                // Log error pero no bloquear la operación principal
-                console.error(
-                  '[Scheduler] Error cancelando invitación al quitar personal (no crítico):',
-                  error
-                );
-              }
-            }
-
-            // Si se cambió personal (de un miembro a otro) y la tarea estaba INVITED, cancelar invitación anterior
-            if (crewMemberId !== null && task.sync_status === 'INVITED' && task.google_event_id && task.google_calendar_id) {
-              try {
-                const {
-                  tieneGoogleCalendarHabilitado,
-                  eliminarEventoEnBackground,
-                } = await import('@/lib/integrations/google/clients/calendar/helpers');
-                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-                  // Cancelar invitación anterior en segundo plano
-                  await eliminarEventoEnBackground(
-                    task.google_calendar_id,
-                    task.google_event_id
-                  );
-                }
-              } catch (error) {
-                // Log error pero no bloquear la operación principal
-                console.error(
-                  '[Scheduler] Error cancelando invitación anterior al cambiar personal (no crítico):',
-                  error
-                );
-              }
-            }
-
-            await prisma.studio_scheduler_event_tasks.update({
-              where: { id: task.id },
-              data: {
-                sync_status: 'DRAFT',
-                // Limpiar referencias de Google cuando se quita o cambia personal
-                ...((crewMemberId === null || (crewMemberId !== null && task.google_event_id)) && task.google_event_id ? {
-                  google_event_id: null,
-                  google_calendar_id: null,
-                } : {}),
-              },
-            });
-          }
-        }
-      } catch (error) {
-        // Log error pero no bloquear la operación principal
-        console.error(
-          '[Scheduler] Error actualizando estado de tarea después de asignar/remover personal (no crítico):',
-          error
-        );
-      }
-    }
-
-    return {
-      success: true,
-      payrollResult: payrollResult || undefined,
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error asignando crew a item:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al asignar crew member',
-    };
-  }
+  return asignarCrewAItemCore(studioSlug, itemId, crewMemberId);
 }
-
-/**
- * Tipo para categoría de crew
- */
-type CrewCategory = {
-  id: string;
-  name: string;
-  tipo: string;
-  color: string | null;
-  icono: string | null;
-  order: number;
-};
 
 /**
  * Obtener categorías de crew members
- * Nota: El modelo studio_crew_categories no existe en el schema actual.
- * Esta función retorna un array vacío hasta que se implemente el modelo.
+ * MIGRADO A: crew-assignment.actions.ts
  */
 export async function obtenerCategoriasCrew(studioSlug: string) {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // TODO: Implementar cuando el modelo studio_crew_categories esté disponible
-    // Por ahora retornamos array vacío ya que el modelo no existe en el schema
-    const categorias: CrewCategory[] = [];
-
-    return {
-      success: true,
-      data: categorias.map((cat: CrewCategory) => ({
-        id: cat.id,
-        name: cat.name,
-        tipo: cat.tipo,
-        color: cat.color,
-        icono: cat.icono,
-        order: cat.order,
-      })),
-    };
-  } catch (error) {
-    console.error('[EVENTOS] Error obteniendo categorías crew:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener categorías',
-    };
-  }
+  return obtenerCategoriasCrewCore(studioSlug);
 }
+
 
 /**
  * Obtener o crear instancia de Scheduler para un evento
@@ -2662,1256 +1833,42 @@ async function obtenerOCrearSchedulerInstance(
 
 /**
  * Crear tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function crearSchedulerTask(
-  studioSlug: string,
-  eventId: string,
-  data: {
-    itemId: string;
-    name: string;
-    description?: string;
-    startDate: Date;
-    endDate: Date;
-    assignedToCrewMemberId?: string | null;
-    notes?: string;
-    isCompleted?: boolean;
-  }
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Verificar que el item existe y pertenece al studio
-    const item = await prisma.studio_cotizacion_items.findFirst({
-      where: {
-        id: data.itemId,
-        cotizaciones: {
-          studio_id: studio.id,
-          evento_id: eventId,
-        },
-      },
-      select: {
-        id: true,
-        cotizacion_id: true,
-      },
-    });
-
-    if (!item) {
-      return { success: false, error: 'Item no encontrado' };
-    }
-
-    // Obtener o crear instancia de Scheduler
-    const instanceResult = await obtenerOCrearSchedulerInstance(studioSlug, eventId);
-    if (!instanceResult.success || !instanceResult.data) {
-      return instanceResult;
-    }
-
-    const schedulerInstanceId = instanceResult.data.id;
-
-    // Verificar que no existe ya una tarea para este item
-    const existingTask = await prisma.studio_scheduler_event_tasks.findUnique({
-      where: { cotizacion_item_id: data.itemId },
-      select: { id: true },
-    });
-
-    if (existingTask) {
-      return { success: false, error: 'Ya existe una tarea para este item' };
-    }
-
-    // Calcular duración en días
-    const durationDays = Math.ceil(
-      (data.endDate.getTime() - data.startDate.getTime()) / (1000 * 60 * 60 * 24)
-    ) + 1;
-
-    // Crear la tarea usando el cliente Prisma estándar
-    const task = await prisma.studio_scheduler_event_tasks.create({
-      data: {
-        scheduler_instance_id: schedulerInstanceId,
-        cotizacion_item_id: data.itemId,
-        name: data.name,
-        description: data.description || null,
-        start_date: data.startDate,
-        end_date: data.endDate,
-        duration_days: durationDays,
-        category: 'PLANNING',
-        priority: 'MEDIUM',
-        status: data.isCompleted ? 'COMPLETED' : 'PENDING',
-        progress_percent: data.isCompleted ? 100 : 0,
-        notes: data.notes || null,
-        completed_at: data.isCompleted ? new Date() : null,
-        sync_status: 'DRAFT',
-      },
-      include: {
-        cotizacion_item: {
-          select: {
-            id: true,
-            assigned_to_crew_member_id: true,
-          },
-        },
-      },
-    });
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-
-    // NO sincronizar inmediatamente - el usuario debe "Publicar" los cambios
-    // La sincronización se hará cuando el usuario publique el cronograma
-
-    return { success: true, data: task };
-  } catch (error) {
-    console.error('[GANTT] Error creando tarea:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al crear tarea',
-    };
-  }
-}
 
 /**
  * Actualizar tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function actualizarSchedulerTask(
-  studioSlug: string,
-  eventId: string,
-  taskId: string,
-  data: {
-    name?: string;
-    description?: string;
-    startDate?: Date;
-    endDate?: Date;
-    assignedToCrewMemberId?: string | null;
-    notes?: string;
-    isCompleted?: boolean;
-    skipPayroll?: boolean; // Si es true, no crear nómina automáticamente
-    checklist_items?: unknown; // SchedulerChecklistItem[] (Workflows Inteligentes)
-    itemData?: {
-      itemId: string;
-      personalId: string;
-      costo: number;
-      cantidad: number;
-      itemName?: string;
-    };
-  }
-): Promise<{ success: boolean; error?: string; payrollResult?: { success: boolean; personalNombre?: string; error?: string } }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Verificar que la tarea existe y pertenece al evento
-    const task = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        id: taskId,
-        scheduler_instance: {
-          event_id: eventId,
-        },
-      },
-      select: {
-        id: true,
-        start_date: true,
-        end_date: true,
-        cotizacion_item_id: true,
-        sync_status: true,
-      },
-    });
-
-    if (!task) {
-      return { success: false, error: 'Tarea no encontrada' };
-    }
-
-    // Preparar datos de actualización. No incluir order: se preserva la posición en Sidebar/Grid.
-    const updateData: {
-      name?: string;
-      description?: string | null;
-      start_date?: Date;
-      end_date?: Date;
-      duration_days?: number;
-      status?: 'PENDING' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED';
-      progress_percent?: number;
-      notes?: string | null;
-      completed_at?: Date | null;
-      assigned_to_crew_member_id?: string | null;
-      sync_status?: 'DRAFT';
-      checklist_items?: unknown;
-    } = {};
-
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description || null;
-    if (data.notes !== undefined) updateData.notes = data.notes || null;
-    if (data.checklist_items !== undefined) updateData.checklist_items = data.checklist_items;
-    if (data.assignedToCrewMemberId !== undefined) updateData.assigned_to_crew_member_id = data.assignedToCrewMemberId;
-
-    const finalStartDate = data.startDate || task.start_date;
-    const finalEndDate = data.endDate || task.end_date;
-
-    // Verificar si las fechas cambiaron
-    const datesChanged =
-      (data.startDate && data.startDate.getTime() !== task.start_date.getTime()) ||
-      (data.endDate && data.endDate.getTime() !== task.end_date.getTime());
-
-    if (data.startDate || data.endDate) {
-      updateData.start_date = finalStartDate;
-      updateData.end_date = finalEndDate;
-      updateData.duration_days = Math.ceil(
-        (finalEndDate.getTime() - finalStartDate.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1;
-
-      // Si las fechas cambiaron y la tarea estaba sincronizada/publicada, marcar como DRAFT
-      if (datesChanged && (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
-        updateData.sync_status = 'DRAFT';
-      }
-    }
-
-    // Si cambió el nombre, descripción o notas, también marcar como DRAFT si estaba sincronizada
-    if ((data.name !== undefined || data.description !== undefined || data.notes !== undefined) &&
-      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
-      updateData.sync_status = 'DRAFT';
-    }
-
-    if (data.isCompleted !== undefined) {
-      updateData.status = data.isCompleted ? 'COMPLETED' : 'PENDING';
-      updateData.progress_percent = data.isCompleted ? 100 : 0;
-      updateData.completed_at = data.isCompleted ? new Date() : null;
-    }
-
-    // Actualizar la tarea
-    await prisma.studio_scheduler_event_tasks.update({
-      where: { id: taskId },
-      data: updateData,
-    });
-
-    // Si se completó la tarea, intentar crear nómina automáticamente
-    // Retornar información de nómina para mostrar toast en el cliente
-    let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
-    if (data.isCompleted === true && task.cotizacion_item_id && !data.skipPayroll) {
-      // Importar dinámicamente para evitar dependencias circulares
-      const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
-
-      // Crear nómina (esperar resultado para retornarlo)
-      try {
-        const result = await crearNominaDesdeTareaCompletada(
-          studioSlug,
-          eventId,
-          taskId,
-          data.itemData // Pasar datos del item si están disponibles
-        );
-        if (result.success && result.data) {
-          payrollResult = {
-            success: true,
-            personalNombre: result.data.personalNombre,
-          };
-        } else {
-          payrollResult = {
-            success: false,
-            error: result.error,
-          };
-        }
-      } catch (error) {
-        // Log error pero no bloquear la actualización de la tarea
-        console.error(
-          '[SCHEDULER] ❌ Error creando nómina automática (no crítico):',
-          error
-        );
-        payrollResult = {
-          success: false,
-          error: error instanceof Error ? error.message : 'Error desconocido',
-        };
-      }
-    }
-
-    // Si se desmarcó la tarea (pasó a pendiente), eliminar nómina asociada
-    if (data.isCompleted === false && task.cotizacion_item_id) {
-      // Importar dinámicamente para evitar dependencias circulares
-      const { eliminarNominaDesdeTareaDesmarcada } = await import('./payroll-actions');
-
-      // Eliminar nómina (await para evitar revalidaciones durante render)
-      try {
-        await eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId);
-      } catch (error) {
-        // Log error pero no bloquear la actualización de la tarea
-        console.error(
-          '[SCHEDULER] ❌ Error eliminando nómina automática (no crítico):',
-          error
-        );
-      }
-    }
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-
-    // Revalidar finanzas si se eliminó una nómina
-    if (data.isCompleted === false && task.cotizacion_item_id) {
-      revalidatePath(`/${studioSlug}/studio/business/finanzas`);
-    }
-
-    // NO sincronizar inmediatamente - el usuario debe "Publicar" los cambios
-    // La sincronización se hará cuando el usuario publique el cronograma
-
-    return {
-      success: true,
-      payrollResult: payrollResult || undefined,
-    };
-  } catch (error) {
-    console.error('[GANTT] Error actualizando tarea:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar tarea',
-    };
-  }
-}
 
 /**
  * Actualizar rango de fechas de la instancia de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function actualizarRangoScheduler(
-  studioSlug: string,
-  eventId: string,
-  dateRange: { from: Date; to: Date }
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Obtener o crear instancia de Gantt
-    let instance = await prisma.studio_scheduler_event_instances.findUnique({
-      where: { event_id: eventId },
-      select: { id: true },
-    });
-
-    if (!instance) {
-      const event = await prisma.studio_events.findUnique({
-        where: { id: eventId },
-        select: { event_date: true },
-      });
-
-      if (!event) {
-        return { success: false, error: 'Evento no encontrado' };
-      }
-
-      instance = await prisma.studio_scheduler_event_instances.create({
-        data: {
-          event_id: eventId,
-          event_date: event.event_date,
-          start_date: dateRange.from,
-          end_date: dateRange.to,
-        },
-        select: { id: true },
-      });
-    } else {
-      // Actualizar rango existente
-      await prisma.studio_scheduler_event_instances.update({
-        where: { id: instance.id },
-        data: {
-          start_date: dateRange.from,
-          end_date: dateRange.to,
-        },
-      });
-    }
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    return { success: true };
-  } catch (error) {
-    console.error('[SCHEDULER] Error actualizando rango:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar rango',
-    };
-  }
-}
 
 /**
  * Obtener tarea de Scheduler por ID
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function obtenerSchedulerTask(
-  studioSlug: string,
-  eventId: string,
-  taskId: string
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const task = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        id: taskId,
-        scheduler_instance: {
-          event_id: eventId,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        start_date: true,
-        end_date: true,
-        duration_days: true,
-        status: true,
-        progress_percent: true,
-        notes: true,
-        cotizacion_item_id: true,
-      },
-    });
-
-    if (!task) {
-      return { success: false, error: 'Tarea no encontrada' };
-    }
-
-    return { success: true, data: task };
-  } catch (error) {
-    console.error('[GANTT] Error obteniendo tarea:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener tarea',
-    };
-  }
-}
 
 /**
  * Eliminar tarea de Scheduler
+ * MIGRADO A: scheduler-tasks.actions.ts
  */
-export async function eliminarSchedulerTask(
-  studioSlug: string,
-  eventId: string,
-  taskId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    // Verificar que la tarea existe y pertenece al evento
-    const task = await prisma.studio_scheduler_event_tasks.findFirst({
-      where: {
-        id: taskId,
-        scheduler_instance: {
-          event_id: eventId,
-        },
-      },
-      select: { id: true },
-    });
-
-    if (!task) {
-      return { success: false, error: 'Tarea no encontrada' };
-    }
-
-    // Obtener información completa de la tarea antes de eliminar (para sincronización y limpieza)
-    const taskWithGoogle = await prisma.studio_scheduler_event_tasks.findUnique({
-      where: { id: taskId },
-      include: {
-        cotizacion_item: {
-          select: {
-            id: true,
-            assigned_to_crew_member_id: true,
-            assigned_to_crew_member: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    // PATRÓN STAGING: Siempre marcar como DRAFT en lugar de eliminar
-    // Esto permite cancelar cambios y mantener historial completo
-    await prisma.studio_scheduler_event_tasks.update({
-      where: { id: taskId },
-      data: {
-        sync_status: 'DRAFT',
-        // Limpiar item para indicar que fue eliminada (staging)
-        cotizacion_item_id: null,
-      },
-    });
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-
-    // Sincronizar eliminación con Google Calendar (en background, no bloquea respuesta)
-    if (taskWithGoogle?.google_event_id && taskWithGoogle?.google_calendar_id) {
-      try {
-        const {
-          tieneGoogleCalendarHabilitado,
-          eliminarEventoEnBackground,
-        } = await import('@/lib/integrations/google/clients/calendar/helpers');
-        if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-          await eliminarEventoEnBackground(
-            taskWithGoogle.google_calendar_id,
-            taskWithGoogle.google_event_id
-          );
-        }
-      } catch (error) {
-        // Log error pero no bloquear la operación principal
-        console.error(
-          '[Google Calendar] Error verificando conexión Google (no crítico):',
-          error
-        );
-      }
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('[SCHEDULER] Error eliminando tarea:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al eliminar tarea',
-    };
-  }
-}
 
 /**
  * Obtener eventos activos con schedulers para la vista de cronogramas
+ * MIGRADO A: scheduler-sync.actions.ts
  */
-export interface EventoSchedulerItem {
-  id: string;
-  name: string;
-  eventDate: Date;
-  contactName: string;
-  status: string;
-  totalItems: number; // Total de items de todas las cotizaciones del evento
-  schedulers: Array<{
-    cotizacionId: string;
-    cotizacionName: string;
-    startDate: Date;
-    endDate: Date;
-    tasks: Array<{
-      id: string;
-      name: string;
-      startDate: Date;
-      endDate: Date;
-      status: string;
-      progress: number;
-      category: string;
-      assignedToUserId: string | null;
-    }>;
-  }>;
-}
 
-export interface EventosSchedulerResponse {
-  success: boolean;
-  data?: EventoSchedulerItem[];
-  error?: string;
-}
+// ============================================================================
+// CÓDIGO MIGRADO: sincronizarTareasEvento + helpers
+// ============================================================================
+// Las siguientes funciones fueron movidas a scheduler-sync.actions.ts:
+// - sincronizarTareasEvento (función principal)
+// - OPERATIONAL_TO_TASK_CATEGORY, CATEGORY_NAME_NORMALIZED_TO_TASK (constantes)
+// - taskCategoryFromCategoryName, pesoPorNombre, isServicioPrincipal (helpers)
+//
+// Usar el proxy wrapper definido arriba para mantener compatibilidad.
+// ============================================================================
 
-export async function obtenerEventosConSchedulers(
-  studioSlug: string
-): Promise<EventosSchedulerResponse> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const eventos = await prisma.studio_events.findMany({
-      where: {
-        studio_id: studio.id,
-        status: 'ACTIVE',
-      },
-      include: {
-        contact: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        promise: {
-          select: {
-            id: true,
-            name: true,
-            event_date: true,
-            quotes: {
-              where: {
-                status: {
-                  in: ['aprobada', 'autorizada', 'approved', 'seleccionada'],
-                },
-              },
-              select: {
-                id: true,
-                name: true,
-                cotizacion_items: {
-                  select: {
-                    id: true,
-                    scheduler_task: {
-                      select: {
-                        id: true,
-                        name: true,
-                        start_date: true,
-                        end_date: true,
-                        status: true,
-                        progress_percent: true,
-                        category: true,
-                        assigned_to_user_id: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        event_date: 'desc',
-      },
-    });
-
-    const eventosMapeados: EventoSchedulerItem[] = eventos.map((evento) => {
-      // Mapear status de TaskStatus a string compatible con el componente
-      const mapTaskStatus = (status: string): string => {
-        switch (status) {
-          case 'COMPLETED':
-            return 'COMPLETED';
-          case 'IN_PROGRESS':
-            return 'IN_PROGRESS';
-          case 'PENDING':
-            return 'PENDING';
-          case 'BLOCKED':
-            return 'DELAYED';
-          default:
-            return 'PENDING';
-        }
-      };
-
-      // Mapear category de TaskCategory a string compatible
-      const mapTaskCategory = (category: string): string => {
-        // Si el componente espera PRE_PRODUCTION pero la DB no lo tiene,
-        // podemos mapear PRODUCTION o crear una lógica
-        switch (category) {
-          case 'PLANNING':
-            return 'PLANNING';
-          case 'PRODUCTION':
-            return 'PRODUCTION';
-          case 'POST_PRODUCTION':
-            return 'POST_PRODUCTION';
-          case 'REVIEW':
-          case 'DELIVERY':
-          case 'WARRANTY':
-            return 'POST_PRODUCTION'; // Agrupar estos en post-producción
-          default:
-            return 'PLANNING';
-        }
-      };
-
-      // Calcular total de items de todas las cotizaciones
-      const totalItems = evento.promise?.quotes?.reduce(
-        (total, cotizacion) => total + (cotizacion.cotizacion_items?.length || 0),
-        0
-      ) || 0;
-
-      // Agrupar tareas por cotización
-      const schedulersPorCotizacion: Array<{
-        cotizacionId: string;
-        cotizacionName: string;
-        startDate: Date;
-        endDate: Date;
-        tasks: Array<{
-          id: string;
-          name: string;
-          startDate: Date;
-          endDate: Date;
-          status: string;
-          progress: number;
-          category: string;
-          assignedToUserId: string | null;
-        }>;
-      }> = [];
-
-      evento.promise?.quotes?.forEach((cotizacion) => {
-        // Filtrar items que tienen tareas del scheduler
-        const tasks = cotizacion.cotizacion_items
-          ?.filter((item) => item.scheduler_task)
-          .map((item) => {
-            const task = item.scheduler_task!;
-            return {
-              id: task.id,
-              name: task.name,
-              startDate: task.start_date,
-              endDate: task.end_date,
-              status: mapTaskStatus(task.status),
-              progress: task.progress_percent,
-              category: mapTaskCategory(task.category),
-              assignedToUserId: task.assigned_to_user_id,
-            };
-          }) || [];
-
-        // Solo agregar si hay tareas
-        if (tasks.length > 0) {
-          // Calcular rango de fechas del cronograma de esta cotización
-          const dates = tasks.map((t) => [t.startDate, t.endDate]).flat();
-          const startDate = new Date(Math.min(...dates.map((d) => d.getTime())));
-          const endDate = new Date(Math.max(...dates.map((d) => d.getTime())));
-
-          schedulersPorCotizacion.push({
-            cotizacionId: cotizacion.id,
-            cotizacionName: cotizacion.name || `Cotización ${cotizacion.id.slice(0, 8)}`,
-            startDate,
-            endDate,
-            tasks,
-          });
-        }
-      });
-
-      return {
-        id: evento.id,
-        name: evento.promise?.name || evento.contact?.name || 'Evento sin nombre',
-        eventDate: evento.event_date,
-        contactName: evento.contact?.name || 'Sin contacto',
-        status: evento.status,
-        totalItems,
-        schedulers: schedulersPorCotizacion,
-      };
-    });
-
-    return {
-      success: true,
-      data: eventosMapeados,
-    };
-  } catch (error) {
-    console.error('[SCHEDULER] Error obteniendo eventos con schedulers:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener eventos',
-    };
-  }
-}
-
-/** Mapeo de categoría operativa (catálogo) a TaskCategory (scheduler). */
-const OPERATIONAL_TO_TASK_CATEGORY: Record<string, 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = {
-  PRODUCTION: 'PRODUCTION',
-  POST_PRODUCTION: 'POST_PRODUCTION',
-  DELIVERY: 'DELIVERY',
-  DIGITAL_DELIVERY: 'DELIVERY',
-  PHYSICAL_DELIVERY: 'DELIVERY',
-  LOGISTICS: 'PLANNING',
-};
-
-/** Nombre de categoría normalizado (trim + lowercase + sin tildes) → TaskCategory. Fuerza PRODUCTION para Producción. */
-const CATEGORY_NAME_NORMALIZED_TO_TASK: Record<string, 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = {
-  produccion: 'PRODUCTION',
-  planeacion: 'PLANNING',
-  preproduccion: 'PLANNING',
-  edicion: 'POST_PRODUCTION',
-  postproduccion: 'POST_PRODUCTION',
-  entrega: 'DELIVERY',
-};
-
-function taskCategoryFromCategoryName(name: string | null | undefined): 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' | null {
-  if (!name || typeof name !== 'string') return null;
-  const normalized = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return CATEGORY_NAME_NORMALIZED_TO_TASK[normalized] ?? null;
-}
-
-/**
- * Peso por nombre para desempate: ignora order_item de la cotización.
- * Shooting/Sesión = primero (0), Asistencia = después (10000), resto = medio (5000).
- */
-function pesoPorNombre(ci: { name?: string | null; name_snapshot?: string | null }): number {
-  const n = (ci.name ?? ci.name_snapshot ?? '').toLowerCase();
-  if (n.includes('shooting') || n.includes('sesión') || n.includes('sesion')) return 0;
-  if (n.includes('asistencia')) return 10000;
-  return 5000;
-}
-
-/** True si el ítem es el servicio principal (ej. Shooting) para categoría PRODUCTION. */
-function isServicioPrincipal(ci: { name?: string | null; name_snapshot?: string | null }): boolean {
-  const n = (ci.name ?? ci.name_snapshot ?? '').toLowerCase();
-  return n.includes('shooting') || n.includes('sesión') || n.includes('sesion');
-}
-
-/**
- * Sincroniza tareas del scheduler con los ítems de la cotización autorizada del evento
- * (incl. anexos si forman parte de cotizacion_items).
- * Crea una tarea por ítem con duración y etapa según catálogo; no duplica si ya existe.
- * Ítems nuevos: order = max(order)+1 en su ámbito (category + catalog_category_id).
- * Ítems existentes: no se sobrescribe order (respeta reorden manual del usuario).
- */
-export async function sincronizarTareasEvento(
-  studioSlug: string,
-  eventId: string
-): Promise<{ success: boolean; created?: number; updated?: number; skipped?: number; error?: string }> {
-  try {
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-    if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
-    }
-
-    const event = await prisma.studio_events.findUnique({
-      where: { id: eventId },
-      select: { id: true, cotizacion_id: true, event_date: true },
-    });
-    if (!event) {
-      return { success: false, error: 'Evento no encontrado' };
-    }
-    if (!event.cotizacion_id) {
-      return { success: false, error: 'El evento no tiene cotización asociada' };
-    }
-
-    const cotizacion = await prisma.studio_cotizaciones.findFirst({
-      where: {
-        id: event.cotizacion_id,
-        studio_id: studio.id,
-        status: { in: ['autorizada', 'aprobada', 'approved'] },
-      },
-      select: {
-        id: true,
-        cotizacion_items: {
-          orderBy: { order: 'asc' },
-          select: {
-            id: true,
-            order: true,
-            name: true,
-            name_snapshot: true,
-            item_id: true,
-            service_category_id: true,
-            seccion_name: true,
-            quantity: true,
-            subtotal: true,
-            items: {
-              select: {
-                operational_category: true,
-                default_duration_days: true,
-                name: true,
-                order: true,
-                service_categories: {
-                  select: {
-                    name: true,
-                    order: true,
-                    section_categories: {
-                      select: {
-                        service_sections: { select: { order: true } },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            service_categories: {
-              select: {
-                name: true,
-                order: true,
-                section_categories: {
-                  select: {
-                    service_sections: { select: { order: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!cotizacion) {
-      return { success: false, error: 'No se encontró cotización autorizada para este evento' };
-    }
-
-    // ─── Instrucción maestra: no copiar order de cotización. Scheduler = espejo del árbol jerárquico. ───
-    // 1) Pasar todos los ítems por la función maestra (misma que el Panel).
-    const itemsParaEstructura: CotizacionItemInput[] = (cotizacion.cotizacion_items ?? []).map((ci, idx) => {
-      try {
-        const seccionOrden =
-          ci?.items?.service_categories?.section_categories?.service_sections?.order ??
-          ci?.service_categories?.section_categories?.service_sections?.order ??
-          999;
-        const categoriaOrden =
-          ci?.items?.service_categories?.order ?? ci?.service_categories?.order ?? 999;
-        const categoryName =
-          (ci?.service_categories as { name?: string } | null)?.name ??
-          (ci?.items?.service_categories as { name?: string } | null)?.name ??
-          null;
-        const orderParaSort = pesoPorNombre(ci);
-        return {
-          id: ci?.id,
-          item_id: ci?.item_id,
-          quantity: ci?.quantity ?? 0,
-          subtotal: Number(ci?.subtotal ?? 0),
-          name_snapshot: ci?.name_snapshot,
-          name: ci?.name,
-          seccion_name: ci?.seccion_name,
-          category_name: categoryName,
-          seccion_orden: seccionOrden,
-          categoria_orden: categoriaOrden,
-          order: orderParaSort,
-        };
-      } catch {
-        return null;
-      }
-    }).filter((x): x is CotizacionItemInput => x != null);
-    // 2) Construir árbol jerárquico (Sección > Categoría > Ítem) y aplanar a lista única.
-    let estructura;
-    let orderedIds: string[];
-    let cotizacionItemsOrdenados: typeof cotizacion.cotizacion_items;
-    try {
-      estructura = construirEstructuraJerarquicaCotizacion(itemsParaEstructura, { ordenarPor: 'catalogo' });
-      orderedIds = aplanarEstructuraAOrdenIds(estructura);
-      cotizacionItemsOrdenados = orderedIds
-        .map((id) => cotizacion.cotizacion_items?.find((ci) => ci?.id === id))
-        .filter(Boolean) as typeof cotizacion.cotizacion_items;
-      if (cotizacionItemsOrdenados.some((ci) => !ci)) {
-        cotizacionItemsOrdenados = cotizacionItemsOrdenados.filter(Boolean) as typeof cotizacion.cotizacion_items;
-      }
-    } catch {
-      return { success: false, error: 'Error al construir estructura de cotización. Revise ítems o etapas vacías.' };
-    }
-    // 3) Asignar order 0, 1, 2, ... por posición en esa lista.
-    const idToVisualIndex = new Map(orderedIds.map((id, i) => [id, i]));
-
-    const instanceResult = await obtenerOCrearSchedulerInstance(studioSlug, eventId);
-    if (!instanceResult.success || !instanceResult.data) {
-      return { success: false, error: instanceResult.error ?? 'Error al obtener instancia del cronograma' };
-    }
-    const schedulerInstanceId = instanceResult.data.id;
-
-    const currentCotizacionItemIds = new Set(cotizacion.cotizacion_items.map((ci) => ci.id));
-    // Solo eliminar tareas cuyo cotizacion_item_id ya no está en la cotización actual.
-    // Las tareas manuales (cotizacion_item_id = null) nunca se tocan.
-    const orphanTasks = await prisma.studio_scheduler_event_tasks.findMany({
-      where: {
-        scheduler_instance_id: schedulerInstanceId,
-        AND: [
-          { cotizacion_item_id: { not: null } },
-          { cotizacion_item_id: { notIn: Array.from(currentCotizacionItemIds) } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (orphanTasks.length > 0) {
-      await prisma.studio_scheduler_event_tasks.deleteMany({
-        where: { id: { in: orphanTasks.map((t) => t.id) } },
-      });
-    }
-
-    const existingByItem = await prisma.studio_scheduler_event_tasks.findMany({
-      where: {
-        scheduler_instance_id: schedulerInstanceId,
-        cotizacion_item_id: { not: null },
-      },
-      select: { id: true, cotizacion_item_id: true, category: true, catalog_category_id: true },
-    });
-    const existingItemIds = new Set(
-      existingByItem.map((t) => t.cotizacion_item_id).filter(Boolean) as string[]
-    );
-    const existingTaskIdByCotizacionItemId = new Map(
-      existingByItem
-        .filter((t) => t.cotizacion_item_id != null)
-        .map((t) => [t.cotizacion_item_id as string, t.id])
-    );
-    const existingTaskByCotizacionItemId = new Map(
-      existingByItem
-        .filter((t) => t.cotizacion_item_id != null)
-        .map((t) => [t.cotizacion_item_id as string, t])
-    );
-
-    // Ámbitos de orden: max(order) por (category, catalog_category_id) para no sobrescribir orden movido por usuario y asignar max+1 a ítems nuevos.
-    const allTasksWithOrder = await prisma.studio_scheduler_event_tasks.findMany({
-      where: { scheduler_instance_id: schedulerInstanceId },
-      select: { order: true, category: true, catalog_category_id: true },
-    });
-    const maxOrderByScope = new Map<string, number>();
-    for (const t of allTasksWithOrder) {
-      const scopeKey = `${t.category}-${t.catalog_category_id ?? 'null'}`;
-      const current = maxOrderByScope.get(scopeKey) ?? -1;
-      maxOrderByScope.set(scopeKey, Math.max(current, t.order ?? 0));
-    }
-
-    const categoryOrder: Array<'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY'> = [
-      'UNASSIGNED',
-      'PLANNING',
-      'PRODUCTION',
-      'POST_PRODUCTION',
-      'DELIVERY',
-    ];
-    const sortKey = (cat: string) => {
-      const idx = categoryOrder.indexOf(cat as typeof categoryOrder[number]);
-      return idx === -1 ? 0 : idx;
-    };
-
-    // Rescate solo si el ítem de cotización no tiene ya una categoría válida (p. ej. asignada por el usuario en el WorkflowCard).
-    const rescueItemIds = cotizacion.cotizacion_items
-      .filter((ci) => ci.item_id != null)
-      .filter((ci) => {
-        const hasCatId = (ci.service_category_id ?? null) != null;
-        if (hasCatId) return false;
-        const catalog = ci.items;
-        const hasOpCat = catalog?.operational_category != null;
-        return !hasOpCat;
-      })
-      .map((ci) => ci.item_id as string);
-    const rescuedItems =
-      rescueItemIds.length > 0
-        ? await prisma.studio_items.findMany({
-          where: { id: { in: rescueItemIds } },
-          select: {
-            id: true,
-            operational_category: true,
-            default_duration_days: true,
-            name: true,
-            service_category_id: true,
-          },
-        })
-        : [];
-    const rescuedByItemId = new Map(
-      rescuedItems.map((r) => [
-        r.id,
-        {
-          operational_category: r.operational_category,
-          default_duration_days: r.default_duration_days ?? 1,
-          name: r.name,
-          service_category_id: r.service_category_id,
-        },
-      ])
-    );
-
-    // Índice = posición en la lista aplanada (0, 1, 2...). No se usa cotizacion_items.order.
-    const itemsRawAll: Array<{
-      cotizacionItemId: string;
-      itemId: string | null;
-      serviceCategoryId: string | null;
-      name: string;
-      taskCategory: 'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY';
-      durationDays: number;
-      visualIndex: number;
-    }> = [];
-    for (let idx = 0; idx < cotizacionItemsOrdenados.length; idx++) {
-      const ci = cotizacionItemsOrdenados[idx];
-      if (!ci) continue;
-      try {
-        const catalog = ci?.items;
-        let opCat = catalog?.operational_category ?? null;
-        let serviceCategoryId = ci?.service_category_id ?? null;
-        let durationDays = catalog?.default_duration_days ?? 1;
-        let catalogName = catalog?.name ?? null;
-        const categoryName =
-          (ci?.service_categories as { name?: string } | null)?.name ??
-          (catalog?.service_categories as { name?: string } | null)?.name ??
-          null;
-        if (ci?.item_id && (!opCat || !serviceCategoryId) && rescuedByItemId.has(ci.item_id)) {
-          const rescued = rescuedByItemId.get(ci.item_id)!;
-          if (!opCat) opCat = rescued.operational_category;
-          if (!serviceCategoryId) serviceCategoryId = rescued.service_category_id;
-          durationDays = rescued.default_duration_days;
-          catalogName = rescued.name;
-        }
-        let taskCategory: 'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY' = 'UNASSIGNED';
-        if (opCat && OPERATIONAL_TO_TASK_CATEGORY[opCat]) {
-          taskCategory = OPERATIONAL_TO_TASK_CATEGORY[opCat];
-        } else {
-          const fromCategory = taskCategoryFromCategoryName(categoryName ?? null);
-          if (fromCategory) taskCategory = fromCategory;
-        }
-        const name = ci?.name ?? ci?.name_snapshot ?? catalogName ?? 'Tarea';
-        const visualIndex = idToVisualIndex.get(ci?.id ?? '') ?? 999;
-        itemsRawAll.push({
-          cotizacionItemId: ci?.id ?? '',
-          itemId: ci?.item_id ?? null,
-          serviceCategoryId: serviceCategoryId ?? null,
-          name,
-          taskCategory,
-          durationDays,
-          visualIndex,
-        });
-      } catch {
-        // Ítem omitido por datos inválidos
-      }
-    }
-
-    // Actualizar solo categoría cuando falta; NUNCA sobrescribir order (el usuario puede haber reordenado con flechas).
-    let updated = 0;
-    for (let i = 0; i < itemsRawAll.length; i++) {
-      const it = itemsRawAll[i];
-      const existing = existingTaskByCotizacionItemId.get(it.cotizacionItemId);
-      if (!existing) continue;
-      const alreadyHasCategory =
-        existing.category != null &&
-        existing.category !== 'UNASSIGNED' &&
-        existing.catalog_category_id != null;
-      const data: { category?: string; catalog_category_id?: string | null } = {};
-      if (!alreadyHasCategory) {
-        data.category = it.taskCategory;
-        data.catalog_category_id = it.serviceCategoryId;
-      }
-      if (Object.keys(data).length === 0) continue;
-      await prisma.studio_scheduler_event_tasks.update({
-        where: { id: existing.id },
-        data,
-      });
-      updated++;
-    }
-
-    const itemsRaw = itemsRawAll.filter((t) => !existingItemIds.has(t.cotizacionItemId));
-
-    const itemIds = itemsRaw.map((t) => t.itemId).filter(Boolean) as string[];
-    const itemToSection: Map<string, { sectionOrder: number }> = new Map();
-    if (itemIds.length > 0) {
-      const itemsWithSection = await prisma.studio_items.findMany({
-        where: { id: { in: itemIds } },
-        select: {
-          id: true,
-          service_categories: {
-            select: {
-              section_categories: {
-                select: {
-                  service_sections: { select: { order: true } },
-                },
-              },
-            },
-          },
-        },
-      });
-      for (const item of itemsWithSection) {
-        const sectionOrder =
-          item.service_categories?.section_categories?.service_sections?.order ?? 0;
-        itemToSection.set(item.id, { sectionOrder });
-      }
-    }
-
-    const eventDate = new Date(event.event_date);
-    eventDate.setHours(0, 0, 0, 0);
-
-    /** Auto-posicionamiento para la primera tarea de la sección */
-    const getStartDateForCategory = (
-      category: (typeof categoryOrder)[number],
-      durationDays: number
-    ): { start: Date; end: Date } => {
-      const d = Math.max(1, durationDays);
-      const start = new Date(eventDate);
-      const end = new Date(eventDate);
-      switch (category) {
-        case 'UNASSIGNED':
-          end.setDate(end.getDate() + d - 1);
-          break;
-        case 'PLANNING':
-          start.setDate(start.getDate() - d);
-          end.setDate(end.getDate() - 1);
-          break;
-        case 'PRODUCTION':
-          end.setDate(end.getDate() + d - 1);
-          break;
-        case 'POST_PRODUCTION':
-          start.setDate(start.getDate() + 1);
-          end.setDate(end.getDate() + 1 + d - 1);
-          break;
-        case 'DELIVERY':
-          start.setDate(start.getDate() + 2);
-          end.setDate(end.getDate() + 2 + d - 1);
-          break;
-        default:
-          end.setDate(end.getDate() + d - 1);
-      }
-      return { start, end };
-    };
-
-    const bySection = new Map<number, typeof itemsRaw>();
-    for (const it of itemsRaw) {
-      const sectionOrder = it.itemId ? (itemToSection.get(it.itemId)?.sectionOrder ?? 0) : 0;
-      const list = bySection.get(sectionOrder) ?? [];
-      list.push(it);
-      bySection.set(sectionOrder, list);
-    }
-    const sectionOrders = Array.from(bySection.keys()).sort((a, b) => a - b);
-
-    let created = 0;
-    for (const order of sectionOrders) {
-      const sectionItems = bySection.get(order) ?? [];
-      if (sectionItems.length === 0) continue;
-      sectionItems.sort((a, b) => sortKey(a.taskCategory) - sortKey(b.taskCategory));
-
-      let cursor: Date | null = null;
-      for (let i = 0; i < sectionItems.length; i++) {
-        const it = sectionItems[i];
-        const durationDays = Math.max(1, it.durationDays);
-        let startDate: Date;
-        let endDate: Date;
-        if (i === 0) {
-          const range = getStartDateForCategory(
-            it.taskCategory as (typeof categoryOrder)[number],
-            it.durationDays
-          );
-          startDate = range.start;
-          endDate = range.end;
-        } else {
-          cursor!.setDate(cursor!.getDate() + 1);
-          startDate = new Date(cursor!);
-          endDate = new Date(cursor!);
-          endDate.setDate(endDate.getDate() + durationDays - 1);
-        }
-        cursor = new Date(endDate);
-
-        const scopeKey = `${it.taskCategory}-${it.serviceCategoryId ?? 'null'}`;
-        const nextOrder = (maxOrderByScope.get(scopeKey) ?? -1) + 1;
-        maxOrderByScope.set(scopeKey, nextOrder);
-
-        await prisma.studio_scheduler_event_tasks.create({
-          data: {
-            scheduler_instance_id: schedulerInstanceId,
-            cotizacion_item_id: it.cotizacionItemId,
-            catalog_category_id: it.serviceCategoryId,
-            name: it.name,
-            start_date: startDate,
-            end_date: endDate,
-            duration_days: durationDays,
-            category: it.taskCategory,
-            order: nextOrder,
-            priority: 'MEDIUM',
-            status: 'PENDING',
-            progress_percent: 0,
-            sync_status: 'DRAFT',
-          },
-        });
-        created++;
-      }
-    }
-
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-
-    return {
-      success: true,
-      created,
-      updated,
-      skipped: existingItemIds.size,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Error al sincronizar tareas',
-    };
-  }
-}

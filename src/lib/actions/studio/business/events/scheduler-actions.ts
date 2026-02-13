@@ -228,9 +228,9 @@ export async function actualizarSchedulerTareasBulkFechas(
       });
     }
 
-    await prisma.$transaction(
-      updates.map((u) =>
-        prisma.studio_scheduler_event_tasks.update({
+    await prisma.$transaction(async (tx) => {
+      for (const u of updates) {
+        await tx.studio_scheduler_event_tasks.update({
           where: { id: u.taskId },
           data: {
             start_date: u.start_date,
@@ -238,10 +238,9 @@ export async function actualizarSchedulerTareasBulkFechas(
             duration_days: u.duration_days,
             ...(u.sync_status && { sync_status: u.sync_status }),
           },
-        })
-      ),
-      { timeout: 15_000, maxWait: 5_000 }
-    );
+        });
+      }
+    }, { maxWait: 5_000 });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -756,7 +755,7 @@ export async function obtenerResumenCambiosPendientes(
 
     const tareas = tareasDraft.map((tarea) => {
       // Determinar tipo de cambio basado en activity_log y estado actual
-      let tipoCambio: 'nueva' | 'modificada' | 'personal_asignado' | 'personal_desasignado' | 'slot_vaciado' = 'nueva';
+      let tipoCambio: 'nueva' | 'modificada' | 'personal_asignado' | 'personal_desasignado' | 'slot_vaciado' | 'eliminada' = 'nueva';
       const cambioAnterior: {
         sync_status: string;
         invitation_status?: string | null;
@@ -1030,6 +1029,7 @@ export async function crearTareaManualScheduler(
     catalog_category_nombre: string | null;
     catalog_section_id: string | null;
     parent_id: string | null;
+    order: number;
     budget_amount: number | null;
     status: string;
     progress_percent: number;
@@ -1128,15 +1128,14 @@ export async function crearTareaManualScheduler(
       // Shift: incrementar order de tareas con order >= newOrder para abrir hueco
       const toShift = itemsInSegment.filter((t) => t.order >= newOrder);
       if (toShift.length > 0) {
-        await prisma.$transaction(
-          toShift.map((t) =>
-            prisma.studio_scheduler_event_tasks.update({
-              where: { id: t.id },
-              data: { order: t.order + 1 },
-            })
-          ),
-          { timeout: 10_000 }
-        );
+        await prisma.$transaction(async (tx) => {
+          for (const task of toShift) {
+            await tx.studio_scheduler_event_tasks.update({
+              where: { id: task.id },
+              data: { order: task.order + 1 },
+            });
+          }
+        });
       }
     } else {
       const maxOrder = itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) : -1;
@@ -1215,15 +1214,14 @@ export async function crearTareaManualScheduler(
       .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 
     if (segmentTasksAfter.length > 0) {
-      await prisma.$transaction(
-        segmentTasksAfter.map((t, i) =>
-          prisma.studio_scheduler_event_tasks.update({
-            where: { id: t.id },
+      await prisma.$transaction(async (tx) => {
+        for (let i = 0; i < segmentTasksAfter.length; i++) {
+          await tx.studio_scheduler_event_tasks.update({
+            where: { id: segmentTasksAfter[i].id },
             data: { order: i },
-          })
-        ),
-        { timeout: 15_000, maxWait: 5_000 }
-      );
+          });
+        }
+      }, { maxWait: 5_000 });
     }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
@@ -1239,7 +1237,6 @@ export async function crearTareaManualScheduler(
         name: task.name,
         start_date: task.start_date,
         end_date: task.end_date,
-        duration_days: task.duration_days ?? durationDays,
         category: task.category,
         catalog_category_id: task.catalog_category_id,
         catalog_category_nombre: task.catalog_category?.name ?? null,
@@ -1501,13 +1498,14 @@ export async function moveSchedulerTask(
       for (const c of children) flatOrdered.push(c.id);
     }
 
-    const tx = flatOrdered.map((id, i) =>
-      prisma.studio_scheduler_event_tasks.update({
-        where: { id },
-        data: { order: i },
-      })
-    );
-    await prisma.$transaction(tx, { timeout: 15_000, maxWait: 5_000 });
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < flatOrdered.length; i++) {
+        await tx.studio_scheduler_event_tasks.update({
+          where: { id: flatOrdered[i] },
+          data: { order: i },
+        });
+      }
+    }, { maxWait: 5_000 });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -1558,18 +1556,19 @@ export async function reorderSchedulerTasksToOrder(
     const allSameStage = tasksInList.every((t) => t.scheduler_instance_id === instanceId && t.category === targetCategory);
     if (!allSameStage) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
 
-    const tx = taskIdsInOrder.map((id, i) => {
-      const task = tasksInList.find((t) => t.id === id)!;
-      const isManual = task.cotizacion_item_id == null;
-      return prisma.studio_scheduler_event_tasks.update({
-        where: { id },
-        data: {
-          order: i,
-          ...(isManual ? { catalog_category_id: targetCatId } : {}),
-        },
-      });
-    });
-    await prisma.$transaction(tx, { timeout: 15_000, maxWait: 5_000 });
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < taskIdsInOrder.length; i++) {
+        const task = tasksInList.find((t) => t.id === taskIdsInOrder[i])!;
+        const isManual = task.cotizacion_item_id == null;
+        await tx.studio_scheduler_event_tasks.update({
+          where: { id: taskIdsInOrder[i] },
+          data: {
+            order: i,
+            ...(isManual ? { catalog_category_id: targetCatId } : {}),
+          },
+        });
+      }
+    }, { maxWait: 5_000 });
 
     return { success: true };
   } catch (error) {
