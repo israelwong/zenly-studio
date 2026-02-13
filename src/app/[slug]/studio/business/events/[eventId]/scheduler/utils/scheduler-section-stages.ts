@@ -5,6 +5,25 @@ export type TaskCategoryStage = 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
+/** Interfaz mínima para un ítem de cotización que puede ser procesado por el Scheduler.
+ * Permite compatibilidad entre EventoDetalle (full) y SchedulerCotizacionItem (subset).
+ */
+export interface CotizacionItemBase {
+  id: string;
+  item_id?: string | null;
+  name?: string | null;
+  name_snapshot?: string | null;
+  catalog_category_id?: string | null;
+  service_category_id?: string | null;
+  scheduler_task?: {
+    id?: string;
+    order?: number | null;
+    category?: string | null;
+    catalog_category_id?: string | null;
+    catalog_category?: { id: string; name: string } | null;
+  } | null;
+}
+
 export const STAGE_ORDER: TaskCategoryStage[] = [
   'PLANNING',
   'PRODUCTION',
@@ -126,7 +145,7 @@ export interface SchedulerStageRow {
 
 export interface SchedulerTaskRow {
   type: 'task';
-  item: CotizacionItem;
+  item: CotizacionItemBase;
   sectionId: string;
   stageCategory: TaskCategoryStage;
   servicioNombre: string;
@@ -232,7 +251,7 @@ function buildCategoryIdToSection(secciones: SeccionData[]): Map<string, { secti
 /** IDs de secciones que tienen al menos una tarea (ítem o manual). Para config: secciones con datos = switch ON y disabled. */
 export function getSectionIdsWithData(
   secciones: SeccionData[],
-  itemsMap: Map<string, CotizacionItem>,
+  itemsMap: Map<string, CotizacionItemBase>,
   manualTasks: ManualTaskPayload[]
 ): Set<string> {
   const categoryIdToSection = buildCategoryIdToSection(secciones);
@@ -494,7 +513,7 @@ function getSectionIdsFromStageKeys(
 
 export function buildSchedulerRows(
   secciones: SeccionData[],
-  itemsMap: Map<string, CotizacionItem>,
+  itemsMap: Map<string, CotizacionItemBase>,
   manualTasks: ManualTaskPayload[] = [],
   activeSectionIds?: Set<string>,
   explicitlyActivatedStageIds?: Set<string> | string[],
@@ -590,21 +609,21 @@ export function buildSchedulerRows(
     const catalogCategoryId = task.catalog_category_id ?? null;
     const resolved = explicitSectionId
       ? {
-          sectionId: explicitSectionId,
-          sectionNombre: secciones.find((s) => s.id === explicitSectionId)?.nombre ?? '',
-          categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
-        }
+        sectionId: explicitSectionId,
+        sectionNombre: secciones.find((s) => s.id === explicitSectionId)?.nombre ?? '',
+        categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+      }
       : catalogCategoryId
         ? (categoryIdToSection.get(catalogCategoryId) ?? {
-            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
-            sectionNombre: firstSectionNombre || 'Sin Categoría',
-            categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
-          })
+          sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
+          sectionNombre: firstSectionNombre || 'Sin Categoría',
+          categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+        })
         : {
-            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
-            sectionNombre: firstSectionNombre || 'Sin Categoría',
-            categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
-          };
+          sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
+          sectionNombre: firstSectionNombre || 'Sin Categoría',
+          categoryNombre: task.catalog_category_nombre ?? 'Sin categoría',
+        };
     const { sectionId, sectionNombre, categoryNombre } = resolved;
     const stage = normalizeCategory(task.category);
     const categoryKey = categoryNombre;

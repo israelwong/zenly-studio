@@ -36,6 +36,24 @@ const isWorkRoute = (path: string): boolean =>
     path !== '/login' &&
     !path.startsWith('/incidencia-tecnica');
 
+/** Tipo de incidencia para personalizar UI según perfil */
+export type IncidenciaType = 'studio' | 'public' | 'client';
+
+/** Determina type desde path para proteger imagen de marca */
+const getIncidentTypeFromPath = (path: string): IncidenciaType => {
+    if (path.includes('/cliente')) return 'client';
+    if (path.includes('/profile') || path.includes('/promise')) return 'public';
+    return 'studio';
+};
+
+/** Rutas que redirigen a incidencia cuando down (login, carga inicial, cliente, público) */
+const shouldRedirectToIncident = (path: string): boolean =>
+    path !== '/incidencia-tecnica' &&
+    (isLoginOrInitialPath(path) ||
+        path.includes('/cliente') ||
+        path.includes('/profile') ||
+        path.includes('/promise'));
+
 interface InfrastructureContextType {
     connectionStatus: ConnectionStatus;
     triggerHealthCheck: () => Promise<void>;
@@ -118,14 +136,14 @@ export function InfrastructureProvider({ children }: { children: React.ReactNode
         return () => clearInterval(id);
     }, [checkHealth, pollInterval]);
 
-    // Redirección forzada: en login/carga inicial + down → /incidencia-tecnica
-    // Solo guardar callbackUrl si es ruta de trabajo (evitar login/incidencia como callback)
+    // Redirección forzada: login/carga inicial/cliente/público + down → /incidencia-tecnica?type=...
     useEffect(() => {
-        if (connectionStatus === 'down' && isLoginOrInitialPath(pathname)) {
-            const url = isWorkRoute(pathname)
-                ? `/incidencia-tecnica?callbackUrl=${encodeURIComponent(pathname)}`
-                : '/incidencia-tecnica';
-            router.replace(url);
+        if (connectionStatus === 'down' && shouldRedirectToIncident(pathname)) {
+            const type = getIncidentTypeFromPath(pathname);
+            const hasCallback = isWorkRoute(pathname) || pathname.includes('/cliente') || pathname.includes('/profile') || pathname.includes('/promise');
+            const params = new URLSearchParams({ type });
+            if (hasCallback) params.set('callbackUrl', pathname);
+            router.replace(`/incidencia-tecnica?${params.toString()}`);
         }
     }, [connectionStatus, pathname, router]);
 

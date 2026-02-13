@@ -819,7 +819,7 @@ export default function EventSchedulerPage() {
           <SchedulerWrapper
             studioSlug={studioSlug}
             eventId={eventId}
-            eventData={eventDataForWrapper as EventoDetalle}
+            eventData={eventDataForWrapper}
             dateRange={dateRange}
             scrollToDate={searchParams.get('date') ?? undefined}
             columnWidth={columnWidth}

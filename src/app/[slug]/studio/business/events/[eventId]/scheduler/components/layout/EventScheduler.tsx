@@ -350,7 +350,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         const { obtenerPreferenciaCrew } = await import('@/lib/actions/studio/crew/crew.actions');
         const result = await obtenerPreferenciaCrew(studioSlug);
         if (result.success) {
-          setHasCrewPreference(result.has_crew);
+          setHasCrewPreference(result.has_crew ?? null);
         }
       } catch (error) {
         // Error silencioso
@@ -409,9 +409,9 @@ export const EventScheduler = React.memo(function EventScheduler({
             return item;
           }),
         })),
-      };
-      updatedData = newData;
-      return newData;
+      } as SchedulerViewData;
+      updatedData = newData as SchedulerViewData;
+      return newData as SchedulerViewData;
     });
 
     // Notificar al padre para actualizar stats inmediatamente
@@ -431,7 +431,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             ? { ...t, notes_count: Math.max(0, ((t as { notes_count?: number }).notes_count ?? 0) + delta) }
             : t
         );
-        return { ...prev, scheduler: prev.scheduler ? { ...prev.scheduler, tasks: newTasks } : prev.scheduler };
+        return { ...prev, scheduler: prev.scheduler ? { ...prev.scheduler, tasks: newTasks } : prev.scheduler } as typeof prev;
       }
       const cotizaciones = prev.cotizaciones ?? [];
       for (const cot of cotizaciones) {
@@ -447,12 +447,12 @@ export const EventScheduler = React.memo(function EventScheduler({
               cotizaciones: cotizaciones.map((c) =>
                 c.id === cot.id
                   ? {
-                      ...c,
-                      cotizacion_items: c.cotizacion_items?.map((i) => (i?.id === item.id ? updated : i)) ?? [],
-                    }
+                    ...c,
+                    cotizacion_items: c.cotizacion_items?.map((i) => (i?.id === item.id ? updated : i)) ?? [],
+                  }
                   : c
               ),
-            };
+            } as typeof prev;
           }
         }
       }
@@ -462,9 +462,12 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   // Patch central de tareas manuales: un solo lugar para actualizar estado y propagar al Grid. Por qué: end_date/duration_days se normalizan a Date y número aquí para que el Grid calcule ancho correcto; la sobrescritura explícita al final evita que valores crudos del patch (p. ej. string ISO) ganen sobre los calculados.
   const handleManualTaskPatch = useCallback((taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => {
-    let updatedData: SchedulerViewData | undefined;
+    let capturedData: SchedulerViewData | undefined;
     setLocalEventData((prev) => {
-      if (!prev.scheduler?.tasks) return prev;
+      if (!prev.scheduler?.tasks) {
+        capturedData = prev;
+        return prev;
+      }
       const current = prev.scheduler.tasks.find((t) => t.id === taskId);
       const toDate = (d: Date | string | undefined) => (d == null ? undefined : d instanceof Date ? d : new Date(d));
       const startDate = toDate(patch.start_date) ?? (current ? toDate(current.start_date) : undefined);
@@ -497,17 +500,18 @@ export const EventScheduler = React.memo(function EventScheduler({
           ...(durationDays != null && { duration_days: durationDays }),
         };
       });
-      updatedData = {
+      const nextData = {
         ...prev,
         scheduler: {
           ...prev.scheduler,
           tasks: newTasks,
         },
-      };
-      return updatedData;
+      } as SchedulerViewData;
+      capturedData = nextData;
+      return nextData;
     });
-    if (updatedData) {
-      if (onDataChange) onDataChange(updatedData);
+    if (capturedData) {
+      if (onDataChange) onDataChange(capturedData);
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
     }
   }, [onDataChange]);
@@ -525,7 +529,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         ...p.scheduler!,
         tasks: p.scheduler!.tasks.filter((t) => t.id !== taskId),
       },
-    }));
+    }) as SchedulerViewData);
 
     const result = await eliminarTareaManual(studioSlug, eventId, taskId);
     if (!result.success) {
@@ -539,7 +543,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             ...p.scheduler!.tasks.slice(index),
           ],
         },
-      }));
+      }) as SchedulerViewData);
       toast.error(result.error ?? 'Error al eliminar');
     } else {
       toast.success('Tarea eliminada');
@@ -562,7 +566,7 @@ export const EventScheduler = React.memo(function EventScheduler({
    */
   const handleReorder = useCallback(
     async (taskId: string, direction: 'up' | 'down') => {
-      type Entry = { taskId: string; order: number; type: 'item'; item: NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0] } | { taskId: string; order: number; type: 'manual'; task: NonNullable<SchedulerViewData['scheduler']>['tasks'][0] };
+      type Entry = { taskId: string; order: number; type: 'item'; item: any } | { taskId: string; order: number; type: 'manual'; task: any };
       const cotizaciones = localEventData.cotizaciones ?? [];
       const manualTasks = localEventData.scheduler?.tasks ?? [];
 
@@ -624,8 +628,8 @@ export const EventScheduler = React.memo(function EventScheduler({
 
       reorderInFlightRef.current = true;
       setLocalEventData((prev) => {
-        const next = { ...prev };
-        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+        const next = { ...prev } as any;
+        next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
           ...cot,
           cotizacion_items: cot.cotizacion_items?.map((item) => {
             const id = item?.scheduler_task?.id;
@@ -644,17 +648,17 @@ export const EventScheduler = React.memo(function EventScheduler({
             }),
           }
           : prev.scheduler;
-        return next;
+        return next as SchedulerViewData;
       });
 
       try {
         const result = await moveSchedulerTask(studioSlug, eventId, taskId, direction);
         if (!result.success) {
           setLocalEventData((prev) => {
-            const next = { ...prev };
-            next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+            const next = { ...prev } as any;
+            next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
               ...cot,
-              cotizacion_items: cot.cotizacion_items?.map((item) => {
+              cotizacion_items: cot.cotizacion_items?.map((item: any) => {
                 const id = item?.scheduler_task?.id;
                 const oldOrder = id != null ? taskIdToOldOrder.get(id) : undefined;
                 if (oldOrder === undefined) return item;
@@ -671,16 +675,17 @@ export const EventScheduler = React.memo(function EventScheduler({
                 }),
               }
               : prev.scheduler;
-            return next;
+            return next as any;
           });
           toast.error(result.error ?? 'Error al reordenar');
           return;
         }
-        const updatedData: SchedulerViewData = {
+
+        const updatedData: any = {
           ...localEventData,
-          cotizaciones: localEventData.cotizaciones?.map((cot) => ({
+          cotizaciones: localEventData.cotizaciones?.map((cot: any) => ({
             ...cot,
-            cotizacion_items: cot.cotizacion_items?.map((item) => {
+            cotizacion_items: cot.cotizacion_items?.map((item: any) => {
               const id = item?.scheduler_task?.id;
               const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
               if (newOrder === undefined) return item;
@@ -690,10 +695,14 @@ export const EventScheduler = React.memo(function EventScheduler({
           scheduler: localEventData.scheduler
             ? {
               ...localEventData.scheduler,
-              tasks: (localEventData.scheduler.tasks ?? []).map((t) => ({ ...t, order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0 })),
+              tasks: (localEventData.scheduler.tasks ?? []).map((t: any) => ({
+                ...t,
+                order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0,
+              })),
             }
             : undefined,
         };
+
         onDataChange?.(updatedData);
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
@@ -726,7 +735,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (childIds.has(t.id)) return { ...t, ...patch };
           return { ...t };
         });
-        const nextData = { ...localEventData, scheduler: localEventData.scheduler ? { ...localEventData.scheduler, tasks: updated } : localEventData.scheduler };
+        const nextData = { ...localEventData, scheduler: localEventData.scheduler ? { ...localEventData.scheduler, tasks: updated } : localEventData.scheduler } as any;
         setLocalEventData(nextData);
         onDataChange?.(nextData);
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
@@ -775,7 +784,7 @@ export const EventScheduler = React.memo(function EventScheduler({
                 : item
             ),
           }));
-          return next;
+          return next as SchedulerViewData;
         });
 
         const result = await moverTareaItemCategoria(studioSlug, eventId, taskId, catalogCategoryId);
@@ -795,7 +804,7 @@ export const EventScheduler = React.memo(function EventScheduler({
                   : item
               ),
             }));
-            return next;
+            return next as SchedulerViewData;
           });
           toast.error(result.error ?? 'Error al mover la tarea');
           return;
@@ -976,241 +985,246 @@ export const EventScheduler = React.memo(function EventScheduler({
   const handleSchedulerDragEnd = useCallback(
     async (event: DragEndEvent) => {
       try {
-      const { active, over } = event;
-      const activeId = String(active.id);
-      let overId = over?.id ? String(over.id) : null;
-      if (!overId && lastOverIdRef.current && lastOverIdRef.current !== activeId) overId = lastOverIdRef.current;
-      lastOverIdRef.current = null;
-      const overData = over?.data?.current as { stageKey?: string; catalogCategoryId?: string | null } | undefined;
+        const { active, over } = event;
+        const activeId = String(active.id);
+        let overId = over?.id ? String(over.id) : null;
+        if (!overId && lastOverIdRef.current && lastOverIdRef.current !== activeId) overId = lastOverIdRef.current;
+        lastOverIdRef.current = null;
+        const overData = over?.data?.current as { stageKey?: string; catalogCategoryId?: string | null } | undefined;
 
-      // Prioridad absoluta al fallback: IGNORAR activeDragData para validaciones; usar siempre la búsqueda fresca
-      const activeDataResolved = resolveActiveDragDataById(activeId);
+        // Prioridad absoluta al fallback: IGNORAR activeDragData para validaciones; usar siempre la búsqueda fresca
+        const activeDataResolved = resolveActiveDragDataById(activeId);
 
-      type Entry = {
-        taskId: string;
-        order: number;
-        stageKey: string;
-        type: 'item';
-        item: NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0];
-      } | {
-        taskId: string;
-        order: number;
-        stageKey: string;
-        type: 'manual';
-        task: NonNullable<SchedulerViewData['scheduler']>['tasks'][0];
-      };
+        type Entry = {
+          taskId: string;
+          order: number;
+          stageKey: string;
+          type: 'item';
+          item: NonNullable<NonNullable<SchedulerViewData['cotizaciones']>[0]['cotizacion_items']>[0];
+        } | {
+          taskId: string;
+          order: number;
+          stageKey: string;
+          type: 'manual';
+          task: NonNullable<SchedulerViewData['scheduler']>['tasks'][0];
+        };
 
-      // Misma fuente que el Sidebar: buildSchedulerRows → groupRowsIntoBlocks → getStageSegments. Handler ve EXACTAMENTE lo que ve el SortableContext.
-      const cotizaciones = localEventData.cotizaciones ?? [];
-      const manualTasksForRows = (localEventData.scheduler?.tasks ?? []).filter((t) => t.cotizacion_item_id == null);
-      const allItemsForMap: CotizacionItem[] = [];
-      cotizaciones.forEach((cot) => {
-        const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
-        if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
-      });
-      const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
-      const itemsMapForRows = new Map<string, CotizacionItem>();
-      sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+        // Misma fuente que el Sidebar: buildSchedulerRows → groupRowsIntoBlocks → getStageSegments. Handler ve EXACTAMENTE lo que ve el SortableContext.
+        const cotizaciones = localEventData.cotizaciones ?? [];
+        const manualTasksForRows = (localEventData.scheduler?.tasks ?? []).filter((t) => t.cotizacion_item_id == null);
+        const allItemsForMap: CotizacionItem[] = [];
+        cotizaciones.forEach((cot) => {
+          const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
+          if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
+        });
+        const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
+        const itemsMapForRows = new Map<string, CotizacionItem>();
+        sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
 
-      const rows = buildSchedulerRows(
-        secciones,
-        itemsMapForRows,
-        manualTasksForRows,
-        activeSectionIds,
-        explicitlyActivatedStageIds,
-        customCategoriesBySectionStage
-      );
-      const blocks = groupRowsIntoBlocks(rows);
-      const allTaskIds = new Set<string>();
-      const taskIdToMeta = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
-      let combined: Entry[] | null = null;
-      let combinedTarget: Entry[] | null = null;
+        const rows = buildSchedulerRows(
+          secciones,
+          itemsMapForRows,
+          manualTasksForRows,
+          activeSectionIds,
+          explicitlyActivatedStageIds,
+          customCategoriesBySectionStage
+        );
+        const blocks = groupRowsIntoBlocks(rows);
+        const allTaskIds = new Set<string>();
+        const taskIdToMeta = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
+        let combined: Entry[] | null = null;
+        let combinedTarget: Entry[] | null = null;
 
-      for (const b of blocks) {
-        if (b.type !== 'stage_block') continue;
-        const stageId = b.block.stageRow.id;
-        for (const segment of getStageSegments(b.block.contentRows)) {
-          const taskRows = segment.rows.filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r));
-          for (const r of taskRows) {
-            const taskId = r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id);
-            if (!taskId || taskId === 'undefined') continue;
-            allTaskIds.add(taskId);
-            const catalogCategoryId =
-              r.type === 'task'
-                ? (r.item as { catalog_category_id?: string | null }).catalog_category_id ?? (r.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
-                : (r.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
-            taskIdToMeta.set(taskId, { stageKey: stageId, catalogCategoryId });
-          }
-          const hasActive = taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === activeId);
-          const hasOver = overId ? taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === overId) : false;
-          if (!combined && hasActive) {
-            combined = taskRows.map((r) =>
-              r.type === 'task'
-                ? ({
+        for (const b of blocks) {
+          if (b.type !== 'stage_block') continue;
+          const stageId = b.block.stageRow.id;
+          for (const segment of getStageSegments(b.block.contentRows)) {
+            const taskRows = segment.rows.filter((r): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r));
+            for (const r of taskRows) {
+              const taskId = r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id);
+              if (!taskId || taskId === 'undefined') continue;
+              allTaskIds.add(taskId);
+              const catalogCategoryId =
+                r.type === 'task'
+                  ? (r.item as { catalog_category_id?: string | null }).catalog_category_id ?? (r.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+                  : (r.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+              taskIdToMeta.set(taskId, { stageKey: stageId, catalogCategoryId });
+            }
+            const hasActive = taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === activeId);
+            const hasOver = overId ? taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === overId) : false;
+            if (!combined && hasActive) {
+              combined = taskRows.map((r) =>
+                r.type === 'task'
+                  ? ({
                     taskId: String(r.item.scheduler_task?.id),
                     order: (r.item.scheduler_task as { order?: number }).order ?? 0,
                     stageKey: stageId,
                     type: 'item' as const,
                     item: r.item,
                   } satisfies Entry)
-                : ({
+                  : ({
                     taskId: String(r.task.id),
                     order: (r.task as { order?: number }).order ?? 0,
                     stageKey: stageId,
                     type: 'manual' as const,
                     task: r.task,
                   } satisfies Entry)
-            );
-            combined.sort((a, b) => a.order - b.order);
-          }
-          if (!combinedTarget && hasOver) {
-            combinedTarget = taskRows.map((r) =>
-              r.type === 'task'
-                ? ({
+              );
+              combined.sort((a, b) => a.order - b.order);
+            }
+            if (!combinedTarget && hasOver) {
+              combinedTarget = taskRows.map((r) =>
+                r.type === 'task'
+                  ? ({
                     taskId: String(r.item.scheduler_task?.id),
                     order: (r.item.scheduler_task as { order?: number }).order ?? 0,
                     stageKey: stageId,
                     type: 'item' as const,
                     item: r.item,
                   } satisfies Entry)
-                : ({
+                  : ({
                     taskId: String(r.task.id),
                     order: (r.task as { order?: number }).order ?? 0,
                     stageKey: stageId,
                     type: 'manual' as const,
                     task: r.task,
                   } satisfies Entry)
-            );
-            combinedTarget.sort((a, b) => a.order - b.order);
+              );
+              combinedTarget.sort((a, b) => a.order - b.order);
+            }
           }
         }
-      }
 
-      if (!combined) return;
+        if (!combined) return;
 
-      const moved = combined.find((e) => e.taskId === activeId);
+        const moved = combined.find((e) => e.taskId === activeId);
 
-      if (!overId || active.id === overId) return;
-      if (!moved) return;
-      if (!activeDataResolved) return;
+        if (!overId || active.id === overId) return;
+        if (!moved) return;
+        if (!activeDataResolved) return;
 
-      /** Normaliza categoría: '' / undefined / __sin_categoria__ → null (evita fallos en DB). */
-      const normCat = (v: string | null | undefined): string | null =>
-        v === '' || v == null || v === SIN_CATEGORIA_SECTION_ID ? null : v;
+        /** Normaliza categoría: '' / undefined / __sin_categoria__ → null (evita fallos en DB). */
+        const normCat = (v: string | null | undefined): string | null =>
+          v === '' || v == null || v === SIN_CATEGORIA_SECTION_ID ? null : v;
 
-      const isManual = activeDataResolved.isManual;
-      const activeStageKey = activeDataResolved.stageKey;
-      const activeCatalogCategoryId = normCat(activeDataResolved.catalogCategoryId) ?? null;
+        const isManual = activeDataResolved.isManual;
+        const activeStageKey = activeDataResolved.stageKey;
+        const activeCatalogCategoryId = normCat(activeDataResolved.catalogCategoryId) ?? null;
 
-      const effectiveCat =
-        moved.type === 'item'
-          ? (moved.item as { catalog_category_id?: string | null }).catalog_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
-          : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
-      /** sectionId desde stageKey (formato "sectionId-STAGE). */
-      const getSectionIdFromStageKey = (sk: string) => (sk.includes('-') ? sk.slice(0, sk.lastIndexOf('-')) : sk);
+        const effectiveCat =
+          moved.type === 'item'
+            ? (moved.item as { catalog_category_id?: string | null }).catalog_category_id ?? (moved.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+            : (moved.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+        /** sectionId desde stageKey (formato "sectionId-STAGE). */
+        const getSectionIdFromStageKey = (sk: string) => (sk.includes('-') ? sk.slice(0, sk.lastIndexOf('-')) : sk);
 
-      // over.id puede ser ID de tarea (plano) o categoría (prefijo cat::). Si no es tarea conocida, tratar como categoría.
-      // Bloqueo estricto: ítems de cotización (isManual: false) no pueden cambiar categoría ni stage; handleItemTaskMoveCategory no se ejecuta en DnD.
-      if (!allTaskIds.has(overId)) {
-        const parsedCat = parseSchedulerCategoryDroppableId(overId);
-        if (parsedCat) {
-          const { stageKey: targetStageKey, catalogCategoryId: rawTarget } = parsedCat;
-          const targetId = normCat(rawTarget);
-          const stageCategory = (targetStageKey?.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-          if (isManual) {
-            const targetCategoryNombre = getCatalogCategoryNombre(targetId);
-            await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, targetCategoryNombre ?? null);
-          } else {
-            toast.error('Los ítems de cotización no pueden cambiar de categoría');
-            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
-          }
-        }
-        return;
-      }
-
-      const activeCat = activeCatalogCategoryId;
-      const overEntry = combined.find((e) => e.taskId === overId);
-      const overMeta = taskIdToMeta.get(overId);
-      const overStage = overData?.stageKey ?? overEntry?.stageKey ?? overMeta?.stageKey;
-      const overCatResolved = overEntry
-        ? overEntry.type === 'item'
-          ? normCat((overEntry.item as { catalog_category_id?: string | null }).catalog_category_id ?? (overEntry.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
-          : normCat((overEntry.task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
-        : overMeta
-          ? normCat(overMeta.catalogCategoryId)
-          : null;
-      const overCat = normCat(overData?.catalogCategoryId) ?? overCatResolved;
-
-      /** Limpieza para comparar stageKey: mismo valor que usa el Sidebar (evita __sin_categoria__ vs ID por string). */
-      const normalizeStageKeyForComparison = (sk: string | null | undefined) => (sk ?? '').trim();
-      const scopeMatch =
-        normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
-
-      let reordered: string[];
-      let taskIdToNewOrder: Map<string, number>;
-      let taskIdToOldOrder: Map<string, number>;
-      let adoptedCatalogForManual: { catalog_category_id: string | null; catalog_category_nombre: string | null } | null = null;
-
-      if (!scopeMatch) {
-        if (isManual && overStage && combinedTarget) {
-          const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
-          if (dropIndex === -1) return;
-          const targetIds = combinedTarget.map((e) => e.taskId);
-          reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
-          taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-          taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-          adoptedCatalogForManual = { catalog_category_id: overCatResolved, catalog_category_nombre: getCatalogCategoryNombre(overCatResolved) };
-          const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-          await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, adoptedCatalogForManual.catalog_category_nombre ?? null);
-        } else {
-          if (isManual && overStage) {
-            const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-            const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
-            await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
-          } else {
-            toast.error('Los ítems de cotización no pueden cambiar de categoría');
-            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+        // over.id puede ser ID de tarea (plano) o categoría (prefijo cat::). Si no es tarea conocida, tratar como categoría.
+        // Bloqueo estricto: ítems de cotización (isManual: false) no pueden cambiar categoría ni stage; handleItemTaskMoveCategory no se ejecuta en DnD.
+        if (!allTaskIds.has(overId)) {
+          const parsedCat = parseSchedulerCategoryDroppableId(overId);
+          if (parsedCat) {
+            const { stageKey: targetStageKey, catalogCategoryId: rawTarget } = parsedCat;
+            const targetId = normCat(rawTarget);
+            const stageCategory = (targetStageKey?.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+            if (isManual) {
+              const targetCategoryNombre = getCatalogCategoryNombre(targetId);
+              await handleManualTaskMoveStage(activeId, stageCategory, targetId ?? null, targetCategoryNombre ?? null);
+            } else {
+              toast.error('Los ítems de cotización no pueden cambiar de categoría');
+              window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+            }
           }
           return;
         }
-      } else {
-        const overIndex = combined.findIndex((e) => e.taskId === overId);
-        const fromIndex = combined.findIndex((e) => e.taskId === activeId);
-        if (fromIndex === -1 || overIndex === -1) return;
-        const getParentId = (e: Entry) =>
-          e.type === 'item'
-            ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
-            : ((e.task as { parent_id?: string | null }).parent_id ?? null);
-        const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
-        const block = [combined[fromIndex]!, ...childrenOfActive];
-        const blockIds = new Set(block.map((e) => e.taskId));
-        const rest = combined.filter((e) => !blockIds.has(e.taskId));
-        const insertIndex = rest.findIndex((e) => e.taskId === overId);
-        const finalInsertIndex = insertIndex >= 0 ? insertIndex : rest.length;
-        const reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
-        reordered = reorderedEntries.map((e) => e.taskId);
-        taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-        taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-      }
-      const originalIds = combined.map((e) => e.taskId);
-      const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
-      if (!orderChanged && !adoptedCatalogForManual) return;
 
-      setUpdatingTaskId(activeId);
-      // Actualización optimista: nuevo orden y, si la manual adoptó categoría, catalog_category_id/catalog_category_nombre
-      setLocalEventData((prev) => {
-        const next = { ...prev };
-        next.cotizaciones = prev.cotizaciones?.map((cot) => ({
-          ...cot,
-          cotizacion_items: cot.cotizacion_items?.map((item) => {
-            const id = item?.scheduler_task?.id;
-            const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
-            if (newOrder === undefined) return item;
-            return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
-          }),
-        }));
-        next.scheduler = prev.scheduler
-          ? {
+        const activeCat = activeCatalogCategoryId;
+        const overEntry = combined.find((e) => e.taskId === overId);
+        const overMeta = taskIdToMeta.get(overId);
+        const overStage = overData?.stageKey ?? overEntry?.stageKey ?? overMeta?.stageKey;
+        const overCatResolved = overEntry
+          ? overEntry.type === 'item'
+            ? normCat((overEntry.item as { catalog_category_id?: string | null }).catalog_category_id ?? (overEntry.item.scheduler_task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
+            : normCat((overEntry.task as { catalog_category_id?: string | null }).catalog_category_id ?? null)
+          : overMeta
+            ? normCat(overMeta.catalogCategoryId)
+            : null;
+        const overCat = normCat(overData?.catalogCategoryId) ?? overCatResolved;
+
+        /** Limpieza para comparar stageKey: mismo valor que usa el Sidebar (evita __sin_categoria__ vs ID por string). */
+        const normalizeStageKeyForComparison = (sk: string | null | undefined) => (sk ?? '').trim();
+        const scopeMatch =
+          normalizeStageKeyForComparison(overStage) === normalizeStageKeyForComparison(activeStageKey) && overCat === activeCat;
+
+        let reordered: string[];
+        let taskIdToNewOrder: Map<string, number>;
+        let taskIdToOldOrder: Map<string, number>;
+        let adoptedCatalogForManual: { catalog_category_id: string | null; catalog_category_nombre: string | null } | null = null;
+
+        if (!scopeMatch) {
+          if (isManual && overStage && combinedTarget) {
+            const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
+            if (dropIndex === -1) return;
+            const targetIds = combinedTarget.map((e) => e.taskId);
+            reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
+            taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+            taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+            adoptedCatalogForManual = { catalog_category_id: overCatResolved, catalog_category_nombre: getCatalogCategoryNombre(overCatResolved) };
+            const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+            await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, adoptedCatalogForManual.catalog_category_nombre ?? null);
+          } else {
+            if (isManual && overStage) {
+              const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+              const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
+              await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
+            } else {
+              toast.error('Los ítems de cotización no pueden cambiar de categoría');
+              window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+            }
+            return;
+          }
+        } else {
+          const overIndex = combined.findIndex((e) => e.taskId === overId);
+          const fromIndex = combined.findIndex((e) => e.taskId === activeId);
+          if (fromIndex === -1 || overIndex === -1) return;
+          const getParentId = (e: Entry) =>
+            e.type === 'item'
+              ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
+              : ((e.task as { parent_id?: string | null }).parent_id ?? null);
+          const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
+          const block = [combined[fromIndex]!, ...childrenOfActive];
+          const blockIds = new Set(block.map((e) => e.taskId));
+          const rest = combined.filter((e) => !blockIds.has(e.taskId));
+          let insertIndex = rest.findIndex((e) => e.taskId === overId);
+          // Compensación Israel Algorithm: al mover hacia abajo (fromIndex < overIndex), el bloque deja un hueco,
+          // por lo que el índice de destino en `rest` debe ajustarse +1 para que el bloque quede DESPUÉS del over.
+          if (fromIndex < overIndex && insertIndex >= 0) {
+            insertIndex += 1;
+          }
+          const finalInsertIndex = insertIndex >= 0 ? insertIndex : rest.length;
+          const reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
+          reordered = reorderedEntries.map((e) => e.taskId);
+          taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+          taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+        }
+        const originalIds = combined.map((e) => e.taskId);
+        const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
+        if (!orderChanged && !adoptedCatalogForManual) return;
+
+        setUpdatingTaskId(activeId);
+        // Actualización optimista: nuevo orden y, si la manual adoptó categoría, catalog_category_id/catalog_category_nombre
+        setLocalEventData((prev) => {
+          const next = { ...prev };
+          next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item) => {
+              const id = item?.scheduler_task?.id;
+              const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
+              if (newOrder === undefined) return item;
+              return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
+            }),
+          }));
+          next.scheduler = prev.scheduler
+            ? {
               ...prev.scheduler,
               tasks: (prev.scheduler.tasks ?? []).map((t) => {
                 const newOrder = taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0;
@@ -1220,66 +1234,66 @@ export const EventScheduler = React.memo(function EventScheduler({
                 return { ...t, order: newOrder, ...patch };
               }),
             }
-          : prev.scheduler;
-        return next;
-      });
+            : prev.scheduler;
+          return next as SchedulerViewData;
+        });
 
-      const payload = { studioSlug, eventId, movedTaskId: activeId, reordered, taskIdToOldOrder, taskIdToNewOrder };
-      if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
-      reorderDebounceRef.current.payload = payload;
-      reorderDebounceRef.current.timeout = setTimeout(async () => {
-        const p = reorderDebounceRef.current.payload ?? payload;
-        reorderDebounceRef.current.timeout = null;
-        reorderDebounceRef.current.payload = null;
-        reorderInFlightRef.current = true;
-        setUpdatingTaskId(p.movedTaskId);
-        try {
-          const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
-          if (!result.success) {
-            setLocalEventDataRef.current((prev) => {
-              const next = { ...prev };
-              next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+        const payload = { studioSlug, eventId, movedTaskId: activeId, reordered, taskIdToOldOrder, taskIdToNewOrder };
+        if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
+        reorderDebounceRef.current.payload = payload;
+        reorderDebounceRef.current.timeout = setTimeout(async () => {
+          const p = reorderDebounceRef.current.payload ?? payload;
+          reorderDebounceRef.current.timeout = null;
+          reorderDebounceRef.current.payload = null;
+          reorderInFlightRef.current = true;
+          setUpdatingTaskId(p.movedTaskId);
+          try {
+            const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
+            if (!result.success) {
+              setLocalEventDataRef.current((prev) => {
+                const next = { ...prev };
+                next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+                  ...cot,
+                  cotizacion_items: cot.cotizacion_items?.map((item) => {
+                    const id = item?.scheduler_task?.id;
+                    const o = id != null ? p.taskIdToOldOrder.get(String(id)) : undefined;
+                    if (o === undefined) return item;
+                    return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: o } : null };
+                  }),
+                }));
+                next.scheduler = prev.scheduler
+                  ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToOldOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
+                  : prev.scheduler;
+                return next as SchedulerViewData;
+              });
+              toast.error(result.error ?? 'Error al reordenar');
+              return;
+            }
+            const data = localEventDataRef.current;
+            const updatedData: SchedulerViewData = {
+              ...data,
+              cotizaciones: data.cotizaciones?.map((cot) => ({
                 ...cot,
                 cotizacion_items: cot.cotizacion_items?.map((item) => {
                   const id = item?.scheduler_task?.id;
-                  const o = id != null ? p.taskIdToOldOrder.get(String(id)) : undefined;
-                  if (o === undefined) return item;
-                  return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: o } : null };
+                  const newOrder = id != null ? p.taskIdToNewOrder.get(String(id)) : undefined;
+                  if (newOrder === undefined) return item;
+                  return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
                 }),
-              }));
-              next.scheduler = prev.scheduler
-                ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToOldOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
-                : prev.scheduler;
-              return next;
-            });
-            toast.error(result.error ?? 'Error al reordenar');
-            return;
+              })),
+              scheduler: data.scheduler
+                ? { ...data.scheduler, tasks: (data.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
+                : undefined,
+            };
+            onDataChangeRef.current?.(updatedData);
+            toast.success('Orden guardado');
+            window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+            window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+          } finally {
+            reorderInFlightRef.current = false;
+            setUpdatingTaskId(null);
           }
-          const data = localEventDataRef.current;
-          const updatedData: SchedulerViewData = {
-            ...data,
-            cotizaciones: data.cotizaciones?.map((cot) => ({
-              ...cot,
-              cotizacion_items: cot.cotizacion_items?.map((item) => {
-                const id = item?.scheduler_task?.id;
-                const newOrder = id != null ? p.taskIdToNewOrder.get(String(id)) : undefined;
-                if (newOrder === undefined) return item;
-                return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
-              }),
-            })),
-            scheduler: data.scheduler
-              ? { ...data.scheduler, tasks: (data.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
-              : undefined,
-          };
-          onDataChangeRef.current?.(updatedData);
-          toast.success('Orden guardado');
-          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-          window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-        } finally {
-          reorderInFlightRef.current = false;
-          setUpdatingTaskId(null);
-        }
-      }, 300);
+        }, 300);
       } finally {
         lastOverIdRef.current = null;
         setActiveDragData(null);
@@ -1350,7 +1364,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         return {
           ...prev,
           scheduler: prev.scheduler ? { ...prev.scheduler, tasks: next } : prev.scheduler,
-        };
+        } as SchedulerViewData;
       });
       const baseTasks = localEventData.scheduler?.tasks ?? [];
       const insertIndex = baseTasks.findIndex((x) => x.id === taskId);
@@ -1402,14 +1416,14 @@ export const EventScheduler = React.memo(function EventScheduler({
       }));
       next.scheduler = prev.scheduler
         ? {
-            ...prev.scheduler,
-            tasks: (prev.scheduler.tasks ?? []).map((t) => ({
-              ...t,
-              order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0,
-            })),
-          }
+          ...prev.scheduler,
+          tasks: (prev.scheduler.tasks ?? []).map((t) => ({
+            ...t,
+            order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0,
+          })),
+        }
         : prev.scheduler;
-      return next;
+      return next as SchedulerViewData;
     },
     []
   );
@@ -1438,7 +1452,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           }));
         }
         nextData = next;
-        return next;
+        return next as SchedulerViewData;
       });
       const result = await toggleTaskHierarchy(studioSlug, eventId, taskId, parentId);
       if (!result.success) {
@@ -1478,7 +1492,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           }));
         }
         nextData = next;
-        return next;
+        return next as SchedulerViewData;
       });
       let failed = false;
       for (const childId of childIds) {
@@ -1550,7 +1564,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             ? { ...prev.scheduler, tasks: [...(prev.scheduler.tasks ?? []), newTask] }
             : prev.scheduler,
         };
-        return applySegmentOrderNormalization(withNew, segmentCategory, segmentCatalogId);
+        return applySegmentOrderNormalization(withNew, segmentCategory, segmentCatalogId) as SchedulerViewData;
       });
       const baseTasks = localEventData.scheduler?.tasks ?? [];
       const withNewTasks = [...baseTasks, newTask];
@@ -1711,7 +1725,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           }
 
           updatedData = newData;
-          return newData;
+          return newData as SchedulerViewData;
         });
 
         // Notificar al padre del cambio
@@ -1772,7 +1786,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           };
         }
         if (onDataChange) queueMicrotask(() => onDataChange(next));
-        return next;
+        return next as SchedulerViewData;
       });
     },
     [onDataChange]
@@ -2067,15 +2081,20 @@ export const EventScheduler = React.memo(function EventScheduler({
                     completed_at: null,
                     assigned_to_user_id: null,
                     depends_on_task_id: null,
-                  },
+                    category: 'SIN_CATEGORIA',
+                    catalog_category_id: null,
+                    order: 0,
+                    assigned_to_crew_member_id: null,
+                    assigned_to_crew_member: null,
+                  } as any,
                 };
               }
               return item;
             }),
           }));
 
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
 
         // Notificar al padre del cambio
@@ -2129,8 +2148,8 @@ export const EventScheduler = React.memo(function EventScheduler({
             }),
           }));
 
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
 
         // Notificar al padre del cambio
@@ -2178,7 +2197,7 @@ export const EventScheduler = React.memo(function EventScheduler({
               })),
             };
             if (onDataChange) queueMicrotask(() => onDataChange(updatedData));
-            return updatedData;
+            return updatedData as SchedulerViewData;
           });
         }
         toast.success(taskIds.length > 0 ? 'Etapa y tareas eliminadas' : 'Etapa actualizada');
@@ -2232,7 +2251,7 @@ export const EventScheduler = React.memo(function EventScheduler({
                 })),
               };
               updatedDataUncomplete = newData;
-              return newData;
+              return newData as SchedulerViewData;
             });
             if (updatedDataUncomplete! && onDataChange) onDataChange(updatedDataUncomplete);
           }
@@ -2368,7 +2387,7 @@ export const EventScheduler = React.memo(function EventScheduler({
                 })),
               };
               updatedData = newData;
-              return newData;
+              return newData as SchedulerViewData;
             });
 
             if (updatedData! && onDataChange) {
@@ -2442,8 +2461,8 @@ export const EventScheduler = React.memo(function EventScheduler({
               }),
             })),
           };
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
 
         // Notificar al padre para actualizar stats
@@ -2521,20 +2540,20 @@ export const EventScheduler = React.memo(function EventScheduler({
                   ...prev.scheduler,
                   tasks: prev.scheduler.tasks.map(t =>
                     t.id === pendingTaskCompletion.taskId
-                      ? {
+                      ? ({
                         ...t,
                         status: 'COMPLETED',
                         completed_at: new Date().toISOString(),
                         assigned_to_crew_member_id: crewMemberId,
                         assigned_to_crew_member,
-                      }
+                      } as any)
                       : t
                   ),
                 }
                 : prev.scheduler,
             };
             updatedData = newData;
-            return newData;
+            return newData as any;
           });
           if (updatedData! && onDataChange) onDataChange(updatedData);
           if (skipPayment) {
@@ -2587,7 +2606,7 @@ export const EventScheduler = React.memo(function EventScheduler({
               return item;
             }),
           })) ?? [],
-        }));
+        }) as any);
 
         const result = await actualizarSchedulerTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
           isCompleted: true,
@@ -2625,8 +2644,8 @@ export const EventScheduler = React.memo(function EventScheduler({
               }),
             })),
           };
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
 
         if (skipPayment) {
@@ -2696,14 +2715,14 @@ export const EventScheduler = React.memo(function EventScheduler({
                 ...prev.scheduler,
                 tasks: prev.scheduler.tasks.map(t =>
                   t.id === pendingTaskCompletion!.taskId
-                    ? { ...t, status: 'COMPLETED', completed_at: new Date().toISOString() }
+                    ? ({ ...t, status: 'COMPLETED', completed_at: new Date().toISOString() } as any)
                     : t
                 ),
               }
               : prev.scheduler,
           };
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
       } else {
         setLocalEventData(prev => {
@@ -2727,8 +2746,8 @@ export const EventScheduler = React.memo(function EventScheduler({
               }),
             })),
           };
-          updatedData = newData;
-          return newData;
+          updatedData = newData as SchedulerViewData;
+          return newData as SchedulerViewData;
         });
       }
 

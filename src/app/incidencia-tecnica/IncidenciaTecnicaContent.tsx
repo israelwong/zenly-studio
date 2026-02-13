@@ -2,47 +2,55 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
-import { ServerCog, ExternalLink, RefreshCw, CheckCircle } from 'lucide-react';
+import { ServerCog, ExternalLink, RefreshCw, CheckCircle, Building2, Shield } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { useInfrastructure } from '@/contexts/InfrastructureContext';
+import { usePlatformBranding } from '@/hooks/usePlatformConfig';
 
-const RESTORE_REDIRECT_DELAY_MS = 2000;
+const FADE_OUT_DURATION_MS = 500;
+const RESTORE_REDIRECT_DELAY_MS = 800; // Tras fade, breve pausa antes de redirigir
 const STABILITY_THRESHOLD = 3;
-const RETRY_COOLDOWN_MS = 10_000; // 10s throttle en botón Reintentar
+const RETRY_COOLDOWN_MS = 10_000;
 
-/**
- * Página de incidencia técnica - Zenly Style, auto-restauración con umbral de 3 niveles
- */
+type IncidenciaType = 'studio' | 'public' | 'client';
+
 export default function IncidenciaTecnicaContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { triggerHealthCheck, successCount, lastCheckedAt, pollInterval } = useInfrastructure();
+    const { logotipo } = usePlatformBranding();
     const [isRetrying, setIsRetrying] = useState(false);
     const [cooldownRemaining, setCooldownRemaining] = useState(0);
     const [secondsUntilNext, setSecondsUntilNext] = useState(0);
+    const [isFadingOut, setIsFadingOut] = useState(false);
     const cooldownEndRef = useRef(0);
 
     const rawCallback = searchParams.get('callbackUrl');
     const callbackUrl = rawCallback?.startsWith('/') && !rawCallback.startsWith('//')
         ? rawCallback
         : null;
+    const typeParam = searchParams.get('type');
+    const type: IncidenciaType = typeParam === 'client' || typeParam === 'public' ? typeParam : 'studio';
 
     const isRecovered = successCount >= STABILITY_THRESHOLD;
     const isValidating = successCount > 0 && successCount < STABILITY_THRESHOLD;
+    const showTechnicalUI = type === 'studio';
 
-    // Auto-restauración: solo cuando successCount === 3 → redirigir a login con callbackUrl
+    // Restauración: fade-out suave + redirección
     useEffect(() => {
         if (isRecovered) {
+            setIsFadingOut(true);
             const target = callbackUrl
-                ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+                ? (type === 'studio' ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : callbackUrl)
                 : '/login';
-            const t = setTimeout(() => router.push(target), RESTORE_REDIRECT_DELAY_MS);
+            const t = setTimeout(() => router.push(target), FADE_OUT_DURATION_MS + RESTORE_REDIRECT_DELAY_MS);
             return () => clearTimeout(t);
         }
-    }, [isRecovered, callbackUrl, router]);
+    }, [isRecovered, callbackUrl, type, router]);
 
-    // Contador regresivo: próximo poll automático (15s)
+    // Contador regresivo (solo studio)
     useEffect(() => {
+        if (!showTechnicalUI) return;
         const update = () => {
             const base = lastCheckedAt || Date.now();
             const elapsed = Date.now() - base;
@@ -51,9 +59,9 @@ export default function IncidenciaTecnicaContent() {
         update();
         const id = setInterval(update, 1000);
         return () => clearInterval(id);
-    }, [lastCheckedAt, pollInterval]);
+    }, [showTechnicalUI, lastCheckedAt, pollInterval]);
 
-    // Cooldown de 10s: botón deshabilitado + spinner durante 10s
+    // Cooldown (solo studio)
     useEffect(() => {
         if (cooldownRemaining <= 0) return;
         const id = setInterval(() => {
@@ -66,22 +74,13 @@ export default function IncidenciaTecnicaContent() {
 
     async function handleRetry() {
         if (isRetrying || cooldownRemaining > 0) return;
-        if (isRecovered) {
-            const target = callbackUrl
-                ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
-                : '/login';
-            router.push(target);
-            return;
-        }
+        if (isRecovered) return;
         setIsRetrying(true);
         cooldownEndRef.current = Date.now() + RETRY_COOLDOWN_MS;
         setCooldownRemaining(Math.ceil(RETRY_COOLDOWN_MS / 1000));
-        triggerHealthCheck().catch(() => {
-            // Sin alertas: el mensaje de mantenimiento permanece inalterado
-        });
+        triggerHealthCheck().catch(() => {});
     }
 
-    // Estados del botón: Éxito > Cooldown > Validación > Reposo
     const getButtonState = () => {
         if (isRecovered) return { label: '¡Conexión recuperada! Entrando...', disabled: true, loading: false };
         if (cooldownRemaining > 0) return { label: `Espera ${cooldownRemaining}s`, disabled: true, loading: true };
@@ -89,98 +88,117 @@ export default function IncidenciaTecnicaContent() {
         return { label: 'Reintentar ahora', disabled: false, loading: false };
     };
     const btnState = getButtonState();
-    const showAutoRetryMessage = btnState.label === 'Reintentar ahora';
+    const showAutoRetryMessage = showTechnicalUI && btnState.label === 'Reintentar ahora';
+
+    // Configuración por type
+    const config = {
+        studio: {
+            icon: (
+                <div className="rounded-full bg-amber-950/40 border border-amber-800/50 p-6 animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                    <ServerCog className="h-16 w-16 text-amber-500" aria-hidden />
+                </div>
+            ),
+            title: 'Servidor en mantenimiento',
+            description: 'Nuestro proveedor de infraestructura (Supabase) está experimentando problemas en la región. Estamos monitoreando la situación y trabajaremos para restablecer el servicio lo antes posible.',
+            footer: 'Tu información está segura. Por favor, intenta de nuevo en unos minutos.',
+        },
+        public: {
+            icon: logotipo ? (
+                <div className="relative w-20 h-20 flex items-center justify-center">
+                    <img src={logotipo} alt="Logo" className="max-w-full max-h-full object-contain" />
+                </div>
+            ) : (
+                <div className="rounded-full bg-zinc-800/60 border border-zinc-700/50 p-6">
+                    <Building2 className="h-16 w-16 text-zinc-400" aria-hidden />
+                </div>
+            ),
+            title: 'Actualización en curso',
+            description: 'Estamos actualizando nuestra plataforma para ti. Por favor, vuelve en unos minutos.',
+            footer: null,
+        },
+        client: {
+            icon: (
+                <div className="rounded-full bg-emerald-950/30 border border-emerald-800/40 p-6">
+                    <Shield className="h-16 w-16 text-emerald-500/80" aria-hidden />
+                </div>
+            ),
+            title: 'Mantenimiento programado',
+            description: 'Los detalles de tu evento están protegidos y volverán a estar disponibles pronto.',
+            footer: null,
+        },
+    };
+
+    const cfg = config[type];
 
     return (
-        <div className="min-h-svh w-full flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black">
+        <div
+            className={`min-h-svh w-full flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black transition-opacity duration-500 ${
+                isFadingOut ? 'opacity-0' : 'opacity-100'
+            }`}
+        >
             <div className="max-w-md w-full text-center space-y-8">
-                {/* Icono con animación y resplandor ámbar */}
-                <div className="flex justify-center">
-                    <div className="rounded-full bg-amber-950/40 border border-amber-800/50 p-6 animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-                        <ServerCog
-                            className="h-16 w-16 text-amber-500"
-                            aria-hidden
-                        />
-                    </div>
-                </div>
+                <div className="flex justify-center">{cfg.icon}</div>
 
-                {/* Contenido */}
                 <div className="space-y-4">
-                    <h1 className="text-2xl font-bold text-zinc-100">
-                        Servidor en mantenimiento
-                    </h1>
-                    <p className="text-zinc-400 text-base leading-relaxed">
-                        Nuestro proveedor de infraestructura (Supabase) está
-                        experimentando problemas en la región. Estamos
-                        monitoreando la situación y trabajaremos para
-                        restablecer el servicio lo antes posible.
+                    <h1 className="text-2xl font-bold text-zinc-100">{cfg.title}</h1>
+                    <p className="text-zinc-400 text-base leading-relaxed">{cfg.description}</p>
+                </div>
+
+                {/* Indicadores técnicos: solo studio */}
+                {showTechnicalUI && (
+                    <>
+                        <div className="flex items-center justify-center gap-2" aria-hidden>
+                            {[1, 2, 3].map((i) => (
+                                <span
+                                    key={i}
+                                    className={`inline-block w-2.5 h-2.5 rounded-full ${
+                                        i <= successCount
+                                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] transition-all duration-300'
+                                            : 'bg-zinc-600 animate-pulse'
+                                    }`}
+                                    style={i > successCount ? { animationDelay: `${(i - 1) * 233}ms` } : undefined}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                            <ZenButton
+                                onClick={handleRetry}
+                                variant="primary"
+                                className={`gap-2 w-full sm:flex-1 sm:min-w-[180px] h-11 shrink-0 ${
+                                    isRecovered ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''
+                                }`}
+                                disabled={btnState.disabled}
+                                loading={btnState.loading}
+                                loadingText={btnState.label}
+                            >
+                                {isRecovered ? <CheckCircle className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
+                                {btnState.label}
+                            </ZenButton>
+                            <a
+                                href="https://status.supabase.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800/50 hover:text-white transition-colors w-full sm:flex-1 sm:min-w-[180px] text-sm font-medium ${
+                                    isRecovered ? 'pointer-events-none opacity-60' : ''
+                                }`}
+                            >
+                                <ExternalLink className="h-4 w-4 shrink-0" />
+                                Ver estado oficial
+                            </a>
+                        </div>
+                    </>
+                )}
+
+                {cfg.footer && (
+                    <p className="text-zinc-500 text-sm">{cfg.footer}</p>
+                )}
+
+                {showAutoRetryMessage && (
+                    <p className="text-zinc-600 text-xs font-light text-center transition-opacity duration-300">
+                        Reintentando establecer conexión en {secondsUntilNext} segundos...
                     </p>
-                </div>
-
-                {/* Indicador de estabilidad: 3 puntos animados (pulso secuencial, dot por dot) */}
-                <div className="flex items-center justify-center gap-2" aria-hidden>
-                    {[1, 2, 3].map((i) => (
-                        <span
-                            key={i}
-                            className={`inline-block w-2.5 h-2.5 rounded-full ${
-                                i <= successCount
-                                    ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] transition-all duration-300'
-                                    : 'bg-zinc-600 animate-pulse'
-                            }`}
-                            style={
-                                i > successCount
-                                    ? { animationDelay: `${(i - 1) * 233}ms` }
-                                    : undefined
-                            }
-                        />
-                    ))}
-                </div>
-
-                {/* Botón principal: toda la narrativa en el label */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <ZenButton
-                        onClick={handleRetry}
-                        variant="primary"
-                        className={`gap-2 w-full sm:flex-1 sm:min-w-[180px] h-11 shrink-0 ${
-                            isRecovered ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''
-                        }`}
-                        disabled={btnState.disabled}
-                        loading={btnState.loading}
-                        loadingText={btnState.label}
-                    >
-                        {isRecovered ? (
-                            <CheckCircle className="h-4 w-4" />
-                        ) : (
-                            <RefreshCw className="h-4 w-4" />
-                        )}
-                        {btnState.label}
-                    </ZenButton>
-                    <a
-                        href="https://status.supabase.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800/50 hover:text-white transition-colors w-full sm:flex-1 sm:min-w-[180px] text-sm font-medium ${
-                            isRecovered ? 'pointer-events-none opacity-60' : ''
-                        }`}
-                    >
-                        <ExternalLink className="h-4 w-4 shrink-0" />
-                        Ver estado oficial
-                    </a>
-                </div>
-
-                <p className="text-zinc-500 text-sm">
-                    Tu información está segura. Por favor, intenta de nuevo
-                    en unos minutos.
-                </p>
-
-                {/* Mensaje inferior: solo en reposo, evita redundancia con Cooldown/Validación */}
-                <p
-                    className={`text-zinc-600 text-xs font-light text-center transition-opacity duration-300 ${
-                        showAutoRetryMessage ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`}
-                >
-                    Reintentando establecer conexión en {secondsUntilNext} segundos...
-                </p>
+                )}
             </div>
         </div>
     );

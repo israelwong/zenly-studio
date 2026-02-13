@@ -188,11 +188,14 @@ export interface EventoDetalle extends EventoBasico {
         progress_percent: number;
         completed_at: Date | null;
         assigned_to_user_id: string | null;
+        assigned_to_crew_member_id: string | null;
         depends_on_task_id: string | null;
         sync_status: 'DRAFT' | 'PUBLISHED' | 'INVITED';
         invitation_status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
         google_event_id: string | null;
         category: string;
+        order: number;
+        notes_count?: number;
       } | null;
     }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
@@ -233,6 +236,7 @@ export interface EventoDetalle extends EventoBasico {
         email: string | null;
         tipo: string;
       } | null;
+      notes_count?: number;
     }>;
   } | null;
   payments?: Array<{
@@ -673,7 +677,7 @@ export async function moveEvent(
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
     revalidatePath(`/${studioSlug}/studio/business/events/${evento.id}`);
-    
+
     // Invalidar caché de lista (con studioSlug para aislamiento)
     revalidateTag(`events-list-${studioSlug}`);
 
@@ -1200,32 +1204,32 @@ export async function obtenerEventoDetalle(
       // Serializar scheduler.tasks: budget_amount como number y assigned_to_crew_member como objeto plano (persistencia en cliente)
       scheduler: evento.scheduler
         ? {
-            ...evento.scheduler,
-            tasks: evento.scheduler.tasks?.map((t) => {
-              const resolvedCatalogCategoryId =
-                t.catalog_category_id ??
-                (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
-                (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.items?.service_category_id ??
-                null;
-              const { catalog_category: _cat, cotizacion_item: _ci, ...rest } = t as typeof t & { cotizacion_item?: unknown };
-              return {
-                ...rest,
-                budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-                order: t.order ?? 0,
-                catalog_category_id: resolvedCatalogCategoryId,
-                catalog_category_nombre: t.catalog_category?.name ?? null,
-                assigned_to_crew_member_id: t.assigned_to_crew_member_id,
-                assigned_to_crew_member: t.assigned_to_crew_member
-                  ? {
-                      id: t.assigned_to_crew_member.id,
-                      name: t.assigned_to_crew_member.name,
-                      email: t.assigned_to_crew_member.email ?? null,
-                      tipo: t.assigned_to_crew_member.tipo,
-                    }
-                  : null,
-              };
-            }),
-          }
+          ...evento.scheduler,
+          tasks: evento.scheduler.tasks?.map((t) => {
+            const resolvedCatalogCategoryId =
+              t.catalog_category_id ??
+              (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
+              (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.items?.service_category_id ??
+              null;
+            const { catalog_category: _cat, cotizacion_item: _ci, ...rest } = t as typeof t & { cotizacion_item?: unknown };
+            return {
+              ...rest,
+              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+              order: t.order ?? 0,
+              catalog_category_id: resolvedCatalogCategoryId,
+              catalog_category_nombre: t.catalog_category?.name ?? null,
+              assigned_to_crew_member_id: t.assigned_to_crew_member_id,
+              assigned_to_crew_member: t.assigned_to_crew_member
+                ? {
+                  id: t.assigned_to_crew_member.id,
+                  name: t.assigned_to_crew_member.name,
+                  email: t.assigned_to_crew_member.email ?? null,
+                  tipo: t.assigned_to_crew_member.tipo,
+                }
+                : null,
+            };
+          }),
+        }
         : null,
     } as EventoDetalle;
 
@@ -1309,23 +1313,23 @@ export async function cancelarEvento(
     // También buscar la cotización específica que tiene el evento en cotizacion_id
     const cotizacionesPorCotizacionId = evento.cotizacion_id
       ? await prisma.studio_cotizaciones.findMany({
-          where: {
-            id: evento.cotizacion_id,
-            // Incluir aunque no tenga evento_id (por si hay inconsistencia)
-          },
-          select: {
-            id: true,
-            name: true,
-            status: true,
-          },
-        })
+        where: {
+          id: evento.cotizacion_id,
+          // Incluir aunque no tenga evento_id (por si hay inconsistencia)
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        },
+      })
       : [];
 
     // Combinar ambas listas y eliminar duplicados
     const todasLasCotizaciones = [
       ...cotizacionesPorEventoId,
       ...cotizacionesPorCotizacionId,
-    ].filter((cot, index, self) => 
+    ].filter((cot, index, self) =>
       index === self.findIndex((c) => c.id === cot.id)
     );
 
@@ -1355,7 +1359,7 @@ export async function cancelarEvento(
     });
 
     if (nominasPendientes.length > 0) {
-      const personalConNominas = nominasPendientes.map((n) => 
+      const personalConNominas = nominasPendientes.map((n) =>
         `${n.personal?.name || 'Personal'}: ${n.payroll_services.length} concepto(s) - ${n.concept}`
       ).join('\n');
 
@@ -1452,7 +1456,7 @@ export async function cancelarEvento(
       // Actualizar todas las cotizaciones encontradas (por evento_id o cotizacion_id)
       if (todasLasCotizaciones.length > 0) {
         const cotizacionIds = todasLasCotizaciones.map(c => c.id);
-        
+
         await tx.studio_cotizaciones.updateMany({
           where: {
             id: {
@@ -1616,10 +1620,10 @@ export async function cancelarEvento(
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
-    
+
     // Invalidar caché de lista (con studioSlug para aislamiento)
     revalidateTag(`events-list-${studioSlug}`);
-    
+
     // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${evento.promise_id}`);
@@ -1646,7 +1650,7 @@ export async function cancelarEvento(
     try {
       const { tieneGoogleCalendarHabilitado, eliminarEventoPrincipalEnBackground } =
         await import('@/lib/integrations/google/clients/calendar/helpers');
-      
+
       if (await tieneGoogleCalendarHabilitado(studioSlug)) {
         eliminarEventoPrincipalEnBackground(eventoId);
       }
@@ -1824,7 +1828,7 @@ export async function actualizarFechaEvento(
           maxEnd.getUTCMonth(),
           maxEnd.getUTCDate()
         ));
-        
+
         const offsetStart = Math.round((minStartDateOnly.getTime() - fechaOriginalUtc.getTime()) / (1000 * 60 * 60 * 24));
         const offsetEnd = Math.round((maxEndDateOnly.getTime() - fechaOriginalUtc.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -1915,19 +1919,19 @@ export async function actualizarFechaEvento(
     // Actualizar agenda - eliminar todas las agendas del evento y crear una nueva con la fecha correcta
     // Esto evita duplicados cuando se actualiza la fecha del evento
     // Normalizar nueva fecha usando UTC para evitar problemas de zona horaria
-    const nuevaFechaNormalizada = nuevaFecha instanceof Date 
+    const nuevaFechaNormalizada = nuevaFecha instanceof Date
       ? new Date(Date.UTC(
-          nuevaFecha.getUTCFullYear(),
-          nuevaFecha.getUTCMonth(),
-          nuevaFecha.getUTCDate(),
-          12, 0, 0
-        ))
+        nuevaFecha.getUTCFullYear(),
+        nuevaFecha.getUTCMonth(),
+        nuevaFecha.getUTCDate(),
+        12, 0, 0
+      ))
       : new Date(Date.UTC(
-          new Date(nuevaFecha).getUTCFullYear(),
-          new Date(nuevaFecha).getUTCMonth(),
-          new Date(nuevaFecha).getUTCDate(),
-          12, 0, 0
-        ));
+        new Date(nuevaFecha).getUTCFullYear(),
+        new Date(nuevaFecha).getUTCMonth(),
+        new Date(nuevaFecha).getUTCDate(),
+        12, 0, 0
+      ));
 
     // Eliminar todas las agendas existentes para este evento para evitar duplicados
     await prisma.studio_agenda.deleteMany({
@@ -1941,7 +1945,7 @@ export async function actualizarFechaEvento(
     const eventTypeName = evento.event_type?.name;
     const eventName = evento.promise?.name;
     let concept = 'Evento';
-    
+
     if (eventName && eventTypeName) {
       concept = `${eventName} (${eventTypeName})`;
     } else if (eventName) {
@@ -1962,14 +1966,14 @@ export async function actualizarFechaEvento(
       : false;
 
     // Construir metadata según tipo
-    const metadata = agendaItem?.metadata 
+    const metadata = agendaItem?.metadata
       ? (agendaItem.metadata as Record<string, unknown>)
       : {
-          agenda_type: isMainEventDate ? 'main_event_date' : 'event_appointment',
-          sync_google: true,
-          google_calendar_type: 'primary',
-          is_main_event_date: isMainEventDate,
-        };
+        agenda_type: isMainEventDate ? 'main_event_date' : 'event_appointment',
+        sync_google: true,
+        google_calendar_type: 'primary',
+        is_main_event_date: isMainEventDate,
+      };
 
     // Crear nueva agenda con la fecha normalizada
     await prisma.studio_agenda.create({
@@ -2100,7 +2104,7 @@ export async function actualizarFechaEvento(
     try {
       const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
         await import('@/lib/integrations/google/clients/calendar/helpers');
-      
+
       if (await tieneGoogleCalendarHabilitado(studioSlug)) {
         sincronizarEventoPrincipalEnBackground(event_id, studioSlug);
       }
@@ -2461,7 +2465,7 @@ export async function asignarCrewAItem(
                 );
               }
             }
-            
+
             // Si se cambió personal (de un miembro a otro) y la tarea estaba INVITED, cancelar invitación anterior
             if (crewMemberId !== null && task.sync_status === 'INVITED' && task.google_event_id && task.google_calendar_id) {
               try {
@@ -2848,7 +2852,7 @@ export async function actualizarSchedulerTask(
 
     // Si cambió el nombre, descripción o notas, también marcar como DRAFT si estaba sincronizada
     if ((data.name !== undefined || data.description !== undefined || data.notes !== undefined) &&
-        (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
+      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
       updateData.sync_status = 'DRAFT';
     }
 
@@ -2923,7 +2927,7 @@ export async function actualizarSchedulerTask(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    
+
     // Revalidar finanzas si se eliminó una nómina
     if (data.isCompleted === false && task.cotizacion_item_id) {
       revalidatePath(`/${studioSlug}/studio/business/finanzas`);
@@ -3649,15 +3653,15 @@ export async function sincronizarTareasEvento(
     const rescuedItems =
       rescueItemIds.length > 0
         ? await prisma.studio_items.findMany({
-            where: { id: { in: rescueItemIds } },
-            select: {
-              id: true,
-              operational_category: true,
-              default_duration_days: true,
-              name: true,
-              service_category_id: true,
-            },
-          })
+          where: { id: { in: rescueItemIds } },
+          select: {
+            id: true,
+            operational_category: true,
+            default_duration_days: true,
+            name: true,
+            service_category_id: true,
+          },
+        })
         : [];
     const rescuedByItemId = new Map(
       rescuedItems.map((r) => [

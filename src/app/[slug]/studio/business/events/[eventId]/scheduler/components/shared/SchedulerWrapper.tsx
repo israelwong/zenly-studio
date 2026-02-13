@@ -85,7 +85,7 @@ export function SchedulerWrapper({
 
   const filteredEventData = useMemo((): SchedulerViewData => {
     return { ...eventData, cotizaciones: filteredCotizaciones } as SchedulerViewData;
-  }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, eventData?.schedulerDateReminders, cotizacionesIds]);
+  }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, cotizacionesIds]);
 
   return (
     <>
