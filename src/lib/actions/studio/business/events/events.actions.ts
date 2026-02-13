@@ -25,6 +25,17 @@ import {
   type CotizacionItemInput,
 } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 
+// ============================================================================
+// PATRÓN PROXY: Re-exportar funciones del dominio core desde events-core.actions.ts
+// Esto mantiene compatibilidad mientras completamos la migración
+// ============================================================================
+export {
+  getEvents,
+  moveEvent,
+  obtenerEventos,
+  actualizarNombreEvento,
+} from './events-core.actions';
+
 export interface EventoBasico {
   id: string;
   name: string | null; // Leer de promise.name
@@ -277,7 +288,10 @@ export interface CancelarEventoResponse {
 
 /**
  * Obtener eventos con pipeline stages (para kanban)
+ * MOVIDO A: events-core.actions.ts
+ * Esta función se mantiene aquí temporalmente para referencia, pero se re-exporta desde events-core.actions.ts
  */
+/* COMENTADO - USAR events-core.actions.ts
 export async function getEvents(
   studioSlug: string,
   params?: z.input<typeof getEventsSchema>
@@ -457,10 +471,13 @@ export async function getEvents(
     };
   }
 }
+*/
 
 /**
  * Mover evento entre etapas del pipeline
+ * MOVIDO A: events-core.actions.ts
  */
+/* COMENTADO - USAR events-core.actions.ts
 export async function moveEvent(
   studioSlug: string,
   data: MoveEventData
@@ -693,10 +710,13 @@ export async function moveEvent(
     };
   }
 }
+*/
 
 /**
  * Obtener todos los eventos de un studio
+ * MOVIDO A: events-core.actions.ts
  */
+/* COMENTADO - USAR events-core.actions.ts
 export async function obtenerEventos(
   studioSlug: string
 ): Promise<EventosListResponse> {
@@ -797,6 +817,7 @@ export async function obtenerEventos(
     };
   }
 }
+*/
 
 /** Timeout para queries de evento detalle (evita bloquear pool) */
 const EVENTO_DETALLE_TIMEOUT_MS = 25_000;
@@ -2130,7 +2151,9 @@ export async function actualizarFechaEvento(
 
 /**
  * Actualizar nombre del evento (campo name en studio_promises)
+ * MOVIDO A: events-core.actions.ts
  */
+/* COMENTADO - USAR events-core.actions.ts
 export async function actualizarNombreEvento(
   studioSlug: string,
   data: UpdateEventNameData
@@ -2175,6 +2198,7 @@ export async function actualizarNombreEvento(
     };
   }
 }
+*/
 
 /**
  * Obtener el número de cotizaciones autorizadas asociadas a un evento
