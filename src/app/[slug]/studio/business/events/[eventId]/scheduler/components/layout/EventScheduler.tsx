@@ -8,6 +8,7 @@ import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { SchedulerViewData } from '../shared/EventSchedulerView';
 import {
   STAGE_ORDER,
+  STAGE_LABELS,
   SIN_CATEGORIA_SECTION_ID,
   buildSchedulerRows,
   getStageSegments,
@@ -974,9 +975,18 @@ export const EventScheduler = React.memo(function EventScheduler({
       setDropIndicator(null);
       return;
     }
-    const isValid = activeData.isManual || (activeData.stageKey === meta.stageKey && normCat(activeData.catalogCategoryId) === normCat(meta.catalogCategoryId));
+    
+    // REGLA ZINC: Tareas de catálogo solo pueden reordenarse en su misma categoría/estado
+    // REGLA AMBER: Tareas manuales tienen libertad total de movimiento
+    const isZincInSameScope = !activeData.isManual && 
+      activeData.stageKey === meta.stageKey && 
+      normCat(activeData.catalogCategoryId) === normCat(meta.catalogCategoryId);
+    
+    const isValid = activeData.isManual || isZincInSameScope;
+    
     if (!isValid) {
       setDropIndicator(null);
+      // Feedback visual: la tarea Zinc no puede ir aquí
       return;
     }
     setDropIndicator({ overId, insertBefore });
@@ -1161,6 +1171,14 @@ export const EventScheduler = React.memo(function EventScheduler({
         let adoptedCatalogForManual: { catalog_category_id: string | null; catalog_category_nombre: string | null } | null = null;
 
         if (!scopeMatch) {
+          // BLOQUEO ZINC: Tareas de catálogo no pueden moverse fuera de su categoría/estado
+          if (!isManual) {
+            toast.error('Tareas de catálogo: Solo permiten reordenamiento interno');
+            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+            return;
+          }
+          
+          // AMBER: Movimiento libre entre secciones/estados/categorías
           if (isManual && overStage && combinedTarget) {
             const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
             if (dropIndex === -1) return;
@@ -1170,15 +1188,16 @@ export const EventScheduler = React.memo(function EventScheduler({
             taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
             adoptedCatalogForManual = { catalog_category_id: overCatResolved, catalog_category_nombre: getCatalogCategoryNombre(overCatResolved) };
             const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+            const stageLabel = STAGE_LABELS[stageCategory] ?? stageCategory;
             await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, adoptedCatalogForManual.catalog_category_nombre ?? null);
+            toast.success(`Tarea movida exitosamente a ${stageLabel}`);
           } else {
             if (isManual && overStage) {
               const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+              const stageLabel = STAGE_LABELS[stageCategory] ?? stageCategory;
               const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
               await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
-            } else {
-              toast.error('Los ítems de cotización no pueden cambiar de categoría');
-              window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+              toast.success(`Tarea movida exitosamente a ${stageLabel}`);
             }
             return;
           }
@@ -1204,15 +1223,16 @@ export const EventScheduler = React.memo(function EventScheduler({
           // Si se suelta sobre una principal, convertirse en subtarea de ella
           // Si se suelta al nivel de principales, limpiar parent_id
           let newParentId: string | null = null;
+          const currentDropIndicator = dropIndicator;
           
           if (overParentId !== null) {
-            // Caso: over está en una subtarea → adoptar su mismo padre (re-parenting o mantener)
+            // Caso 1: over en subtarea - adoptar su mismo padre (re-parenting)
             newParentId = overParentId;
+          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual && !activeParentId) {
+            // Caso 2: NESTING AUTOMÁTICO - Amber soltada DEBAJO de principal
+            newParentId = overId;
           } else {
-            // Caso: over es una tarea principal
-            // Si active ya es subtarea del mismo padre que over, mantener (no cambiar)
-            // Si active viene de otro padre o es principal, NO convertir en hijo automáticamente
-            // (eso se hace explícitamente con el menú contextual o dropIndicator especial)
+            // Caso 3: Mantener parent_id actual (reordenamiento simple)
             newParentId = activeParentId;
           }
           
