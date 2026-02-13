@@ -1193,8 +1193,9 @@ export const EventScheduler = React.memo(function EventScheduler({
             
             // REGLA 2: AUTO-PROMOCIÓN (Prevención de Huérfanas)
             // Si la tarea tenía parent_id y se mueve a nuevo estado/categoría sin nuevo padre, promover a principal
-            const activeTaskData = activeEntry.type === 'manual' 
-              ? activeEntry.task 
+            const activeTaskEntry = combined.find((e) => e.taskId === activeId);
+            const activeTaskData = activeTaskEntry && activeTaskEntry.type === 'manual' 
+              ? activeTaskEntry.task 
               : null;
             const hadParent = activeTaskData && (activeTaskData as { parent_id?: string | null }).parent_id != null;
             
