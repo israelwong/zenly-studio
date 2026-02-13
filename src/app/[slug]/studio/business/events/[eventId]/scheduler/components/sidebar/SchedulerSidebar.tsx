@@ -1858,7 +1858,7 @@ export const SchedulerSidebar = React.memo(({
                                   if (!prevParentId) {
                                     return isManualTaskRow(prev)
                                       ? (prev as import('../../utils/scheduler-section-stages').SchedulerManualTaskRow).task.id
-                                      : null;
+                                      : ((prev as import('../../utils/scheduler-section-stages').SchedulerTaskRow).item?.scheduler_task?.id ?? null);
                                   }
                                 }
                                 return null;
