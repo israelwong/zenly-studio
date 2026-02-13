@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import {
@@ -837,9 +838,19 @@ function ManualTaskRow({
                 ) : (
                   <button
                     type="button"
-                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (previousPrincipalId == null) return; await onToggleTaskHierarchy(localTask.id, previousPrincipalId); }}
-                    disabled={previousPrincipalId == null}
+                    onClick={async (e) => { 
+                      e.stopPropagation(); 
+                      setHoverOpen(false); 
+                      if (previousPrincipalId == null) return; 
+                      if (childTaskIds.length > 0) {
+                        toast.error('No se permite anidación de múltiples niveles');
+                        return;
+                      }
+                      await onToggleTaskHierarchy(localTask.id, previousPrincipalId); 
+                    }}
+                    disabled={previousPrincipalId == null || childTaskIds.length > 0}
                     className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
+                    title={childTaskIds.length > 0 ? 'Las tareas con subtareas no pueden ser secundarias' : undefined}
                   >
                     Convertir en tarea secundaria
                   </button>

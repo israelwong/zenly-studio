@@ -1190,7 +1190,48 @@ export const EventScheduler = React.memo(function EventScheduler({
             e.type === 'item'
               ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
               : ((e.task as { parent_id?: string | null }).parent_id ?? null);
+          
+          // ========== REGLAS DE ANIDACIÓN ESTRICTAS ==========
+          
+          const activeEntry = combined[fromIndex]!;
+          const overEntry = combined[overIndex]!;
+          const activeParentId = getParentId(activeEntry);
+          const overParentId = getParentId(overEntry);
           const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
+          
+          // REGLA 3: Determinar nuevo parent_id según contexto de drop
+          // Si se suelta sobre una subtarea, adoptar su mismo padre
+          // Si se suelta sobre una principal, convertirse en subtarea de ella
+          // Si se suelta al nivel de principales, limpiar parent_id
+          let newParentId: string | null = null;
+          
+          if (overParentId !== null) {
+            // Caso: over está en una subtarea → adoptar su mismo padre (re-parenting o mantener)
+            newParentId = overParentId;
+          } else {
+            // Caso: over es una tarea principal
+            // Si active ya es subtarea del mismo padre que over, mantener (no cambiar)
+            // Si active viene de otro padre o es principal, NO convertir en hijo automáticamente
+            // (eso se hace explícitamente con el menú contextual o dropIndicator especial)
+            newParentId = activeParentId;
+          }
+          
+          // REGLA 1: Bloqueo de Zinc - Las tareas de catálogo no pueden ser secundarias
+          // Solo validar si se está intentando cambiar a un parent_id no nulo
+          if (!isManual && newParentId !== null && newParentId !== activeParentId) {
+            toast.error('Las tareas de catálogo no pueden ser secundarias');
+            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+            return;
+          }
+          
+          // REGLA 2: Bloqueo de Multi-nivel - Tareas con hijos no pueden tener padres
+          // Solo validar si se está intentando asignar un nuevo padre
+          if (childrenOfActive.length > 0 && newParentId !== null && newParentId !== activeParentId) {
+            toast.error('No se permite anidación de múltiples niveles');
+            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+            return;
+          }
+          
           const block = [combined[fromIndex]!, ...childrenOfActive];
           const blockIds = new Set(block.map((e) => e.taskId));
           const rest = combined.filter((e) => !blockIds.has(e.taskId));
@@ -1205,6 +1246,42 @@ export const EventScheduler = React.memo(function EventScheduler({
           reordered = reorderedEntries.map((e) => e.taskId);
           taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
           taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+          
+          // Si cambió el parent_id, actualizar optimista y llamar a toggleTaskHierarchy
+          if (newParentId !== activeParentId) {
+            setLocalEventData((prev) => {
+              const next = { ...prev };
+              if (prev.scheduler?.tasks) {
+                next.scheduler = {
+                  ...prev.scheduler,
+                  tasks: prev.scheduler.tasks.map((t) =>
+                    t.id === activeId ? { ...t, parent_id: newParentId } : t
+                  ),
+                };
+              }
+              return next as SchedulerViewData;
+            });
+            
+            // Llamar a toggleTaskHierarchy para persistir el cambio
+            const hierarchyResult = await toggleTaskHierarchy(studioSlug, eventId, activeId, newParentId);
+            if (!hierarchyResult.success) {
+              toast.error(hierarchyResult.error ?? 'Error al actualizar jerarquía');
+              // Rollback
+              setLocalEventData((prev) => {
+                const next = { ...prev };
+                if (prev.scheduler?.tasks) {
+                  next.scheduler = {
+                    ...prev.scheduler,
+                    tasks: prev.scheduler.tasks.map((t) =>
+                      t.id === activeId ? { ...t, parent_id: activeParentId } : t
+                    ),
+                  };
+                }
+                return next as SchedulerViewData;
+              });
+              return;
+            }
+          }
         }
         const originalIds = combined.map((e) => e.taskId);
         const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
