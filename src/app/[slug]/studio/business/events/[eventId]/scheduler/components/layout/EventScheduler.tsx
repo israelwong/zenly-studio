@@ -1179,26 +1179,83 @@ export const EventScheduler = React.memo(function EventScheduler({
           }
           
           // AMBER: Movimiento libre entre secciones/estados/categorías
-          if (isManual && overStage && combinedTarget) {
-            const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
-            if (dropIndex === -1) return;
-            const targetIds = combinedTarget.map((e) => e.taskId);
-            reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
-            taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-            taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-            adoptedCatalogForManual = { catalog_category_id: overCatResolved, catalog_category_nombre: getCatalogCategoryNombre(overCatResolved) };
+          if (isManual && overStage) {
+            // REGLA 1: ATERRIZAJE OBLIGATORIO EN CATEGORÍA
+            // Resolver categoría del destino - NUNCA puede ser null para Amber
+            const targetCategoryId = overCatResolved;
+            const targetCategoryNombre = getCatalogCategoryNombre(targetCategoryId);
+            
+            if (!targetCategoryId) {
+              toast.error('No se puede mover la tarea: categoría destino inválida');
+              window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+              return;
+            }
+            
+            // REGLA 2: AUTO-PROMOCIÓN (Prevención de Huérfanas)
+            // Si la tarea tenía parent_id y se mueve a nuevo estado/categoría sin nuevo padre, promover a principal
+            const activeTaskData = activeEntry.type === 'manual' 
+              ? activeEntry.task 
+              : null;
+            const hadParent = activeTaskData && (activeTaskData as { parent_id?: string | null }).parent_id != null;
+            
+            // Determinar si debe promover a principal
+            let shouldPromoteToRoot = false;
+            if (hadParent && combinedTarget) {
+              // Verificar si NO se está soltando bajo un nuevo padre válido
+              const overTaskEntry = combinedTarget.find((e) => e.taskId === overId);
+              const overHasParent = overTaskEntry && (
+                overTaskEntry.type === 'manual' 
+                  ? !!(overTaskEntry.task as { parent_id?: string | null }).parent_id
+                  : !!(overTaskEntry.item.scheduler_task as { parent_id?: string | null })?.parent_id
+              );
+              
+              // Si over no tiene padre (es principal) Y no es nesting automático, promover
+              shouldPromoteToRoot = !overHasParent;
+            }
+            
+            if (combinedTarget) {
+              const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
+              if (dropIndex === -1) return;
+              const targetIds = combinedTarget.map((e) => e.taskId);
+              reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
+              taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+              taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
+            }
+            
+            adoptedCatalogForManual = { 
+              catalog_category_id: targetCategoryId, 
+              catalog_category_nombre: targetCategoryNombre 
+            };
+            
             const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
             const stageLabel = STAGE_LABELS[stageCategory] ?? stageCategory;
-            await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, adoptedCatalogForManual.catalog_category_nombre ?? null);
-            toast.success(`Tarea movida exitosamente a ${stageLabel}`);
-          } else {
-            if (isManual && overStage) {
-              const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-              const stageLabel = STAGE_LABELS[stageCategory] ?? stageCategory;
-              const overCatalogNombre = getCatalogCategoryNombre(overCatResolved);
-              await handleManualTaskMoveStage(activeId, stageCategory, overCatResolved, overCatalogNombre ?? null);
+            
+            // Ejecutar movimiento con categoría obligatoria
+            await handleManualTaskMoveStage(activeId, stageCategory, targetCategoryId, targetCategoryNombre);
+            
+            // Si debe promover, limpiar parent_id
+            if (shouldPromoteToRoot) {
+              const promoteResult = await toggleTaskHierarchy(studioSlug, eventId, activeId, null);
+              if (promoteResult.success) {
+                setLocalEventData((prev) => {
+                  const next = { ...prev };
+                  if (prev.scheduler?.tasks) {
+                    next.scheduler = {
+                      ...prev.scheduler,
+                      tasks: prev.scheduler.tasks.map((t) =>
+                        t.id === activeId ? { ...t, parent_id: null, category: stageCategory, catalog_category_id: targetCategoryId } : t
+                      ),
+                    };
+                  }
+                  return next as SchedulerViewData;
+                });
+                toast.success('Tarea movida y convertida en principal');
+              }
+            } else {
               toast.success(`Tarea movida exitosamente a ${stageLabel}`);
             }
+            
+            window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
             return;
           }
         } else {
@@ -1218,18 +1275,20 @@ export const EventScheduler = React.memo(function EventScheduler({
           const overParentId = getParentId(overEntry);
           const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
           
-          // REGLA 3: Determinar nuevo parent_id según contexto de drop
-          // Si se suelta sobre una subtarea, adoptar su mismo padre
-          // Si se suelta sobre una principal, convertirse en subtarea de ella
-          // Si se suelta al nivel de principales, limpiar parent_id
+          // REGLA 3: RE-PARENTESCO DINÁMICO (Amber puede adoptar cualquier padre)
           let newParentId: string | null = null;
           const currentDropIndicator = dropIndicator;
           
           if (overParentId !== null) {
-            // Caso 1: over en subtarea - adoptar su mismo padre (re-parenting)
-            newParentId = overParentId;
-          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual && !activeParentId) {
-            // Caso 2: NESTING AUTOMÁTICO - Amber soltada DEBAJO de principal
+            // Caso 1: over en subtarea - adoptar su mismo padre (re-parenting familiar)
+            if (isManual) {
+              newParentId = overParentId;
+            } else {
+              newParentId = activeParentId; // Zinc mantiene su jerarquía
+            }
+          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual) {
+            // Caso 2: NESTING AUTOMÁTICO - Amber soltada DEBAJO de cualquier principal (Zinc o Amber)
+            // Permitir adopción de nuevo padre independiente de si tenía padre anterior
             newParentId = overId;
           } else {
             // Caso 3: Mantener parent_id actual (reordenamiento simple)
@@ -1269,20 +1328,42 @@ export const EventScheduler = React.memo(function EventScheduler({
           
           // Si cambió el parent_id, actualizar optimista y llamar a toggleTaskHierarchy
           if (newParentId !== activeParentId) {
+            // ATERRIZAJE OBLIGATORIO: Si es Amber, asegurar que adopte la categoría del destino
+            let updatedCategoryId = activeCat;
+            let updatedCategoryNombre: string | null = null;
+            
+            if (isManual && overCatResolved !== activeCat) {
+              updatedCategoryId = overCatResolved;
+              updatedCategoryNombre = getCatalogCategoryNombre(overCatResolved);
+            }
+            
             setLocalEventData((prev) => {
               const next = { ...prev };
               if (prev.scheduler?.tasks) {
                 next.scheduler = {
                   ...prev.scheduler,
                   tasks: prev.scheduler.tasks.map((t) =>
-                    t.id === activeId ? { ...t, parent_id: newParentId } : t
+                    t.id === activeId ? { 
+                      ...t, 
+                      parent_id: newParentId,
+                      ...(isManual && updatedCategoryId ? { 
+                        catalog_category_id: updatedCategoryId,
+                        catalog_category_nombre: updatedCategoryNombre 
+                      } : {})
+                    } : t
                   ),
                 };
               }
               return next as SchedulerViewData;
             });
             
-            // Llamar a toggleTaskHierarchy para persistir el cambio
+            // Si también cambió la categoría (Amber), actualizar primero la categoría
+            if (isManual && updatedCategoryId && updatedCategoryId !== activeCat) {
+              const stageCategory = activeStageKey.split('-').pop() as import('../../utils/scheduler-section-stages').TaskCategoryStage;
+              await handleManualTaskMoveStage(activeId, stageCategory, updatedCategoryId, updatedCategoryNombre ?? null);
+            }
+            
+            // Llamar a toggleTaskHierarchy para persistir el cambio de jerarquía
             const hierarchyResult = await toggleTaskHierarchy(studioSlug, eventId, activeId, newParentId);
             if (!hierarchyResult.success) {
               toast.error(hierarchyResult.error ?? 'Error al actualizar jerarquía');
@@ -1293,7 +1374,11 @@ export const EventScheduler = React.memo(function EventScheduler({
                   next.scheduler = {
                     ...prev.scheduler,
                     tasks: prev.scheduler.tasks.map((t) =>
-                      t.id === activeId ? { ...t, parent_id: activeParentId } : t
+                      t.id === activeId ? { 
+                        ...t, 
+                        parent_id: activeParentId,
+                        catalog_category_id: activeCat 
+                      } : t
                     ),
                   };
                 }
@@ -1301,6 +1386,21 @@ export const EventScheduler = React.memo(function EventScheduler({
               });
               return;
             }
+            
+            // Toast descriptivo según tipo de cambio de jerarquía
+            if (newParentId === null && activeParentId !== null) {
+              // Promoción a principal
+              toast.success('Tarea convertida en principal');
+            } else if (newParentId !== null && activeParentId === null) {
+              // Nesting automático (adopción de padre)
+              toast.success('Tarea convertida en secundaria');
+            } else if (newParentId !== null && activeParentId !== null) {
+              // Re-parenting (cambio de familia)
+              toast.success('Tarea reasignada a nueva familia');
+            }
+            
+            // Notificar al Israel Algorithm
+            window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
           }
         }
         const originalIds = combined.map((e) => e.taskId);
