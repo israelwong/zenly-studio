@@ -1,6 +1,16 @@
-// Este page.tsx no renderiza contenido explícito
-// El EventLayoutClient en el layout.tsx maneja el contenido por defecto con el fallback
-// Cuando no hay children, muestra EventPanel automáticamente
+import { obtenerEventoDetalle } from '@/lib/actions/studio/business/events';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; eventId: string }>;
+}) {
+  const { slug: studioSlug, eventId } = await params;
+  const result = await obtenerEventoDetalle(studioSlug, eventId);
+  const name = result.success && result.data?.name ? result.data.name : null;
+  return { title: name ?? 'Evento' };
+}
+
 export default function EventDetailPage() {
   return undefined;
 }

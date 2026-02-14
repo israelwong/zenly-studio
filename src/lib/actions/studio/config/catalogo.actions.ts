@@ -34,7 +34,7 @@ async function getstudio_idFromSlug(slug: string): Promise<string | null> {
  */
 function revalidateCatalogo(slug: string) {
     revalidatePath(`/${slug}/studio/commercial/catalogo`);
-    revalidatePath(`/${slug}/studio/commercial/catalogo`);
+    revalidatePath(`/${slug}/studio/business`);
 }
 
 // =====================================================
@@ -64,7 +64,9 @@ export async function getCatalogShell(
                 name: true,
                 order: true,
                 section_categories: {
+                    orderBy: { order: 'asc' },
                     select: {
+                        order: true,
                         service_categories: {
                             select: {
                                 id: true,
@@ -108,13 +110,13 @@ export async function getCatalogShell(
             id: seccion.id,
             nombre: seccion.name,
             descripcion: null,
-            orden: seccion.order,
+            order: seccion.order,
             createdAt: new Date(),
             updatedAt: new Date(),
             categorias: seccion.section_categories.map((sc) => ({
                 id: sc.service_categories.id,
                 nombre: sc.service_categories.name,
-                orden: sc.service_categories.order,
+                order: sc.order,  // ← FIX: Solo studio_section_categories.order
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 seccionId: seccion.id,
@@ -130,7 +132,7 @@ export async function getCatalogShell(
                     billing_type: s.billing_type,
                     operational_category: s.operational_category ?? undefined,
                     default_duration_days: s.default_duration_days,
-                    orden: s.order,
+                    order: s.order,
                     status: s.status,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -179,7 +181,9 @@ export async function obtenerCatalogo(
                 name: true,
                 order: true,
                 section_categories: {
+                    orderBy: { order: 'asc' },
                     select: {
+                        order: true,
                         service_categories: {
                             select: {
                                 id: true,
@@ -224,13 +228,13 @@ export async function obtenerCatalogo(
             id: seccion.id,
             nombre: seccion.name,
             descripcion: null, // No se carga description en lista
-            orden: seccion.order,
+            order: seccion.order,
             createdAt: new Date(), // Timestamps no necesarios para lista
             updatedAt: new Date(),
             categorias: seccion.section_categories.map((sc) => ({
                 id: sc.service_categories.id,
                 nombre: sc.service_categories.name,
-                orden: sc.service_categories.order,
+                order: sc.order,  // ← FIX: Solo studio_section_categories.order
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 seccionId: seccion.id,
@@ -246,7 +250,7 @@ export async function obtenerCatalogo(
                     billing_type: s.billing_type,
                     operational_category: s.operational_category ?? undefined,
                     default_duration_days: s.default_duration_days,
-                    orden: s.order,
+                    order: s.order,
                     status: s.status,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -282,7 +286,7 @@ export async function obtenerSecciones(): Promise<ActionResponse<SeccionData[]>>
             id: s.id,
             nombre: s.name,
             descripcion: s.description,
-            orden: s.order,
+            order: s.order,
             createdAt: s.created_at,
             updatedAt: s.updated_at,
             categorias: [],
@@ -334,7 +338,7 @@ export async function crearSeccion(
                 id: seccion.id,
                 nombre: seccion.name,
                 descripcion: seccion.description,
-                orden: seccion.order,
+                order: seccion.order,
                 createdAt: seccion.created_at,
                 updatedAt: seccion.updated_at,
                 categorias: [],
@@ -377,7 +381,7 @@ export async function actualizarSeccion(
                 id: seccion.id,
                 nombre: seccion.name,
                 descripcion: seccion.description,
-                orden: seccion.order,
+                order: seccion.order,
                 createdAt: seccion.created_at,
                 updatedAt: seccion.updated_at,
                 categorias: [],
@@ -453,7 +457,7 @@ export async function actualizarOrdenSecciones(
             validatedData.secciones.map((seccion) =>
                 prisma.studio_service_sections.update({
                     where: { id: seccion.id },
-                    data: { order: seccion.orden },
+                    data: { order: seccion.order },
                 })
             )
         );
@@ -493,7 +497,7 @@ export async function obtenerCategorias(): Promise<ActionResponse<CategoriaData[
         const categoriasData: CategoriaData[] = categorias.map((c) => ({
             id: c.id,
             nombre: c.name,
-            orden: c.order,
+            order: c.order,
             createdAt: c.created_at,
             updatedAt: c.updated_at,
             seccionId: c.section_categories?.section_id,
@@ -528,16 +532,17 @@ export async function crearCategoria(
                 select: { order: true },
             });
 
-        const nuevoOrden = ultimaCategoria ? ultimaCategoria.order + 1 : 0;
+        const nuevoOrder = ultimaCategoria ? ultimaCategoria.order + 1 : 0;
 
         // Crear categoría con relación a sección
         const categoria = await prisma.studio_service_categories.create({
             data: {
                 name: validatedData.nombre,
-                order: nuevoOrden,
+                order: nuevoOrder,
                 section_categories: {
                     create: {
                         section_id: seccion_id,
+                        order: nuevoOrder,
                     },
                 },
             },
@@ -550,7 +555,7 @@ export async function crearCategoria(
             data: {
                 id: categoria.id,
                 nombre: categoria.name,
-                orden: categoria.order,
+                order: categoria.order,
                 createdAt: categoria.created_at,
                 updatedAt: categoria.updated_at,
                 seccionId: seccion_id,
@@ -581,7 +586,7 @@ export async function actualizarCategoria(
         const validatedData = CategoriaSchema.partial().parse(data);
         const updateData: { name?: string; order?: number } = {};
         if (validatedData.nombre !== undefined) updateData.name = validatedData.nombre;
-        if (validatedData.orden !== undefined) updateData.order = validatedData.orden;
+        if (validatedData.order !== undefined) updateData.order = validatedData.order;
 
         const categoria = await prisma.studio_service_categories.update({
             where: { id: categoriaId },
@@ -602,7 +607,7 @@ export async function actualizarCategoria(
             data: {
                 id: categoria.id,
                 nombre: categoria.name,
-                orden: categoria.order,
+                order: categoria.order,
                 createdAt: categoria.created_at,
                 updatedAt: categoria.updated_at,
                 seccionId: categoria.section_categories?.section_id,
@@ -663,7 +668,44 @@ export async function eliminarCategoria(
 }
 
 /**
- * Actualizar orden de múltiples categorías
+ * Corrige categorías con typo "peronalizada" → "personalizada" en studio_service_categories.
+ * Idempotente: solo actualiza nombres que contienen el typo.
+ */
+export async function corregirTypoPeronalizadaCategorias(
+    studioSlug: string
+): Promise<ActionResponse<{ updated: number }>> {
+    try {
+        const studio_id = await getstudio_idFromSlug(studioSlug);
+        if (!studio_id) {
+            return { success: false, error: 'Estudio no encontrado' };
+        }
+        const categoriasConTypo = await prisma.studio_service_categories.findMany({
+            where: { name: { contains: 'peronalizada', mode: 'insensitive' } },
+            select: { id: true, name: true },
+        });
+        let updated = 0;
+        for (const cat of categoriasConTypo) {
+            const nuevoNombre = cat.name.replace(/peronalizada/gi, 'personalizada');
+            if (nuevoNombre !== cat.name) {
+                await prisma.studio_service_categories.update({
+                    where: { id: cat.id },
+                    data: { name: nuevoNombre },
+                });
+                updated++;
+            }
+        }
+        if (updated > 0) revalidateCatalogo(studioSlug);
+        return { success: true, data: { updated } };
+    } catch (error) {
+        console.error('Error corrigiendo typo en categorías:', error);
+        return { success: false, error: 'Error al corregir categorías' };
+    }
+}
+
+/**
+ * Actualizar orden de múltiples categorías.
+ * El orden se persiste en studio_section_categories (tabla intermedia sección-categoría).
+ * Usa transacción para garantizar atomicidad y pesos específicos (0, 1, 2...).
  */
 export async function actualizarOrdenCategorias(
     studioSlug: string,
@@ -672,13 +714,16 @@ export async function actualizarOrdenCategorias(
     try {
         const validatedData = ActualizarOrdenCategoriasSchema.parse(data);
 
-        await Promise.all(
-            validatedData.categorias.map((categoria) =>
-                prisma.studio_service_categories.update({
-                    where: { id: categoria.id },
-                    data: { order: categoria.orden },
-                })
-            )
+        await prisma.$transaction(
+            validatedData.categorias.map((categoria) => {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`ORDEN ACTUALIZADO EN DB: Cat=${categoria.id} -> Pos=${categoria.order}`);
+                }
+                return prisma.studio_section_categories.update({
+                    where: { category_id: categoria.id },
+                    data: { order: categoria.order },
+                });
+            })
         );
 
         revalidateCatalogo(studioSlug);
@@ -735,7 +780,7 @@ export async function obtenerServicios(
             gasto: s.expense,
             tipo_utilidad: s.utility_type,
             type: s.type,
-            orden: s.order,
+            order: s.order,
             status: s.status,
             createdAt: s.created_at,
             updatedAt: s.updated_at,
@@ -747,7 +792,7 @@ export async function obtenerServicios(
             categoria: {
                 id: s.service_categories.id,
                 nombre: s.service_categories.name,
-                orden: s.service_categories.order,
+                order: s.service_categories.order,
                 createdAt: s.service_categories.created_at,
                 updatedAt: s.service_categories.updated_at,
                 seccionId: s.service_categories.section_categories?.section_id,
@@ -830,7 +875,7 @@ export async function crearServicio(
                 gasto: servicio.expense,
                 tipo_utilidad: servicio.utility_type,
                 type: servicio.type,
-                orden: servicio.order,
+                order: servicio.order,
                 status: servicio.status,
                 createdAt: servicio.created_at,
                 updatedAt: servicio.updated_at,
@@ -898,7 +943,7 @@ export async function actualizarServicio(
                 gasto: servicio.expense,
                 tipo_utilidad: servicio.utility_type,
                 type: servicio.type,
-                orden: servicio.order,
+                order: servicio.order,
                 status: servicio.status,
                 createdAt: servicio.created_at,
                 updatedAt: servicio.updated_at,
@@ -1012,7 +1057,7 @@ export async function duplicarServicio(
                 // precio_publico: servicioNuevo.precio_publico,
                 tipo_utilidad: servicioNuevo.utility_type,
                 type: servicioNuevo.type,
-                orden: servicioNuevo.order,
+                order: servicioNuevo.order,
                 status: servicioNuevo.status,
                 createdAt: servicioNuevo.created_at,
                 updatedAt: servicioNuevo.updated_at,

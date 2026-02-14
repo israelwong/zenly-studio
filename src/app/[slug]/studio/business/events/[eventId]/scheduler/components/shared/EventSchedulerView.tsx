@@ -21,6 +21,10 @@ interface EventSchedulerViewProps {
   onRefetchEvent?: () => Promise<void>;
   /** Si se pasa, no se llama a obtenerCatalogo (carga atómica desde obtenerTareasScheduler). */
   initialSecciones?: SeccionData[];
+  /** Marca de tiempo para key del sidebar (anti-caché tras reordenar). */
+  timestamp?: number;
+  /** Llamado tras reordenar categorías con éxito. */
+  onCategoriesReordered?: () => void;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -29,7 +33,6 @@ interface EventSchedulerViewProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
-  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
@@ -52,6 +55,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onDataChange,
   onRefetchEvent,
   initialSecciones,
+  timestamp,
+  onCategoriesReordered,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -59,7 +64,6 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
-  onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
@@ -73,13 +77,20 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
 
-  // Cargar secciones del catálogo solo si no se pasaron por carga atómica
+  // Sincronizar con initialSecciones cuando cambie (crítico para reconciliación de reordenamiento)
   useEffect(() => {
     if (initialSecciones && initialSecciones.length > 0) {
       setSecciones(initialSecciones);
       setLoadingSecciones(false);
-      return;
     }
+  }, [initialSecciones]);
+
+  // Cargar secciones del catálogo solo si no se pasaron por carga atómica
+  useEffect(() => {
+    if (initialSecciones && initialSecciones.length > 0) {
+      return; // Ya sincronizado en el efecto anterior
+    }
+    
     const loadSecciones = async () => {
       setLoadingSecciones(true);
       try {
@@ -188,6 +199,8 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         isMaximized={isMaximized}
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
+        timestamp={timestamp}
+        onCategoriesReordered={onCategoriesReordered}
         activeSectionIds={activeSectionIds}
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         stageIdsWithDataBySection={stageIdsWithDataBySection}
@@ -195,7 +208,6 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
-        onMoveCategory={onMoveCategory}
         onRenameCustomCategory={onRenameCustomCategory}
         onRemoveCustomCategory={onRemoveCustomCategory}
         onReminderAdd={onReminderAdd}

@@ -41,7 +41,7 @@ export function SchedulerSectionCategoriesConfigPopover({
       <PopoverContent className="w-64 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
         <p className="text-xs font-medium text-zinc-400 mb-2">Categorías en esta sección</p>
         <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
-          {section.categorias.map((cat) => {
+          {(section.categorias ?? []).map((cat) => {
             const hasData = categoryIdsWithData.has(cat.id);
             const isActive = hasData || explicitlyActivatedCategoryIds.has(cat.id);
             const disabled = hasData;

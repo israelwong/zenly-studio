@@ -219,9 +219,10 @@ export function EventSchedulerControlCard({
   }, [secciones]);
 
   const treeBySection: SectionNode[] = useMemo(() => {
+    const seccionesSafe = (secciones ?? []).filter((s): s is SeccionData => s != null && s.id != null);
     const orderedTasks =
-      secciones.length > 0
-        ? ordenarPorEstructuraCanonica(tasks, secciones, (t) => t.catalog_category_id, (t) => t.name)
+      seccionesSafe.length > 0
+        ? ordenarPorEstructuraCanonica(tasks, seccionesSafe, (t) => t.catalog_category_id, (t) => t.name)
         : tasks;
     const alertTasks: SchedulerTaskRow[] = [];
     const sectionMap = new Map<string, SectionNode>();
@@ -287,7 +288,7 @@ export function EventSchedulerControlCard({
     if (sectionMap.has(PENDING_SECTION_ID)) {
       result.push(sectionMap.get(PENDING_SECTION_ID)!);
     }
-    for (const sec of secciones) {
+    for (const sec of seccionesSafe) {
       if (sectionMap.has(sec.id)) {
         result.push(sectionMap.get(sec.id)!);
       }
@@ -567,9 +568,9 @@ export function EventSchedulerControlCard({
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
                                   <div className="pl-4 mt-0.5 space-y-1">
-                                    {(phaseNode.categories ?? []).map((cat) => {
+                                    {(phaseNode.categories ?? []).filter((cat): cat is NonNullable<typeof cat> => cat != null).map((cat) => {
                                       const taskCount = cat.tasks?.length ?? 0;
-                                      const catKey = `${phaseKey}-${cat.categoryId}`;
+                                      const catKey = `${phaseKey}-${cat.categoryId ?? ''}`;
                                       const catOpen = openCategories[catKey] ?? true;
 
                                       return (
@@ -714,7 +715,12 @@ function ClasificarPopoverContent({
         <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide block mb-1">
           Fase operativa
         </label>
-        <Select value={phase} onValueChange={setPhase}>
+        <Select
+          value={phase}
+          onValueChange={(value) => {
+            if (PHASE_ORDER.includes(value as PhaseKey)) setPhase(value as PhaseKey);
+          }}
+        >
           <SelectTrigger className="h-8 bg-zinc-800 border-zinc-700 text-xs w-full">
             <SelectValue />
           </SelectTrigger>

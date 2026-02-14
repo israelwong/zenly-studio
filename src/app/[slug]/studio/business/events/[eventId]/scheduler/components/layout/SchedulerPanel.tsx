@@ -24,6 +24,8 @@ interface SchedulerPanelProps {
   onSidebarWidthChange?: (width: number) => void;
   columnWidth?: number;
   secciones: SeccionData[];
+  /** Secciones completas (sin filtrar) para reorden de categorías cuando la categoría no está en secciones filtradas. */
+  fullSecciones?: SeccionData[] | null;
   itemsMap: Map<string, CotizacionItem>;
   manualTasks?: ManualTaskPayload[];
   studioSlug: string;
@@ -43,12 +45,12 @@ interface SchedulerPanelProps {
     startDate?: Date,
     parentId?: string | null
   ) => Promise<void>;
-  onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => void;
+  onToggleTaskHierarchy?: (taskId: string, parentId: string | null) => Promise<void>;
   onConvertSubtasksToPrincipal?: (childIds: string[]) => Promise<void>;
   onManualTaskPatch?: (taskId: string, patch: import('../sidebar/SchedulerManualTaskPopover').ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
   onManualTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
-  onManualTaskMoveStage?: (taskId: string, category: import('../utils/scheduler-section-stages').TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
+  onManualTaskMoveStage?: (taskId: string, category: import('../../utils/scheduler-section-stages').TaskCategoryStage, catalogCategoryId?: string | null, catalogCategoryNombre?: string | null) => void;
   onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
   onItemTaskMoveCategory?: (taskId: string, catalogCategoryId: string | null) => void;
   onManualTaskDuplicate?: (taskId: string) => void;
@@ -62,6 +64,10 @@ interface SchedulerPanelProps {
   onExpandedStagesChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   collapsedCategoryIds?: Set<string>;
   onCollapsedCategoryIdsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  /** Marca de tiempo para key del sidebar (anti-caché tras reordenar). */
+  timestamp?: number;
+  /** Llamado tras reordenar categorías con éxito. */
+  onCategoriesReordered?: () => void;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -70,7 +76,6 @@ interface SchedulerPanelProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
-  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onDeleteCustomCategory?: (sectionId: string, stage: string, categoryId: string, taskIds: string[]) => Promise<void>;
   onSchedulerDragStart?: (event: import('@dnd-kit/core').DragStartEvent) => void;
@@ -110,6 +115,7 @@ export const SchedulerPanel = React.memo(({
   onSidebarWidthChange,
   columnWidth = 60,
   secciones,
+  fullSecciones,
   itemsMap,
   manualTasks = [],
   studioSlug,
@@ -140,6 +146,8 @@ export const SchedulerPanel = React.memo(({
   onExpandedStagesChange,
   collapsedCategoryIds,
   onCollapsedCategoryIdsChange,
+  timestamp,
+  onCategoriesReordered,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -147,7 +155,6 @@ export const SchedulerPanel = React.memo(({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
-  onMoveCategory,
   onRenameCustomCategory,
   onDeleteCustomCategory,
   onSchedulerDragStart,
@@ -291,10 +298,13 @@ export const SchedulerPanel = React.memo(({
             ghostPortalEl={ghostPortalEl}
             sidebarWidth={sidebarWidth}
             secciones={secciones}
+            fullSecciones={fullSecciones}
             itemsMap={itemsMap}
             manualTasks={manualTasks}
             studioSlug={studioSlug}
             eventId={eventId}
+            timestamp={timestamp}
+            onCategoriesReordered={onCategoriesReordered}
             renderItem={renderSidebarItem}
             onTaskToggleComplete={onTaskToggleComplete}
             onItemUpdate={onItemUpdate}
@@ -305,7 +315,6 @@ export const SchedulerPanel = React.memo(({
             onToggleStage={onToggleStage}
             onAddCustomCategory={onAddCustomCategory}
             onRemoveEmptyStage={onRemoveEmptyStage}
-            onMoveCategory={onMoveCategory}
             onRenameCustomCategory={onRenameCustomCategory}
             onDeleteCustomCategory={onDeleteCustomCategory}
             onAddManualTaskSubmit={onAddManualTaskSubmit}
@@ -327,7 +336,6 @@ export const SchedulerPanel = React.memo(({
             onExpandedStagesChange={onExpandedStagesChange}
             collapsedCategoryIds={collapsedCategoryIds}
             onCollapsedCategoryIdsChange={onCollapsedCategoryIdsChange}
-            customCategoriesBySectionStage={customCategoriesBySectionStage}
             onSchedulerDragStart={onSchedulerDragStart}
             onSchedulerDragMove={onSchedulerDragMove}
             onSchedulerDragOver={onSchedulerDragOver}
@@ -404,8 +412,7 @@ export const SchedulerPanel = React.memo(({
         )}
     </div>
   );
-}, (prevProps, nextProps) => {
-  // Comparación personalizada: re-renderizar si cambian fechas, items o tareas manuales (nombre/completado)
+}, (prevProps: Readonly<SchedulerPanelProps>, nextProps: Readonly<SchedulerPanelProps>): boolean => {
   const prevFrom = prevProps.dateRange?.from?.getTime();
   const prevTo = prevProps.dateRange?.to?.getTime();
   const nextFrom = nextProps.dateRange?.from?.getTime();
@@ -420,8 +427,8 @@ export const SchedulerPanel = React.memo(({
   const collapsedCategoryIdsEqual =
     prevProps.collapsedCategoryIds === nextProps.collapsedCategoryIds ||
     (prevProps.collapsedCategoryIds?.size === nextProps.collapsedCategoryIds?.size &&
-      prevProps.collapsedCategoryIds &&
-      nextProps.collapsedCategoryIds &&
+      prevProps.collapsedCategoryIds != null &&
+      nextProps.collapsedCategoryIds != null &&
       [...prevProps.collapsedCategoryIds].every((id) => nextProps.collapsedCategoryIds!.has(id)));
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
@@ -436,8 +443,14 @@ export const SchedulerPanel = React.memo(({
   const sidebarWidthEqual = prevProps.sidebarWidth === nextProps.sidebarWidth;
   const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
   const remindersEqual = prevProps.schedulerDateReminders === nextProps.schedulerDateReminders;
+  const timestampEqual = prevProps.timestamp === nextProps.timestamp;
 
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual && sidebarWidthEqual && columnWidthEqual && remindersEqual;
+  return Boolean(
+    datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual &&
+    expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual &&
+    stageIdsBySectionEqual && customCatsEqual && bulkDragEqual && isMaximizedEqual && sidebarWidthEqual &&
+    columnWidthEqual && remindersEqual && timestampEqual
+  );
 });
 
 SchedulerPanel.displayName = 'SchedulerPanel';

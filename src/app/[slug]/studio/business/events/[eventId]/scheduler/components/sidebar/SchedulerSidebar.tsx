@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, startTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -93,6 +94,8 @@ interface ItemMetadata {
 
 interface SchedulerSidebarProps {
   secciones: SeccionData[];
+  /** Secciones completas (sin filtrar por items) para reorden: la categoría a mover puede no estar en secciones filtradas. */
+  fullSecciones?: SeccionData[] | null;
   itemsMap: Map<string, CotizacionItem>;
   manualTasks?: ManualTaskPayload[];
   studioSlug: string;
@@ -132,7 +135,6 @@ interface SchedulerSidebarProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
-  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onDeleteCustomCategory?: (sectionId: string, stage: string, categoryId: string, taskIds: string[]) => Promise<void>;
   onItemTaskReorder?: (taskId: string, direction: 'up' | 'down') => void;
@@ -149,6 +151,10 @@ interface SchedulerSidebarProps {
   sidebarWidth?: number;
   /** DOM del contenedor para el ghost del drag (portal dentro del scheduler para z-index correcto). Sin fallback a body. */
   ghostPortalEl?: HTMLDivElement | null;
+  /** Marca de tiempo para key del contenedor (anti-caché tras reordenar categorías). */
+  timestamp?: number;
+  /** Llamado tras reordenar categorías con éxito (refresh + actualizar timestamp en padre). */
+  onCategoriesReordered?: () => void;
 }
 
 
@@ -383,7 +389,14 @@ function SchedulerRamaLine({ minHeight = ROW_HEIGHTS.TASK_ROW }: { minHeight?: n
   );
 }
 
-function CategoryDroppableHeader({
+function areEqualCategory(
+  a: { stageKey: string; catalogCategoryId: string | null; sectionId: string; label?: string },
+  b: { stageKey: string; catalogCategoryId: string | null; sectionId: string; label?: string }
+): boolean {
+  return a.stageKey === b.stageKey && a.catalogCategoryId === b.catalogCategoryId && a.sectionId === b.sectionId && a.label === b.label;
+}
+
+const CategoryDroppableHeader = React.memo(function CategoryDroppableHeader({
   stageKey,
   catalogCategoryId,
   isValidDrop,
@@ -393,6 +406,7 @@ function CategoryDroppableHeader({
   syncedTasks = 0,
   googleCalendarEnabled = false,
   isCustomCategory = false,
+  label,
 }: {
   stageKey: string;
   catalogCategoryId: string | null;
@@ -403,6 +417,7 @@ function CategoryDroppableHeader({
   syncedTasks?: number;
   googleCalendarEnabled?: boolean;
   isCustomCategory?: boolean;
+  label?: string;
 }) {
   const { setNodeRef } = useDroppable({
     id: schedulerCategoryDroppableId(stageKey, catalogCategoryId),
@@ -410,7 +425,7 @@ function CategoryDroppableHeader({
   return (
     <div
       ref={setNodeRef}
-      className={`group relative flex items-center pl-12 pr-4 border-b border-white/5 transition-colors min-h-[32px] box-border overflow-hidden gap-2 ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-transparent'}`}
+      className={`group relative flex items-center pl-12 pr-4 border-b border-white/5 transition-colors min-h-[32px] box-border gap-2 cursor-default ${isValidDrop ? 'bg-zinc-800/30 border-zinc-500/60' : 'bg-transparent'}`}
       style={{ height: ROW_HEIGHTS.CATEGORY_HEADER, minHeight: ROW_HEIGHTS.CATEGORY_HEADER, maxHeight: ROW_HEIGHTS.CATEGORY_HEADER, boxSizing: 'border-box' }}
       data-section-id={sectionId}
       title={typeof sectionId === 'string' && sectionId ? `Sección: ${sectionId}` : undefined}
@@ -423,15 +438,22 @@ function CategoryDroppableHeader({
       )}
     </div>
   );
-}
+}, areEqualCategory);
 
 /** Quita el sufijo " (timestamp)" del nombre de categoría para mostrar solo lo que escribió el usuario. */
+/** Normaliza typo "peronalizada" → "personalizada" en UI (incl. si viene de BD). */
 function formatCategoryLabel(label: string): string {
   if (typeof label !== 'string' || !label) return label;
-  return label.replace(/\s*\(\d{10,}\)\s*$/, '').trim() || label;
+  const withoutTimestamp = label.replace(/\s*\(\d{10,}\)\s*$/, '').trim() || label;
+  return withoutTimestamp.replace(/peronalizada/gi, 'personalizada');
 }
 
-/** Resuelve catalog_category_id desde una fila de tipo category (id = `${stageId}-cat-${key}`; key puede ser id o nombre). */
+/** Normaliza typo en nombre para búsqueda (peronalizada → personalizada). */
+function normalizeCategoryNameForSearch(name: string): string {
+  return String(name ?? '').replace(/peronalizada/gi, 'personalizada').trim();
+}
+
+/** Resuelve catalog_category_id (CUID) desde una fila de tipo category. key puede ser CUID o nombre. Siempre devuelve CUID cuando existe en catálogo. */
 function getCatalogCategoryIdFromCategoryRow(
   row: { id: string; stageId: string; label: string },
   sectionId: string,
@@ -439,13 +461,23 @@ function getCatalogCategoryIdFromCategoryRow(
 ): string | null {
   const prefix = `${row.stageId}-cat-`;
   if (!row.id.startsWith(prefix)) return null;
-  const key = row.id.slice(prefix.length);
+  const key = row.id.slice(prefix.length).trim();
   if (!key) return null;
-  const sec = secciones.find((s) => s.id === sectionId);
-  const byId = sec?.categorias?.find((c) => c.id === key)?.id;
-  if (byId) return byId;
-  const byName = sec?.categorias?.find((c) => c.nombre === key)?.id;
-  return byName ?? key;
+  const keyNorm = normalizeCategoryNameForSearch(key);
+  const sinCategoria = '__sin_categoria__';
+  for (const sec of secciones) {
+    if (sectionId && sectionId !== sinCategoria && sec.id !== sectionId) continue;
+    const byId = sec.categorias?.find((c) => String(c.id).trim() === key);
+    if (byId) return byId.id;
+    const byName = sec.categorias?.find(
+      (c) =>
+        normalizeCategoryNameForSearch(c.nombre) === keyNorm ||
+        String(c.nombre).trim() === key ||
+        normalizeCategoryNameForSearch(c.nombre) === key
+    );
+    if (byName) return byName.id;
+  }
+  return key;
 }
 
 function AddCustomCategoryForm({
@@ -569,6 +601,13 @@ function AddSubtaskButton({
   );
 }
 
+function areEqualManualTask(
+  a: { task: { id: string; order?: number } },
+  b: { task: { id: string; order?: number } }
+): boolean {
+  return a.task.id === b.task.id && (a.task.order ?? 0) === (b.task.order ?? 0);
+}
+
 interface ManualTaskRowSortableProps {
   taskId: string;
   isManual: boolean;
@@ -584,7 +623,7 @@ interface ManualTaskRowSortableProps {
 }
 
 /** Fila manual: badge duración | avatar + nombre | notas (si >0) | HoverCard acciones. */
-function ManualTaskRow({
+const ManualTaskRow = React.memo(function ManualTaskRow({
   task,
   studioSlug,
   eventId,
@@ -613,6 +652,9 @@ function ManualTaskRow({
   onNoteAdded,
   sortableProps,
   activeDragData,
+  customCategoriesBySectionStage = new Map(),
+  categoriesWithDataByStage = new Map(),
+  onAddCustomCategory,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
@@ -652,6 +694,9 @@ function ManualTaskRow({
   onNoteAdded?: (taskId: string, delta: number) => void;
   sortableProps: ManualTaskRowSortableProps;
   activeDragData?: { taskId: string; isManual: boolean } | null;
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  categoriesWithDataByStage?: Map<string, Set<string>>;
+  onAddCustomCategory?: (sectionId: string, stage: string, name: string) => Promise<void>;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [hoverOpen, setHoverOpen] = useState(false);
@@ -669,11 +714,6 @@ function ManualTaskRow({
   const { localTask } = useSchedulerManualTaskSync(task);
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
   const hasCrew = !!localTask.assigned_to_crew_member;
-
-  const showUp = (onReorderUp != null && canMoveUp) || onMoveToPreviousCategory != null;
-  const showDown = (onReorderDown != null && canMoveDown) || onMoveToNextCategory != null;
-  const upEnabled = (onReorderUp != null && canMoveUp) || onMoveToPreviousCategory != null;
-  const downEnabled = (onReorderDown != null && canMoveDown) || onMoveToNextCategory != null;
 
   const taskDurationDays = (() => {
     const t = localTask as { duration_days?: number; start_date?: Date | string; end_date?: Date | string };
@@ -753,6 +793,41 @@ function ManualTaskRow({
           </PopoverContent>
         </Popover>
       )}
+      {/* Convertir jerarquía - Nivel 1 (Hover Principal) */}
+      {onToggleTaskHierarchy && (
+        <>
+          {localTask.parent_id ? (
+            <button
+              type="button"
+              onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); await onToggleTaskHierarchy(localTask.id, null); }}
+              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+            >
+              <CornerDownRight className="h-4 w-4 shrink-0" />
+              Convertir en tarea principal
+            </button>
+          ) : (
+            previousPrincipalId && childTaskIds.length === 0 && (
+              <button
+                type="button"
+                onClick={async (e) => { 
+                  e.stopPropagation(); 
+                  setHoverOpen(false); 
+                  if (previousPrincipalId == null) return; 
+                  if (childTaskIds.length > 0) {
+                    toast.error('No se permite anidación de múltiples niveles');
+                    return;
+                  }
+                  await onToggleTaskHierarchy(localTask.id, previousPrincipalId); 
+                }}
+                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+              >
+                <CornerDownRight className="h-4 w-4 shrink-0" />
+                Convertir en tarea secundaria
+              </button>
+            )
+          )}
+        </>
+      )}
       <div className="my-1 h-px bg-zinc-800" />
       <HoverCard openDelay={150} closeDelay={80}>
         <HoverCardTrigger asChild>
@@ -776,27 +851,6 @@ function ManualTaskRow({
           className="w-48 p-2 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
         >
           <div className="flex flex-col gap-0 py-1">
-            {showUp && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); if (canMoveUp && onReorderUp) onReorderUp(localTask.id); else if (onMoveToPreviousCategory) onMoveToPreviousCategory(); }}
-                disabled={!upEnabled}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
-              >
-                <ChevronUp className="h-3.5 w-3.5" /> Subir
-              </button>
-            )}
-            {showDown && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); if (canMoveDown && onReorderDown) onReorderDown(localTask.id); else if (onMoveToNextCategory) onMoveToNextCategory(); }}
-                disabled={!downEnabled}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
-              >
-                <ChevronDown className="h-3.5 w-3.5" /> Bajar
-              </button>
-            )}
-            {(showUp || showDown) && <div className="my-1 h-px bg-zinc-800" />}
             {onDuplicate && (
               <button
                 type="button"
@@ -815,57 +869,29 @@ function ManualTaskRow({
                 <FolderInput className="h-3.5 w-3.5" /> Mover a…
               </button>
             )}
-            {onToggleTaskHierarchy && (
+            {childTaskIds.length > 0 && !localTask.parent_id && (
               <>
                 <div className="my-1 h-px bg-zinc-800" />
-                {childTaskIds.length > 0 && !localTask.parent_id && (
-                  <button
-                    type="button"
-                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds); else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null); }}
-                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    Convertir subtareas en principales
-                  </button>
-                )}
-                {localTask.parent_id ? (
-                  <button
-                    type="button"
-                    onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); await onToggleTaskHierarchy(localTask.id, null); }}
-                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    Convertir en tarea principal
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={async (e) => { 
-                      e.stopPropagation(); 
-                      setHoverOpen(false); 
-                      if (previousPrincipalId == null) return; 
-                      if (childTaskIds.length > 0) {
-                        toast.error('No se permite anidación de múltiples niveles');
-                        return;
-                      }
-                      await onToggleTaskHierarchy(localTask.id, previousPrincipalId); 
-                    }}
-                    disabled={previousPrincipalId == null || childTaskIds.length > 0}
-                    className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
-                    title={childTaskIds.length > 0 ? 'Las tareas con subtareas no pueden ser secundarias' : undefined}
-                  >
-                    Convertir en tarea secundaria
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds); else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null); }}
+                  className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+                >
+                  Convertir subtareas en principales
+                </button>
               </>
             )}
-            {(onToggleTaskHierarchy || showUp || showDown) && <div className="my-1 h-px bg-zinc-800" />}
             {onManualTaskDelete && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setDeleteConfirmOpen(true); }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Eliminar
-              </button>
+              <>
+                <div className="my-1 h-px bg-zinc-800" />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setDeleteConfirmOpen(true); }}
+                  className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                </button>
+              </>
             )}
           </div>
         </HoverCardContent>
@@ -969,9 +995,12 @@ function ManualTaskRow({
           currentCategory={stageCategory}
           currentCatalogCategoryId={localTask.catalog_category_id}
           secciones={secciones}
-          onConfirm={(category, catalogCategoryId, catalogCategoryNombre) =>
+          customCategoriesBySectionStage={customCategoriesBySectionStage}
+          categoriesWithDataByStage={categoriesWithDataByStage}
+          onConfirm={(category, catalogCategoryId, catalogCategoryNombre, shouldActivateStage) =>
             onMoveToStage(localTask.id, category, catalogCategoryId, catalogCategoryNombre)
           }
+          onAddCustomCategory={onAddCustomCategory}
         />
       )}
       <TaskNotesSheet
@@ -985,7 +1014,7 @@ function ManualTaskRow({
       />
     </>
   );
-}
+}, areEqualManualTask);
 
 function SchedulerItem({
   item,
@@ -1221,7 +1250,8 @@ function SchedulerItem({
 const EMPTY_STAGE_SEGMENTS: import('../../utils/scheduler-section-stages').StageSegment[] = [];
 
 export const SchedulerSidebar = React.memo(({
-  secciones,
+  secciones: seccionesProp,
+  fullSecciones: fullSeccionesProp,
   itemsMap,
   manualTasks = [],
   studioSlug,
@@ -1253,7 +1283,6 @@ export const SchedulerSidebar = React.memo(({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
-  onMoveCategory,
   onRenameCustomCategory,
   onDeleteCustomCategory,
   onItemTaskReorder: _onItemTaskReorder,
@@ -1269,11 +1298,117 @@ export const SchedulerSidebar = React.memo(({
   googleCalendarEnabled = false,
   sidebarWidth = 340,
   ghostPortalEl,
+  timestamp,
+  onCategoriesReordered,
 }: SchedulerSidebarProps) => {
+  /** Ordena secciones por order de categorías (Visual Order = Logical Order desde el primer render). */
+  const sortSeccionesByCategoryOrder = useCallback((secciones: typeof seccionesProp) => {
+    return (secciones ?? []).map((sec) => ({
+      ...sec,
+      categorias: [...(sec.categorias ?? [])].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+    }));
+  }, []);
+
   const [isMounted, setIsMounted] = useState(false);
+  const [localSecciones, setLocalSecciones] = useState(() => sortSeccionesByCategoryOrder(seccionesProp));
+  const [isReordering, setIsReordering] = useState(false);
+  
+  // Clave estable (string) para que el useEffect tenga siempre 1 dependencia y no cambie de tamaño
+  const seccionesPropKey = useMemo(
+    () =>
+      (seccionesProp ?? [])
+        .map((s) => `${s.id}:${(s.categorias ?? []).map((c) => `${c.id}=${c.order}`).join(',')}`)
+        .join('|'),
+    [seccionesProp]
+  );
+  
   useEffect(() => {
     setIsMounted(true);
   }, []);
+  
+  // Sincronizar con props cuando cambien externamente (clonar y ordenar profundamente)
+  useEffect(() => {
+    setLocalSecciones(sortSeccionesByCategoryOrder(seccionesProp ?? []));
+  }, [seccionesPropKey, sortSeccionesByCategoryOrder]);
+
+  const router = useRouter();
+
+  const handleLocalMoveCategory = useCallback(
+    async (sectionIdInput: string, categoryIdInput: string, direction: 'up' | 'down') => {
+      // Mismo ID: exacto, o uno termina en el otro (CUID completo vs últimos 8 chars). Normalizar string.
+      const sameCategoryId = (a: string | undefined, b: string | undefined) => {
+        const x = a != null ? String(a).trim() : '';
+        const y = b != null ? String(b).trim() : '';
+        if (x === '' || y === '') return false;
+        return x === y || x.endsWith(y) || y.endsWith(x);
+      };
+
+      const searchIn =
+        fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
+
+      let sectionIndex = searchIn.findIndex((s) =>
+        (s.categorias ?? []).some((c) => sameCategoryId(c?.id, categoryIdInput))
+      );
+
+      // Fallback: buscar por sectionId del click (por si la categoría no matchea por id en searchIn).
+      if (sectionIndex === -1 && sectionIdInput) {
+        const bySectionId = searchIn.findIndex(
+          (s) => (s.id != null && sectionIdInput != null && (s.id === sectionIdInput || s.id.endsWith(sectionIdInput) || sectionIdInput.endsWith(s.id)))
+        );
+        if (bySectionId >= 0) {
+          const sec = searchIn[bySectionId];
+          const hasCat = (sec.categorias ?? []).some((c) => sameCategoryId(c?.id, categoryIdInput));
+          if (hasCat) sectionIndex = bySectionId;
+        }
+      }
+
+      if (sectionIndex === -1) {
+        toast.error('Categoría no encontrada');
+        return;
+      }
+
+      const section = searchIn[sectionIndex];
+      const categories = [...(section.categorias ?? [])];
+
+      const currentIndex = categories.findIndex((c) => sameCategoryId(c?.id, categoryIdInput));
+
+      if (currentIndex === -1) {
+        toast.error('Categoría no encontrada en esta sección');
+        return;
+      }
+
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= categories.length) return;
+
+      const currentCat = categories[currentIndex]!;
+      const targetCat = categories[targetIndex]!;
+
+      [categories[currentIndex], categories[targetIndex]] = [targetCat, currentCat];
+
+      const newCategories = categories.map((c, idx) => ({ ...c, order: idx }));
+
+      setLocalSecciones((prev) =>
+        prev.map((s) => (s.id === section.id ? { ...s, categorias: newCategories } : s))
+      );
+
+      try {
+        const { reorderCategoriesByStage } = await import('@/lib/actions/studio/business/events/scheduler-actions');
+        const idsToSend = newCategories.map((c) => c.id);
+        const response = await reorderCategoriesByStage(studioSlug, section.id, idsToSend);
+
+        if (response.success) {
+          startTransition(() => router.refresh());
+          onCategoriesReordered?.();
+        } else {
+          toast.error(response.error ?? 'Error al guardar el orden');
+        }
+      } catch {
+        toast.error('Error al guardar el orden');
+      }
+    },
+    [localSecciones, fullSeccionesProp, studioSlug, router, onCategoriesReordered]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1289,18 +1424,68 @@ export const SchedulerSidebar = React.memo(({
     },
     [activeDragData]
   );
+  
+  // Key que representa el orden actual de categorías: al cambiar (Optimistic UI o props), React re-pinta la lista
+  const seccionesOrderKey = useMemo(
+    () =>
+      localSecciones
+        .map((s) => (s.categorias ?? []).map((c) => c.id).join('-'))
+        .join('|'),
+    [localSecciones]
+  );
+  
   const rows = useMemo(
     () =>
       buildSchedulerRows(
-        secciones,
+        localSecciones,
         itemsMap,
         manualTasks,
         activeSectionIds,
         explicitlyActivatedStageIds,
         customCategoriesBySectionStage
       ),
-    [explicitlyActivatedStageIds, secciones, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
+    [explicitlyActivatedStageIds, localSecciones, seccionesOrderKey, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
   );
+  
+  /** Construir mapa de categorías con datos por estado (stageKey -> Set<categoryId>) */
+  const categoriesWithDataByStage = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    
+    // Recorrer todas las filas para identificar qué categorías tienen tareas en cada estado
+    rows.forEach((row) => {
+      if (row.type === 'category') {
+        // SchedulerCategoryRow tiene: id, label, sectionId, stageId
+        const categoryRow = row as { id: string; stageId: string; sectionId: string; label: string };
+        const stageId = categoryRow.stageId; // formato: sectionId-STAGE
+        
+        // Buscar la categoría en el catálogo de la sección por nombre (label). Sort por order para consistencia.
+        const section = localSecciones.find(s => s.id === categoryRow.sectionId);
+        if (section) {
+          const sortedCats = [...(section.categorias ?? [])].sort((a, b) => (Number(a.order) ?? 0) - (Number(b.order) ?? 0));
+          const category = sortedCats.find(cat => cat.nombre === categoryRow.label);
+          if (category) {
+            if (!map.has(stageId)) {
+              map.set(stageId, new Set<string>());
+            }
+            map.get(stageId)!.add(category.id);
+          }
+        }
+        
+        // También verificar si es una categoría personalizada
+        const customCats = customCategoriesBySectionStage.get(stageId) || [];
+        const customCat = customCats.find(cat => cat.name === categoryRow.label);
+        if (customCat) {
+          if (!map.has(stageId)) {
+            map.set(stageId, new Set<string>());
+          }
+          map.get(stageId)!.add(customCat.id);
+        }
+      }
+    });
+    
+    return map;
+  }, [rows, localSecciones, customCategoriesBySectionStage]);
+  
   const sectionTaskCounts = useMemo(() => getSectionTaskCounts(rows), [rows]);
   const [internalCollapsedCategoryIds, setInternalCollapsedCategoryIds] = useState<Set<string>>(new Set());
   const collapsedCategoryIds = collapsedCategoryIdsProp !== undefined ? collapsedCategoryIdsProp : internalCollapsedCategoryIds;
@@ -1366,6 +1551,7 @@ export const SchedulerSidebar = React.memo(({
         else next.add(categoryRowId);
         return next;
       });
+      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
     [setCollapsedCategoryIds]
   );
@@ -1467,17 +1653,21 @@ export const SchedulerSidebar = React.memo(({
         onDragOver={onSchedulerDragOver}
         onDragEnd={onSchedulerDragEnd}
       >
+        {/* Key por orden + timestamp: fuerza re-render cuando cambia el orden o tras reordenar (anti-caché) */}
+        <div key={`${seccionesOrderKey}-${timestamp ?? 0}`} className="contents">
         {sectionGroups.map((group, groupIdx) => {
           const isLastSection = groupIdx === sectionGroups.length - 1;
           const sectionBlock = group.blocks[0];
           const stageBlocks = group.blocks.slice(1);
+          // section del estado local para que el render refleje siempre localSecciones
+          const sectionFromLocal = localSecciones.find((s) => s.id === group.sectionId);
           return (
             <React.Fragment key={group.sectionId}>
               {sectionBlock?.type === 'section' && (() => {
             const block = sectionBlock;
             const sectionExpanded = isSectionExpanded(block.row.id);
             const taskCount = sectionTaskCounts.get(block.row.id) ?? 0;
-            const sectionData = secciones.find((s) => s.id === block.row.id);
+            const sectionData = sectionFromLocal ?? localSecciones.find((s) => s.id === block.row.id);
             const stageIdsWithData = stageIdsWithDataBySection.get(block.row.id) ?? new Set<string>();
             return (
               <div
@@ -1585,13 +1775,31 @@ export const SchedulerSidebar = React.memo(({
                     const categoryRow = segment.categoryRow;
                     const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
                     const orderedCategories = categoryRows.map((r) => ({
-                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, secciones),
+                      id: getCatalogCategoryIdFromCategoryRow(r, stageRow.sectionId, localSecciones),
                       name: r.label,
                     }));
                     const catRow = categoryRow && isCategoryRow(categoryRow) ? categoryRow : null;
                     const segments = stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS;
+                    let catalogCategoryIdForKey: string | null = null;
+                    if (catRow) {
+                      const catPrefix = `${catRow.stageId}-cat-`;
+                      const categoryId = catRow.id.startsWith(catPrefix) ? catRow.id.slice(catPrefix.length) : '';
+                      catalogCategoryIdForKey = getCatalogCategoryIdFromCategoryRow(catRow, stageRow.sectionId, localSecciones);
+                      if (!catalogCategoryIdForKey) catalogCategoryIdForKey = categoryId || null;
+                    }
+                    const categoriaOrder =
+                      catRow && catalogCategoryIdForKey
+                        ? (() => {
+                            const sec = localSecciones.find((s) => s.id === catRow.sectionId);
+                            const cat = sec?.categorias?.find(
+                              (c) => String(c.id).trim() === String(catalogCategoryIdForKey).trim() || c.nombre === catRow?.label
+                            );
+                            return Number(cat?.order) ?? Number((cat as { orden?: number })?.orden) ?? segIdx;
+                          })()
+                        : segIdx;
+                    const segmentKey = catRow ? `${catRow.id}-${categoriaOrder}` : segment.rows[0]?.id ?? `seg-${segIdx}`;
                     return (
-                      <React.Fragment key={catRow?.id ?? `seg-${segIdx}`}>
+                      <React.Fragment key={segmentKey}>
                         {!catRow &&
                           segment.rows
                             .filter((r) => isAddPhantomRow(r) || isAddCategoryPhantomRow(r))
@@ -1659,11 +1867,28 @@ export const SchedulerSidebar = React.memo(({
                         {catRow && (() => {
                           const catPrefix = `${catRow.stageId}-cat-`;
                           const categoryId = catRow.id.startsWith(catPrefix) ? catRow.id.slice(catPrefix.length) : '';
-                          const catalogCategoryId = getCatalogCategoryIdFromCategoryRow(catRow, stageRow.sectionId, secciones);
+                          let catalogCategoryId = getCatalogCategoryIdFromCategoryRow(catRow, stageRow.sectionId, localSecciones);
                           const customList = customCategoriesBySectionStage.get(catRow.stageId) ?? [];
-                          const isCustomCategory = customList.some((c) => c.id === categoryId);
-                          const canMoveUp = onMoveCategory && catalogCategoryId && segIdx > 0;
-                          const canMoveDown = onMoveCategory && catalogCategoryId && segIdx < segments.length - 1;
+                          if (!catalogCategoryId) catalogCategoryId = categoryId || null;
+                          const isLikelyName = catalogCategoryId && /^\s*.+\s+\(\d{10,}\)\s*$/.test(catalogCategoryId);
+                          if (isLikelyName && customList.length > 0) {
+                            const byId = customList.find((c) => String(c.id).trim() === String(catalogCategoryId).trim());
+                            const byName = customList.find(
+                              (c) =>
+                                normalizeCategoryNameForSearch(c.name) === normalizeCategoryNameForSearch(catalogCategoryId ?? '') ||
+                                String(catalogCategoryId).replace(/\s*\(\d{10,}\)\s*$/, '').trim() === c.name
+                            );
+                            if (byId) catalogCategoryId = byId.id;
+                            else if (byName) catalogCategoryId = byName.id;
+                          }
+                          const isInCustomList =
+                            customList.some((c) => String(c.id).trim() === String(categoryId).trim()) ||
+                            customList.some((c) => String(c.id).trim() === String(catalogCategoryId ?? '').trim());
+                          const hasCustomNamePattern = /^\s*.+\s+\(\d{10,}\)\s*$/.test(catRow.label ?? '');
+                          const hasTypoLegacy = /peronalizada/i.test(catRow.label ?? '');
+                          const isCustomCategory = isInCustomList || hasCustomNamePattern || hasTypoLegacy;
+                          const canMoveUp = catalogCategoryId && Number(segIdx) > 0;
+                          const canMoveDown = catalogCategoryId && Number(segIdx) < Number(segments.length) - 1;
                           const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
                           const isCategoryCollapsed = collapsedCategoryIds.has(catRow.id);
                           const isEditCatOpen =
@@ -1671,14 +1896,24 @@ export const SchedulerSidebar = React.memo(({
                             addPopoverContext.sectionId === catRow.sectionId &&
                             addPopoverContext.stage === stageRow.category &&
                             addPopoverContext.categoryId === categoryId;
+                          
+                          // Obtener order de la DB para forzar re-render cuando cambie el orden
+                          const categoryOrderFromDB = (() => {
+                            if (!catalogCategoryId) return categoriaOrder;
+                            const section = localSecciones.find((s) => s.id === catRow.sectionId);
+                            const cat = section?.categorias?.find((c) => c.id === catalogCategoryId);
+                            return cat?.order ?? categoriaOrder;
+                          })();
+                          
                           return (
-                            <React.Fragment key={catRow.id}>
+                            <React.Fragment key={`${catRow.id}-${categoryOrderFromDB}`}>
                               <CategoryDroppableHeader
                                 stageKey={stageRow.id}
                                 catalogCategoryId={catalogCategoryId}
                                 isValidDrop={isValidDrop}
                                 sectionId={catRow.sectionId}
                                 isCustomCategory={isCustomCategory}
+                                label={catRow.label}
                                 totalTasks={segmentTaskIds.length}
                                 syncedTasks={segment.rows.filter((r) => {
                                   if (isTaskRow(r)) return (r.item.scheduler_task as { sync_status?: string } | undefined)?.sync_status === 'INVITED';
@@ -1702,39 +1937,58 @@ export const SchedulerSidebar = React.memo(({
                                     {formatCategoryLabel(catRow.label)}
                                   </span>
                                 </button>
-                                {(canMoveUp || canMoveDown) && (
-                                  <span className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                    {canMoveUp && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (catalogCategoryId) onMoveCategory?.(catRow.stageId, catalogCategoryId, 'up');
-                                        }}
-                                        className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                        aria-label="Mover categoría arriba"
-                                      >
-                                        <ChevronUp className="h-3.5 w-3.5" />
-                                      </button>
+                                {((canMoveUp || canMoveDown) || isCustomCategory) && (
+                                  <span
+                                    className={`relative z-20 flex items-center gap-0.5 shrink-0 ml-0.5 transition-colors ${isCustomCategory ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                    style={{ pointerEvents: 'auto' }}
+                                  >
+                                    {(canMoveUp || canMoveDown) && (
+                                      <>
+                                        {isReordering ? (
+                                          <div className="p-2 min-w-[28px] min-h-[28px] flex items-center justify-center">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                                          </div>
+                                        ) : (
+                                          <>
+                                            {canMoveUp && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  if (catalogCategoryId) {
+                                                    handleLocalMoveCategory(catRow.sectionId, catalogCategoryId, 'up');
+                                                  }
+                                                }}
+                                                disabled={isReordering}
+                                                className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                                aria-label="Mover categoría arriba"
+                                              >
+                                                <ChevronUp className="h-3.5 w-3.5" />
+                                              </button>
+                                            )}
+                                            {canMoveDown && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  e.preventDefault();
+                                                  if (catalogCategoryId) {
+                                                    handleLocalMoveCategory(catRow.sectionId, catalogCategoryId, 'down');
+                                                  }
+                                                }}
+                                                disabled={isReordering}
+                                                className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                                aria-label="Mover categoría abajo"
+                                              >
+                                                <ChevronDown className="h-3.5 w-3.5" />
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </>
                                     )}
-                                    {canMoveDown && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (catalogCategoryId) onMoveCategory?.(catRow.stageId, catalogCategoryId, 'down');
-                                        }}
-                                        className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200"
-                                        aria-label="Mover categoría abajo"
-                                      >
-                                        <ChevronDown className="h-3.5 w-3.5" />
-                                      </button>
-                                    )}
-                                  </span>
-                                )}
-                                {isCustomCategory && (
-                                  <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-0.5">
-                                    {onRenameCustomCategory && (
+                                    {isCustomCategory && onRenameCustomCategory && (
                                       <Popover
                                         open={isEditCatOpen}
                                         onOpenChange={(open) => {
@@ -1754,7 +2008,7 @@ export const SchedulerSidebar = React.memo(({
                                                 currentName: formatCategoryLabel(catRow.label),
                                               });
                                             }}
-                                            className="p-0.5 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                            className="p-1 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 transition-colors"
                                             aria-label="Editar categoría"
                                           >
                                             <Pencil className="h-3.5 w-3.5" />
@@ -1768,7 +2022,7 @@ export const SchedulerSidebar = React.memo(({
                                             initialName={formatCategoryLabel(catRow.label)}
                                             onAdd={async () => {}}
                                             onSave={async (name) => {
-                                              await onRenameCustomCategory(catRow.sectionId, stageRow.category, categoryId, name);
+                                              await onRenameCustomCategory(catRow.sectionId, stageRow.category, catalogCategoryId ?? categoryId, name);
                                               setAddPopoverContext(null);
                                             }}
                                             onCancel={() => setAddPopoverContext(null)}
@@ -1776,24 +2030,25 @@ export const SchedulerSidebar = React.memo(({
                                         </PopoverContent>
                                       </Popover>
                                     )}
-                                    {onDeleteCustomCategory && (
+                                    {isCustomCategory && onDeleteCustomCategory && (
                                       <button
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
+                                          const realId = catalogCategoryId ?? categoryId;
                                           if (segmentTaskIds.length > 0) {
                                             setDeleteCategoryModal({
                                               open: true,
                                               sectionId: catRow.sectionId,
                                               stage: stageRow.category,
-                                              categoryId,
+                                              categoryId: realId,
                                               taskIds: segmentTaskIds,
                                             });
                                           } else {
-                                            onDeleteCustomCategory(catRow.sectionId, stageRow.category, categoryId, []);
+                                            onDeleteCustomCategory(catRow.sectionId, stageRow.category, realId, []);
                                           }
                                         }}
-                                        className="p-0.5 rounded hover:bg-red-900/40 text-zinc-400 hover:text-red-400 transition-colors"
+                                        className="p-1 rounded hover:bg-red-900/40 text-zinc-400 hover:text-red-400 transition-colors"
                                         aria-label="Eliminar categoría"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
@@ -1823,21 +2078,50 @@ export const SchedulerSidebar = React.memo(({
                       const nextCat = categoryIndex >= 0 && categoryIndex < orderedCategories.length - 1 ? orderedCategories[categoryIndex + 1]! : null;
                       const manualCatalogCategoryId = (row.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
                       const currentTaskId = row.task.id;
+                      const currentTaskParentId = (row.task as { parent_id?: string | null }).parent_id ?? null;
+                      
+                      // VERIFICACIÓN DE SEGURIDAD: Validar que el padre (si existe) esté en la misma categoría
+                      let isValidParent = false;
+                      if (currentTaskParentId) {
+                        const parentTask = segment.rows.find((r) => {
+                          if (isManualTaskRow(r)) {
+                            return r.task.id === currentTaskParentId;
+                          } else if (isTaskRow(r)) {
+                            return r.item.scheduler_task?.id === currentTaskParentId;
+                          }
+                          return false;
+                        });
+                        if (parentTask) {
+                          const parentCategoryId = isManualTaskRow(parentTask)
+                            ? (parentTask.task as { catalog_category_id?: string | null }).catalog_category_id ?? null
+                            : (parentTask.item as { catalog_category_id?: string | null }).catalog_category_id ?? null;
+                          // El padre es válido si está en la misma categoría
+                          isValidParent = parentCategoryId === manualCatalogCategoryId;
+                        }
+                      }
+                      
                       const childTaskIds = segment.rows
                         .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerManualTaskRow | import('../../utils/scheduler-section-stages').SchedulerTaskRow =>
                           (isManualTaskRow(r) && (r.task.parent_id ?? null) === currentTaskId) ||
                           (isTaskRow(r) && ((r.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null) === currentTaskId)
                         )
                         .map((r) => (isManualTaskRow(r) ? r.task.id : r.item.scheduler_task!.id));
+                      
+                      // Crear tarea con validación de parent_id
+                      const taskWithValidatedParent = {
+                        ...row.task,
+                        parent_id: isValidParent ? currentTaskParentId : null,
+                      };
+                      
                       return (
                         <ManualTaskRow
-                          key={`${row.task.id}-${(row.task as { parent_id?: string | null }).parent_id ?? 'none'}`}
-                            task={row.task}
+                          key={`${row.task.id}-${currentTaskParentId ?? 'none'}`}
+                            task={taskWithValidatedParent}
                             activeDragData={activeDragData}
                             studioSlug={studioSlug}
                             eventId={eventId}
                             stageCategory={stageRow.category}
-                            secciones={secciones}
+                            secciones={localSecciones}
                             canMoveUp={pos > 0}
                             canMoveDown={pos < taskRowsInOrder.length - 1}
                             onMoveToPreviousCategory={
@@ -1881,6 +2165,9 @@ export const SchedulerSidebar = React.memo(({
                             onAddManualTaskSubmit={onAddManualTaskSubmit}
                             onManualTaskUpdate={onManualTaskUpdate}
                             onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
+                            customCategoriesBySectionStage={customCategoriesBySectionStage}
+                            categoriesWithDataByStage={categoriesWithDataByStage}
+                            onAddCustomCategory={onAddCustomCategory}
                             sortableProps={{
                               taskId: String(row.task.id),
                               isManual: true,
@@ -1916,6 +2203,21 @@ export const SchedulerSidebar = React.memo(({
                           : (row.item as { service_category_id?: string | null }).service_category_id ?? (row.item.scheduler_task as { catalog_category_id?: string | null })?.catalog_category_id ?? null;
 
                       const itemTaskParentId = (row.item.scheduler_task as { parent_id?: string | null })?.parent_id;
+                      
+                      // VERIFICACIÓN DE SEGURIDAD: Solo mostrar como subtarea si el padre existe en el mismo segmento
+                      let isValidSubtask = false;
+                      if (itemTaskParentId) {
+                        const parentExistsInSegment = segment.rows.some((r) => {
+                          if (isTaskRow(r)) {
+                            return r.item.scheduler_task?.id === itemTaskParentId;
+                          } else if (isManualTaskRow(r)) {
+                            return r.task.id === itemTaskParentId;
+                          }
+                          return false;
+                        });
+                        isValidSubtask = parentExistsInSegment;
+                      }
+                      
                       const showAddSubtaskForItem = !itemTaskParentId && onAddManualTaskSubmit && row.item.scheduler_task?.id;
                       const st = row.item.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
                       let itemDurationDays = st?.duration_days;
@@ -1935,7 +2237,7 @@ export const SchedulerSidebar = React.memo(({
                             servicioNombre: row.servicioNombre,
                             servicioId: row.catalogItemId,
                             hideBadge: hasItemDuration,
-                            isSubtask: (itemTaskParentId ?? null) != null,
+                            isSubtask: isValidSubtask,
                             stageCategory: stageRow.category,
                           }}
                           studioSlug={studioSlug}
@@ -2123,6 +2425,7 @@ export const SchedulerSidebar = React.memo(({
             </React.Fragment>
           );
         })}
+        </div>
 
         <DragOverlay dropAnimation={null}>{null}</DragOverlay>
         {/* Overlay flotante portaleado al contenedor interno (sin fallback a body) para que sidebar z-30 lo tape */}

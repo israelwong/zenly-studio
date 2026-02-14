@@ -30,6 +30,8 @@ export {
   obtenerTareasScheduler,
   addSchedulerTaskNote,
   getSchedulerTaskNotes,
+  corregirCircularParentIdEvento,
+  resetCronogramaEvento,
 } from './scheduler-actions';
 export type { TareasSchedulerPayload, SchedulerData, SchedulerCotizacionItem, SchedulerItemForView } from './scheduler-actions';
 

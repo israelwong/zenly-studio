@@ -29,10 +29,10 @@ export function EventCronogramaCard({
     window.location.href = `/${studioSlug}/studio/business/events/${eventId}/scheduler`;
   };
 
-  const scheduler = eventData.scheduler;
-  const tasks = scheduler?.tasks || [];
+  const scheduler = eventData?.scheduler ?? null;
+  const tasks = scheduler?.tasks ?? [];
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'completed' || t.progress_percent === 100).length;
+  const completedTasks = tasks.filter((t) => t?.status === 'completed' || t?.progress_percent === 100).length;
 
   const allClassified =
     totalTasks === 0 ||
@@ -41,11 +41,15 @@ export function EventCronogramaCard({
         (t as { catalog_category_id?: string | null }).catalog_category_id &&
         (t as { category?: string }).category !== 'UNASSIGNED'
     );
-  const pendingClassify = totalTasks > 0 ? tasks.filter(
-    (t) =>
-      !(t as { catalog_category_id?: string | null }).catalog_category_id ||
-      (t as { category?: string }).category === 'UNASSIGNED'
-  ).length : 0;
+  const pendingClassify =
+    totalTasks > 0
+      ? tasks.filter(
+          (t) =>
+            !(t as { catalog_category_id?: string | null }).catalog_category_id ||
+            (t as { category?: string }).category === 'UNASSIGNED'
+        ).length
+      : 0;
+  const hasNoScheduler = !scheduler;
 
   return (
     <ZenCard>
@@ -95,10 +99,21 @@ export function EventCronogramaCard({
             )}
           </div>
         ) : (
-          <div className="text-center py-4">
+          <div className="text-center py-4 space-y-3">
             <p className="text-xs text-zinc-500">
-              No hay cronograma configurado
+              {hasNoScheduler ? 'Crear cronograma' : 'No hay cronograma configurado'}
             </p>
+            {hasNoScheduler && (
+              <ZenButton
+                variant="outline"
+                size="sm"
+                onClick={handleViewCronograma}
+                className="gap-2"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                Crear cronograma
+              </ZenButton>
+            )}
           </div>
         )}
         {totalTasks > 0 && !allClassified && (

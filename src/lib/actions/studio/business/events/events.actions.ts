@@ -18,6 +18,7 @@ import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { ordenarCotizacionItemsPorCatalogo } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import {
   EVENT_BASE_SELECT,
+  EVENT_BASE_SELECT_LAYOUT,
   COMPLETED_PAYMENTS_SELECT,
   EVENT_AGENDA_SELECT,
   EVENT_CANCEL_INCLUDE,
@@ -527,7 +528,7 @@ export interface CancelarEventoResponse {
  Timeout para queries de evento detalle (evita bloquear pool)
  */
 
-const EVENTO_DETALLE_TIMEOUT_MS = 25_000;
+const EVENTO_DETALLE_TIMEOUT_MS = 60_000;
 
 /** Select compartido para cotizacion_items en cotizaciones (estructura para ordenamiento por catálogo) */
 const COTIZACIONES_ITEMS_SELECT = {
@@ -631,35 +632,52 @@ export async function obtenerEventoDetalle(
     });
 
     if (!studio) {
+      console.error('[obtenerEventoDetalle] success: false — Studio no encontrado', { studioSlug, eventoId });
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Query 1: Evento base (event_type, contact, promise)
     const eventoBase = await prisma.studio_events.findFirst({
       where: { id: eventoId, studio_id: studio.id },
-      select: EVENT_BASE_SELECT,
+      select: EVENT_BASE_SELECT_LAYOUT,
     });
 
     if (!eventoBase) {
+      console.error('[obtenerEventoDetalle] success: false — Evento no encontrado', { studioSlug, eventoId });
       return { success: false, error: 'Evento no encontrado' };
     }
 
     if (!eventoBase.promise_id) {
+      console.error('[obtenerEventoDetalle] success: false — Evento sin promesa asociada', { studioSlug, eventoId });
       return { success: false, error: 'Evento sin promesa asociada' };
     }
 
     const promiseId = eventoBase.promise_id;
 
-    // evento base + financials + pagos + agenda. Sin cotizaciones/scheduler (dieta).
-    const [
-      financials,
-      pagos,
-      cotizacion,
-      cotizacionesPorEvento,
-      cotizacionesPorPromise,
-      scheduler,
-      agenda,
-    ] = await Promise.race([
+    const promiseExists = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { id: true },
+    });
+    if (!promiseExists) {
+      console.error('[obtenerEventoDetalle] promise_id apunta a registro inexistente', { studioSlug, eventoId, promiseId });
+      return { success: false, error: 'Promesa asociada no encontrada (integridad)' };
+    }
+
+    if (eventoBase.cotizacion_id) {
+      const cotizacionExists = await prisma.studio_cotizaciones.findUnique({
+        where: { id: eventoBase.cotizacion_id },
+        select: { id: true },
+      });
+      if (!cotizacionExists) {
+        console.error('[obtenerEventoDetalle] cotizacion_id apunta a registro inexistente', { studioSlug, eventoId, cotizacion_id: eventoBase.cotizacion_id });
+        return { success: false, error: 'Cotización asociada no encontrada (integridad)' };
+      }
+    }
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout ${EVENTO_DETALLE_TIMEOUT_MS}ms al cargar evento`)), EVENTO_DETALLE_TIMEOUT_MS)
+    );
+
+    const [financials, pagos, agenda] = await Promise.race([
       Promise.all([
         getPromiseFinancials(promiseId).catch(() => ({
           contractValue: 0,
@@ -670,21 +688,22 @@ export async function obtenerEventoDetalle(
           where: { promise_id: promiseId, status: 'completed' },
           select: COMPLETED_PAYMENTS_SELECT,
           orderBy: { payment_date: 'desc' },
+          take: 10,
         }),
-        Promise.resolve(null),
-        Promise.resolve([]),
-        Promise.resolve([]),
-        Promise.resolve(null),
         prisma.studio_agenda.findMany({
           where: { evento_id: eventoId },
           select: EVENT_AGENDA_SELECT,
           orderBy: { date: 'asc' },
+          take: 10,
         }),
       ]),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout ${EVENTO_DETALLE_TIMEOUT_MS}ms al cargar evento`)), EVENTO_DETALLE_TIMEOUT_MS)
-      ),
+      timeoutPromise,
     ]);
+
+    const cotizacion = null;
+    const cotizacionesPorEvento: unknown[] = [];
+    const cotizacionesPorPromise: unknown[] = [];
+    const scheduler = null;
 
     const todasLasCotizaciones =
       cotizacionesPorEvento.length > 0 ? cotizacionesPorEvento : cotizacionesPorPromise;
@@ -726,10 +745,10 @@ export async function obtenerEventoDetalle(
         interested_dates: evento.promise.tentative_dates
           ? (evento.promise.tentative_dates as string[])
           : null,
-        acquisition_channel_id: evento.promise.contact?.acquisition_channel_id || null,
-        social_network_id: evento.promise.contact?.social_network_id || null,
-        referrer_contact_id: evento.promise.contact?.referrer_contact_id || null,
-        referrer_name: evento.promise.contact?.referrer_name || null,
+        acquisition_channel_id: (evento.promise as { contact?: { acquisition_channel_id?: string | null } }).contact?.acquisition_channel_id ?? null,
+        social_network_id: (evento.promise as { contact?: { social_network_id?: string | null } }).contact?.social_network_id ?? null,
+        referrer_contact_id: (evento.promise as { contact?: { referrer_contact_id?: string | null } }).contact?.referrer_contact_id ?? null,
+        referrer_name: (evento.promise as { contact?: { referrer_name?: string | null } }).contact?.referrer_name ?? null,
         contact: evento.promise.contact || {
           id: '',
           name: '',
@@ -819,9 +838,16 @@ export async function obtenerEventoDetalle(
       data: eventoSerializado,
     };
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Error al obtener detalle del evento';
+    console.error('[obtenerEventoDetalle] success: false — Excepción en try', {
+      studioSlug,
+      eventoId,
+      error: msg,
+      stack: error instanceof Error ? error.stack : 'No stack',
+    });
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener detalle del evento',
+      error: msg,
     };
   }
 }

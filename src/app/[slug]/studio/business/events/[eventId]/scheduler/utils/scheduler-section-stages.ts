@@ -357,6 +357,92 @@ export function getStageIdsWithDataBySectionFromEventData(
   return bySection;
 }
 
+/** Por stageKey: IDs de categorías visibles en ese estado (catalog con tareas + custom). Solo scope del stage. */
+export function getCategoryIdsInStageFromEventData(
+  eventData: {
+    cotizaciones?: Array<{
+      cotizacion_items?: Array<{
+        scheduler_task?: { catalog_category_id?: string | null; category?: string | null } | null;
+        catalog_category_id?: string | null;
+      }> | null;
+    }> | null;
+    scheduler?: { tasks?: Array<{ catalog_category_id?: string | null; category?: string | null }> } | null;
+  },
+  secciones: SeccionData[],
+  stageKey: string,
+  customCategoriesBySectionStage: Map<string, Array<{ id: string; name: string }>>
+): string[] {
+  // Extraer sectionId y stage del stageKey (formato: "sectionId-STAGE")
+  const stageMatch = stageKey.match(/-((?:PLANNING|PRODUCTION|POST_PRODUCTION|DELIVERY))$/);
+  const sectionId = stageMatch ? stageKey.slice(0, -stageMatch[1].length - 1) : stageKey;
+  const stage = stageMatch ? stageMatch[1] : null;
+  
+  if (!stage) {
+    return [];
+  }
+  
+  const stageNorm = normalizeCategory(stage);
+  const sec = secciones.find((s) => s.id === sectionId);
+  
+  // Construir Set de IDs de categorías que tienen tareas en este stage
+  const catalogIdsInStage = new Set<string>();
+  const categoryIdToSection = buildCategoryIdToSection(secciones);
+  
+  for (const cot of eventData.cotizaciones ?? []) {
+    for (const item of cot.cotizacion_items ?? []) {
+      const task = item.scheduler_task as { category?: string | null; catalog_category_id?: string | null } | null | undefined;
+      if (!task) continue;
+      const taskCategory = normalizeCategory(task.category ?? undefined);
+      if (taskCategory !== stageNorm) continue;
+      
+      const catalogCategoryId = (item as { catalog_category_id?: string | null }).catalog_category_id ?? task.catalog_category_id ?? null;
+      if (catalogCategoryId && categoryIdToSection.get(catalogCategoryId)?.sectionId === sectionId) {
+        catalogIdsInStage.add(catalogCategoryId);
+      }
+    }
+  }
+  
+  for (const task of eventData.scheduler?.tasks ?? []) {
+    const taskCategory = normalizeCategory((task as { category?: string }).category ?? undefined);
+    if (taskCategory !== stageNorm) continue;
+    
+    const catalogCategoryId = task.catalog_category_id ?? null;
+    if (catalogCategoryId && categoryIdToSection.get(catalogCategoryId)?.sectionId === sectionId) {
+      catalogIdsInStage.add(catalogCategoryId);
+    }
+  }
+  
+  // Filtrar categorías que tienen tareas en este stage
+  const catalogInStage = [...(sec?.categorias ?? [])]
+    .filter((c) => catalogIdsInStage.has(c.id))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((c) => ({ id: c.id, order: c.order ?? 0 }));
+  
+  // FALLBACK: Si no hay tareas, usar TODAS las categorías de la sección
+  if (catalogInStage.length === 0 && (customCategoriesBySectionStage.get(stageKey) ?? []).length === 0) {
+    const allSectionCats = (sec?.categorias ?? [])
+      .map(normalizeCategoria)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    
+    return allSectionCats.map(c => c.id);
+  }
+  
+  // Combinar catalog + custom
+  const maxCatalogOrder = catalogInStage.length > 0 ? Math.max(...catalogInStage.map((c) => Number(c.order) ?? 0)) : -1;
+  const customInStage = (customCategoriesBySectionStage.get(stageKey) ?? []).map((c, i) => ({
+    id: c.id,
+    order: maxCatalogOrder + 1 + i,
+  }));
+  
+  const allCategories = [...catalogInStage, ...customInStage].sort((a, b) => {
+    const orderA = a.order ?? 999;
+    const orderB = b.order ?? 999;
+    return orderA - orderB;
+  });
+  
+  return Array.from(new Set(allCategories.map((c) => c.id)));
+}
+
 /** Por sección: IDs de categorías del catálogo que tienen al menos una tarea en esa sección. Para popover local. */
 export function getCategoryIdsWithDataBySectionFromEventData(
   eventData: {
@@ -401,6 +487,12 @@ export function getCategoryIdsWithDataBySectionFromEventData(
 }
 
 type TaskRow = SchedulerTaskRow | SchedulerManualTaskRow;
+
+/** Normaliza categoría: usa solo order (studio_section_categories). */
+function normalizeCategoria<T extends { id: string; order?: number; [k: string]: unknown }>(cat: T): T & { order: number } {
+  const order = cat.order ?? 0;
+  return { ...cat, order } as T & { order: number };
+}
 
 /** Extrae taskId y parentId de una fila de tarea (ítem o manual). */
 function getTaskIdAndParent(row: TaskRow): { taskId: string; parentId: string | null } | null {
@@ -699,23 +791,39 @@ export function buildSchedulerRows(
       });
 
       const stageId = `${sectionId}-${stage}`;
+      const sec = sectionId !== SIN_CATEGORIA_SECTION_ID ? secciones.find((s) => s.id === sectionId) : null;
+      const categoriasNorm = (sec?.categorias ?? []).map(normalizeCategoria);
+      const sortedCats = [...categoriasNorm].sort((a, b) => a.order - b.order);
+      const ordenMapById = new Map<string, number>();
+      sortedCats.forEach((c, i) => ordenMapById.set(c.id, c.order));
+
       if (isEmptyStage) {
         const customCats = customCategoriesBySectionStage?.get(stageKey) ?? [];
-        for (const cat of customCats) {
+        const customInStage = customCats.map((cat, i) => ({
+          id: cat.id,
+          label: cat.name,
+          order: ordenMapById.get(cat.id) ?? 1000 + i,
+        }));
+        const allCategories = [...customInStage].sort((a, b) => {
+          const orderA = a.order ?? 999;
+          const orderB = b.order ?? 999;
+          return orderA - orderB;
+        });
+        for (const { id: catId, label } of allCategories) {
           rows.push({
             type: 'category',
-            id: `${stageId}-cat-${cat.id}`,
-            label: cat.name,
+            id: `${stageId}-cat-${catId}`,
+            label,
             sectionId,
             stageId,
           });
           rows.push({
             type: 'add_phantom',
-            id: `${stageId}-cat-${cat.id}-add`,
+            id: `${stageId}-cat-${catId}-add`,
             sectionId,
             stageCategory: stage,
-            catalogCategoryId: cat.id,
-            categoryLabel: cat.name,
+            catalogCategoryId: catId,
+            categoryLabel: label,
           });
         }
         rows.push({
@@ -726,19 +834,72 @@ export function buildSchedulerRows(
           stageId,
         });
       } else {
-        const sec = sectionId !== SIN_CATEGORIA_SECTION_ID ? secciones.find((s) => s.id === sectionId) : null;
-        const ordenMap = new Map<string, number>();
-        sec?.categorias?.forEach((c, i) => ordenMap.set(c.nombre, c.orden ?? i));
-        const sortedCategoryKeys = [...categoryKeys].sort(
-          (a, b) => (ordenMap.get(a) ?? 999) - (ordenMap.get(b) ?? 999)
-        );
-        for (const categoryKey of sortedCategoryKeys) {
-          const list = byCat.get(categoryKey)!;
-          const sorted = reorderWithHierarchy([...list]);
+        const customCats = customCategoriesBySectionStage?.get(stageKey) ?? [];
+        
+        // NUEVO: Iterar sobre seccion.categorias (orden de DB) en lugar de categoryKeys (orden de ítems)
+        const categoriesToRender: Array<{ id: string; label: string; order: number; list: Array<{ order: number; row: TaskRow }> }> = [];
+        
+        // 1. Procesar categorías del catálogo (según order de DB)
+        for (const cat of sortedCats) {
+          // Buscar ítems de esta categoría en este stage
+          const categoryItems: Array<{ order: number; row: TaskRow }> = [];
+          
+          for (const list of byCat.values()) {
+            for (const item of list) {
+              const itemCatId = 
+                item.row.type === 'manual_task'
+                  ? item.row.task.catalog_category_id
+                  : item.row.type === 'task'
+                    ? ((item.row.item as { catalog_category_id?: string | null }).catalog_category_id ??
+                       (item.row.item.scheduler_task as { catalog_category_id?: string | null })?.catalog_category_id)
+                    : null;
+              
+              if (itemCatId === cat.id) {
+                categoryItems.push(item);
+              }
+            }
+          }
+          
+          // Solo renderizar si tiene ítems en este stage
+          if (categoryItems.length > 0) {
+            categoriesToRender.push({
+              id: cat.id,
+              label: cat.nombre,
+              order: cat.order,
+              list: categoryItems,
+            });
+          }
+        }
+        
+        // 2. Agregar categorías custom que tengan ítems
+        const catalogIdsRendered = new Set(categoriesToRender.map(c => c.id));
+        for (const customCat of customCats) {
+          if (catalogIdsRendered.has(customCat.id)) continue;
+          
+          const customItems = byCat.get(customCat.name) ?? [];
+          if (customItems.length > 0) {
+            categoriesToRender.push({
+              id: customCat.id,
+              label: customCat.name,
+              order: ordenMapById.get(customCat.id) ?? 1000,
+              list: customItems as Array<{ order: number; row: TaskRow }>,
+            });
+          }
+        }
+        
+        // 3. Ordenar por order con fallback explícito (a prueba de balas)
+        const allCategories = categoriesToRender.sort((a, b) => {
+          const orderA = a.order ?? 999;
+          const orderB = b.order ?? 999;
+          return orderA - orderB;
+        });
+        
+        for (const { id: catId, label, list } of allCategories) {
+          const sorted = list.length > 0 ? reorderWithHierarchy([...list]) : [];
           rows.push({
             type: 'category',
-            id: `${stageId}-cat-${categoryKey}`,
-            label: categoryKey,
+            id: `${stageId}-cat-${catId}`,
+            label,
             sectionId,
             stageId,
           });
@@ -747,11 +908,11 @@ export function buildSchedulerRows(
           }
           rows.push({
             type: 'add_phantom',
-            id: `${stageId}-cat-${categoryKey}-add`,
+            id: `${stageId}-cat-${catId}-add`,
             sectionId,
             stageCategory: stage,
-            catalogCategoryId: getCatalogCategoryId(sectionId, categoryKey),
-            categoryLabel: categoryKey,
+            catalogCategoryId: catId,
+            categoryLabel: label,
           });
         }
         rows.push({

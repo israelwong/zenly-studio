@@ -6,6 +6,7 @@ import { Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenConfirmModal, ZenButton } from '@/components/ui/zen';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
+import type { EventoResumenData } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { EventPanel } from '../../components/EventPanel';
 import { EventDetailHeader } from './EventDetailHeader';
 import { EventDetailToolbar } from './EventDetailToolbar';
@@ -19,6 +20,9 @@ interface EventLayoutClientProps {
   eventId: string;
   eventData: EventoDetalle;
   pipelineStages: EventPipelineStage[];
+  initialResumen?: EventoResumenData | null;
+  initialCotizacionesCount?: number;
+  initialContratosCount?: number;
   children: React.ReactNode;
 }
 
@@ -27,51 +31,43 @@ export function EventLayoutClient({
   eventId,
   eventData: initialEventData,
   pipelineStages,
+  initialResumen,
+  initialCotizacionesCount,
+  initialContratosCount,
   children,
 }: EventLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Verificar si estamos en la ruta base (sin sub-rutas como /scheduler)
   const isBaseRoute = pathname && !pathname.includes('/scheduler') && pathname.endsWith(`/events/${eventId}`);
   const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
   const [eventData, setEventData] = useState<EventoDetalle>(initialEventData);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [cotizacionesCount, setCotizacionesCount] = useState(0);
-  const [contratosCount, setContratosCount] = useState(0);
+  const [cotizacionesCount, setCotizacionesCount] = useState(initialCotizacionesCount ?? 0);
+  const [contratosCount, setContratosCount] = useState(initialContratosCount ?? 0);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
-
   useEffect(() => {
     document.title = 'Zenly Studio - Evento';
-    
-    // Cerrar overlays al montar el componente de detalle
     window.dispatchEvent(new CustomEvent('close-overlays'));
   }, []);
 
-  // Cargar datos adicionales (import directo para evitar HMR con barrel)
   useEffect(() => {
+    if (initialCotizacionesCount !== undefined && initialContratosCount !== undefined) return;
     const loadAdditionalData = async () => {
       const { obtenerCotizacionesAutorizadasCount } = await import('@/lib/actions/studio/business/events/events.actions');
       const countResult = await obtenerCotizacionesAutorizadasCount(studioSlug, eventId);
-      if (countResult.success && countResult.count !== undefined) {
-        setCotizacionesCount(countResult.count);
-      }
-
-      // Verificar contratos activos
+      if (countResult.success && countResult.count !== undefined) setCotizacionesCount(countResult.count);
       const contractsResult = await getAllEventContracts(studioSlug, eventId);
       if (contractsResult.success && contractsResult.data) {
-        const activeContracts = contractsResult.data.filter(
-          (c) => c.status !== 'CANCELLED'
-        );
-        setContratosCount(activeContracts.length > 0 ? 1 : 0);
+        const active = contractsResult.data.filter((c) => c.status !== 'CANCELLED');
+        setContratosCount(active.length > 0 ? 1 : 0);
       }
     };
-
     loadAdditionalData();
-  }, [studioSlug, eventId]);
+  }, [studioSlug, eventId, initialCotizacionesCount, initialContratosCount]);
 
   const handleCancelClick = () => setShowCancelModal(true);
 
@@ -145,6 +141,7 @@ export function EventLayoutClient({
               studioSlug={studioSlug}
               eventId={eventId}
               eventData={eventData}
+              initialResumen={initialResumen}
               onEventUpdated={async () => {
                 const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
                 const result = await obtenerEventoDetalle(studioSlug, eventId);

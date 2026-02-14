@@ -18,12 +18,14 @@ import { getContractTemplate } from '@/lib/actions/studio/business/contracts/tem
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { logCallMade, logWhatsAppSent } from '@/lib/actions/studio/commercial/promises';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
+import type { EventoResumenData } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { toast } from 'sonner';
 
 interface ResumenEventoProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
+  initialResumen?: EventoResumenData | null;
 }
 
 type ContactField = 'name' | 'phone' | 'email';
@@ -57,7 +59,7 @@ function GoogleLogoIcon({ className }: { className?: string }) {
   );
 }
 
-export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoProps) {
+export function ResumenEvento({ studioSlug, eventId, eventData, initialResumen }: ResumenEventoProps) {
   const router = useRouter();
   const [showCotizacionPreview, setShowCotizacionPreview] = useState(false);
   const [showContratoPreview, setShowContratoPreview] = useState(false);
@@ -65,8 +67,8 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
   const [loadingContratoTemplate, setLoadingContratoTemplate] = useState(false);
   const [templateContentWithPlaceholders, setTemplateContentWithPlaceholders] = useState<string | null>(null);
   const [cotizacionCompleta, setCotizacionCompleta] = useState<any>(null);
-  const [resumen, setResumen] = useState<any>(null);
-  const [loadingResumen, setLoadingResumen] = useState(true);
+  const [resumen, setResumen] = useState<EventoResumenData | null>(initialResumen ?? null);
+  const [loadingResumen, setLoadingResumen] = useState(initialResumen === undefined);
 
   const contact = eventData.contact ?? eventData.promise?.contact ?? null;
   const contactId = contact?.id ?? null;
@@ -375,13 +377,12 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
 
   // Cargar resumen del evento con snapshots inmutables
   useEffect(() => {
+    if (initialResumen !== undefined) return;
     const loadResumen = async () => {
       setLoadingResumen(true);
       try {
         const result = await obtenerResumenEventoCreado(studioSlug, eventId);
-        if (result.success && result.data) {
-          setResumen(result.data);
-        }
+        if (result.success && result.data) setResumen(result.data);
       } catch (error) {
         console.error('Error loading resumen:', error);
       } finally {
@@ -389,7 +390,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
       }
     };
     loadResumen();
-  }, [studioSlug, eventId]);
+  }, [studioSlug, eventId, initialResumen]);
 
   // Obtener datos procesados desde snapshots inmutables (igual que CotizacionAutorizadaCard)
   const cotizacionData = resumen?.cotizacion || eventData.cotizacion;

@@ -12,7 +12,6 @@ build/
 # Archivos temporales y logs
 *.log
 *.tsbuildinfo
-/docs
 /migrate
 /assets
 

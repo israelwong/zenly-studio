@@ -21,6 +21,10 @@ interface SchedulerWrapperProps {
   onPublished?: () => void;
   cotizacionId?: string;
   initialSecciones?: import('@/lib/actions/schemas/catalogo-schemas').SeccionData[];
+  /** Marca de tiempo para forzar re-render del sidebar tras reordenar categorías (key anti-caché). */
+  timestamp?: number;
+  /** Llamado tras reordenar categorías con éxito: refresh + actualizar timestamp. */
+  onCategoriesReordered?: () => void;
   /** Secciones activas (con datos o activadas por usuario). */
   activeSectionIds?: Set<string>;
   /** Keys `${sectionId}-${stage}`: etapas vacías activadas. */
@@ -31,7 +35,6 @@ interface SchedulerWrapperProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
-  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
@@ -58,6 +61,8 @@ export function SchedulerWrapper({
   onPublished,
   cotizacionId,
   initialSecciones,
+  timestamp,
+  onCategoriesReordered,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -65,7 +70,6 @@ export function SchedulerWrapper({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
-  onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
@@ -99,6 +103,8 @@ export function SchedulerWrapper({
         onDataChange={onDataChange}
         onRefetchEvent={onRefetchEvent}
         initialSecciones={initialSecciones}
+        timestamp={timestamp}
+        onCategoriesReordered={onCategoriesReordered}
         activeSectionIds={activeSectionIds}
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         stageIdsWithDataBySection={stageIdsWithDataBySection}
@@ -106,7 +112,6 @@ export function SchedulerWrapper({
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
-        onMoveCategory={onMoveCategory}
         onRenameCustomCategory={onRenameCustomCategory}
         onRemoveCustomCategory={onRemoveCustomCategory}
         isMaximized={isMaximized}

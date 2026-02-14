@@ -10,11 +10,13 @@ import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseI
 // import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
+import type { EventoResumenData } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 
 interface EventPanelProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
+  initialResumen?: EventoResumenData | null;
   onEventUpdated?: () => void;
 }
 
@@ -22,18 +24,18 @@ export function EventPanel({
   studioSlug,
   eventId,
   eventData,
+  initialResumen,
   onEventUpdated,
 }: EventPanelProps) {
   return (
     <div className="space-y-6">
-      {/* Layout de 3 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna 1: Contacto + Resumen financiero + Bitácora heredada */}
         <div className="lg:col-span-1 space-y-6">
           <ResumenEvento
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}
+            initialResumen={initialResumen}
           />
           <EventFinancialSummaryCard
             initialQuote={
@@ -82,7 +84,7 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 3: Cronograma */}
+        {/* Columna 3: Cronograma + Flujo de Trabajo */}
         <div className="lg:col-span-1 space-y-6">
           <EventSchedulerControlCard
             studioSlug={studioSlug}

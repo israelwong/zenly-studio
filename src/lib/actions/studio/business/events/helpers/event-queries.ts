@@ -1,8 +1,53 @@
 import { Prisma } from '@prisma/client';
 
 /**
+ * Query mínima para layout/detalle: solo campos necesarios para mostrar evento.
+ * Evita joins profundos (referrer_contact, acquisition_channel, social_network anidados).
+ */
+export const EVENT_BASE_SELECT_LAYOUT = {
+  id: true,
+  event_date: true,
+  status: true,
+  event_type_id: true,
+  contact_id: true,
+  promise_id: true,
+  cotizacion_id: true,
+  stage_id: true,
+  event_type: { select: { id: true, name: true } },
+  contact: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      avatar_url: true,
+      address: true,
+    },
+  },
+  promise: {
+    select: {
+      id: true,
+      event_type_id: true,
+      event_location: true,
+      name: true,
+      address: true,
+      event_date: true,
+      tentative_dates: true,
+      contact: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.studio_eventsSelect;
+
+/**
  * Query para obtener el evento base con sus relaciones principales
- * Usado en obtenerEventoDetalle
+ * Usado en obtenerEventoDetalle (flujo completo) y otros
  */
 export const EVENT_BASE_SELECT = {
   id: true,

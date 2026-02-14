@@ -27,7 +27,7 @@ function normalizeConnectionString(url: string, isPgbouncer: boolean): string {
       urlObj.searchParams.set('pgbouncer', 'true');
       urlObj.searchParams.set('connection_limit', '1');
     }
-    urlObj.searchParams.set('connect_timeout', '3');
+    urlObj.searchParams.set('connect_timeout', process.env.PRISMA_CONNECT_TIMEOUT ?? '30');
     
     return urlObj.toString();
   } catch {
@@ -125,7 +125,7 @@ if (process.env.NODE_ENV !== "production" && globalThis.__prisma) {
 
 const prisma = globalThis.__prisma || new PrismaClient({
   adapter,
-  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+  log: ['error', 'warn'],
   errorFormat: 'pretty',
 });
 

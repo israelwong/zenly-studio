@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
@@ -19,7 +19,7 @@ import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
 import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDateRangeConfig';
 import { DateRangeConflictModal } from './components/date-config/DateRangeConflictModal';
 import { useSchedulerHeaderData } from './hooks/useSchedulerHeaderData';
-import { getSectionIdsWithDataFromEventData, getStageIdsWithDataBySectionFromEventData } from './utils/scheduler-section-stages';
+import { getSectionIdsWithDataFromEventData, getStageIdsWithDataBySectionFromEventData, getCategoryIdsInStageFromEventData } from './utils/scheduler-section-stages';
 import {
   getSchedulerStaging,
   setSchedulerStaging,
@@ -72,8 +72,16 @@ export default function EventSchedulerPage() {
     }
   }, []);
 
+  const [timestamp, setTimestamp] = useState(Date.now());
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
+
+  const onCategoriesReordered = useCallback(() => {
+    startTransition(() => {
+      router.refresh();
+      setTimestamp(Date.now());
+    });
+  }, [router]);
 
   const activeSectionIds = useMemo(() => {
     if (!payload?.secciones?.length) return new Set<string>();
@@ -91,6 +99,18 @@ export default function EventSchedulerPage() {
     return getStageIdsWithDataBySectionFromEventData(payload, payload.secciones);
   }, [payload]);
 
+  useEffect(() => {
+    if (!studioSlug || typeof window === 'undefined') return;
+    const key = `scheduler-typo-fix-${studioSlug}`;
+    if (sessionStorage.getItem(key)) return;
+    import('@/lib/actions/studio/config/catalogo.actions')
+      .then(({ corregirTypoPeronalizadaCategorias }) => corregirTypoPeronalizadaCategorias(studioSlug))
+      .then((r) => {
+        if (r.success) sessionStorage.setItem(key, '1');
+      })
+      .catch(() => {});
+  }, [studioSlug]);
+
   const loadScheduler = useCallback(async () => {
     if (!eventId || !studioSlug) return;
     try {
@@ -99,6 +119,8 @@ export default function EventSchedulerPage() {
       if (result.success && result.data) {
         const data = result.data;
         setPayload(data);
+        
+        
         setDateRange(prev => {
           if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
             return {
@@ -158,14 +180,14 @@ export default function EventSchedulerPage() {
 
   const handleAddCustomCategory = useCallback(
     async (sectionId: string, stage: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
+      let trimmed = name.trim().replace(/peronalizada/gi, 'personalizada');
+      if (!trimmed) trimmed = 'Categoría Personalizada';
       const key = `${sectionId}-${stage}`;
       if (!isValidStageKey(key)) return;
       try {
         const { crearCategoria } = await import('@/lib/actions/studio/config/catalogo.actions');
         const uniqueName = `${trimmed} (${Date.now()})`;
-        const result = await crearCategoria(studioSlug, { nombre: uniqueName, orden: 0 }, sectionId);
+        const result = await crearCategoria(studioSlug, { nombre: uniqueName, order: 0 }, sectionId);
         if (result.success && result.data) {
           setCustomCategoriesBySectionStage((prev) => {
             const next = new Map(prev);
@@ -202,8 +224,7 @@ export default function EventSchedulerPage() {
         if (swapIdx < 0 || swapIdx >= list.length) return prev;
         const next = [...list];
         [next[idx], next[swapIdx]] = [next[swapIdx]!, next[idx]!];
-        const nextMap = new Map(prev);
-        nextMap.set(stageKey, next);
+        const nextMap = new Map([...prev.entries()].map(([k, v]) => [k, k === stageKey ? next : [...v]]));
         if (eventId && typeof window !== 'undefined') {
           const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
           setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(nextMap) });
@@ -216,63 +237,35 @@ export default function EventSchedulerPage() {
   );
 
   const doSwapCatalog = useCallback(
-    (sectionId: string, catalogCategoryId: string, direction: 'up' | 'down') => {
+    (sectionId: string, id1: string, id2: string) => {
       setPayload((prev) => {
         if (!prev?.secciones) return prev;
-        const secIdx = prev.secciones.findIndex((s) => s.id === sectionId);
-        if (secIdx < 0) return prev;
-        const sec = prev.secciones[secIdx]!;
-        const cats = sec.categorias ?? [];
-        const sorted = [...cats].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
-        const idx = sorted.findIndex((c) => c.id === catalogCategoryId);
-        if (idx < 0) return prev;
-        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-        if (swapIdx < 0 || swapIdx >= sorted.length) return prev;
-        const ordenMap = new Map(cats.map((c) => [c.id, c.orden ?? 0]));
-        const orderA = ordenMap.get(catalogCategoryId) ?? sorted[idx]!.orden ?? 0;
-        const orderB = ordenMap.get(sorted[swapIdx]!.id) ?? sorted[swapIdx]!.orden ?? 0;
-        const nextCats = cats.map((c) =>
-          c.id === catalogCategoryId ? { ...c, orden: orderB } : c.id === sorted[swapIdx]!.id ? { ...c, orden: orderA } : c
-        );
-        const nextSecs = [...prev.secciones];
-        nextSecs[secIdx] = { ...sec, categorias: nextCats };
-        return { ...prev, secciones: nextSecs };
+
+        const nuevasSecciones = JSON.parse(JSON.stringify(prev.secciones)) as typeof prev.secciones;
+        const sec = nuevasSecciones.find((s) => s.id === sectionId);
+        if (!sec) return prev;
+
+        const categorias = sec.categorias ?? [];
+        const cat1 = categorias.find((c) => String(c.id).trim() === String(id1).trim());
+        const cat2 = categorias.find((c) => String(c.id).trim() === String(id2).trim());
+        if (!cat1 || !cat2) return prev;
+
+        const order1 = cat1.order ?? 0;
+        const order2 = cat2.order ?? 0;
+        const nextCats = categorias.map((c) => {
+          const baseOrder = c.order ?? 0;
+          if (String(c.id).trim() === String(id1).trim()) return { ...c, order: order2 };
+          if (String(c.id).trim() === String(id2).trim()) return { ...c, order: order1 };
+          return { ...c, order: baseOrder };
+        });
+        sec.categorias = nextCats;
+        return { ...prev, secciones: nuevasSecciones };
       });
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      queueMicrotask(() => window.dispatchEvent(new CustomEvent('scheduler-structure-changed')));
     },
     []
   );
 
-  const handleMoveCategory = useCallback(
-    async (stageKey: string, catalogCategoryId: string, direction: 'up' | 'down') => {
-      const stageMatch = stageKey.match(/-((?:PLANNING|PRODUCTION|POST_PRODUCTION|DELIVERY))$/);
-      const sectionId = stageMatch ? stageKey.slice(0, -stageMatch[1].length - 1) : stageKey;
-
-      const customList = customCategoriesBySectionStage.get(stageKey) ?? [];
-      const isCustom = customList.some((c) => c.id === catalogCategoryId);
-
-      if (isCustom) {
-        doSwapCustom(stageKey, catalogCategoryId, direction);
-      } else {
-        doSwapCatalog(sectionId, catalogCategoryId, direction);
-      }
-
-      try {
-        const { reorderCategory } = await import('@/lib/actions/studio/business/events/scheduler-actions');
-        const result = await reorderCategory(studioSlug, sectionId, catalogCategoryId, direction);
-        if (!result.success) {
-          toast.error(result.error ?? 'Error al reordenar');
-          if (isCustom) doSwapCustom(stageKey, catalogCategoryId, direction);
-          else doSwapCatalog(sectionId, catalogCategoryId, direction);
-        }
-      } catch {
-        toast.error('Error al reordenar categoría');
-        if (isCustom) doSwapCustom(stageKey, catalogCategoryId, direction);
-        else doSwapCatalog(sectionId, catalogCategoryId, direction);
-      }
-    },
-    [eventId, studioSlug, customCategoriesBySectionStage, doSwapCustom, doSwapCatalog]
-  );
 
   const handleRenameCustomCategory = useCallback(
     async (sectionId: string, stage: string, categoryId: string, newName: string) => {
@@ -825,6 +818,8 @@ export default function EventSchedulerPage() {
             columnWidth={columnWidth}
             isMaximized={isMaximized}
             initialSecciones={payload.secciones}
+            timestamp={timestamp}
+            onCategoriesReordered={onCategoriesReordered}
             activeSectionIds={activeSectionIds}
             explicitlyActivatedStageIds={explicitlyActivatedStageIds}
             stageIdsWithDataBySection={stageIdsWithDataBySection}
@@ -832,7 +827,6 @@ export default function EventSchedulerPage() {
             onToggleStage={handleToggleStage}
             onAddCustomCategory={handleAddCustomCategory}
             onRemoveEmptyStage={handleRemoveEmptyStage}
-            onMoveCategory={handleMoveCategory}
             onRenameCustomCategory={handleRenameCustomCategory}
             onRemoveCustomCategory={handleRemoveCustomCategory}
             onReminderAdd={handleReminderAdd}

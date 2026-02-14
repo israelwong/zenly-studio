@@ -20,6 +20,7 @@ import {
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { getPositionFromDate, isDateInRange } from '../../utils/coordinate-utils';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+import { reconcileWithServerOrder } from '../../utils/reconcile-order';
 import { SchedulerPanel } from './SchedulerPanel';
 import {
   actualizarSchedulerTaskFechas,
@@ -82,6 +83,10 @@ interface EventSchedulerProps {
   columnWidth?: number;
   onDataChange?: (data: SchedulerViewData) => void;
   onRefetchEvent?: () => Promise<void>;
+  /** Marca de tiempo para key del sidebar (anti-caché tras reordenar). */
+  timestamp?: number;
+  /** Llamado tras reordenar categorías con éxito. */
+  onCategoriesReordered?: () => void;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -90,7 +95,6 @@ interface EventSchedulerProps {
   onToggleStage?: (sectionId: string, stage: string, enabled: boolean) => void;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => void;
   onRemoveEmptyStage?: (sectionId: string, stage: string) => void;
-  onMoveCategory?: (stageKey: string, categoryId: string, direction: 'up' | 'down') => void;
   onRenameCustomCategory?: (sectionId: string, stage: string, categoryId: string, newName: string) => Promise<void>;
   onRemoveCustomCategory?: (sectionId: string, stage: string, categoryId: string) => void;
   isMaximized?: boolean;
@@ -112,6 +116,8 @@ export const EventScheduler = React.memo(function EventScheduler({
   columnWidth = 60,
   onDataChange,
   onRefetchEvent,
+  timestamp,
+  onCategoriesReordered,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -119,7 +125,6 @@ export const EventScheduler = React.memo(function EventScheduler({
   onToggleStage,
   onAddCustomCategory,
   onRemoveEmptyStage,
-  onMoveCategory,
   onRenameCustomCategory,
   onRemoveCustomCategory,
   isMaximized,
@@ -321,10 +326,15 @@ export const EventScheduler = React.memo(function EventScheduler({
   }, []);
 
   // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
-  // No sobrescribir mientras handleReorder está en vuelo para no revertir la actualización optimista.
+  // RECONCILIACIÓN ATÓMICA: Usar el order del servidor como fuente de verdad, pero preservar actualizaciones optimistas.
   useEffect(() => {
     if (reorderInFlightRef.current) return;
-    setLocalEventData(eventData);
+    
+    setLocalEventData((prev) => {
+      // Reconciliar: el order del servidor gana, pero preservamos optimistic updates
+      const reconciled = reconcileWithServerOrder(prev, eventData);
+      return reconciled;
+    });
   }, [eventData]);
 
   // Scroll suave a la fecha indicada en URL (ej. desde AlertsPopover)
@@ -719,7 +729,8 @@ export const EventScheduler = React.memo(function EventScheduler({
       taskId: string,
       category: import('../../utils/scheduler-section-stages').TaskCategoryStage,
       catalogCategoryId?: string | null,
-      catalogCategoryNombre?: string | null
+      catalogCategoryNombre?: string | null,
+      shouldActivateStage?: boolean
     ) => {
       setUpdatingTaskId(taskId);
       try {
@@ -739,13 +750,31 @@ export const EventScheduler = React.memo(function EventScheduler({
         const nextData = { ...localEventData, scheduler: localEventData.scheduler ? { ...localEventData.scheduler, tasks: updated } : localEventData.scheduler } as any;
         setLocalEventData(nextData);
         onDataChange?.(nextData);
+        
+        // Si se debe activar el estado, agregarlo a explicitlyActivatedStageIds
+        if (shouldActivateStage && catalogCategoryId) {
+          // Buscar la sección de la categoría
+          const section = secciones.find(s => 
+            s.categorias?.some(cat => cat.id === catalogCategoryId)
+          );
+          if (section) {
+            const stageKey = `${section.id}-${category}`;
+            setExplicitlyActivatedStageIds(prev => {
+              if (prev.includes(stageKey)) return prev;
+              return [...prev, stageKey];
+            });
+          }
+        }
+        
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        
+        toast.success('Tarea movida correctamente');
       } finally {
         setUpdatingTaskId(null);
       }
     },
-    [studioSlug, eventId, localEventData, onDataChange]
+    [studioSlug, eventId, localEventData, onDataChange, secciones]
   );
 
   const handleItemTaskMoveCategory = useCallback(
@@ -976,19 +1005,18 @@ export const EventScheduler = React.memo(function EventScheduler({
       return;
     }
     
-    // REGLA ZINC: Tareas de catálogo solo pueden reordenarse en su misma categoría/estado
-    // REGLA AMBER: Tareas manuales tienen libertad total de movimiento
-    const isZincInSameScope = !activeData.isManual && 
+    // BLOQUEO CROSS-SCOPE TOTAL
+    // Ninguna tarea (Zinc o Amber, principal o secundaria) puede moverse fuera de su scope
+    const isSameScope = 
       activeData.stageKey === meta.stageKey && 
       normCat(activeData.catalogCategoryId) === normCat(meta.catalogCategoryId);
     
-    const isValid = activeData.isManual || isZincInSameScope;
-    
-    if (!isValid) {
+    if (!isSameScope) {
       setDropIndicator(null);
-      // Feedback visual: la tarea Zinc no puede ir aquí
+      // Todos los movimientos cross-scope requieren modal "Mover a otro estado"
       return;
     }
+    
     setDropIndicator({ overId, insertBefore });
   }, [taskIdToMeta, resolveActiveDragDataById, normCat]);
 
@@ -1171,95 +1199,27 @@ export const EventScheduler = React.memo(function EventScheduler({
         let adoptedCatalogForManual: { catalog_category_id: string | null; catalog_category_nombre: string | null } | null = null;
 
         if (!scopeMatch) {
-          // BLOQUEO ZINC: Tareas de catálogo no pueden moverse fuera de su categoría/estado
-          if (!isManual) {
-            toast.error('Tareas de catálogo: Solo permiten reordenamiento interno');
+          // BLOQUEO CROSS-SCOPE TOTAL
+          // Ninguna tarea puede moverse entre estados/secciones vía D&D
+          
+          // Validación especial: Si es una tarea secundaria (tiene parent_id), mostrar mensaje específico
+          const activeTask = isManual 
+            ? manualTasksForRows.find(t => t.id === activeId)
+            : null;
+          
+          if (activeTask && (activeTask as { parent_id?: string | null }).parent_id) {
+            toast.error('Las tareas secundarias no pueden moverse fuera de su tarea principal');
             window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
             return;
           }
           
-          // AMBER: Movimiento libre entre secciones/estados/categorías
-          if (isManual && overStage) {
-            // REGLA 1: ATERRIZAJE OBLIGATORIO EN CATEGORÍA
-            // Resolver categoría del destino - NUNCA puede ser null para Amber
-            const targetCategoryId = overCatResolved;
-            const targetCategoryNombre = getCatalogCategoryNombre(targetCategoryId);
-            
-            if (!targetCategoryId) {
-              toast.error('No se puede mover la tarea: categoría destino inválida');
-              window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
-              return;
-            }
-            
-            // REGLA 2: AUTO-PROMOCIÓN (Prevención de Huérfanas)
-            // Si la tarea tenía parent_id y se mueve a nuevo estado/categoría sin nuevo padre, promover a principal
-            const activeTaskEntry = combined.find((e) => e.taskId === activeId);
-            const activeTaskData = activeTaskEntry && activeTaskEntry.type === 'manual' 
-              ? activeTaskEntry.task 
-              : null;
-            const hadParent = activeTaskData && (activeTaskData as { parent_id?: string | null }).parent_id != null;
-            
-            // Determinar si debe promover a principal
-            let shouldPromoteToRoot = false;
-            if (hadParent && combinedTarget) {
-              // Verificar si NO se está soltando bajo un nuevo padre válido
-              const overTaskEntry = combinedTarget.find((e) => e.taskId === overId);
-              const overHasParent = overTaskEntry && (
-                overTaskEntry.type === 'manual' 
-                  ? !!(overTaskEntry.task as { parent_id?: string | null }).parent_id
-                  : !!(overTaskEntry.item.scheduler_task as { parent_id?: string | null })?.parent_id
-              );
-              
-              // Si over no tiene padre (es principal) Y no es nesting automático, promover
-              shouldPromoteToRoot = !overHasParent;
-            }
-            
-            if (combinedTarget) {
-              const dropIndex = combinedTarget.findIndex((e) => e.taskId === overId);
-              if (dropIndex === -1) return;
-              const targetIds = combinedTarget.map((e) => e.taskId);
-              reordered = [...targetIds.slice(0, dropIndex), activeId, ...targetIds.slice(dropIndex)];
-              taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-              taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-            }
-            
-            adoptedCatalogForManual = { 
-              catalog_category_id: targetCategoryId, 
-              catalog_category_nombre: targetCategoryNombre 
-            };
-            
-            const stageCategory = (overStage.split('-').pop() ?? 'PLANNING') as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-            const stageLabel = STAGE_LABELS[stageCategory] ?? stageCategory;
-            
-            // Ejecutar movimiento con categoría obligatoria
-            await handleManualTaskMoveStage(activeId, stageCategory, targetCategoryId, targetCategoryNombre);
-            
-            // Si debe promover, limpiar parent_id
-            if (shouldPromoteToRoot) {
-              const promoteResult = await toggleTaskHierarchy(studioSlug, eventId, activeId, null);
-              if (promoteResult.success) {
-                setLocalEventData((prev) => {
-                  const next = { ...prev };
-                  if (prev.scheduler?.tasks) {
-                    next.scheduler = {
-                      ...prev.scheduler,
-                      tasks: prev.scheduler.tasks.map((t) =>
-                        t.id === activeId ? { ...t, parent_id: null, category: stageCategory, catalog_category_id: targetCategoryId } : t
-                      ),
-                    };
-                  }
-                  return next as SchedulerViewData;
-                });
-                toast.success('Tarea movida y convertida en principal');
-              }
-            } else {
-              toast.success(`Tarea movida exitosamente a ${stageLabel}`);
-            }
-            
-            window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-            return;
-          }
-        } else {
+          toast.error('Usa el menú "Mover a otro estado" para cambiar de sección');
+          window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
+          return;
+        }
+        
+        // MISMO SCOPE: Reordenamiento local permitido
+        {
           const overIndex = combined.findIndex((e) => e.taskId === overId);
           const fromIndex = combined.findIndex((e) => e.taskId === activeId);
           if (fromIndex === -1 || overIndex === -1) return;
@@ -1287,9 +1247,9 @@ export const EventScheduler = React.memo(function EventScheduler({
             } else {
               newParentId = activeParentId; // Zinc mantiene su jerarquía
             }
-          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual) {
-            // Caso 2: NESTING AUTOMÁTICO - Amber soltada DEBAJO de cualquier principal (Zinc o Amber)
-            // Permitir adopción de nuevo padre independiente de si tenía padre anterior
+          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual && activeParentId !== null) {
+            // Caso 2: RE-PARENTING - Solo si YA era una subtarea
+            // Las tareas principales mantienen su nivel de raíz
             newParentId = overId;
           } else {
             // Caso 3: Mantener parent_id actual (reordenamiento simple)
@@ -1448,6 +1408,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           try {
             const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
             if (!result.success) {
+              // Revertir al orden anterior en caso de error
               setLocalEventDataRef.current((prev) => {
                 const next = { ...prev };
                 next.cotizaciones = prev.cotizaciones?.map((cot) => ({
@@ -1467,23 +1428,42 @@ export const EventScheduler = React.memo(function EventScheduler({
               toast.error(result.error ?? 'Error al reordenar');
               return;
             }
-            const data = localEventDataRef.current;
-            const updatedData: SchedulerViewData = {
-              ...data,
-              cotizaciones: data.cotizaciones?.map((cot) => ({
-                ...cot,
-                cotizacion_items: cot.cotizacion_items?.map((item) => {
-                  const id = item?.scheduler_task?.id;
-                  const newOrder = id != null ? p.taskIdToNewOrder.get(String(id)) : undefined;
-                  if (newOrder === undefined) return item;
-                  return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
-                }),
-              })),
-              scheduler: data.scheduler
-                ? { ...data.scheduler, tasks: (data.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
-                : undefined,
-            };
-            onDataChangeRef.current?.(updatedData);
+            
+            // RECONCILIACIÓN INMEDIATA: Usar el orden devuelto por el servidor (fuente de verdad)
+            if (result.data) {
+              const orderMap = new Map(result.data.map((t) => [t.taskId, t.newOrder]));
+              
+              setLocalEventDataRef.current((prev) => {
+                return {
+                  ...prev,
+                  cotizaciones: prev.cotizaciones?.map((cot) => ({
+                    ...cot,
+                    cotizacion_items: cot.cotizacion_items?.map((item) => {
+                      const taskId = item?.scheduler_task?.id;
+                      const newOrder = taskId ? orderMap.get(taskId) : undefined;
+                      
+                      return newOrder !== undefined && item.scheduler_task
+                        ? { ...item, scheduler_task: { ...item.scheduler_task, order: newOrder } }
+                        : item;
+                    }),
+                  })),
+                  scheduler: prev.scheduler
+                    ? {
+                        ...prev.scheduler,
+                        tasks: prev.scheduler.tasks.map((task) => {
+                          const newOrder = orderMap.get(task.id);
+                          return newOrder !== undefined ? { ...task, order: newOrder } : task;
+                        }),
+                      }
+                    : prev.scheduler,
+                } as SchedulerViewData;
+              });
+              
+              // Notificar al padre con el estado actualizado
+              const data = localEventDataRef.current;
+              onDataChangeRef.current?.(data);
+            }
+            
             toast.success('Orden guardado');
             window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
             window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
@@ -1816,18 +1796,17 @@ export const EventScheduler = React.memo(function EventScheduler({
   // Construir estructura personalizada para items sin catálogo
   // Agrupar items por sección/categoría del snapshot
   const seccionesFiltradasConItems = useMemo(() => {
-    // Primero intentar filtrar por catálogo normal
-    const seccionesConCatalogo = secciones
+    const seccionesConCatalogo = (secciones ?? [])
       .map((seccion) => ({
         ...seccion,
-        categorias: seccion.categorias
+        categorias: (seccion.categorias ?? [])
           .map((categoria) => ({
             ...categoria,
-            servicios: categoria.servicios.filter((servicio) => itemsMap.has(servicio.id)),
+            servicios: (categoria.servicios ?? []).filter((servicio) => itemsMap.has(servicio.id)),
           }))
-          .filter((categoria) => categoria.servicios.length > 0),
+          .filter((c) => (c.servicios?.length ?? 0) > 0),
       }))
-      .filter((seccion) => seccion.categorias.length > 0);
+      .filter((seccion) => (seccion.categorias?.length ?? 0) > 0);
 
     // Si hay items con catálogo, usar esa estructura
     if (seccionesConCatalogo.length > 0) {
@@ -1862,24 +1841,33 @@ export const EventScheduler = React.memo(function EventScheduler({
     });
 
     // Convertir a estructura compatible con SchedulerPanel
+    const now = new Date();
     return Array.from(seccionesMap.entries()).map(([seccionName, categoriasMap], sIndex) => ({
       id: `seccion-${sIndex}`,
       nombre: seccionName,
       descripcion: null,
-      orden: sIndex,
+      order: sIndex,
+      createdAt: now,
+      updatedAt: now,
       categorias: Array.from(categoriasMap.entries()).map(([categoryName, items], cIndex) => ({
         id: `categoria-${sIndex}-${cIndex}`,
         nombre: categoryName,
-        orden: cIndex,
+        order: cIndex,
+        createdAt: now,
+        updatedAt: now,
         servicios: items.map((item, iIndex) => ({
-          id: item.id, // Usar el id del cotizacion_item como key
+          id: item.id,
+          studioId: '',
+          servicioCategoriaId: `categoria-${sIndex}-${cIndex}`,
           nombre: item.name || item.name_snapshot || 'Sin nombre',
-          tipo: 'SERVICIO' as const,
           costo: item.cost || item.cost_snapshot || 0,
           gasto: 0,
-          utilidad_tipo: item.profit_type || item.profit_type_snapshot || 'service',
-          orden: iIndex,
-          estado: 'active',
+          tipo_utilidad: item.profit_type || item.profit_type_snapshot || 'service',
+          type: 'service',
+          order: iIndex,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
         })),
       })),
     }));
@@ -3068,6 +3056,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         onSidebarWidthChange={setSidebarWidth}
         columnWidth={columnWidth}
         secciones={seccionesFiltradasConItems}
+        fullSecciones={secciones}
         itemsMap={itemsMap}
         manualTasks={manualTasks}
         studioSlug={studioSlug}
@@ -3077,10 +3066,11 @@ export const EventScheduler = React.memo(function EventScheduler({
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         stageIdsWithDataBySection={stageIdsWithDataBySection}
         customCategoriesBySectionStage={customCategoriesBySectionStage}
+        timestamp={timestamp}
+        onCategoriesReordered={onCategoriesReordered}
         onToggleStage={onToggleStage}
         onAddCustomCategory={onAddCustomCategory}
         onRemoveEmptyStage={onRemoveEmptyStage}
-        onMoveCategory={onMoveCategory}
         onRenameCustomCategory={onRenameCustomCategory}
         onDeleteCustomCategory={handleDeleteCustomCategory}
         onTaskUpdate={handleTaskUpdate}

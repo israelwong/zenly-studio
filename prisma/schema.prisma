@@ -1149,8 +1149,11 @@ model studio_section_categories {
   id                 String                    @id @default(cuid())
   section_id         String
   category_id        String                    @unique
+  order              Int                       @default(0)
   service_categories studio_service_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
   service_sections   studio_service_sections   @relation(fields: [section_id], references: [id], onDelete: Cascade)
+
+  @@index([section_id, order])
 }
 
 model studio_item_expenses {

@@ -341,14 +341,17 @@ export function pesoPorNombreCotizacion(name: string | null | undefined, nameSna
   return 1000;
 }
 
-/** Catálogo mínimo para construir mapa de orden (sección → categoría). */
-export type CatalogoParaOrden = Array<{ id: string; orden: number; categorias: Array<{ id: string; orden: number }> }>;
+/** Catálogo mínimo para construir mapa de orden (sección → categoría). Solo order, una sola fuente de verdad. */
+export type CatalogoParaOrden = Array<{ id: string; order: number; categorias: Array<{ id: string; order: number }> }>;
 
 export function buildCategoryOrderMap(secciones: CatalogoParaOrden): Map<string, { sectionOrden: number; categoryOrden: number }> {
   const map = new Map<string, { sectionOrden: number; categoryOrden: number }>();
-  secciones.forEach((sec, sIdx) => {
-    sec.categorias.forEach((cat, cIdx) => {
-      map.set(cat.id, { sectionOrden: sec.orden ?? sIdx, categoryOrden: cat.orden ?? cIdx });
+  (secciones ?? []).forEach((sec, sIdx) => {
+    if (sec == null) return;
+    (sec.categorias ?? []).forEach((cat, cIdx) => {
+      if (cat != null && cat.id != null) {
+        map.set(cat.id, { sectionOrden: Number(sec.order) || sIdx, categoryOrden: Number(cat.order) || cIdx });
+      }
     });
   });
   return map;

@@ -19,7 +19,7 @@ export const SeccionSchema = z.object({
         .trim()
         .optional()
         .nullable(),
-    orden: z.number().int().min(0).default(0),
+    order: z.number().int().min(0).default(0),
 });
 
 /**
@@ -31,7 +31,7 @@ export const CategoriaSchema = z.object({
         .min(3, 'El nombre debe tener al menos 3 caracteres')
         .max(100, 'El nombre no puede exceder 100 caracteres')
         .trim(),
-    orden: z.number().int().min(0).default(0),
+    order: z.number().int().min(0).default(0),
 });
 
 /**
@@ -75,7 +75,7 @@ export const ServicioSchema = z.object({
         .string()
         .cuid('ID de categoría inválido'),
     status: z.enum(['active', 'inactive']).default('active'),
-    orden: z.number().int().min(0).default(0),
+    order: z.number().int().min(0).default(0),
     gastos: z.array(GastoServicioSchema).optional(),
 });
 
@@ -96,19 +96,20 @@ export const ActualizarOrdenSeccionesSchema = z.object({
     secciones: z.array(
         z.object({
             id: z.string().cuid(),
-            orden: z.number().int().min(0),
+            order: z.number().int().min(0),
         })
     ).min(1, 'Debe haber al menos una sección'),
 });
 
 /**
- * Schema para actualizar orden de múltiples categorías
+ * Schema para actualizar orden de múltiples categorías.
+ * order = índice del array (0, 1, 2... N-1). Una sola fuente de verdad.
  */
 export const ActualizarOrdenCategoriasSchema = z.object({
     categorias: z.array(
         z.object({
             id: z.string().cuid(),
-            orden: z.number().int().min(0),
+            order: z.number().int().min(0),
         })
     ).min(1, 'Debe haber al menos una categoría'),
 });
@@ -124,19 +125,20 @@ export interface SeccionData {
     id: string;
     nombre: string;
     descripcion?: string | null;
-    orden: number;
+    order: number;
     createdAt: Date;
     updatedAt: Date;
     categorias: CategoriaData[];
 }
 
 /**
- * Tipo para datos de Categoría
+ * Tipo para datos de Categoría.
+ * order = índice (0, 1, 2... N-1). Una sola fuente de verdad.
  */
 export interface CategoriaData {
     id: string;
     nombre: string;
-    orden: number;
+    order: number;
     createdAt: Date;
     updatedAt: Date;
     seccionId?: string; // ID de la sección a la que pertenece
@@ -171,7 +173,7 @@ export interface ServicioData {
     type: string; // Agregar campo type del enum
     billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación dinámica
     operational_category?: OperationalCategoryCatalog | null;
-    orden: number;
+    order: number;
     status: string;
     createdAt: Date;
     updatedAt: Date;

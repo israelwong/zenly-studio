@@ -87,7 +87,7 @@ function normalizePhase(cat: TaskCategory): PhaseKey | 'PENDING' {
 }
 
 function needsAlert(task: SchedulerTaskRow): boolean {
-  return task.category === 'UNASSIGNED' || !task.catalog_category_id;
+  return task?.category === 'UNASSIGNED' || !(task?.catalog_category_id ?? null);
 }
 
 interface SectionNode {
@@ -146,7 +146,7 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
         const res = await obtenerCatalogo(studioSlug, true);
         if (res.success && res.data) {
           setSecciones(res.data);
-          const flat = res.data.flatMap((s) => s.categorias.map((c) => ({ id: c.id, nombre: c.nombre })));
+          const flat = res.data.flatMap((s) => (s.categorias ?? []).map((c) => ({ id: c.id, nombre: c.nombre })));
           setCatalogCategories(flat);
         }
       } catch {
@@ -159,89 +159,121 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
   const categoryIdToSection = useMemo(() => {
     const map = new Map<string, { sectionId: string; sectionNombre: string; categoryNombre: string }>();
     for (const sec of secciones) {
-      for (const cat of sec.categorias) {
+      for (const cat of sec.categorias ?? []) {
         map.set(cat.id, { sectionId: sec.id, sectionNombre: sec.nombre, categoryNombre: cat.nombre });
       }
     }
     return map;
   }, [secciones]);
 
+  const catalogCategoryIds = useMemo(
+    () => new Set((secciones ?? []).flatMap((s) => (s.categorias ?? []).map((c) => c?.id).filter(Boolean))),
+    [secciones]
+  );
+
   const treeBySection: SectionNode[] = useMemo(() => {
-    const orderedTasks =
-      secciones.length > 0
-        ? ordenarPorEstructuraCanonica(tasks, secciones, (t) => t.catalog_category_id, (t) => t.name)
-        : tasks;
-    const alertTasks: SchedulerTaskRow[] = [];
-    const sectionMap = new Map<string, SectionNode>();
+    try {
+      const orderedTasks =
+        secciones.length > 0
+          ? ordenarPorEstructuraCanonica(tasks, secciones, (t) => t?.catalog_category_id ?? null, (t) => t?.name ?? null)
+          : tasks ?? [];
+      const alertTasks: SchedulerTaskRow[] = [];
+      const sectionMap = new Map<string, SectionNode>();
 
-    const getOrCreateSection = (sectionId: string, sectionNombre: string, isAlert = false) => {
-      if (!sectionMap.has(sectionId)) {
-        sectionMap.set(sectionId, {
-          sectionId,
-          sectionNombre,
-          isAlertSection: isAlert,
-          phases: PHASE_ORDER.map((phase) => ({ phase, categories: [] })),
-        });
-      }
-      return sectionMap.get(sectionId)!;
-    };
-
-    for (const t of orderedTasks) {
-      const phase = normalizePhase(t.category);
-
-      if (needsAlert(t)) {
-        alertTasks.push(t);
-        continue;
-      }
-
-      const meta = t.catalog_category_id ? categoryIdToSection.get(t.catalog_category_id) : null;
-      if (!meta) {
-        alertTasks.push(t);
-        continue;
-      }
-
-      const section = getOrCreateSection(meta.sectionId, meta.sectionNombre, false);
-      const phaseNode = section.phases.find((p) => p.phase === phase)!;
-      let catNode = phaseNode.categories.find((c) => c.categoryId === t.catalog_category_id!);
-      if (!catNode) {
-        catNode = {
-          categoryId: t.catalog_category_id!,
-          categoryNombre: meta.categoryNombre,
-          tasks: [],
-        };
-        phaseNode.categories.push(catNode);
-      }
-      catNode.tasks.push(t);
-    }
-
-    if (alertTasks.length > 0) {
-      const alertSection = getOrCreateSection(PENDING_SECTION_ID, 'Pendiente de clasificación', true);
-      for (const phase of PHASE_ORDER) {
-        const phaseNode = alertSection.phases.find((p) => p.phase === phase)!;
-        const resolvedPhase = (t: SchedulerTaskRow) =>
-          normalizePhase(t.category) === 'PENDING' ? 'PLANNING' : (normalizePhase(t.category) as PhaseKey);
-        const inPhase = alertTasks.filter((t) => resolvedPhase(t) === phase);
-        if (inPhase.length > 0) {
-          phaseNode.categories.push({
-            categoryId: '__sin_categoria__',
-            categoryNombre: 'Sin categoría',
-            tasks: inPhase,
+      const getOrCreateSection = (sectionId: string, sectionNombre: string, isAlert = false) => {
+        if (!sectionMap.has(sectionId)) {
+          sectionMap.set(sectionId, {
+            sectionId,
+            sectionNombre,
+            isAlertSection: isAlert,
+            phases: PHASE_ORDER.map((phase) => ({ phase, categories: [] })),
           });
         }
-      }
-    }
+        return sectionMap.get(sectionId)!;
+      };
 
-    const result: SectionNode[] = [];
-    if (sectionMap.has(PENDING_SECTION_ID)) {
-      result.push(sectionMap.get(PENDING_SECTION_ID)!);
-    }
-    for (const sec of secciones) {
-      if (sectionMap.has(sec.id)) {
-        result.push(sectionMap.get(sec.id)!);
+      // 1) Esqueleto: solo categorías oficiales del catálogo (las que tienen tareas se llenan en el loop).
+      for (const sec of secciones ?? []) {
+        if (sec?.id != null) getOrCreateSection(sec.id, sec.nombre ?? sec.id, false);
       }
+
+      for (const t of orderedTasks) {
+        const phase = normalizePhase(t?.category ?? 'UNASSIGNED');
+
+        if (needsAlert(t)) {
+          alertTasks.push(t);
+          continue;
+        }
+
+        const catId = t?.catalog_category_id ?? null;
+        const meta = catId ? categoryIdToSection.get(catId) : null;
+        if (!meta || !catId) {
+          alertTasks.push(t);
+          continue;
+        }
+
+        const section = getOrCreateSection(meta.sectionId, meta.sectionNombre, false);
+        const phaseNode = section.phases?.find((p) => p?.phase === phase);
+        if (!phaseNode) continue;
+        let catNode = phaseNode.categories?.find((c) => c != null && c.categoryId === catId);
+        if (!catNode) {
+          catNode = {
+            categoryId: catId,
+            categoryNombre: meta.categoryNombre,
+            tasks: [],
+          };
+          phaseNode.categories = phaseNode.categories ?? [];
+          phaseNode.categories.push(catNode);
+        }
+        catNode.tasks.push(t);
+      }
+
+      // 2) Cajón de sastre al final: "Otras tareas" para los que no encajaron.
+      if (alertTasks.length > 0) {
+        const alertSection = getOrCreateSection(PENDING_SECTION_ID, 'Otras tareas', true);
+        for (const phase of PHASE_ORDER) {
+          const phaseNode = alertSection.phases?.find((p) => p?.phase === phase);
+          if (!phaseNode) continue;
+          const resolvedPhase = (t: SchedulerTaskRow) =>
+            normalizePhase(t?.category ?? 'UNASSIGNED') === 'PENDING' ? 'PLANNING' : (normalizePhase(t?.category ?? 'UNASSIGNED') as PhaseKey);
+          const inPhase = alertTasks.filter((t) => resolvedPhase(t) === phase);
+          if (inPhase.length > 0) {
+            (phaseNode.categories ??= []).push({
+              categoryId: '__sin_categoria__',
+              categoryNombre: 'Sin categoría',
+              tasks: inPhase,
+            });
+          }
+        }
+      }
+
+      // Prioridad: primero secciones del catálogo (orden oficial), luego cajón de sastre al final.
+      const result: SectionNode[] = [];
+      for (const sec of secciones ?? []) {
+        if (sec?.id && sectionMap.has(sec.id)) result.push(sectionMap.get(sec.id)!);
+      }
+      if (sectionMap.has(PENDING_SECTION_ID)) result.push(sectionMap.get(PENDING_SECTION_ID)!);
+
+      return result;
+    } catch (err) {
+      console.error('[EventTodoList] Error al construir árbol por sección:', err);
+      // No rebotar: devolver sección "Error" con las tareas que había para mostrar algo.
+      const failedTasks = Array.isArray(tasks) ? tasks : [];
+      const errorSection: SectionNode = {
+        sectionId: '__error__',
+        sectionNombre: 'Error',
+        isAlertSection: true,
+        phases: [
+          {
+            phase: 'PLANNING',
+            categories: [{ categoryId: '__error__', categoryNombre: 'Error al cargar', tasks: failedTasks }],
+          },
+          ...PHASE_ORDER.slice(1).map((phase) => ({ phase, categories: [] as SectionNode['phases'][0]['categories'] })),
+        ],
+      };
+      return [errorSection];
     }
-    return result;
-  }, [tasks, secciones, categoryIdToSection]);
+  }, [tasks, secciones, categoryIdToSection, catalogCategoryIds]);
 
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const togglePhase = (key: string) => setOpenPhases((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -367,11 +399,18 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
           </div>
         ) : (
           <div className="space-y-1">
-            {treeBySection.map((section) => {
-              const sectionKey = section.sectionId;
-              const sectionOpen = openSections[sectionKey] ?? section.isAlertSection;
+            {treeBySection
+              .filter((section) => section != null && section.sectionId != null)
+              .map((section) => {
+                const sectionKey = section.sectionId;
+                const sectionOpen = openSections[sectionKey] ?? section.isAlertSection;
+                const sectionTaskCount = (section.phases ?? []).reduce(
+                  (acc, p) => acc + (p.categories ?? []).reduce((a, c) => a + (c?.tasks?.length ?? 0), 0),
+                  0
+                );
+                if (sectionTaskCount === 0) return null;
 
-              return (
+                return (
                 <Collapsible
                   key={sectionKey}
                   open={sectionOpen}
@@ -397,15 +436,23 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
                         {section.sectionNombre}
                       </span>
                       <span className="text-[10px] opacity-80 ml-auto">
-                        {section.phases.reduce((acc, p) => acc + p.categories.reduce((a, c) => a + c.tasks.length, 0), 0)}
+                        {(section.phases ?? []).reduce(
+                        (acc, p) => acc + (p.categories ?? []).reduce((a, c) => a + (c?.tasks?.length ?? 0), 0),
+                        0
+                      )}
                       </span>
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="pl-4 mt-1 space-y-1 border-l border-zinc-800/60 ml-2">
-                      {section.phases.map((phaseNode) => {
-                        const totalInPhase = phaseNode.categories.reduce((a, c) => a + c.tasks.length, 0);
-                        if (totalInPhase === 0) return null;
+                      {(section.phases ?? [])
+                        .filter((p) => p != null && (p.categories?.length ?? 0) > 0)
+                        .map((phaseNode) => {
+                          const totalInPhase = (phaseNode.categories ?? []).reduce(
+                            (a, c) => a + (c != null && c.tasks ? c.tasks.length : 0),
+                            0
+                          );
+                          if (totalInPhase === 0) return null;
                         const phaseKey = `${sectionKey}-${phaseNode.phase}`;
                         const phaseOpen = openPhases[phaseKey] ?? true;
                         const phaseColors = STAGE_COLORS[phaseNode.phase];
@@ -438,9 +485,11 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
                             </CollapsibleTrigger>
                             <CollapsibleContent>
                               <div className="pl-4 mt-0.5 space-y-1">
-                                {phaseNode.categories.map((cat) => {
-                                  if (cat.tasks.length === 0) return null;
-                                  const catKey = `${phaseKey}-${cat.categoryId}`;
+                                {(phaseNode.categories ?? [])
+                                  .filter((cat): cat is NonNullable<typeof cat> => cat != null && cat.categoryId != null)
+                                  .filter((cat) => (cat.tasks?.length ?? 0) > 0)
+                                  .map((cat) => {
+                                    const catKey = `${phaseKey}-${cat.categoryId}`;
                                   const catOpen = openCategories[catKey] ?? true;
 
                                   return (
@@ -581,7 +630,7 @@ function ClasificarPopoverContent({
         <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide block mb-1">
           Fase operativa
         </label>
-        <Select value={phase} onValueChange={setPhase}>
+        <Select value={phase} onValueChange={(v) => setPhase(v as unknown as PhaseKey)}>
           <SelectTrigger className="h-8 bg-zinc-800 border-zinc-700 text-xs w-full">
             <SelectValue />
           </SelectTrigger>

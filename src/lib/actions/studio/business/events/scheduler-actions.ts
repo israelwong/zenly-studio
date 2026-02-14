@@ -2,7 +2,7 @@
 
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
 import { obtenerCatalogo, actualizarOrdenCategorias } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
@@ -290,14 +290,15 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
           },
         },
       },
-      orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
+      orderBy: [{ category: 'asc' }, { order: 'asc' }],
     });
 
     const data = tareas.map((t) => {
       const fromItem = t.cotizacion_item?.service_category_id ?? t.cotizacion_item?.items?.service_category_id ?? null;
+      const catalog_category_id = t.catalog_category_id ?? fromItem ?? 'uncategorized';
       return {
         ...t,
-        catalog_category_id: t.catalog_category_id ?? fromItem ?? null,
+        catalog_category_id,
       };
     });
 
@@ -1523,13 +1524,19 @@ export async function moveSchedulerTask(
  * Reordena tareas dentro del mismo stage (mismo instance, category).
  * Israel Algorithm: subtareas siguen al padre; el order aplica a la lista plana (padre, hijos, siguiente…).
  * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... (serie continua).
+ * 
+ * @returns success + data con el orden actualizado para reconciliación inmediata en el cliente
  */
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
   eventId: string,
   taskIdsInOrder: string[]
-): Promise<{ success: boolean; error?: string }> {
-  if (taskIdsInOrder.length === 0) return { success: true };
+): Promise<{ 
+  success: boolean; 
+  data?: Array<{ taskId: string; newOrder: number }>; 
+  error?: string;
+}> {
+  if (taskIdsInOrder.length === 0) return { success: true, data: [] };
   try {
     const tasksInList = await prisma.studio_scheduler_event_tasks.findMany({
       where: { id: { in: taskIdsInOrder }, scheduler_instance: { event_id: eventId } },
@@ -1556,6 +1563,9 @@ export async function reorderSchedulerTasksToOrder(
     const allSameStage = tasksInList.every((t) => t.scheduler_instance_id === instanceId && t.category === targetCategory);
     if (!allSameStage) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
 
+    // Capturar el orden actualizado para devolverlo al cliente
+    const reorderedTasks: Array<{ taskId: string; newOrder: number }> = [];
+
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < taskIdsInOrder.length; i++) {
         const task = tasksInList.find((t) => t.id === taskIdsInOrder[i])!;
@@ -1567,10 +1577,13 @@ export async function reorderSchedulerTasksToOrder(
             ...(isManual ? { catalog_category_id: targetCatId } : {}),
           },
         });
+        
+        // Capturar el orden actualizado
+        reorderedTasks.push({ taskId: taskIdsInOrder[i], newOrder: i });
       }
     }, { maxWait: 5_000 });
 
-    return { success: true };
+    return { success: true, data: reorderedTasks };
   } catch (error) {
     console.error('[reorderSchedulerTasksToOrder] Error:', error);
     return {
@@ -1621,7 +1634,7 @@ export async function moverTareaManualCategoria(
         cotizacion_item_id: null,
         scheduler_instance: { event_id: eventId },
       },
-      select: { id: true, scheduler_instance_id: true, category: true, catalog_category_id: true },
+      select: { id: true, scheduler_instance_id: true, category: true, catalog_category_id: true, parent_id: true },
     });
     if (!task) {
       return { success: false, error: 'Tarea no encontrada' };
@@ -1632,12 +1645,17 @@ export async function moverTareaManualCategoria(
       (task.catalog_category_id ?? null) === (catalogCategoryId ?? null);
     if (sameCategory) return { success: true };
 
+    // LA REGLA DEL DIVORCIO OBLIGATORIO:
+    // Al cambiar estado o categoría, SIEMPRE limpiar parent_id
+    const changedScope = task.category !== validCategory || (task.catalog_category_id ?? null) !== (catalogCategoryId ?? null);
+    
     const maxOrder = await prisma.studio_scheduler_event_tasks.aggregate({
       where: {
         scheduler_instance_id: task.scheduler_instance_id,
         cotizacion_item_id: null,
         category: validCategory,
         catalog_category_id: catalogCategoryId ?? null,
+        parent_id: null, // Solo contar tareas principales en el destino
       },
       _max: { order: true },
     });
@@ -1653,6 +1671,8 @@ export async function moverTareaManualCategoria(
           category: validCategory,
           catalog_category_id: catalogCategoryId ?? null,
           order: parentOrder,
+          // DIVORCIO OBLIGATORIO: Limpiar parent_id al cruzar fronteras
+          ...(changedScope ? { parent_id: null } : {}),
         },
       });
 
@@ -1827,53 +1847,139 @@ export async function clasificarTareaScheduler(
   }
 }
 
+const SIN_CATEGORIA_SECTION_ID = '__sin_categoria__';
+
+
 /**
- * Reordena una categoría dentro de una sección (swap con la vecina).
- * Persiste en BD para que la Tarjeta de Flujo de Trabajo refleje el mismo orden.
+ * Reordena categorías por Stage/Estado.
+ * Recibe array completo de IDs en el orden deseado y actualiza studio_section_categories.
  */
-export async function reorderCategory(
+export async function reorderCategoriesByStage(
   studioSlug: string,
   sectionId: string,
-  catalogCategoryId: string,
-  direction: 'up' | 'down'
-): Promise<{ success: boolean; error?: string }> {
+  orderedCategoryIds: string[]
+): Promise<{ 
+  success: boolean; 
+  data?: Array<{ categoryId: string; newOrder: number }>; 
+  error?: string 
+}> {
+  console.log('🔵 [SERVER] reorderCategoriesByStage INICIADO', {
+    studioSlug,
+    sectionId: sectionId.slice(-8),
+    orderedCategoryIds: orderedCategoryIds.map(id => id.slice(-8)),
+    totalCategories: orderedCategoryIds.length,
+  });
+  
+  if (orderedCategoryIds.length === 0) {
+    console.log('⚠️ [SERVER] Array vacío, retornando success sin cambios');
+    return { success: true, data: [] };
+  }
+  
   try {
-    const sectionCats = await prisma.studio_section_categories.findMany({
-      where: { section_id: sectionId },
-      include: { service_categories: { select: { id: true, order: true } } },
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
     });
-    const sorted = [...sectionCats].sort(
-      (a, b) => a.service_categories.order - b.service_categories.order
-    );
-    const idx = sorted.findIndex((sc) => sc.category_id === catalogCategoryId);
-    if (idx < 0) {
-      return { success: false, error: 'Categoría no encontrada en la sección' };
+    
+    if (!studio) {
+      console.log('❌ [SERVER] Studio no encontrado');
+      return { success: false, error: 'Studio no encontrado' };
     }
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sorted.length) {
-      return { success: false, error: 'No se puede mover más en esa dirección' };
-    }
-    const catA = sorted[idx]!.service_categories;
-    const catB = sorted[swapIdx]!.service_categories;
-    const orderA = catA.order;
-    const orderB = catB.order;
-    const result = await actualizarOrdenCategorias(studioSlug, {
-      categorias: [
-        { id: catA.id, orden: orderB },
-        { id: catB.id, orden: orderA },
-      ],
+    
+    console.log('✅ [SERVER] Studio validado:', studio.id.slice(-8));
+    
+    // Leer estado ANTES de la transacción
+    const beforeState = await prisma.studio_section_categories.findMany({
+      where: { 
+        section_id: sectionId,
+        category_id: { in: orderedCategoryIds }
+      },
+      select: { category_id: true, order: true },
+      orderBy: { order: 'asc' },
     });
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-    return { success: true };
+    
+    console.log('📊 [SERVER] Estado DB ANTES:', beforeState.map(c => ({
+      id: c.category_id.slice(-8),
+      order: c.order,
+    })));
+    
+    const updatedCategories = await prisma.$transaction(async (tx) => {
+      console.log('🔄 [SERVER] Iniciando transacción DB...');
+      
+      // RE-INDEXACIÓN FORZADA (0, 1, 2...)
+      for (let i = 0; i < orderedCategoryIds.length; i++) {
+        await tx.studio_section_categories.update({
+          where: { category_id: orderedCategoryIds[i] },
+          data: { order: i },
+        });
+        console.log(`  ✏️ [SERVER] UPDATE: ${orderedCategoryIds[i].slice(-8)} → order: ${i}`);
+      }
+      
+      // Re-indexar otras categorías de la sección
+      const updatedIds = new Set(orderedCategoryIds);
+      const others = await tx.studio_section_categories.findMany({
+        where: { 
+          section_id: sectionId,
+          category_id: { notIn: orderedCategoryIds }
+        },
+        select: { category_id: true },
+        orderBy: { order: 'asc' },
+      });
+      
+      console.log(`📦 [SERVER] Otras categorías en sección: ${others.length}`);
+      
+      let nextOrder = orderedCategoryIds.length;
+      for (const cat of others) {
+        await tx.studio_section_categories.update({
+          where: { category_id: cat.category_id },
+          data: { order: nextOrder },
+        });
+        console.log(`  ➕ [SERVER] OTHER: ${cat.category_id.slice(-8)} → order: ${nextOrder}`);
+        nextOrder++;
+      }
+      
+      // Devolver todas las categorías actualizadas de la sección
+      const allCategories = await tx.studio_section_categories.findMany({
+        where: { section_id: sectionId },
+        select: { category_id: true, order: true },
+        orderBy: { order: 'asc' },
+      });
+      
+      console.log('📊 [SERVER] Estado DB DESPUÉS:', allCategories.map(c => ({
+        id: c.category_id.slice(-8),
+        order: c.order,
+      })));
+      
+      return allCategories.map(c => ({
+        categoryId: c.category_id,
+        newOrder: c.order,
+      }));
+    }, { maxWait: 5000, timeout: 10000 });
+    
+    console.log('✅ [SERVER] Transacción completada exitosamente');
+    console.log('📤 [SERVER] Retornando data:', {
+      totalUpdated: updatedCategories.length,
+      sample: updatedCategories.slice(0, 3).map(c => ({
+        id: c.categoryId.slice(-8),
+        order: c.newOrder,
+      })),
+    });
+    
+    // Revalidar: opción nuclear para que el refresh traiga datos frescos de la DB
+    revalidatePath('/', 'layout');
+    
+    console.log('🔵 [SERVER] reorderCategoriesByStage FINALIZADO con éxito');
+    
+    return { success: true, data: updatedCategories };
   } catch (error) {
+    console.error('❌ [SERVER] Error en reorderCategoriesByStage:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al reordenar categoría',
+      error: error instanceof Error ? error.message : 'Error al reordenar',
     };
   }
 }
+
 
 /**
  * Duplica una tarea manual en la misma categoría/etapa. La copia aparece justo debajo de la original:
@@ -2127,6 +2233,7 @@ export async function obtenerTareasScheduler(
   eventId: string,
   cotizacionId?: string | null
 ): Promise<{ success: boolean; data?: TareasSchedulerPayload; error?: string }> {
+  noStore();
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -2181,7 +2288,7 @@ export async function obtenerTareasScheduler(
                 select: { id: true },
               },
             },
-            orderBy: [{ category: 'asc' }, { start_date: 'asc' }],
+            orderBy: [{ category: 'asc' }, { order: 'asc' }],
           },
         },
       }),
@@ -2198,7 +2305,7 @@ export async function obtenerTareasScheduler(
           name: true,
           status: true,
           cotizacion_items: {
-            // Paridad con Card: orden inicial por category + start_date se aplica en JS (orderItemsLikeCard). Select idéntico en campos de estructura (catalog_category_id, service_category_id, items.service_category_id).
+            // Orden por task.order (BD), no por fecha. orderItemsLikeCard usa order en JS.
             orderBy: [{ order: 'asc' }],
             select: {
               ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -2279,15 +2386,15 @@ export async function obtenerTareasScheduler(
     const getName = (item: (typeof cotizacionesRows)[0]['cotizacion_items'][0]): string | null =>
       item.scheduler_task?.name ?? item.name ?? item.name_snapshot ?? null;
 
-    // Paridad con Card (obtenerSchedulerTareas): mismo orderBy [category asc, start_date asc] para orden inicial.
-    const orderItemsLikeCard = <T extends { scheduler_task?: { category?: string; start_date?: Date } | null }>(items: T[]): T[] =>
+    // Orden por task.order (BD), no por fecha. El orden de categorías viene del catálogo; no debe cambiar al mover ítems.
+    const orderItemsLikeCard = <T extends { scheduler_task?: { category?: string; order?: number } | null }>(items: T[]): T[] =>
       [...items].sort((a, b) => {
         const catA = a.scheduler_task?.category ?? 'PLANNING';
         const catB = b.scheduler_task?.category ?? 'PLANNING';
         if (catA !== catB) return catA.localeCompare(catB);
-        const dateA = a.scheduler_task?.start_date ? new Date(a.scheduler_task.start_date).getTime() : 0;
-        const dateB = b.scheduler_task?.start_date ? new Date(b.scheduler_task.start_date).getTime() : 0;
-        return dateA - dateB;
+        const orderA = a.scheduler_task?.order ?? 0;
+        const orderB = b.scheduler_task?.order ?? 0;
+        return orderA - orderB;
       });
 
     let cotizaciones = cotizacionesRows.map((c) => {
@@ -2302,7 +2409,8 @@ export async function obtenerTareasScheduler(
         status: c.status,
         cotizacion_items: orderedItems.map((item) => {
           const resolved_service_category_id = item.service_category_id ?? item.items?.service_category_id ?? null;
-          const effectiveCatalogCategoryId = item.scheduler_task?.catalog_category_id ?? resolved_service_category_id;
+          const effectiveCatalogCategoryId =
+            item.scheduler_task?.catalog_category_id ?? resolved_service_category_id ?? 'uncategorized';
           return {
             id: item.id,
             item_id: item.item_id,
@@ -2328,7 +2436,7 @@ export async function obtenerTareasScheduler(
                   const { activity_log, ...stRest } = item.scheduler_task as typeof item.scheduler_task & { activity_log?: { id: string }[] };
                   return {
                     ...stRest,
-                    catalog_category_id: effectiveCatalogCategoryId ?? item.scheduler_task.catalog_category_id,
+                    catalog_category_id: effectiveCatalogCategoryId,
                     catalog_category: item.scheduler_task.catalog_category,
                     progress_percent: item.scheduler_task.progress_percent,
                     completed_at: item.scheduler_task.completed_at,
@@ -2375,10 +2483,12 @@ export async function obtenerTareasScheduler(
             end_date: schedulerInstance.end_date,
             tasks: tasks.map((t) => {
               const { activity_log, ...taskRest } = t as typeof t & { activity_log?: { id: string }[] };
+              const catalog_category_id = t.catalog_category_id ?? 'uncategorized';
               return {
                 ...taskRest,
+                catalog_category_id,
                 catalog_category_nombre: t.catalog_category?.name ?? null,
-                catalog_section_id: getSectionIdForCategory(t.catalog_category_id ?? null),
+                catalog_section_id: getSectionIdForCategory(catalog_category_id),
                 progress_percent: t.progress_percent,
                 completed_at: t.completed_at,
                 budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
@@ -2580,6 +2690,111 @@ export async function getSchedulerTaskNotes(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al cargar notas',
+    };
+  }
+}
+
+/**
+ * Rompe referencias circulares: tareas donde id === parent_id (causan bucles infinitos).
+ * Ejecutar antes de procesar datos o como mantenimiento.
+ */
+export async function corregirCircularParentIdEvento(
+  studioSlug: string,
+  eventId: string
+): Promise<{ success: boolean; updated?: number; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({ where: { slug: studioSlug }, select: { id: true } });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId, event: { studio_id: studio.id } },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento o instancia no encontrada' };
+
+    const circular = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { scheduler_instance_id: instance.id, parent_id: { not: null } },
+      select: { id: true, parent_id: true },
+    });
+    const toFix = circular.filter((t) => t.parent_id === t.id);
+    if (toFix.length === 0) return { success: true, updated: 0 };
+
+    await prisma.studio_scheduler_event_tasks.updateMany({
+      where: { id: { in: toFix.map((t) => t.id) } },
+      data: { parent_id: null },
+    });
+    return { success: true, updated: toFix.length };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al corregir parent_id circular',
+    };
+  }
+}
+
+/**
+ * Reset cronograma de un evento (depuración/Mei y Mica):
+ * 1) Corrige parent_id circular (id === parent_id → null).
+ * 2) Opcional: borra tareas manuales (cotizacion_item_id null).
+ * 3) Opcional: elimina la instancia del scheduler (cascade borra tareas); el sistema creará una nueva limpia al entrar.
+ */
+export async function resetCronogramaEvento(
+  studioSlug: string,
+  eventId: string,
+  options?: {
+    soloLimpiarCircular?: boolean;
+    borrarManuales?: boolean;
+    eliminarInstanciaScheduler?: boolean;
+  }
+): Promise<{
+  success: boolean;
+  circularCorregidos?: number;
+  tareasEliminadas?: number;
+  instanciaEliminada?: boolean;
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({ where: { slug: studioSlug }, select: { id: true } });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId, event: { studio_id: studio.id } },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento sin instancia de cronograma' };
+
+    const circularResult = await corregirCircularParentIdEvento(studioSlug, eventId);
+    if (!circularResult.success) return circularResult;
+    const circularCorregidos = circularResult.updated ?? 0;
+
+    let tareasEliminadas = 0;
+    if (options?.borrarManuales && !options?.soloLimpiarCircular && !options?.eliminarInstanciaScheduler) {
+      const deleted = await prisma.studio_scheduler_event_tasks.deleteMany({
+        where: {
+          scheduler_instance_id: instance.id,
+          cotizacion_item_id: null,
+        },
+      });
+      tareasEliminadas = deleted.count;
+    }
+
+    let instanciaEliminada = false;
+    if (options?.eliminarInstanciaScheduler) {
+      await prisma.studio_scheduler_event_instances.delete({
+        where: { id: instance.id },
+      });
+      instanciaEliminada = true;
+    }
+
+    return {
+      success: true,
+      circularCorregidos,
+      tareasEliminadas,
+      instanciaEliminada,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al resetear cronograma',
     };
   }
 }
