@@ -2,8 +2,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { validateStudio } from './helpers/studio-validator';
-import { revalidateSchedulerPaths } from './helpers/revalidation-utils';
+import { revalidateSchedulerPaths, revalidateEventPaths } from './helpers/revalidation-utils';
 import { revalidatePath } from 'next/cache';
+import { normalizeDateToUtcDateOnly } from '@/lib/utils/date-only';
 
 /**
  * Respuesta ligera del estado del scheduler (sin cargar árbol de tareas)
@@ -18,10 +19,10 @@ export interface CheckSchedulerStatusResult {
 }
 
 /**
- * Obtener o crear instancia de Scheduler para un evento
- * Helper interno para las funciones de tareas
+ * Obtener o crear instancia de Scheduler para un evento.
+ * Exportado para uso en scheduler-custom-categories.actions.
  */
-async function obtenerOCrearSchedulerInstance(
+export async function obtenerOCrearSchedulerInstance(
   studioSlug: string,
   eventId: string,
   dateRange?: { from: Date; to: Date }
@@ -478,7 +479,24 @@ export async function actualizarRangoScheduler(
         select: { id: true },
       });
     } else {
-      // Actualizar rango existente
+      // Validación de integridad: no reducir el periodo si hay tareas fuera del nuevo rango
+      const tasks = await prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance_id: instance.id },
+        select: { start_date: true, end_date: true },
+      });
+      const newFrom = normalizeDateToUtcDateOnly(dateRange.from);
+      const newTo = normalizeDateToUtcDateOnly(dateRange.to);
+      for (const t of tasks) {
+        const taskStart = normalizeDateToUtcDateOnly(t.start_date);
+        const taskEnd = normalizeDateToUtcDateOnly(t.end_date);
+        if (taskStart.getTime() < newFrom.getTime() || taskEnd.getTime() > newTo.getTime()) {
+          return {
+            success: false,
+            error: 'No se puede reducir el periodo: existen tareas fuera del nuevo rango definido.',
+          };
+        }
+      }
+
       await prisma.studio_scheduler_event_instances.update({
         where: { id: instance.id },
         data: {
@@ -495,6 +513,66 @@ export async function actualizarRangoScheduler(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar rango',
+    };
+  }
+}
+
+/** Payload para persistir staging del Scheduler en la instancia (categorías custom y etapas activadas). */
+export interface ActualizarSchedulerStagingInput {
+  customCategoriesBySectionStage?: Array<[string, Array<{ id: string; name: string }>]>;
+  explicitlyActivatedStageIds?: string[];
+}
+
+/**
+ * Persiste staging (categorías custom y etapas explícitamente activadas) en la instancia del Scheduler.
+ * Así la Workflow Card y otras vistas obtienen la misma fuente de verdad desde obtenerEventoDetalle.
+ */
+export async function actualizarSchedulerStaging(
+  studioSlug: string,
+  eventId: string,
+  input: ActualizarSchedulerStagingInput
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studioResult = await validateStudio(studioSlug);
+    if (!studioResult.success || !studioResult.studioId) {
+      return { success: false, error: studioResult.error };
+    }
+
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId },
+      select: { id: true },
+    });
+
+    if (!instance) {
+      return { success: false, error: 'No existe instancia de Scheduler para este evento' };
+    }
+
+    const updateData: {
+      custom_categories_by_section_stage?: unknown;
+      explicitly_activated_stage_ids?: unknown;
+    } = {};
+    
+    if (input.customCategoriesBySectionStage !== undefined) {
+      updateData.custom_categories_by_section_stage = input.customCategoriesBySectionStage;
+    }
+    if (input.explicitlyActivatedStageIds !== undefined) {
+      updateData.explicitly_activated_stage_ids = input.explicitlyActivatedStageIds;
+    }
+
+    await prisma.studio_scheduler_event_instances.update({
+      where: { id: instance.id },
+      data: updateData,
+    });
+
+    await revalidateEventPaths(studioSlug, eventId);
+    await revalidateSchedulerPaths(studioSlug, eventId);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('[actualizarSchedulerStaging]', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al guardar staging',
     };
   }
 }
@@ -637,6 +715,152 @@ export async function eliminarSchedulerTask(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al eliminar tarea',
+    };
+  }
+}
+
+/**
+ * Limpieza total del scheduler de un evento (solo desarrollo / pruebas).
+ * Elimina todas las tareas y categorías custom; deja la instancia vacía para probar sincronización.
+ */
+export async function limpiarEstructuraScheduler(
+  studioSlug: string,
+  eventId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studioResult = await validateStudio(studioSlug);
+    if (!studioResult.success || !studioResult.studioId) {
+      return { success: false, error: studioResult.error };
+    }
+
+    const instance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { event_id: eventId },
+      select: { id: true },
+    });
+
+    if (!instance) {
+      await revalidateSchedulerPaths(studioSlug, eventId);
+      await revalidateEventPaths(studioSlug, eventId);
+      return { success: true };
+    }
+
+    // Borrado en transacción para asegurar atomicidad
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Obtener IDs de tareas a borrar
+      const taskIds = await tx.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance_id: instance.id },
+        select: { id: true },
+      });
+      const ids = taskIds.map((t) => t.id);
+
+      if (ids.length === 0) {
+        return { deletedTasks: 0, deletedCats: 0 };
+      }
+
+      // 2. Limpiar TODAS las FKs que apunten a estas tareas
+      await tx.studio_scheduler_event_tasks.updateMany({
+        where: { depends_on_task_id: { in: ids } },
+        data: { depends_on_task_id: null },
+      });
+
+      // Limpiar scheduler_task_id de TODOS los items del evento
+      const event = await tx.studio_events.findUnique({
+        where: { id: eventId },
+        select: { cotizacion_id: true },
+      });
+      const orClauseItems: Array<{ evento_id: string } | { id: string }> = [{ evento_id: eventId }];
+      if (event?.cotizacion_id) orClauseItems.push({ id: event.cotizacion_id });
+      
+      const cotizacionIds = await tx.studio_cotizaciones.findMany({
+        where: { OR: orClauseItems },
+        select: { id: true },
+      });
+      
+      if (cotizacionIds.length > 0) {
+        await tx.studio_cotizacion_items.updateMany({
+          where: { cotizacion_id: { in: cotizacionIds.map(c => c.id) } },
+          data: { scheduler_task_id: null },
+        });
+      }
+
+      await tx.studio_external_service_sales.updateMany({
+        where: { scheduler_task_id: { in: ids } },
+        data: { scheduler_task_id: null },
+      });
+
+      // 3. Borrar activity log
+      await tx.studio_scheduler_task_activity.deleteMany({
+        where: { task_id: { in: ids } },
+      });
+
+      // 4. Borrar tareas
+      const deletedTasks = await tx.studio_scheduler_event_tasks.deleteMany({
+        where: { id: { in: ids } },
+      });
+
+      // 5. Verificar DENTRO de la transacción
+      const taskCountAfter = await tx.studio_scheduler_event_tasks.count({
+        where: { scheduler_instance_id: instance.id },
+      });
+      if (taskCountAfter > 0) {
+        throw new Error(`Falló el borrado: ${taskCountAfter} tareas permanecen en la tabla después de deleteMany`);
+      }
+
+      // 6. Borrar categorías custom
+      const deletedCats = await tx.studio_scheduler_custom_categories.deleteMany({
+        where: { scheduler_instance_id: instance.id },
+      });
+
+      return { deletedTasks: deletedTasks.count, deletedCats: deletedCats.count };
+    });
+
+    // Verificación post-commit
+    const finalCount = await prisma.studio_scheduler_event_tasks.count({
+      where: { scheduler_instance_id: instance.id },
+    });
+
+    if (finalCount > 0) {
+      // Intentar borrado directo como fallback
+      const taskIdsForDirect = await prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance_id: instance.id },
+        select: { id: true },
+      });
+      
+      if (taskIdsForDirect.length > 0) {
+        await prisma.studio_scheduler_event_tasks.updateMany({
+          where: { depends_on_task_id: { in: taskIdsForDirect.map(t => t.id) } },
+          data: { depends_on_task_id: null },
+        });
+        await prisma.studio_cotizacion_items.updateMany({
+          where: { scheduler_task_id: { in: taskIdsForDirect.map(t => t.id) } },
+          data: { scheduler_task_id: null },
+        });
+        
+        const directDelete = await prisma.studio_scheduler_event_tasks.deleteMany({
+          where: { id: { in: taskIdsForDirect.map(t => t.id) } },
+        });
+        
+        const afterDirectDelete = await prisma.studio_scheduler_event_tasks.count({
+          where: { scheduler_instance_id: instance.id },
+        });
+        
+        if (afterDirectDelete > 0) {
+          return { 
+            success: false, 
+            error: `Falló incluso el borrado directo: ${afterDirectDelete} tareas permanecen.` 
+          };
+        }
+      }
+    }
+
+    await revalidateSchedulerPaths(studioSlug, eventId);
+    await revalidateEventPaths(studioSlug, eventId);
+    return { success: true };
+  } catch (error) {
+    console.error('[SCHEDULER] Error limpiando estructura:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al limpiar estructura',
     };
   }
 }

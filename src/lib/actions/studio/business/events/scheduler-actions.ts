@@ -276,6 +276,7 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         duration_days: true,
         category: true,
         catalog_category_id: true,
+        scheduler_custom_category_id: true, // Trinity: categorías operativas (A, B, C)
         catalog_category: { select: { id: true, name: true } },
         status: true,
         progress_percent: true,
@@ -1011,6 +1012,9 @@ export async function crearTareaManualScheduler(
     name: string;
     durationDays: number;
     catalog_category_id?: string | null;
+    /** Snapshot de nombres (independencia del catálogo). Opcional; si se envían se persisten. */
+    catalog_section_name_snapshot?: string | null;
+    catalog_category_name_snapshot?: string | null;
     /** Costo estimado (budget_amount). Opcional. */
     budget_amount?: number | null;
     /** Fecha de inicio (celda clicada en grid). Si se omite, usa cascada (hoy en rango o inicio evento). */
@@ -1027,7 +1031,9 @@ export async function crearTareaManualScheduler(
     end_date: Date;
     category: string;
     catalog_category_id: string | null;
+    scheduler_custom_category_id: string | null;
     catalog_category_nombre: string | null;
+    scheduler_custom_category_nombre: string | null;
     catalog_section_id: string | null;
     parent_id: string | null;
     order: number;
@@ -1082,9 +1088,12 @@ export async function crearTareaManualScheduler(
       });
     }
 
-    const catalogCategoryId = params.catalog_category_id ?? null;
     const parentId = params.parent_id ?? null;
-
+    const rawCategoryId = params.catalog_category_id ?? null;
+    const { resolveCategoryIdForManualTask } = await import('./scheduler-custom-categories.actions');
+    const resolved = await resolveCategoryIdForManualTask(studioSlug, eventId, rawCategoryId);
+    const schedulerCustomCategoryId = resolved?.scheduler_custom_category_id ?? null;
+    const catalogCategoryId = resolved?.catalog_category_id ?? null;
     if (parentId) {
       const parent = await prisma.studio_scheduler_event_tasks.findFirst({
         where: { id: parentId, scheduler_instance_id: instance.id },
@@ -1107,16 +1116,17 @@ export async function crearTareaManualScheduler(
     type TaskRow = (typeof allEventTasks)[number];
     const normCat = (v: string | null): string | null =>
       v != null ? String(v).toLowerCase().trim() || null : null;
-    const segmentCatalogNorm = normCat(catalogCategoryId);
+    const segmentCatalogNorm = normCat(schedulerCustomCategoryId ?? catalogCategoryId);
 
     /**
      * Determina si una tarea pertenece al segmento (paridad con frontend).
      * Manual: category + catalog_category_id. Cotización: solo category (catalog suele venir null en DB).
      */
+    const taskCatNorm = (t: TaskRow) => normCat((t as { scheduler_custom_category_id?: string | null }).scheduler_custom_category_id ?? t.catalog_category_id);
     const belongsToSegment = (t: TaskRow): boolean => {
       if (t.category !== category) return false;
       const isManual = t.cotizacion_item_id == null;
-      if (isManual) return normCat(t.catalog_category_id) === segmentCatalogNorm;
+      if (isManual) return taskCatNorm(t) === segmentCatalogNorm;
       return true; // cotización: basta con que coincida la category (etapa)
     };
 
@@ -1157,21 +1167,26 @@ export async function crearTareaManualScheduler(
     const durationDays = Math.max(1, Math.min(365, Math.round(params.durationDays) || 1));
     const endDate = addDays(startDate, durationDays - 1);
 
+    const createData = {
+      scheduler_instance_id: instance.id,
+      cotizacion_item_id: null,
+      name: params.name.trim() || 'Tarea manual',
+      duration_days: durationDays,
+      category,
+      start_date: startDate,
+      end_date: toUTCNoon(endDate),
+      sync_status: 'DRAFT' as const,
+      catalog_category_id: catalogCategoryId,
+      scheduler_custom_category_id: schedulerCustomCategoryId,
+      catalog_section_id_snapshot: params.sectionId || null,
+      catalog_section_name_snapshot: params.catalog_section_name_snapshot ?? null,
+      catalog_category_name_snapshot: params.catalog_category_name_snapshot ?? null,
+      parent_id: parentId,
+      order: newOrder,
+      budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
+    };
     const task = await prisma.studio_scheduler_event_tasks.create({
-      data: {
-        scheduler_instance_id: instance.id,
-        cotizacion_item_id: null,
-        name: params.name.trim() || 'Tarea manual',
-        duration_days: durationDays,
-        category,
-        start_date: startDate,
-        end_date: toUTCNoon(endDate),
-        sync_status: 'DRAFT',
-        catalog_category_id: catalogCategoryId,
-        parent_id: parentId,
-        order: newOrder,
-        budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
-      },
+      data: createData as Parameters<typeof prisma.studio_scheduler_event_tasks.create>[0]['data'],
       select: {
         id: true,
         name: true,
@@ -1180,6 +1195,7 @@ export async function crearTareaManualScheduler(
         duration_days: true,
         category: true,
         catalog_category_id: true,
+        scheduler_custom_category_id: true,
         parent_id: true,
         order: true,
         budget_amount: true,
@@ -1187,11 +1203,12 @@ export async function crearTareaManualScheduler(
         progress_percent: true,
         completed_at: true,
         catalog_category: { select: { name: true } },
+        scheduler_custom_category: { select: { id: true, name: true } },
         assigned_to_crew_member_id: true,
         assigned_to_crew_member: {
           select: { id: true, name: true, email: true, tipo: true },
         },
-      },
+      } as Parameters<typeof prisma.studio_scheduler_event_tasks.create>[0]['select'],
     });
 
     // Reindexación atómica después del insert: mismo criterio en memoria (include + comparación normalizada).
@@ -1204,9 +1221,11 @@ export async function crearTareaManualScheduler(
       },
     });
 
+    const taskCatNormAfter = (t: (typeof allEventTasksAfter)[number]) =>
+      normCat((t as { scheduler_custom_category_id?: string | null }).scheduler_custom_category_id ?? t.catalog_category_id);
     const belongsToSegmentAfter = (t: (typeof allEventTasksAfter)[number]): boolean => {
       if (t.category !== category) return false;
-      if (t.cotizacion_item_id == null) return normCat(t.catalog_category_id) === segmentCatalogNorm;
+      if (t.cotizacion_item_id == null) return taskCatNormAfter(t) === segmentCatalogNorm;
       return true;
     };
 
@@ -1230,6 +1249,13 @@ export async function crearTareaManualScheduler(
 
     const finalOrder = segmentTasksAfter.findIndex((t) => t.id === task.id);
     const orderToReturn = finalOrder >= 0 ? finalOrder : task.order;
+    type TaskWithRelations = typeof task & {
+      catalog_category?: { name: string } | null;
+      scheduler_custom_category_id?: string | null;
+      scheduler_custom_category?: { name: string } | null;
+      assigned_to_crew_member?: { id: string; name: string; email: string | null; tipo: string } | null;
+    };
+    const t = task as TaskWithRelations;
 
     return {
       success: true,
@@ -1240,7 +1266,9 @@ export async function crearTareaManualScheduler(
         end_date: task.end_date,
         category: task.category,
         catalog_category_id: task.catalog_category_id,
-        catalog_category_nombre: task.catalog_category?.name ?? null,
+        scheduler_custom_category_id: t.scheduler_custom_category_id ?? null,
+        catalog_category_nombre: t.catalog_category?.name ?? null,
+        scheduler_custom_category_nombre: t.scheduler_custom_category?.name ?? null,
         catalog_section_id: params.sectionId ?? null,
         parent_id: parentId,
         order: orderToReturn,
@@ -1250,12 +1278,12 @@ export async function crearTareaManualScheduler(
         completed_at: task.completed_at,
         cotizacion_item_id: null,
         assigned_to_crew_member_id: task.assigned_to_crew_member_id,
-        assigned_to_crew_member: task.assigned_to_crew_member
+        assigned_to_crew_member: t.assigned_to_crew_member
           ? {
-              id: task.assigned_to_crew_member.id,
-              name: task.assigned_to_crew_member.name,
-              email: task.assigned_to_crew_member.email ?? null,
-              tipo: task.assigned_to_crew_member.tipo,
+              id: t.assigned_to_crew_member.id,
+              name: t.assigned_to_crew_member.name,
+              email: t.assigned_to_crew_member.email ?? null,
+              tipo: t.assigned_to_crew_member.tipo,
             }
           : null,
       },
@@ -2183,6 +2211,7 @@ export interface TareasSchedulerPayload {
     id: string;
     start_date: Date | null;
     end_date: Date | null;
+    custom_categories?: Array<{ id: string; name: string; section_id: string; stage: string; order: number }>;
     tasks: Array<{
       id: string;
       name: string;
@@ -2195,6 +2224,8 @@ export interface TareasSchedulerPayload {
       cotizacion_item_id: string | null;
       category: string;
       catalog_category_id: string | null;
+      scheduler_custom_category_id?: string | null;
+      scheduler_custom_category?: { id: string; name: string } | null;
       catalog_category_nombre?: string | null;
       catalog_section_id?: string | null;
       order: number;
@@ -2253,14 +2284,14 @@ export async function obtenerTareasScheduler(
     });
     if (!event) return { success: false, error: 'Evento no encontrado' };
 
-    const [schedulerInstance, cotizacionesRows, seccionesResult, remindersRows] = await Promise.all([
-      prisma.studio_scheduler_event_instances.findFirst({
-        where: { event_id: eventId },
-        select: {
-          id: true,
-          start_date: true,
-          end_date: true,
-          tasks: {
+    type InstanceWithStaging = { id: string; start_date: Date; end_date: Date; tasks: Array<Record<string, unknown>>; custom_categories_by_section_stage?: unknown; explicitly_activated_stage_ids?: unknown };
+    const schedulerSelect = {
+      id: true,
+      start_date: true,
+      end_date: true,
+      custom_categories_by_section_stage: true,
+      explicitly_activated_stage_ids: true,
+      tasks: {
             select: {
               id: true,
               name: true,
@@ -2289,9 +2320,14 @@ export async function obtenerTareasScheduler(
               },
             },
             orderBy: [{ category: 'asc' }, { order: 'asc' }],
-          },
-        },
-      }),
+      },
+    } as const;
+    const [schedulerInstanceRaw, cotizacionesRows, seccionesResult, remindersRows] = await Promise.all([
+      prisma.studio_scheduler_event_instances.findFirst({
+        where: { event_id: eventId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- select incluye custom_categories_by_section_stage y explicitly_activated_stage_ids (schema actualizado)
+        select: schedulerSelect as any,
+      }).then((r) => r as InstanceWithStaging | null),
       prisma.studio_cotizaciones.findMany({
         where: {
           OR: [
@@ -2457,6 +2493,7 @@ export async function obtenerTareasScheduler(
       cotizaciones = cotizaciones.filter((c) => c.id === cotizacionId);
     }
 
+    const schedulerInstance = schedulerInstanceRaw;
     const tasks = schedulerInstance?.tasks ?? [];
     const seccionesForPayload = seccionesResult.success && seccionesResult.data ? seccionesResult.data : [];
     const getSectionIdForCategory = (catalogCategoryId: string | null): string | null => {
@@ -2481,31 +2518,50 @@ export async function obtenerTareasScheduler(
             id: schedulerInstance.id,
             start_date: schedulerInstance.start_date,
             end_date: schedulerInstance.end_date,
+            explicitly_activated_stage_ids: schedulerInstance.explicitly_activated_stage_ids,
+            custom_categories: schedulerInstance.custom_categories_by_section_stage,
             tasks: tasks.map((t) => {
-              const { activity_log, ...taskRest } = t as typeof t & { activity_log?: { id: string }[] };
-              const catalog_category_id = t.catalog_category_id ?? 'uncategorized';
+              const row = t as {
+                activity_log?: { id: string }[];
+                catalog_category_id?: string | null;
+                catalog_category?: { name: string } | null;
+                progress_percent?: number;
+                completed_at?: Date | null;
+                budget_amount?: unknown;
+                assigned_to_crew_member?: unknown;
+              };
+              const { activity_log, ...taskRest } = row;
+              const catalog_category_id = row.catalog_category_id ?? 'uncategorized';
               return {
                 ...taskRest,
                 catalog_category_id,
-                catalog_category_nombre: t.catalog_category?.name ?? null,
+                catalog_category_nombre: row.catalog_category?.name ?? null,
                 catalog_section_id: getSectionIdForCategory(catalog_category_id),
-                progress_percent: t.progress_percent,
-                completed_at: t.completed_at,
-                budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-                assigned_to_crew_member: t.assigned_to_crew_member,
+                progress_percent: row.progress_percent,
+                completed_at: row.completed_at,
+                budget_amount: row.budget_amount != null ? Number(row.budget_amount) : null,
+                assigned_to_crew_member: row.assigned_to_crew_member,
                 notes_count: activity_log?.length ?? 0,
               };
             }),
           }
         : null,
       secciones: seccionesForPayload,
+      explicitlyActivatedStageIds:
+        schedulerInstance?.explicitly_activated_stage_ids != null && Array.isArray(schedulerInstance.explicitly_activated_stage_ids)
+          ? (schedulerInstance.explicitly_activated_stage_ids as string[])
+          : undefined,
+      customCategoriesBySectionStage:
+        schedulerInstance?.custom_categories_by_section_stage != null && Array.isArray(schedulerInstance.custom_categories_by_section_stage)
+          ? (schedulerInstance.custom_categories_by_section_stage as Array<[string, Array<{ id: string; name: string }>]>)
+          : undefined,
       schedulerDateReminders: remindersRows.map((r) => ({
         id: r.id,
         reminder_date: r.reminder_date,
         subject_text: r.subject_text,
         description: r.description,
       })),
-    };
+    } as TareasSchedulerPayload;
 
     return { success: true, data: payload };
   } catch (error) {

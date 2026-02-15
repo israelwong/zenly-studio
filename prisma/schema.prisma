@@ -1855,20 +1855,41 @@ model studio_event_timeline {
 }
 
 model studio_scheduler_event_instances {
-  id          String                         @id @default(cuid())
-  event_id    String                         @unique
-  is_custom   Boolean                        @default(false)
-  custom_name String?
-  event_date  DateTime
-  start_date  DateTime
-  end_date    DateTime
-  created_at  DateTime                       @default(now())
-  updated_at  DateTime                       @updatedAt
-  event       studio_events                  @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tasks       studio_scheduler_event_tasks[]
+  id                              String                               @id @default(cuid())
+  event_id                        String                               @unique
+  is_custom                       Boolean                              @default(false)
+  custom_name                     String?
+  event_date                      DateTime
+  start_date                      DateTime
+  end_date                        DateTime
+  custom_categories_by_section_stage Json?
+  explicitly_activated_stage_ids   Json?
+  created_at                      DateTime                             @default(now())
+  updated_at                      DateTime                             @updatedAt
+  event                           studio_events                        @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tasks                           studio_scheduler_event_tasks[]
+  custom_categories               studio_scheduler_custom_categories[]
 
   @@index([event_id])
   @@index([event_date])
+}
+
+/// Categorías operativas del Scheduler: solo para este evento (no impactan studio_service_categories).
+/// Se eliminan al borrar la instancia o el evento.
+model studio_scheduler_custom_categories {
+  id                    String   @id @default(cuid())
+  scheduler_instance_id String
+  name                  String
+  section_id            String   // id de la sección del catálogo (referencia lógica)
+  stage                 String   // PLANNING | PRODUCTION | POST_PRODUCTION | DELIVERY
+  order                 Int      @default(0)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  scheduler_instance    studio_scheduler_event_instances @relation(fields: [scheduler_instance_id], references: [id], onDelete: Cascade)
+  tasks                 studio_scheduler_event_tasks[]
+
+  @@index([scheduler_instance_id])
+  @@index([scheduler_instance_id, section_id, stage])
 }
 
 model studio_scheduler_event_tasks {
@@ -1902,6 +1923,10 @@ model studio_scheduler_event_tasks {
   sync_status                SyncStatus                       @default(DRAFT)
   invitation_status          InvitationStatus?
   catalog_category_id        String?
+  catalog_category_name_snapshot String?
+  catalog_section_id_snapshot    String?
+  catalog_section_name_snapshot String?
+  scheduler_custom_category_id String?
   parent_id                  String?
   parent_task                studio_scheduler_event_tasks?     @relation("TaskParentChild", fields: [parent_id], references: [id], onDelete: SetNull)
   child_tasks                studio_scheduler_event_tasks[]   @relation("TaskParentChild")
@@ -1910,6 +1935,7 @@ model studio_scheduler_event_tasks {
   completed_by               user_studio_roles?               @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
   cotizacion_item            studio_cotizacion_items?         @relation("CotizacionItemSchedulerTask", fields: [cotizacion_item_id], references: [id])
   catalog_category           studio_service_categories?      @relation("SchedulerTaskCatalogCategory", fields: [catalog_category_id], references: [id], onDelete: SetNull)
+  scheduler_custom_category  studio_scheduler_custom_categories? @relation(fields: [scheduler_custom_category_id], references: [id], onDelete: SetNull)
   depends_on                 studio_scheduler_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
   dependent_tasks            studio_scheduler_event_tasks[]   @relation("EventTaskDependency")
   scheduler_instance         studio_scheduler_event_instances @relation(fields: [scheduler_instance_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -1918,6 +1944,7 @@ model studio_scheduler_event_tasks {
 
   @@index([scheduler_instance_id, status])
   @@index([catalog_category_id])
+  @@index([scheduler_custom_category_id])
   @@index([sync_status])
   @@index([invitation_status])
   @@index([assigned_to_user_id])

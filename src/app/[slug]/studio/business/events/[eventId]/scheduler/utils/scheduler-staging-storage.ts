@@ -2,13 +2,21 @@
 
 const STORAGE_KEY_PREFIX = 'scheduler-staging';
 
-/** Clave debe ser "sectionId-stageId" (ej. "clx123-PLANNING"). Rechaza undefined, vacío o sin guión. */
+/** Clave debe ser "sectionId-STAGE" (ej. "clx123-PLANNING"). Valida formato y stage válido. */
 export function isValidStageKey(key: string): boolean {
   if (typeof key !== 'string' || key.length < 3) return false;
-  const sep = key.indexOf('-');
+  const sep = key.lastIndexOf('-'); // último guión por si sectionId tiene guiones
   if (sep <= 0 || sep === key.length - 1) return false;
+  
   const sectionId = key.slice(0, sep);
-  return sectionId !== 'undefined' && sectionId.length > 0;
+  const stage = key.slice(sep + 1);
+  
+  // Validar sectionId
+  if (sectionId === 'undefined' || sectionId.length === 0) return false;
+  
+  // Validar stage: solo valores del enum TaskCategoryStage
+  const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
+  return validStages.has(stage);
 }
 
 export interface SchedulerStagingState {

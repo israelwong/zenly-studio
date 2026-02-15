@@ -15,7 +15,13 @@ import {
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
-import { ordenarCotizacionItemsPorCatalogo } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
+import {
+  ordenarCotizacionItemsPorCatalogo,
+  COTIZACION_ITEMS_SELECT_STANDARD,
+} from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
+import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import {
   EVENT_BASE_SELECT,
   EVENT_BASE_SELECT_LAYOUT,
@@ -42,11 +48,13 @@ import {
   eliminarSchedulerTask as eliminarSchedulerTaskCore,
   obtenerSchedulerTask as obtenerSchedulerTaskCore,
   actualizarRangoScheduler as actualizarRangoSchedulerCore,
+  actualizarSchedulerStaging as actualizarSchedulerStagingCore,
   type CheckSchedulerStatusResult,
+  type ActualizarSchedulerStagingInput,
 } from './scheduler-tasks.actions';
 
-// Re-exportar tipos de scheduler-tasks
-export type { CheckSchedulerStatusResult };
+// Re-exportar tipos y action de scheduler-tasks
+export type { CheckSchedulerStatusResult, ActualizarSchedulerStagingInput };
 
 import {
   obtenerEventosConSchedulers as obtenerEventosConSchedulersCore,
@@ -208,6 +216,18 @@ export async function actualizarRangoScheduler(
   dateRange: { from: Date; to: Date }
 ) {
   return actualizarRangoSchedulerCore(studioSlug, eventId, dateRange);
+}
+
+/**
+ * Persistir staging del Scheduler (categorías custom y etapas activadas) en la instancia.
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function actualizarSchedulerStaging(
+  studioSlug: string,
+  eventId: string,
+  input: ActualizarSchedulerStagingInput
+) {
+  return actualizarSchedulerStagingCore(studioSlug, eventId, input);
 }
 
 /**
@@ -496,6 +516,15 @@ export interface EventoDetalle extends EventoBasico {
     link_meeting_url: string | null;
     agenda_tipo: string | null;
   }>;
+  /** Catálogo (secciones + categorías) para unificar consulta con Scheduler. */
+  secciones?: SeccionData[];
+  /** Recordatorios por fecha del Scheduler. */
+  schedulerDateReminders?: Array<{
+    id: string;
+    reminder_date: Date | string;
+    subject_text: string;
+    description: string | null;
+  }>;
 }
 
 export interface EventosListResponse {
@@ -677,7 +706,137 @@ export async function obtenerEventoDetalle(
       setTimeout(() => reject(new Error(`Timeout ${EVENTO_DETALLE_TIMEOUT_MS}ms al cargar evento`)), EVENTO_DETALLE_TIMEOUT_MS)
     );
 
-    const [financials, pagos, agenda] = await Promise.race([
+    const schedulerInstanceSelect = {
+      id: true,
+      event_date: true,
+      start_date: true,
+      end_date: true,
+      is_custom: true,
+      custom_categories: {
+        select: { id: true, name: true, section_id: true, stage: true, order: true },
+        orderBy: [{ section_id: 'asc' }, { stage: 'asc' }, { order: 'asc' }],
+      },
+      tasks: {
+        select: {
+          id: true,
+          name: true,
+          start_date: true,
+          end_date: true,
+          duration_days: true,
+          status: true,
+          progress_percent: true,
+          completed_at: true,
+          cotizacion_item_id: true,
+          category: true,
+          catalog_category_id: true,
+          catalog_category_name_snapshot: true,
+          catalog_section_id_snapshot: true,
+          catalog_section_name_snapshot: true,
+          scheduler_custom_category_id: true,
+          parent_id: true,
+          catalog_category: { select: { id: true, name: true } },
+          scheduler_custom_category: { select: { id: true, name: true } },
+          order: true,
+          budget_amount: true,
+          assigned_to_crew_member_id: true,
+          assigned_to_crew_member: {
+            select: { id: true, name: true, email: true, tipo: true },
+          },
+          activity_log: {
+            where: { action: 'NOTE_ADDED' },
+            select: { id: true },
+          },
+        },
+        orderBy: [{ category: 'asc' }, { order: 'asc' }],
+      },
+    } as const;
+
+    const cotizacionesSelect = {
+      id: true,
+      name: true,
+      status: true,
+      price: true,
+      discount: true,
+      promise_id: true,
+      evento_id: true,
+      condiciones_comerciales_name_snapshot: true,
+      condiciones_comerciales_description_snapshot: true,
+      condiciones_comerciales_advance_percentage_snapshot: true,
+      condiciones_comerciales_advance_type_snapshot: true,
+      condiciones_comerciales_advance_amount_snapshot: true,
+      condiciones_comerciales_discount_percentage_snapshot: true,
+      revision_of_id: true,
+      revision_number: true,
+      revision_status: true,
+      created_at: true,
+      updated_at: true,
+      cotizacion_items: {
+        orderBy: [{ order: 'asc' }],
+        select: {
+          ...COTIZACION_ITEMS_SELECT_STANDARD,
+          cost: true,
+          cost_snapshot: true,
+          profit_type: true,
+          profit_type_snapshot: true,
+          service_category_id: true,
+          service_categories: {
+            select: {
+              id: true,
+              name: true,
+              order: true,
+              section_categories: { select: { service_sections: { select: { id: true, name: true, order: true } } } },
+            },
+          },
+          items: {
+            select: {
+              order: true,
+              service_category_id: true,
+              service_categories: {
+                select: {
+                  id: true,
+                  name: true,
+                  order: true,
+                  section_categories: { select: { service_sections: { select: { id: true, name: true, order: true } } } },
+                },
+              },
+            },
+          },
+          assigned_to_crew_member_id: true,
+          assigned_to_crew_member: { select: { id: true, name: true, tipo: true } },
+          scheduler_task: {
+            select: {
+              id: true,
+              name: true,
+              start_date: true,
+              end_date: true,
+              status: true,
+              progress_percent: true,
+              completed_at: true,
+              category: true,
+              catalog_category_id: true,
+              catalog_category_name_snapshot: true,
+              catalog_section_id_snapshot: true,
+              catalog_section_name_snapshot: true,
+              parent_id: true,
+              catalog_category: { select: { id: true, name: true } },
+              order: true,
+              assigned_to_crew_member_id: true,
+              assigned_to_crew_member: {
+                select: { id: true, name: true, email: true, tipo: true },
+              },
+              sync_status: true,
+              invitation_status: true,
+              activity_log: {
+                where: { action: 'NOTE_ADDED' },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      },
+    } as const;
+
+    const [financials, pagos, agenda, schedulerInstanceRaw, cotizacionesRows, seccionesResult, remindersRows] = await Promise.race([
       Promise.all([
         getPromiseFinancials(promiseId).catch(() => ({
           contractValue: 0,
@@ -696,17 +855,108 @@ export async function obtenerEventoDetalle(
           orderBy: { date: 'asc' },
           take: 10,
         }),
+        prisma.studio_scheduler_event_instances.findFirst({
+          where: { event_id: eventoId },
+          select: schedulerInstanceSelect,
+        }),
+        prisma.studio_cotizaciones.findMany({
+          where: {
+            OR: [
+              { evento_id: eventoId },
+              ...(eventoBase.cotizacion_id ? [{ id: eventoBase.cotizacion_id }] : []),
+            ],
+            status: { in: ['autorizada', 'aprobada', 'approved'] },
+          },
+          select: cotizacionesSelect,
+        }),
+        obtenerCatalogo(studioSlug, true),
+        studio?.id
+          ? prisma.studio_scheduler_date_reminders.findMany({
+              where: { studio_id: studio.id, event_id: eventoId, is_completed: false },
+              select: { id: true, reminder_date: true, subject_text: true, description: true },
+              orderBy: { reminder_date: 'asc' },
+            })
+          : Promise.resolve([]),
       ]),
       timeoutPromise,
     ]);
 
-    const cotizacion = null;
-    const cotizacionesPorEvento: unknown[] = [];
-    const cotizacionesPorPromise: unknown[] = [];
-    const scheduler = null;
+    const secciones: SeccionData[] = seccionesResult?.success && seccionesResult?.data ? seccionesResult.data : [];
+    type CotizacionRow = (typeof cotizacionesRows)[0];
+    const getCategoryId = (item: CotizacionRow['cotizacion_items'][0]): string | null =>
+      item.scheduler_task?.catalog_category_id ?? item.service_category_id ?? item.items?.service_category_id ?? null;
+    const getName = (item: CotizacionRow['cotizacion_items'][0]): string | null =>
+      item.scheduler_task?.name ?? item.name ?? item.name_snapshot ?? null;
 
+    const cotizacionesPorEvento = cotizacionesRows.filter((c) => c.evento_id === eventoId);
+    const cotizacionesPorPromise = cotizacionesRows.filter((c) => c.promise_id === promiseId && c.evento_id !== eventoId);
+    const rawCotizaciones = cotizacionesPorEvento.length > 0 ? cotizacionesPorEvento : cotizacionesPorPromise;
     const todasLasCotizaciones =
-      cotizacionesPorEvento.length > 0 ? cotizacionesPorEvento : cotizacionesPorPromise;
+      secciones.length > 0
+        ? rawCotizaciones.map((cot) => ({
+            ...cot,
+            cotizacion_items: ordenarPorEstructuraCanonica(cot.cotizacion_items, secciones, getCategoryId, getName),
+          }))
+        : rawCotizaciones;
+
+    const cotizacion = eventoBase.cotizacion_id
+      ? todasLasCotizaciones.find((c) => c.id === eventoBase.cotizacion_id) ?? todasLasCotizaciones[0]
+      : todasLasCotizaciones[0] ?? null;
+
+    type InstanceTask = NonNullable<typeof schedulerInstanceRaw>['tasks'][0];
+    const scheduler = schedulerInstanceRaw
+      ? (() => {
+          const raw = schedulerInstanceRaw;
+          const customCategories = (raw as { custom_categories?: Array<{ id: string; name: string; section_id: string; stage: string; order: number }> }).custom_categories ?? [];
+          return {
+            id: raw.id,
+            event_date: raw.event_date,
+            start_date: raw.start_date,
+            end_date: raw.end_date,
+            is_custom: raw.is_custom,
+            custom_categories: customCategories,
+            tasks: raw.tasks.map((t: InstanceTask) => ({
+              id: t.id,
+              name: t.name,
+              description: (t as { description?: string | null }).description ?? null,
+              start_date: t.start_date,
+              end_date: t.end_date,
+              duration_days: t.duration_days,
+              category: t.category,
+              priority: (t as { priority?: string }).priority ?? 'MEDIUM',
+              assigned_to_user_id: (t as { assigned_to_user_id?: string | null }).assigned_to_user_id ?? null,
+              assigned_to_crew_member_id: t.assigned_to_crew_member_id,
+              status: t.status,
+              progress_percent: t.progress_percent,
+              cotizacion_item_id: t.cotizacion_item_id,
+              scheduler_custom_category_id: (t as { scheduler_custom_category_id?: string | null }).scheduler_custom_category_id ?? null,
+              scheduler_custom_category: (t as { scheduler_custom_category?: { id: string; name: string } | null }).scheduler_custom_category ?? null,
+              depends_on_task_id: (t as { depends_on_task_id?: string | null }).depends_on_task_id ?? null,
+              checklist_items: (t as { checklist_items?: unknown }).checklist_items ?? null,
+              budget_amount: t.budget_amount,
+              assigned_to: null,
+              assigned_to_crew_member: t.assigned_to_crew_member
+                ? {
+                    id: t.assigned_to_crew_member.id,
+                    name: t.assigned_to_crew_member.name,
+                    email: t.assigned_to_crew_member.email ?? null,
+                    tipo: t.assigned_to_crew_member.tipo,
+                  }
+                : null,
+              notes_count: Array.isArray((t as { activity_log?: { id: string }[] }).activity_log)
+                ? (t as { activity_log: { id: string }[] }).activity_log.length
+                : 0,
+              catalog_category_id: t.catalog_category_id,
+              catalog_category_name_snapshot: (t as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? null,
+              catalog_section_id: (t as { catalog_section_id_snapshot?: string | null }).catalog_section_id_snapshot ?? null,
+              catalog_section_id_snapshot: (t as { catalog_section_id_snapshot?: string | null }).catalog_section_id_snapshot ?? null,
+              catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
+              catalog_category: t.catalog_category,
+              order: t.order,
+            })),
+          };
+        })()
+      : null;
 
     const evento = {
       ...eventoBase,
@@ -714,6 +964,16 @@ export async function obtenerEventoDetalle(
       cotizaciones: todasLasCotizaciones,
       scheduler: scheduler ?? undefined,
       agenda,
+      secciones: secciones.length > 0 ? secciones : undefined,
+      schedulerDateReminders:
+        remindersRows.length > 0
+          ? remindersRows.map((r) => ({
+              id: r.id,
+              reminder_date: r.reminder_date,
+              subject_text: r.subject_text,
+              description: r.description,
+            }))
+          : undefined,
     };
 
     // Leer campos desde promesa (fuente única de verdad)
@@ -800,7 +1060,7 @@ export async function obtenerEventoDetalle(
         payment_date: pago.payment_date || pago.created_at,
         concept: pago.concept,
       })),
-      // Serializar scheduler.tasks: budget_amount como number y assigned_to_crew_member como objeto plano (persistencia en cliente)
+      // Serializar scheduler (estructura desde tasks + catálogo; sin JSONB)
       scheduler: evento.scheduler ? (() => {
         const scheduler = evento.scheduler!;
         return {

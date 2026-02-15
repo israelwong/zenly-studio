@@ -13,6 +13,8 @@ interface SchedulerSectionStagesConfigPopoverProps {
   stageIdsWithData: Set<string>;
   /** Keys `${sectionId}-${stage}` activados por usuario */
   explicitlyActivatedStageIds: string[];
+  /** Categorías custom operativas por stageKey → bloqueo adicional */
+  customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
   onToggleStage: (sectionId: string, stage: string, enabled: boolean) => void;
   triggerClassName?: string;
 }
@@ -34,6 +36,7 @@ export function SchedulerSectionStagesConfigPopover({
   sectionName,
   stageIdsWithData,
   explicitlyActivatedStageIds,
+  customCategoriesBySectionStage = new Map(),
   onToggleStage,
   triggerClassName,
 }: SchedulerSectionStagesConfigPopoverProps) {
@@ -67,7 +70,10 @@ export function SchedulerSectionStagesConfigPopover({
           {(STAGE_ORDER as readonly TaskCategoryStage[]).map((stage) => {
             const stageKey = buildStageKey(sectionId, stage);
             const hasData = stageIdsWithData.has(stage);
-            const disabled = hasData;
+            // Bloqueo refinado: tiene tareas O tiene categorías custom operativas
+            const hasCustomCategories = (customCategoriesBySectionStage.get(stageKey) ?? []).length > 0;
+            const disabled = hasData || hasCustomCategories;
+            const isChecked = explicitlyActivatedStageIds.includes(stageKey) || hasData || hasCustomCategories;
             return (
               <div
                 key={stage}
@@ -77,21 +83,21 @@ export function SchedulerSectionStagesConfigPopover({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (disabled) return;
-                  onToggleStage(sectionId, stage, !(explicitlyActivatedStageIds.includes(stageKey) || stageIdsWithData.has(stage)));
+                  onToggleStage(sectionId, stage, !isChecked);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     e.stopPropagation();
                     if (disabled) return;
-                    onToggleStage(sectionId, stage, !(explicitlyActivatedStageIds.includes(stageKey) || stageIdsWithData.has(stage)));
+                    onToggleStage(sectionId, stage, !isChecked);
                   }
                 }}
               >
                 <span className="text-sm text-zinc-200 truncate">{STAGE_LABELS[stage]}</span>
                 <div onClick={(e) => e.stopPropagation()}>
                   <Switch
-                    checked={explicitlyActivatedStageIds.includes(stageKey) || stageIdsWithData.has(stage)}
+                    checked={isChecked}
                     disabled={disabled}
                     onCheckedChange={(value) => {
                       if (disabled) return;
@@ -104,7 +110,7 @@ export function SchedulerSectionStagesConfigPopover({
           })}
         </div>
         <p className="text-[10px] text-zinc-500 mt-2">
-          Los estados con tareas no se pueden desactivar.
+          Solo se puede ocultar si está totalmente vacío (sin tareas ni categorías custom).
         </p>
       </PopoverContent>
     </Popover>

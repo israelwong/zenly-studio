@@ -333,6 +333,8 @@ async function obtenerOCrearInstancia(
  * - Etapa (category): solo operational_category del catálogo o fallback mapearCategoriaDesdeNombre. Estados: PLANNING, PRODUCTION, POST_PRODUCTION, DELIVERY.
  * - Orden: array aplanado Sección → Categoría → Ítem; order = índice de iteración.
  * - Upsert solo por cotizacion_item_id: las tareas manuales (sin cotizacion_item_id) no se tocan; coexisten con las importadas sin ser eliminadas ni remapeadas.
+ * - Limpieza de huérfanos: se eliminan tareas con catalog_category_id que no están vinculadas a un cotizacion_item_id real de este evento (residuos de plantilla o ítems sacados de la cotización).
+ * - No se modifican studio_scheduler_custom_categories ni las tareas que referencian scheduler_custom_category_id (sincronización no destructiva).
  * - Update: solo order, category, duration_days, name, catalog_category_id. No notes, status ni progress_percent.
  */
 export async function sincronizarTareasEvento(
@@ -394,7 +396,7 @@ export async function sincronizarTareasEvento(
                 section_categories: {
                   select: {
                     order: true,
-                    service_sections: { select: { order: true } },
+                    service_sections: { select: { id: true, name: true, order: true } },
                   },
                 },
               },
@@ -413,7 +415,7 @@ export async function sincronizarTareasEvento(
                     section_categories: {
                       select: {
                         order: true,
-                        service_sections: { select: { order: true } },
+                        service_sections: { select: { id: true, name: true, order: true } },
                       },
                     },
                   },
@@ -425,6 +427,7 @@ export async function sincronizarTareasEvento(
       },
     });
 
+    // Item-First: solo ítems de cotizaciones autorizadas
     const allItems = cotizacionesRows.flatMap((c) => c.cotizacion_items ?? []);
     const orderedItems = aplanarOrdenCanonico(allItems);
 
@@ -458,6 +461,12 @@ export async function sincronizarTareasEvento(
           1;
         const name = item.name ?? item.name_snapshot ?? 'Tarea';
 
+        // Snapshots solo desde el ítem procesado (no catálogo global)
+        const sectionRef = item.service_categories?.section_categories ?? item.items?.service_categories?.section_categories;
+        const snapshotSectionId = sectionRef?.service_sections?.id ?? null;
+        const snapshotSectionName = sectionRef?.service_sections?.name ?? 'Sin sección';
+        const snapshotCategoryName = categoryName ?? 'Sin categoría';
+
         const endDate = new Date(eventDate);
         endDate.setDate(endDate.getDate() + Math.max(1, durationDays));
 
@@ -479,6 +488,9 @@ export async function sincronizarTareasEvento(
             sync_status: 'DRAFT',
             order,
             ...(catalogCategoryId != null ? { catalog_category_id: catalogCategoryId } : {}),
+            catalog_category_name_snapshot: snapshotCategoryName,
+            catalog_section_id_snapshot: snapshotSectionId,
+            catalog_section_name_snapshot: snapshotSectionName,
           },
           update: {
             order,
@@ -486,6 +498,9 @@ export async function sincronizarTareasEvento(
             duration_days: durationDays,
             name,
             ...(catalogCategoryId != null ? { catalog_category_id: catalogCategoryId } : {}),
+            catalog_category_name_snapshot: snapshotCategoryName,
+            catalog_section_id_snapshot: snapshotSectionId,
+            catalog_section_name_snapshot: snapshotSectionName,
           },
         });
 
@@ -499,7 +514,63 @@ export async function sincronizarTareasEvento(
           updated++;
         }
       }
+
+      // Limpieza de huérfanos: tareas con catalog_category_id no vinculadas a un ítem real de la cotización autorizada
+      const validItemIds = new Set(orderedItems.map((it) => it.id));
+      const orphanWhere = {
+        scheduler_instance_id: schedulerInstanceId,
+        catalog_category_id: { not: null },
+        OR: validItemIds.size > 0
+          ? [
+              { cotizacion_item_id: null },
+              { cotizacion_item_id: { notIn: [...validItemIds] } },
+            ]
+          : [{ cotizacion_item_id: null }],
+      } as const;
+      const orphans = await tx.studio_scheduler_event_tasks.findMany({
+        where: orphanWhere,
+        select: { id: true },
+      });
+      const orphanIds = orphans.map((o) => o.id);
+      if (orphanIds.length > 0) {
+        await tx.studio_scheduler_event_tasks.updateMany({
+          where: { scheduler_instance_id: schedulerInstanceId, depends_on_task_id: { in: orphanIds } },
+          data: { depends_on_task_id: null },
+        });
+        await tx.studio_cotizacion_items.updateMany({
+          where: { scheduler_task_id: { in: orphanIds } },
+          data: { scheduler_task_id: null },
+        });
+        await tx.studio_scheduler_event_tasks.deleteMany({
+          where: { id: { in: orphanIds } },
+        });
+      }
     });
+
+    // Inicialización automática: activar estados que tienen tareas
+    if (created > 0) {
+      const tasksWithStages = await prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance_id: schedulerInstanceId, catalog_section_id_snapshot: { not: null } },
+        select: { catalog_section_id_snapshot: true, category: true },
+      });
+      
+      const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
+      const stageKeys = new Set<string>();
+      
+      for (const task of tasksWithStages) {
+        if (task.catalog_section_id_snapshot && task.category && validStages.has(task.category)) {
+          const stageKey = `${task.catalog_section_id_snapshot}-${task.category}`;
+          stageKeys.add(stageKey);
+        }
+      }
+      
+      if (stageKeys.size > 0) {
+        await prisma.studio_scheduler_event_instances.update({
+          where: { id: schedulerInstanceId },
+          data: { explicitly_activated_stage_ids: Array.from(stageKeys) },
+        });
+      }
+    }
 
     if (created > 0 || updated > 0) {
       const { revalidateSchedulerPaths } = await import('./helpers/revalidation-utils');

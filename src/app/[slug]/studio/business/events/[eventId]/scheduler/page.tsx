@@ -1,14 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
-import {
-  obtenerTareasScheduler,
-  type TareasSchedulerPayload,
-  type SchedulerData,
-} from '@/lib/actions/studio/business/events/scheduler-actions';
+import { type TareasSchedulerPayload, type SchedulerData } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { obtenerEventoDetalle, actualizarSchedulerStaging } from '@/lib/actions/studio/business/events/events.actions';
+import { STAGE_ORDER } from './utils/scheduler-section-stages';
 import {
   createSchedulerDateReminder,
   updateSchedulerDateReminder,
@@ -24,10 +22,10 @@ import {
   getSchedulerStaging,
   setSchedulerStaging,
   clearSchedulerStaging,
-  customCategoriesMapFromStaging,
   customCategoriesToStaging,
   isValidStageKey,
 } from './utils/scheduler-staging-storage';
+import { crearCategoriaOperativa, listarCategoriasOperativas } from '@/lib/actions/studio/business/events/scheduler-custom-categories.actions';
 import { COLUMN_WIDTH, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX } from './utils/coordinate-utils';
 import { type DateRange } from 'react-day-picker';
 import { SchedulerPortal } from '@/components/SchedulerPortal';
@@ -115,14 +113,26 @@ export default function EventSchedulerPage() {
     if (!eventId || !studioSlug) return;
     try {
       setLoading(true);
-      const result = await obtenerTareasScheduler(studioSlug, eventId, cotizacionId || null);
+      const result = await obtenerEventoDetalle(studioSlug, eventId);
       if (result.success && result.data) {
         const data = result.data;
-        setPayload(data);
-        
-        
-        setDateRange(prev => {
-          if (!prev && data?.scheduler?.start_date && data?.scheduler?.end_date) {
+        let cotizaciones = data.cotizaciones ?? [];
+        if (cotizacionId) {
+          cotizaciones = cotizaciones.filter((c) => c.id === cotizacionId);
+        }
+        const payloadData: TareasSchedulerPayload = {
+          id: data.id,
+          name: data.name ?? data.promise?.name ?? 'Evento',
+          event_date: data.event_date ?? data.promise?.event_date ?? null,
+          promise: data.promise ?? null,
+          cotizaciones,
+          scheduler: data.scheduler ?? null,
+          secciones: data.secciones ?? [],
+          schedulerDateReminders: data.schedulerDateReminders ?? [],
+        };
+        setPayload(payloadData);
+        setDateRange((prev) => {
+          if (!prev && data.scheduler?.start_date && data.scheduler?.end_date) {
             return {
               from: new Date(data.scheduler.start_date),
               to: new Date(data.scheduler.end_date),
@@ -130,21 +140,52 @@ export default function EventSchedulerPage() {
           }
           return prev;
         });
-        setExplicitlyActivatedStageIds(prev => {
-          const fromPayload = data.explicitlyActivatedStageIds;
-          if (fromPayload?.length) return fromPayload;
-          const staging = getSchedulerStaging(eventId);
-          return staging?.explicitlyActivatedStageIds ?? prev;
-        });
-        setCustomCategoriesBySectionStage(prev => {
-          const fromPayload = data.customCategoriesBySectionStage;
-          if (fromPayload?.length) return customCategoriesMapFromStaging(fromPayload);
-          const staging = getSchedulerStaging(eventId);
-          if (staging?.customCategoriesBySectionStage?.length) {
-            return customCategoriesMapFromStaging(staging.customCategoriesBySectionStage);
+        const secciones = data.secciones ?? [];
+        const customMap = new Map<string, Array<{ id: string; name: string }>>();
+        const operativasFromScheduler = (data.scheduler as { custom_categories?: Array<{ id: string; name: string; section_id: string; stage: string; order: number }> } | null)?.custom_categories ?? [];
+        let operativasByKey = new Map<string, Array<{ id: string; name: string }>>();
+        if (operativasFromScheduler.length > 0) {
+          for (const op of operativasFromScheduler) {
+            const key = `${op.section_id}-${op.stage}`;
+            if (!operativasByKey.has(key)) operativasByKey.set(key, []);
+            operativasByKey.get(key)!.push({ id: op.id, name: op.name });
           }
-          return prev;
+        } else {
+          const operativasRes = await listarCategoriasOperativas(studioSlug, eventId);
+          if (operativasRes.success && operativasRes.data?.length) {
+            for (const op of operativasRes.data) {
+              const key = `${op.section_id}-${op.stage}`;
+              if (!operativasByKey.has(key)) operativasByKey.set(key, []);
+              operativasByKey.get(key)!.push({ id: op.id, name: op.name });
+            }
+          }
+        }
+        for (const s of secciones) {
+          for (const st of STAGE_ORDER) {
+            const key = `${s.id}-${st}`;
+            const operativas = operativasByKey.get(key) ?? [];
+            // Solo categorías operativas (A, B, C); las de catálogo se extraen de los snapshots en buildSchedulerRows
+            customMap.set(key, operativas);
+          }
+        }
+        setCustomCategoriesBySectionStage(customMap);
+        // Trinity: Cargar estados activados desde DB (no localStorage)
+        const rawActivated = data.scheduler?.explicitly_activated_stage_ids
+          ? (Array.isArray(data.scheduler.explicitly_activated_stage_ids)
+            ? data.scheduler.explicitly_activated_stage_ids
+            : [])
+          : [];
+        
+        // Limpieza: filtrar solo llaves válidas (formato: sectionId-STAGE)
+        const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
+        const cleanedActivated = rawActivated.filter((key: string) => {
+          const parts = key.split('-');
+          if (parts.length < 2) return false;
+          const stage = parts[parts.length - 1];
+          return validStages.has(stage);
         });
+        
+        setExplicitlyActivatedStageIds(cleanedActivated);
       } else {
         toast.error(result.error || 'Evento no encontrado');
         router.push(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -157,26 +198,57 @@ export default function EventSchedulerPage() {
     }
   }, [eventId, studioSlug, cotizacionId, router]);
 
-  const handleToggleStage = useCallback((sectionId: string, stage: string, enabled: boolean) => {
+  const handleToggleStage = useCallback(async (sectionId: string, stage: string, enabled: boolean) => {
     const stageKey = `${sectionId}-${stage}`;
     if (enabled && !isValidStageKey(stageKey)) return;
-    setExplicitlyActivatedStageIds((prev) => {
-      const next = enabled ? [...prev, stageKey] : prev.filter((id) => id !== stageKey);
-      if (eventId && typeof window !== 'undefined') {
-        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
-        setSchedulerStaging(eventId, { ...staging, explicitlyActivatedStageIds: next });
-      }
-      return next;
+    
+    // Calcular siguiente estado con limpieza de llaves inválidas
+    const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
+    const cleanedCurrent = explicitlyActivatedStageIds.filter((key: string) => {
+      const parts = key.split('-');
+      if (parts.length < 2) return false;
+      const keyStage = parts[parts.length - 1];
+      return validStages.has(keyStage);
     });
-    window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-  }, [eventId]);
-
-  const persistStagingCustomCats = useCallback((next: Map<string, Array<{ id: string; name: string }>>) => {
-    if (eventId && typeof window !== 'undefined') {
-      const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
-      setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(next) });
+    
+    const next = enabled 
+      ? [...cleanedCurrent, stageKey] 
+      : cleanedCurrent.filter((id) => id !== stageKey);
+    
+    // Trinity: Persistir en DB (no solo localStorage)
+    try {
+      const { actualizarSchedulerStaging } = await import('@/lib/actions/studio/business/events/scheduler-tasks.actions');
+      const result = await actualizarSchedulerStaging(studioSlug, eventId, {
+        explicitlyActivatedStageIds: next,
+      });
+      
+      if (result.success) {
+        setExplicitlyActivatedStageIds(next);
+        toast.success(`Estado ${enabled ? 'activado' : 'desactivado'}`);
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        setTimeout(() => router.refresh(), 100);
+      } else {
+        toast.error(result.error ?? 'Error al activar estado');
+      }
+    } catch (error) {
+      console.error('[handleToggleStage]', error);
+      toast.error('Error al activar estado');
     }
-  }, [eventId]);
+  }, [eventId, studioSlug, explicitlyActivatedStageIds]);
+
+  const persistStagingCustomCats = useCallback(async (next: Map<string, Array<{ id: string; name: string }>>) => {
+    if (!eventId || !studioSlug) return;
+    
+    // Trinity: Persistir en DB directamente (no localStorage)
+    try {
+      const { actualizarSchedulerStaging } = await import('@/lib/actions/studio/business/events/scheduler-tasks.actions');
+      await actualizarSchedulerStaging(studioSlug, eventId, {
+        customCategoriesBySectionStage: customCategoriesToStaging(next),
+      });
+    } catch (error) {
+      console.error('[persistStagingCustomCats]', error);
+    }
+  }, [eventId, studioSlug]);
 
   const handleAddCustomCategory = useCallback(
     async (sectionId: string, stage: string, name: string) => {
@@ -185,14 +257,12 @@ export default function EventSchedulerPage() {
       const key = `${sectionId}-${stage}`;
       if (!isValidStageKey(key)) return;
       try {
-        const { crearCategoria } = await import('@/lib/actions/studio/config/catalogo.actions');
-        const uniqueName = `${trimmed} (${Date.now()})`;
-        const result = await crearCategoria(studioSlug, { nombre: uniqueName, order: 0 }, sectionId);
+        const result = await crearCategoriaOperativa(studioSlug, eventId, { sectionId, stage, name: trimmed });
         if (result.success && result.data) {
           setCustomCategoriesBySectionStage((prev) => {
             const next = new Map(prev);
             const list = next.get(key) ?? [];
-            next.set(key, [...list, { id: result.data!.id, name: trimmed }]);
+            next.set(key, [...list, { id: result.data!.id, name: result.data!.name }]);
             persistStagingCustomCats(next);
             return next;
           });
@@ -201,17 +271,10 @@ export default function EventSchedulerPage() {
           toast.error(result.error ?? 'Error al crear la categoría');
         }
       } catch {
-        setCustomCategoriesBySectionStage((prev) => {
-          const next = new Map(prev);
-          const list = next.get(key) ?? [];
-          next.set(key, [...list, { id: `custom-${key}-${Date.now()}`, name: trimmed }]);
-          persistStagingCustomCats(next);
-          return next;
-        });
-        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        toast.error('Error al crear la categoría');
       }
     },
-    [studioSlug, persistStagingCustomCats]
+    [studioSlug, eventId, persistStagingCustomCats]
   );
 
   const doSwapCustom = useCallback(
@@ -316,27 +379,29 @@ export default function EventSchedulerPage() {
     [persistStagingCustomCats]
   );
 
-  const handleRemoveEmptyStage = useCallback((sectionId: string, stage: string) => {
+  const handleRemoveEmptyStage = useCallback(async (sectionId: string, stage: string) => {
     const stageKey = `${sectionId}-${stage}`;
-    setExplicitlyActivatedStageIds((prev) => {
-      const next = prev.filter((id) => id !== stageKey);
-      if (eventId && typeof window !== 'undefined') {
-        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
-        setSchedulerStaging(eventId, { ...staging, explicitlyActivatedStageIds: next });
+    const nextStages = explicitlyActivatedStageIds.filter((id) => id !== stageKey);
+    const nextCustom = new Map(customCategoriesBySectionStage);
+    nextCustom.delete(stageKey);
+    
+    // Trinity: Persistir en DB
+    try {
+      const { actualizarSchedulerStaging } = await import('@/lib/actions/studio/business/events/scheduler-tasks.actions');
+      const result = await actualizarSchedulerStaging(studioSlug, eventId, {
+        explicitlyActivatedStageIds: nextStages,
+        customCategoriesBySectionStage: customCategoriesToStaging(nextCustom),
+      });
+      if (result.success) {
+        setExplicitlyActivatedStageIds(nextStages);
+        setCustomCategoriesBySectionStage(nextCustom);
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        setTimeout(() => router.refresh(), 100);
       }
-      return next;
-    });
-    setCustomCategoriesBySectionStage((prev) => {
-      const next = new Map(prev);
-      next.delete(`${sectionId}-${stage}`);
-      if (eventId && typeof window !== 'undefined') {
-        const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
-        setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(next) });
-      }
-      return next;
-    });
-    window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-  }, [eventId]);
+    } catch (error) {
+      console.error('[handleRemoveEmptyStage]', error);
+    }
+  }, [eventId, studioSlug, explicitlyActivatedStageIds, customCategoriesBySectionStage, router]);
 
   const eventDataForHook: SchedulerData | null = payload
     ? { id: payload.id, name: payload.name, event_date: payload.event_date, promise: payload.promise, cotizaciones: payload.cotizaciones, scheduler: payload.scheduler }
@@ -368,6 +433,11 @@ export default function EventSchedulerPage() {
     if (!eventId || !studioSlug) return;
     loadScheduler();
   }, [eventId, studioSlug, loadScheduler]);
+
+  // Trinity: Ya no necesitamos sincronizar desde localStorage porque todo se guarda directo en DB
+  // Este listener causaba que se borraran los estados porque leía localStorage vacío
+  // y sobrescribía la DB. Cada acción (handleToggleStage, handleAddCustomCategory, etc.)
+  // ahora persiste directamente en DB con actualizarSchedulerStaging
 
   const handlePublished = useCallback(() => {
     clearSchedulerStaging(eventId);

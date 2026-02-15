@@ -1699,6 +1699,7 @@ export const SchedulerSidebar = React.memo(({
                     sectionName={block.row.name}
                     stageIdsWithData={stageIdsWithData}
                     explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+                    customCategoriesBySectionStage={customCategoriesBySectionStage}
                     onToggleStage={onToggleStage}
                   />
                 )}
@@ -1886,9 +1887,11 @@ export const SchedulerSidebar = React.memo(({
                             customList.some((c) => String(c.id).trim() === String(catalogCategoryId ?? '').trim());
                           const hasCustomNamePattern = /^\s*.+\s+\(\d{10,}\)\s*$/.test(catRow.label ?? '');
                           const hasTypoLegacy = /peronalizada/i.test(catRow.label ?? '');
-                          const isCustomCategory = isInCustomList || hasCustomNamePattern || hasTypoLegacy;
+                          // Solo categorías operativas (en customList) muestran borrar/renombrar; categorías de catálogo nunca llaman al catálogo global.
+                          const isCustomCategory = isInCustomList;
                           const canMoveUp = catalogCategoryId && Number(segIdx) > 0;
                           const canMoveDown = catalogCategoryId && Number(segIdx) < Number(segments.length) - 1;
+                          const showCustomButtons = (canMoveUp || canMoveDown) || isCustomCategory || hasCustomNamePattern || hasTypoLegacy;
                           const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
                           const isCategoryCollapsed = collapsedCategoryIds.has(catRow.id);
                           const isEditCatOpen =
@@ -1937,9 +1940,9 @@ export const SchedulerSidebar = React.memo(({
                                     {formatCategoryLabel(catRow.label)}
                                   </span>
                                 </button>
-                                {((canMoveUp || canMoveDown) || isCustomCategory) && (
+                                {showCustomButtons && (
                                   <span
-                                    className={`relative z-20 flex items-center gap-0.5 shrink-0 ml-0.5 transition-colors ${isCustomCategory ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                    className={`relative z-20 flex items-center gap-0.5 shrink-0 ml-0.5 transition-colors ${isCustomCategory || hasCustomNamePattern || hasTypoLegacy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                     style={{ pointerEvents: 'auto' }}
                                   >
                                     {(canMoveUp || canMoveDown) && (
