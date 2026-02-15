@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { Calendar, Clock, Loader2, RefreshCw, ChevronDown, ChevronRight, Timer, Bell, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ZenCard,
@@ -223,10 +224,9 @@ export function EventSchedulerControlCard({
         setCustomCategoriesBySectionStage(new Map());
       }
       // Trinity: Cargar estados activados desde DB con limpieza
-      if (schedulerRes && schedulerRes.explicitly_activated_stage_ids) {
-        const rawActivated = Array.isArray(schedulerRes.explicitly_activated_stage_ids)
-          ? schedulerRes.explicitly_activated_stage_ids
-          : [];
+      const schedulerWithStaging = schedulerRes as { explicitly_activated_stage_ids?: unknown } | null;
+      if (schedulerWithStaging?.explicitly_activated_stage_ids && Array.isArray(schedulerWithStaging.explicitly_activated_stage_ids)) {
+        const rawActivated = schedulerWithStaging.explicitly_activated_stage_ids as string[];
         
         // Limpieza: filtrar solo llaves válidas (formato: sectionId-STAGE)
         const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
@@ -508,9 +508,6 @@ export function EventSchedulerControlCard({
     }
   };
 
-  const handleViewCronograma = () => {
-    window.location.href = `/${studioSlug}/studio/business/events/${eventId}/scheduler`;
-  };
 
   const isInitialState = !status?.exists || status.taskCount === 0;
 
@@ -592,15 +589,13 @@ export function EventSchedulerControlCard({
             Flujo de Trabajo
           </ZenCardTitle>
           {!loading && !isInitialState && (
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleViewCronograma}
-              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0 gap-1"
+            <Link
+              href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`}
+              className="inline-flex items-center justify-center whitespace-nowrap font-medium transition-all duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 focus-visible:ring-zinc-500/50 bg-transparent py-1.5 rounded-md h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0 gap-1"
             >
               Cronograma
               <span className="text-[10px] opacity-80">→</span>
-            </ZenButton>
+            </Link>
           )}
         </div>
       </ZenCardHeader>

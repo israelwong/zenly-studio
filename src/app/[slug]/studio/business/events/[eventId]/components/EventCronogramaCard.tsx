@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Calendar, Clock, Lock } from 'lucide-react';
 import {
   ZenCard,
@@ -25,10 +26,6 @@ export function EventCronogramaCard({
   eventData,
   onUpdated,
 }: EventCronogramaCardProps) {
-  const handleViewCronograma = () => {
-    window.location.href = `/${studioSlug}/studio/business/events/${eventId}/scheduler`;
-  };
-
   const scheduler = eventData?.scheduler ?? null;
   const tasks = scheduler?.tasks ?? [];
   const totalTasks = tasks.length;
@@ -59,15 +56,13 @@ export function EventCronogramaCard({
             Cronograma
           </ZenCardTitle>
           {allClassified ? (
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleViewCronograma}
-              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
+            <Link
+              href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`}
+              className="inline-flex items-center justify-center whitespace-nowrap font-medium transition-all duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 focus-visible:ring-zinc-500/50 bg-transparent py-1.5 rounded-md h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 shrink-0"
             >
               <Calendar className="h-3 w-3 mr-1" />
               Gestionar Cronograma
-            </ZenButton>
+            </Link>
           ) : (
             <span className="flex items-center gap-1 h-6 px-2 text-[10px] text-amber-400/90 shrink-0" title="Clasifica los ítems pendientes para continuar">
               <Lock className="h-3 w-3" />
@@ -104,15 +99,13 @@ export function EventCronogramaCard({
               {hasNoScheduler ? 'Crear cronograma' : 'No hay cronograma configurado'}
             </p>
             {hasNoScheduler && (
-              <ZenButton
-                variant="outline"
-                size="sm"
-                onClick={handleViewCronograma}
-                className="gap-2"
+              <Link
+                href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`}
+                className="inline-flex items-center justify-center whitespace-nowrap font-medium transition-all duration-200 cursor-pointer disabled:pointer-events-none disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 focus-visible:ring-zinc-500/50 border border-zinc-700 bg-zinc-800/50 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-50 focus-visible:ring-zinc-500 rounded-md h-9 px-4 py-2 text-sm gap-2"
               >
                 <Calendar className="h-3.5 w-3.5" />
                 Crear cronograma
-              </ZenButton>
+              </Link>
             )}
           </div>
         )}
