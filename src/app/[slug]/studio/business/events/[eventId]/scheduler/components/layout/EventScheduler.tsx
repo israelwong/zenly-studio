@@ -19,13 +19,15 @@ import {
 } from '../../utils/scheduler-section-stages';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { getPositionFromDate, isDateInRange } from '../../utils/coordinate-utils';
-import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+import { reindexarOrdenSecuencial } from '@/lib/logic/event-structure-master';
 import { reconcileWithServerOrder } from '../../utils/reconcile-order';
 import { SchedulerPanel } from './SchedulerPanel';
+import { SchedulerUpdatingTaskIdProvider } from '../../context/SchedulerUpdatingTaskIdContext';
 import {
   actualizarSchedulerTaskFechas,
   actualizarSchedulerTareasBulkFechas,
   eliminarTareaManual,
+  eliminarTareaManualEnCascada,
   moveSchedulerTask,
   reorderSchedulerTasksToOrder,
   moverTareaManualCategoria,
@@ -37,6 +39,7 @@ import {
 
 const EDGE_SCROLL_THRESHOLD = 100;
 const EDGE_SCROLL_VELOCITY = 10;
+
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
@@ -148,6 +151,9 @@ export const EventScheduler = React.memo(function EventScheduler({
     costoTotal: number;
     isManual?: boolean;
   } | null>(null);
+  /** Confirmación de eliminar tarea con subtareas (cascada). Manual o catálogo. */
+  const [cascadeDeletePending, setCascadeDeletePending] = useState<{ taskId: string; childIds: string[]; isCatalog?: boolean } | null>(null);
+
   const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
   const [pendingFixedSalaryTask, setPendingFixedSalaryTask] = useState<{
     taskId: string;
@@ -235,14 +241,21 @@ export const EventScheduler = React.memo(function EventScheduler({
       reordered: string[];
       taskIdToOldOrder: Map<string, number>;
       taskIdToNewOrder: Map<string, number>;
+      debugLogReorder?: boolean;
+      debugIdTypes?: Array<{ id: string; type: 'item' | 'manual' }>;
     } | null;
   }>({ timeout: null, payload: null });
+
+  /** Backup: limpiar updatingTaskId tras 8s por si la promesa de reorden no resuelve (evita spinner infinito). */
+  const reorderBackupClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setLocalEventDataRef = useRef(setLocalEventData);
   const localEventDataRef = useRef(localEventData);
   const onDataChangeRef = useRef(onDataChange);
+  const setUpdatingTaskIdRef = useRef(setUpdatingTaskId);
   setLocalEventDataRef.current = setLocalEventData;
   localEventDataRef.current = localEventData;
   onDataChangeRef.current = onDataChange;
+  setUpdatingTaskIdRef.current = setUpdatingTaskId;
 
   /** Datos del ítem arrastrado (para que el Sidebar resalte destinos válidos). */
   const [activeDragData, setActiveDragData] = useState<{
@@ -295,19 +308,36 @@ export const EventScheduler = React.memo(function EventScheduler({
   /** True mientras la capa de proyección hace fade-out antes de desmontar. */
   const [bulkDragFadingOut, setBulkDragFadingOut] = useState(false);
 
-  /** Ancho del sidebar (resizable 280–520px). Persistido en localStorage. */
-  const [sidebarWidth, setSidebarWidth] = useState(340);
+  /** Ancho del sidebar (resizable). Persistido en localStorage. */
+  const defaultSidebarWidth = useMemo(() => {
+    if (typeof window === 'undefined') return 340;
+    const isMobile = window.innerWidth < 768;
+    // Mobile: 40%, Desktop: 30%
+    const percentage = isMobile ? 0.4 : 0.3;
+    return Math.floor(window.innerWidth * percentage);
+  }, []);
+
+  const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
 
   // Inicializar desde localStorage antes del primer paint (evita flicker)
   useLayoutEffect(() => {
     try {
-      const v = parseInt(localStorage.getItem('scheduler-sidebar-width') ?? '340', 10);
-      const w = Math.max(280, Math.min(520, isNaN(v) ? 340 : v));
-      if (w !== 340) setSidebarWidth(w);
+      const stored = localStorage.getItem('scheduler-sidebar-width');
+      if (stored) {
+        const v = parseInt(stored, 10);
+        const isMobile = window.innerWidth < 768;
+        // Min: 240px, Max: 60% del viewport
+        const minWidth = 240;
+        const maxWidth = Math.floor(window.innerWidth * 0.6);
+        const w = Math.max(minWidth, Math.min(maxWidth, isNaN(v) ? defaultSidebarWidth : v));
+        setSidebarWidth(w);
+      } else {
+        setSidebarWidth(defaultSidebarWidth);
+      }
     } catch {
       // ignore
     }
-  }, []);
+  }, [defaultSidebarWidth]);
 
   // Persistir cuando cambie el ancho
   useEffect(() => {
@@ -318,24 +348,51 @@ export const EventScheduler = React.memo(function EventScheduler({
     }
   }, [sidebarWidth]);
 
-  // Limpieza del debounce al desmontar
+  // Ajustar sidebar al cambiar tamaño de ventana (respetando límites)
+  useEffect(() => {
+    const handleWindowResize = () => {
+      const stored = localStorage.getItem('scheduler-sidebar-width');
+      if (stored) {
+        const v = parseInt(stored, 10);
+        const minWidth = 240;
+        const maxWidth = Math.floor(window.innerWidth * 0.6);
+        const constrained = Math.max(minWidth, Math.min(maxWidth, v));
+        if (constrained !== sidebarWidth) {
+          setSidebarWidth(constrained);
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, [sidebarWidth]);
+
+  // Limpieza del debounce y backup al desmontar
   useEffect(() => {
     return () => {
       if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
+      if (reorderBackupClearRef.current) clearTimeout(reorderBackupClearRef.current);
     };
   }, []);
 
-  // Sincronizar localEventData cuando el padre pase nuevos datos (p. ej. refetch tras sync en Dashboard).
-  // RECONCILIACIÓN ATÓMICA: Usar el order del servidor como fuente de verdad, pero preservar actualizaciones optimistas.
-  useEffect(() => {
+  // Opción B: sync explícito. No useEffect([eventData]) para evitar rebote por eventData estale.
+  const syncWithServer = useCallback(() => {
     if (reorderInFlightRef.current) return;
-    
-    setLocalEventData((prev) => {
-      // Reconciliar: el order del servidor gana, pero preservamos optimistic updates
-      const reconciled = reconcileWithServerOrder(prev, eventData);
-      return reconciled;
-    });
+    setLocalEventData((prev) => reconcileWithServerOrder(prev, eventData));
   }, [eventData]);
+
+  // 1) Montaje inicial: asegurar localEventData = eventData (useState(eventData) ya lo hace; este efecto refuerza).
+  useEffect(() => {
+    setLocalEventData(eventData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+
+  // 2) Tras reorden exitoso: limpiar refs y spinner (datos ya están en localEventData).
+  const handleReorderSuccess = useCallback(() => {
+    reorderInFlightRef.current = false;
+    setUpdatingTaskId(null);
+    // NO router.refresh() - la reconciliación ya actualizó los datos locales con el servidor
+  }, []);
 
   // Scroll suave a la fecha indicada en URL (ej. desde AlertsPopover)
   useEffect(() => {
@@ -534,11 +591,19 @@ export const EventScheduler = React.memo(function EventScheduler({
     const task = index >= 0 ? tasks[index] : null;
     if (!task) return;
 
+    const childIds = tasks
+      .filter((t) => (t as { parent_id?: string | null }).parent_id != null && String((t as { parent_id?: string | null }).parent_id) === String(taskId))
+      .map((t) => t.id);
+    if (childIds.length > 0) {
+      setCascadeDeletePending({ taskId, childIds });
+      return;
+    }
+
     setLocalEventData((p) => ({
       ...p,
       scheduler: {
         ...p.scheduler!,
-        tasks: p.scheduler!.tasks.filter((t) => t.id !== taskId),
+        tasks: p.scheduler!.tasks?.filter((t) => t.id !== taskId) ?? [],
       },
     }) as SchedulerViewData);
 
@@ -549,9 +614,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         scheduler: {
           ...p.scheduler!,
           tasks: [
-            ...p.scheduler!.tasks.slice(0, index),
+            ...p.scheduler!.tasks?.slice(0, index) ?? [],
             task,
-            ...p.scheduler!.tasks.slice(index),
+            ...p.scheduler!.tasks?.slice(index) ?? [],
           ],
         },
       }) as SchedulerViewData);
@@ -573,11 +638,16 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   /**
    * Reorden unificado: lista combinada de ítems (cotización) + tareas manuales del mismo ámbito.
-   * Swap con idx-1 (arriba) o idx+1 (abajo) y re-indexación 0,1,2... en estado local y servidor.
+   * Si la tarea movida tiene hijos (parent_id), se mueve todo el bloque (padre + hijos) como unidad.
    */
   const handleReorder = useCallback(
     async (taskId: string, direction: 'up' | 'down') => {
       type Entry = { taskId: string; order: number; type: 'item'; item: any } | { taskId: string; order: number; type: 'manual'; task: any };
+      const getParentId = (e: Entry): string | null =>
+        e.type === 'item'
+          ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
+          : ((e.task as { parent_id?: string | null }).parent_id ?? null);
+
       const cotizaciones = localEventData.cotizaciones ?? [];
       const manualTasks = localEventData.scheduler?.tasks ?? [];
 
@@ -631,10 +701,47 @@ export const EventScheduler = React.memo(function EventScheduler({
       if (direction === 'up' && idx === 0) return;
       if (direction === 'down' && idx === combined.length - 1) return;
 
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      const reordered = [...combined];
-      [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!];
-      const taskIdToNewOrder = new Map(reordered.map((e, i) => [e.taskId, i]));
+      const childrenOfMoved = combined.filter((e) => getParentId(e) != null && String(getParentId(e)) === String(taskId));
+      const blockSize = 1 + childrenOfMoved.length;
+      const block = combined.slice(idx, idx + blockSize);
+
+      let reordered: Entry[];
+      let useBlockReorder = false;
+
+      if (direction === 'up') {
+        let prevPrincipalIdx = idx - 1;
+        while (prevPrincipalIdx >= 0 && getParentId(combined[prevPrincipalIdx]!) !== null) prevPrincipalIdx--;
+        if (prevPrincipalIdx < 0) return;
+        const prevPrincipalId = combined[prevPrincipalIdx]!.taskId;
+        let prevEnd = prevPrincipalIdx + 1;
+        while (prevEnd < idx && getParentId(combined[prevEnd]!) != null && String(getParentId(combined[prevEnd]!)) === String(prevPrincipalId)) prevEnd++;
+        const prevBlockSize = prevEnd - prevPrincipalIdx;
+        const prevBlock = combined.slice(prevPrincipalIdx, prevEnd);
+        reordered = [
+          ...combined.slice(0, prevPrincipalIdx),
+          ...block,
+          ...prevBlock,
+          ...combined.slice(idx + blockSize),
+        ];
+        useBlockReorder = blockSize > 1 || prevBlockSize > 1;
+      } else {
+        const nextIdx = idx + blockSize;
+        if (nextIdx >= combined.length) return;
+        const nextPrincipalId = combined[nextIdx]!.taskId;
+        let nextEnd = nextIdx + 1;
+        while (nextEnd < combined.length && getParentId(combined[nextEnd]!) != null && String(getParentId(combined[nextEnd]!)) === String(nextPrincipalId)) nextEnd++;
+        const nextBlockSize = nextEnd - nextIdx;
+        const nextBlock = combined.slice(nextIdx, nextEnd);
+        reordered = [
+          ...combined.slice(0, idx),
+          ...nextBlock,
+          ...block,
+          ...combined.slice(nextEnd),
+        ];
+        useBlockReorder = blockSize > 1 || nextBlockSize > 1;
+      }
+
+      const taskIdToNewOrder = reindexarOrdenSecuencial(reordered, (e) => String(e.taskId));
       const taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
 
       reorderInFlightRef.current = true;
@@ -642,18 +749,18 @@ export const EventScheduler = React.memo(function EventScheduler({
         const next = { ...prev } as any;
         next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
           ...cot,
-          cotizacion_items: cot.cotizacion_items?.map((item) => {
+          cotizacion_items: cot.cotizacion_items?.map((item: SchedulerCotizacionItem) => {
             const id = item?.scheduler_task?.id;
-            const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
-            if (newOrder === undefined) return item;
-            return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
-          }),
+            const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
+            if (newOrder === undefined) return item as SchedulerCotizacionItem;
+            return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null } as SchedulerCotizacionItem;
+          }) as SchedulerCotizacionItem[],
         }));
         next.scheduler = prev.scheduler
           ? {
             ...prev.scheduler,
             tasks: (prev.scheduler.tasks ?? []).map((t) => {
-              const newOrder = taskIdToNewOrder.get(t.id);
+              const newOrder = taskIdToNewOrder.get(String(t.id));
               if (newOrder === undefined) return t;
               return { ...t, order: newOrder };
             }),
@@ -662,34 +769,73 @@ export const EventScheduler = React.memo(function EventScheduler({
         return next as SchedulerViewData;
       });
 
-      try {
-        const result = await moveSchedulerTask(studioSlug, eventId, taskId, direction);
-        if (!result.success) {
-          setLocalEventData((prev) => {
-            const next = { ...prev } as any;
-            next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
-              ...cot,
-              cotizacion_items: cot.cotizacion_items?.map((item: any) => {
-                const id = item?.scheduler_task?.id;
-                const oldOrder = id != null ? taskIdToOldOrder.get(id) : undefined;
-                if (oldOrder === undefined) return item;
-                return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null };
+      const rollback = () => {
+        setLocalEventData((prev) => {
+          const next = { ...prev } as any;
+          next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
+            ...cot,
+            cotizacion_items: cot.cotizacion_items?.map((item: any) => {
+              const id = item?.scheduler_task?.id;
+              const oldOrder = id != null ? taskIdToOldOrder.get(String(id)) : undefined;
+              if (oldOrder === undefined) return item;
+              return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: oldOrder } : null };
+            }),
+          }));
+          next.scheduler = prev.scheduler
+            ? {
+              ...prev.scheduler,
+              tasks: (prev.scheduler.tasks ?? []).map((t) => {
+                const oldOrder = taskIdToOldOrder.get(String(t.id));
+                if (oldOrder === undefined) return t;
+                return { ...t, order: oldOrder };
               }),
-            }));
-            next.scheduler = prev.scheduler
-              ? {
-                ...prev.scheduler,
-                tasks: (prev.scheduler.tasks ?? []).map((t) => {
-                  const oldOrder = taskIdToOldOrder.get(t.id);
-                  if (oldOrder === undefined) return t;
-                  return { ...t, order: oldOrder };
+            }
+            : prev.scheduler;
+          return next as any;
+        });
+      };
+
+      try {
+        if (useBlockReorder) {
+          const reorderedIds = reordered.map((e) => e.taskId);
+          const result = await reorderSchedulerTasksToOrder(studioSlug, eventId, reorderedIds);
+          if (!result.success) {
+            rollback();
+            toast.error(result.error ?? 'Error al reordenar');
+            return;
+          }
+          if (result.data) {
+            const orderMap = new Map(result.data.map((t) => [t.taskId, t.newOrder]));
+            setLocalEventData((prev) => {
+              const next = { ...prev } as any;
+              next.cotizaciones = (prev.cotizaciones as any)?.map((cot: any) => ({
+                ...cot,
+                cotizacion_items: cot.cotizacion_items?.map((item: any) => {
+                  const id = item?.scheduler_task?.id;
+                  const newOrder = id != null ? orderMap.get(id) : undefined;
+                  if (newOrder === undefined || !item?.scheduler_task) return item;
+                  return { ...item, scheduler_task: { ...item.scheduler_task, order: newOrder } };
                 }),
-              }
-              : prev.scheduler;
-            return next as any;
-          });
-          toast.error(result.error ?? 'Error al reordenar');
-          return;
+              }));
+              next.scheduler = prev.scheduler
+                ? {
+                  ...prev.scheduler,
+                  tasks: (prev.scheduler.tasks ?? []).map((t) => {
+                    const newOrder = orderMap.get(t.id);
+                    return newOrder !== undefined ? { ...t, order: newOrder } : t;
+                  }),
+                }
+                : prev.scheduler;
+              return next as SchedulerViewData;
+            });
+          }
+        } else {
+          const result = await moveSchedulerTask(studioSlug, eventId, taskId, direction);
+          if (!result.success) {
+            rollback();
+            toast.error(result.error ?? 'Error al reordenar');
+            return;
+          }
         }
 
         const updatedData: any = {
@@ -698,7 +844,7 @@ export const EventScheduler = React.memo(function EventScheduler({
             ...cot,
             cotizacion_items: cot.cotizacion_items?.map((item: any) => {
               const id = item?.scheduler_task?.id;
-              const newOrder = id != null ? taskIdToNewOrder.get(id) : undefined;
+              const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
               if (newOrder === undefined) return item;
               return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
             }),
@@ -708,7 +854,7 @@ export const EventScheduler = React.memo(function EventScheduler({
               ...localEventData.scheduler,
               tasks: (localEventData.scheduler.tasks ?? []).map((t: any) => ({
                 ...t,
-                order: taskIdToNewOrder.get(t.id) ?? (t as { order?: number }).order ?? 0,
+                order: taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0,
               })),
             }
             : undefined,
@@ -721,7 +867,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         reorderInFlightRef.current = false;
       }
     },
-    [studioSlug, eventId, localEventData, onDataChange]
+    [studioSlug, eventId, localEventData, onDataChange, reorderSchedulerTasksToOrder]
   );
 
   const handleManualTaskMoveStage = useCallback(
@@ -741,7 +887,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         }
         const patch = { category, catalog_category_id: catalogCategoryId ?? null, catalog_category_nombre: catalogCategoryNombre ?? null };
         const tasks = localEventData.scheduler?.tasks ?? [];
-        const childIds = new Set(tasks.filter((t) => (t as { parent_id?: string | null }).parent_id === taskId).map((t) => t.id));
+        const childIds = new Set(tasks.filter((t) => (t as { parent_id?: string | null }).parent_id != null && String((t as { parent_id?: string | null }).parent_id) === String(taskId)).map((t) => t.id));
         const updated = tasks.map((t) => {
           if (t.id === taskId) return { ...t, ...patch };
           if (childIds.has(t.id)) return { ...t, ...patch };
@@ -917,9 +1063,10 @@ export const EventScheduler = React.memo(function EventScheduler({
       const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
       if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
     });
-    const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
+    // Construcción directa del Map sin ordenamiento previo
+    // buildSchedulerRows se encarga del ordenamiento usando scheduler_task.order
     const itemsMapForRows = new Map<string, CotizacionItem>();
-    sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+    allItemsForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
     const rows = buildSchedulerRows(secciones, itemsMapForRows, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage);
     const blocks = groupRowsIntoBlocks(rows);
     const map = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
@@ -1025,9 +1172,10 @@ export const EventScheduler = React.memo(function EventScheduler({
       try {
         const { active, over } = event;
         const activeId = String(active.id);
-        let overId = over?.id ? String(over.id) : null;
-        if (!overId && lastOverIdRef.current && lastOverIdRef.current !== activeId) overId = lastOverIdRef.current;
+        let overId: string | null = over?.id != null ? String(over.id) : null;
+        if (!overId && lastOverIdRef.current != null && String(lastOverIdRef.current) !== activeId) overId = String(lastOverIdRef.current);
         lastOverIdRef.current = null;
+        overId = overId != null ? String(overId) : null;
         const overData = over?.data?.current as { stageKey?: string; catalogCategoryId?: string | null } | undefined;
 
         // Prioridad absoluta al fallback: IGNORAR activeDragData para validaciones; usar siempre la búsqueda fresca
@@ -1055,9 +1203,9 @@ export const EventScheduler = React.memo(function EventScheduler({
           const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
           if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
         });
-        const sortedForMap = secciones.length > 0 ? ordenarPorEstructuraCanonica(allItemsForMap, secciones, (t) => t.catalog_category_id ?? null, (t) => t.name ?? null) : allItemsForMap;
+        // Construcción directa del Map sin ordenamiento previo
         const itemsMapForRows = new Map<string, CotizacionItem>();
-        sortedForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+        allItemsForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
 
         const rows = buildSchedulerRows(
           secciones,
@@ -1088,47 +1236,40 @@ export const EventScheduler = React.memo(function EventScheduler({
                   : (r.task as { catalog_category_id?: string | null }).catalog_category_id ?? null;
               taskIdToMeta.set(taskId, { stageKey: stageId, catalogCategoryId });
             }
-            const hasActive = taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === activeId);
-            const hasOver = overId ? taskRows.some((r) => (r.type === 'task' ? String(r.item.scheduler_task?.id) : String(r.task.id)) === overId) : false;
+            const toEntryTaskId = (r: typeof taskRows[0]) => {
+              const raw = r.type === 'task' ? r.item.scheduler_task?.id : r.task.id;
+              return raw != null && raw !== '' ? String(raw) : null;
+            };
+            // Lista unificada a nivel categoría: todas las tareas del segmento (catálogo + custom) en orden visual.
+            // Catálogo y custom son indistinguibles para el reorden; se reindexa el order 0,1,2… a nivel categoría.
+            const hasActive = taskRows.some((r) => toEntryTaskId(r) === activeId);
+            const hasOver = overId ? taskRows.some((r) => toEntryTaskId(r) === overId) : false;
             if (!combined && hasActive) {
-              combined = taskRows.map((r) =>
-                r.type === 'task'
-                  ? ({
-                    taskId: String(r.item.scheduler_task?.id),
-                    order: (r.item.scheduler_task as { order?: number }).order ?? 0,
-                    stageKey: stageId,
-                    type: 'item' as const,
-                    item: r.item,
-                  } satisfies Entry)
-                  : ({
-                    taskId: String(r.task.id),
-                    order: (r.task as { order?: number }).order ?? 0,
-                    stageKey: stageId,
-                    type: 'manual' as const,
-                    task: r.task,
-                  } satisfies Entry)
-              );
+              combined = taskRows
+                .map((r) => {
+                  const rawId = toEntryTaskId(r);
+                  if (!rawId) return null;
+                  const taskId = String(rawId);
+                  return r.type === 'task'
+                    ? ({ taskId, order: (r.item.scheduler_task as { order?: number }).order ?? 0, stageKey: stageId, type: 'item' as const, item: r.item } satisfies Entry)
+                    : ({ taskId, order: (r.task as { order?: number }).order ?? 0, stageKey: stageId, type: 'manual' as const, task: r.task } satisfies Entry);
+                })
+                .filter((e): e is Entry => e != null);
+              
+              // ✅ SORT EXPLÍCITO: Garantiza orden ascendente por order
               combined.sort((a, b) => a.order - b.order);
             }
             if (!combinedTarget && hasOver) {
-              combinedTarget = taskRows.map((r) =>
-                r.type === 'task'
-                  ? ({
-                    taskId: String(r.item.scheduler_task?.id),
-                    order: (r.item.scheduler_task as { order?: number }).order ?? 0,
-                    stageKey: stageId,
-                    type: 'item' as const,
-                    item: r.item,
-                  } satisfies Entry)
-                  : ({
-                    taskId: String(r.task.id),
-                    order: (r.task as { order?: number }).order ?? 0,
-                    stageKey: stageId,
-                    type: 'manual' as const,
-                    task: r.task,
-                  } satisfies Entry)
-              );
-              combinedTarget.sort((a, b) => a.order - b.order);
+              combinedTarget = taskRows
+                .map((r) => {
+                  const rawId = toEntryTaskId(r);
+                  if (!rawId) return null;
+                  const taskId = String(rawId);
+                  return r.type === 'task'
+                    ? ({ taskId, order: (r.item.scheduler_task as { order?: number }).order ?? 0, stageKey: stageId, type: 'item' as const, item: r.item } satisfies Entry)
+                    : ({ taskId, order: (r.task as { order?: number }).order ?? 0, stageKey: stageId, type: 'manual' as const, task: r.task } satisfies Entry);
+                })
+                .filter((e): e is Entry => e != null);
             }
           }
         }
@@ -1137,7 +1278,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
         const moved = combined.find((e) => e.taskId === activeId);
 
-        if (!overId || active.id === overId) return;
+        if (!overId || activeId === overId) return;
         if (!moved) return;
         if (!activeDataResolved) return;
 
@@ -1218,174 +1359,85 @@ export const EventScheduler = React.memo(function EventScheduler({
           return;
         }
         
-        // MISMO SCOPE: Reordenamiento local permitido
-        {
-          const overIndex = combined.findIndex((e) => e.taskId === overId);
-          const fromIndex = combined.findIndex((e) => e.taskId === activeId);
-          if (fromIndex === -1 || overIndex === -1) return;
-          const getParentId = (e: Entry) =>
-            e.type === 'item'
-              ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
-              : ((e.task as { parent_id?: string | null }).parent_id ?? null);
-          
-          // ========== REGLAS DE ANIDACIÓN ESTRICTAS ==========
-          
-          const activeEntry = combined[fromIndex]!;
-          const overEntry = combined[overIndex]!;
-          const activeParentId = getParentId(activeEntry);
-          const overParentId = getParentId(overEntry);
-          const childrenOfActive = combined.filter((e) => getParentId(e) === activeId);
-          
-          // REGLA 3: RE-PARENTESCO DINÁMICO (Amber puede adoptar cualquier padre)
-          let newParentId: string | null = null;
-          const currentDropIndicator = dropIndicator;
-          
-          if (overParentId !== null) {
-            // Caso 1: over en subtarea - adoptar su mismo padre (re-parenting familiar)
-            if (isManual) {
-              newParentId = overParentId;
-            } else {
-              newParentId = activeParentId; // Zinc mantiene su jerarquía
-            }
-          } else if (currentDropIndicator && !currentDropIndicator.insertBefore && isManual && activeParentId !== null) {
-            // Caso 2: RE-PARENTING - Solo si YA era una subtarea
-            // Las tareas principales mantienen su nivel de raíz
-            newParentId = overId;
-          } else {
-            // Caso 3: Mantener parent_id actual (reordenamiento simple)
-            newParentId = activeParentId;
-          }
-          
-          // REGLA 1: Bloqueo de Zinc - Las tareas de catálogo no pueden ser secundarias
-          // Solo validar si se está intentando cambiar a un parent_id no nulo
-          if (!isManual && newParentId !== null && newParentId !== activeParentId) {
-            toast.error('Las tareas de catálogo no pueden ser secundarias');
-            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
-            return;
-          }
-          
-          // REGLA 2: Bloqueo de Multi-nivel - Tareas con hijos no pueden tener padres
-          // Solo validar si se está intentando asignar un nuevo padre
-          if (childrenOfActive.length > 0 && newParentId !== null && newParentId !== activeParentId) {
-            toast.error('No se permite anidación de múltiples niveles');
-            window.dispatchEvent(new CustomEvent('scheduler-dnd-shake', { detail: { taskId: activeId } }));
-            return;
-          }
-          
-          const block = [combined[fromIndex]!, ...childrenOfActive];
-          const blockIds = new Set(block.map((e) => e.taskId));
-          const rest = combined.filter((e) => !blockIds.has(e.taskId));
-          let insertIndex = rest.findIndex((e) => e.taskId === overId);
-          // Compensación Israel Algorithm: al mover hacia abajo (fromIndex < overIndex), el bloque deja un hueco,
-          // por lo que el índice de destino en `rest` debe ajustarse +1 para que el bloque quede DESPUÉS del over.
-          if (fromIndex < overIndex && insertIndex >= 0) {
-            insertIndex += 1;
-          }
-          const finalInsertIndex = insertIndex >= 0 ? insertIndex : rest.length;
-          const reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
-          reordered = reorderedEntries.map((e) => e.taskId);
-          taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
-          taskIdToOldOrder = new Map(combined.map((e) => [e.taskId, e.order]));
-          
-          // Si cambió el parent_id, actualizar optimista y llamar a toggleTaskHierarchy
-          if (newParentId !== activeParentId) {
-            // ATERRIZAJE OBLIGATORIO: Si es Amber, asegurar que adopte la categoría del destino
-            let updatedCategoryId = activeCat;
-            let updatedCategoryNombre: string | null = null;
-            
-            if (isManual && overCatResolved !== activeCat) {
-              updatedCategoryId = overCatResolved;
-              updatedCategoryNombre = getCatalogCategoryNombre(overCatResolved);
-            }
-            
-            setLocalEventData((prev) => {
-              const next = { ...prev };
-              if (prev.scheduler?.tasks) {
-                next.scheduler = {
-                  ...prev.scheduler,
-                  tasks: prev.scheduler.tasks.map((t) =>
-                    t.id === activeId ? { 
-                      ...t, 
-                      parent_id: newParentId,
-                      ...(isManual && updatedCategoryId ? { 
-                        catalog_category_id: updatedCategoryId,
-                        catalog_category_nombre: updatedCategoryNombre 
-                      } : {})
-                    } : t
-                  ),
-                };
-              }
-              return next as SchedulerViewData;
-            });
-            
-            // Si también cambió la categoría (Amber), actualizar primero la categoría
-            if (isManual && updatedCategoryId && updatedCategoryId !== activeCat) {
-              const stageCategory = activeStageKey.split('-').pop() as import('../../utils/scheduler-section-stages').TaskCategoryStage;
-              await handleManualTaskMoveStage(activeId, stageCategory, updatedCategoryId, updatedCategoryNombre ?? null);
-            }
-            
-            // Llamar a toggleTaskHierarchy para persistir el cambio de jerarquía
-            const hierarchyResult = await toggleTaskHierarchy(studioSlug, eventId, activeId, newParentId);
-            if (!hierarchyResult.success) {
-              toast.error(hierarchyResult.error ?? 'Error al actualizar jerarquía');
-              // Rollback
-              setLocalEventData((prev) => {
-                const next = { ...prev };
-                if (prev.scheduler?.tasks) {
-                  next.scheduler = {
-                    ...prev.scheduler,
-                    tasks: prev.scheduler.tasks.map((t) =>
-                      t.id === activeId ? { 
-                        ...t, 
-                        parent_id: activeParentId,
-                        catalog_category_id: activeCat 
-                      } : t
-                    ),
-                  };
-                }
-                return next as SchedulerViewData;
-              });
-              return;
-            }
-            
-            // Toast descriptivo según tipo de cambio de jerarquía
-            if (newParentId === null && activeParentId !== null) {
-              // Promoción a principal
-              toast.success('Tarea convertida en principal');
-            } else if (newParentId !== null && activeParentId === null) {
-              // Nesting automático (adopción de padre)
-              toast.success('Tarea convertida en secundaria');
-            } else if (newParentId !== null && activeParentId !== null) {
-              // Re-parenting (cambio de familia)
-              toast.success('Tarea reasignada a nueva familia');
-            }
-            
-            // Notificar al Israel Algorithm
-            window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
-          }
+        // Un solo arreglo por categoría (sección > estado > categoría): todos los ítems (catálogo + custom).
+        // combined = orden visual del segmento (sidebar). Ese arreglo en su orden final → order 0,1,2..N en BD.
+        const activeIdStr = String(activeId);
+        const overIdStr = overId != null ? String(overId) : '';
+        const getParentId = (e: Entry): string | null =>
+          e.type === 'item'
+            ? ((e.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null)
+            : ((e.task as { parent_id?: string | null }).parent_id ?? null);
+
+        const activeEntry = moved;
+        const childrenOfActive = combined.filter(
+          (e) => getParentId(e) != null && String(getParentId(e)) === activeIdStr
+        );
+        const block: Entry[] = [activeEntry, ...childrenOfActive];
+        const rest = combined.filter((e) => !block.some((b) => String(b.taskId) === String(e.taskId)));
+
+        const overIndexInRest = rest.findIndex((e) => String(e.taskId) === overIdStr);
+        let reorderedEntries: Entry[];
+
+        if (overIndexInRest >= 0) {
+          const finalInsertIndex =
+            dropIndicator && !dropIndicator.insertBefore ? overIndexInRest + 1 : overIndexInRest;
+          reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
+        } else {
+          // over está dentro del bloque movido → fallback splice plano
+          const fromIndex = combined.findIndex((e) => String(e.taskId) === activeIdStr);
+          const overIndex = combined.findIndex((e) => String(e.taskId) === overIdStr);
+          if (fromIndex < 0 || overIndex < 0) return;
+          const ids = combined.map((e) => String(e.taskId));
+          ids.splice(fromIndex, 1);
+          let destIndex = dropIndicator && !dropIndicator.insertBefore ? overIndex + 1 : overIndex;
+          if (fromIndex < destIndex) destIndex -= 1;
+          ids.splice(destIndex, 0, activeIdStr);
+          reorderedEntries = ids
+            .map((id) => combined.find((e) => String(e.taskId) === id))
+            .filter((e): e is Entry => e != null);
         }
-        const originalIds = combined.map((e) => e.taskId);
+
+        reordered = reorderedEntries.map((e) => String(e.taskId));
+        taskIdToNewOrder = new Map(reordered.map((id, i) => [id, i]));
+        taskIdToOldOrder = new Map(combined.map((e) => [String(e.taskId), e.order]));
+
+        const originalIds = combined.map((e) => String(e.taskId));
         const orderChanged = reordered.length !== originalIds.length || reordered.some((id, i) => id !== originalIds[i]);
         if (!orderChanged && !adoptedCatalogForManual) return;
 
-        setUpdatingTaskId(activeId);
-        // Actualización optimista: nuevo orden y, si la manual adoptó categoría, catalog_category_id/catalog_category_nombre
+        reorderInFlightRef.current = true;
+
+        if (reorderBackupClearRef.current) clearTimeout(reorderBackupClearRef.current);
+        reorderBackupClearRef.current = setTimeout(() => {
+          reorderBackupClearRef.current = null;
+          setUpdatingTaskIdRef.current(null);
+        }, 8000);
+        const normalizedActiveId = String(activeId);
+        setUpdatingTaskId(normalizedActiveId);
+        // Actualización optimista: mutación explícita de order (catálogo + manuales) para evitar rebote.
         setLocalEventData((prev) => {
           const next = { ...prev };
+          // Catálogo: clonar hasta item.scheduler_task y asignar order numérico.
           next.cotizaciones = prev.cotizaciones?.map((cot) => ({
             ...cot,
             cotizacion_items: cot.cotizacion_items?.map((item) => {
-              const id = item?.scheduler_task?.id;
-              const newOrder = id != null ? taskIdToNewOrder.get(String(id)) : undefined;
-              if (newOrder === undefined) return item;
-              return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: newOrder } : null };
+              const taskId = item?.scheduler_task?.id;
+              const newOrderVal = taskId != null ? taskIdToNewOrder.get(String(taskId)) : undefined;
+              if (newOrderVal === undefined) return item;
+              const newOrder = Number(newOrderVal);
+              const st = item!.scheduler_task;
+              const newItem = { ...item };
+              newItem.scheduler_task = st ? { ...st, order: newOrder } : null;
+              return newItem;
             }),
           }));
+          // Manuales: clonar tasks y asignar .order numérico cuando el ID está en el mapa.
           next.scheduler = prev.scheduler
             ? {
               ...prev.scheduler,
               tasks: (prev.scheduler.tasks ?? []).map((t) => {
-                const newOrder = taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0;
+                const rawOrder = taskIdToNewOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0;
+                const newOrder = Number(rawOrder);
                 const patch = adoptedCatalogForManual && t.id === activeId
                   ? { catalog_category_id: adoptedCatalogForManual.catalog_category_id, catalog_category_nombre: adoptedCatalogForManual.catalog_category_nombre }
                   : {};
@@ -1396,7 +1448,14 @@ export const EventScheduler = React.memo(function EventScheduler({
           return next as SchedulerViewData;
         });
 
-        const payload = { studioSlug, eventId, movedTaskId: activeId, reordered, taskIdToOldOrder, taskIdToNewOrder };
+        const payload = {
+          studioSlug,
+          eventId,
+          movedTaskId: normalizedActiveId,
+          reordered,
+          taskIdToOldOrder,
+          taskIdToNewOrder,
+        };
         if (reorderDebounceRef.current.timeout) clearTimeout(reorderDebounceRef.current.timeout);
         reorderDebounceRef.current.payload = payload;
         reorderDebounceRef.current.timeout = setTimeout(async () => {
@@ -1408,71 +1467,89 @@ export const EventScheduler = React.memo(function EventScheduler({
           try {
             const result = await reorderSchedulerTasksToOrder(p.studioSlug, p.eventId, p.reordered);
             if (!result.success) {
-              // Revertir al orden anterior en caso de error
-              setLocalEventDataRef.current((prev) => {
-                const next = { ...prev };
-                next.cotizaciones = prev.cotizaciones?.map((cot) => ({
+              // ROLLBACK: Revertir al orden anterior en caso de error
+              const rollbackData: SchedulerViewData = {
+                ...localEventDataRef.current,
+                cotizaciones: localEventDataRef.current.cotizaciones?.map((cot) => ({
                   ...cot,
                   cotizacion_items: cot.cotizacion_items?.map((item) => {
                     const id = item?.scheduler_task?.id;
-                    const o = id != null ? p.taskIdToOldOrder.get(String(id)) : undefined;
-                    if (o === undefined) return item;
-                    return { ...item, scheduler_task: item!.scheduler_task ? { ...item.scheduler_task, order: o } : null };
+                    const oldOrder = id != null ? p.taskIdToOldOrder.get(String(id)) : undefined;
+                    if (oldOrder === undefined) return item;
+                    return { 
+                      ...item, 
+                      scheduler_task: item!.scheduler_task 
+                        ? { ...item.scheduler_task, order: oldOrder } 
+                        : null 
+                    };
                   }),
-                }));
-                next.scheduler = prev.scheduler
-                  ? { ...prev.scheduler, tasks: (prev.scheduler.tasks ?? []).map((t) => ({ ...t, order: p.taskIdToOldOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 })) }
-                  : prev.scheduler;
-                return next as SchedulerViewData;
-              });
+                })),
+                scheduler: localEventDataRef.current.scheduler
+                  ? { 
+                      ...localEventDataRef.current.scheduler, 
+                      tasks: (localEventDataRef.current.scheduler.tasks ?? []).map((t) => ({ 
+                        ...t, 
+                        order: p.taskIdToOldOrder.get(String(t.id)) ?? (t as { order?: number }).order ?? 0 
+                      })) 
+                    }
+                  : localEventDataRef.current.scheduler,
+              };
+              
+              setLocalEventData(rollbackData);
               toast.error(result.error ?? 'Error al reordenar');
+              reorderInFlightRef.current = false;
+              setUpdatingTaskId(null);
               return;
             }
-            
-            // RECONCILIACIÓN INMEDIATA: Usar el orden devuelto por el servidor (fuente de verdad)
+
+            // PASO 3: RECONCILIACIÓN INMEDIATA con orden del servidor
             if (result.data) {
-              const orderMap = new Map(result.data.map((t) => [t.taskId, t.newOrder]));
+              const orderMap = new Map(result.data.map((t) => [String(t.taskId), t.newOrder]));
               
-              setLocalEventDataRef.current((prev) => {
-                return {
-                  ...prev,
-                  cotizaciones: prev.cotizaciones?.map((cot) => ({
-                    ...cot,
-                    cotizacion_items: cot.cotizacion_items?.map((item) => {
-                      const taskId = item?.scheduler_task?.id;
-                      const newOrder = taskId ? orderMap.get(taskId) : undefined;
-                      
-                      return newOrder !== undefined && item.scheduler_task
-                        ? { ...item, scheduler_task: { ...item.scheduler_task, order: newOrder } }
-                        : item;
-                    }),
-                  })),
-                  scheduler: prev.scheduler
-                    ? {
-                        ...prev.scheduler,
-                        tasks: prev.scheduler.tasks.map((task) => {
-                          const newOrder = orderMap.get(task.id);
-                          return newOrder !== undefined ? { ...task, order: newOrder } : task;
-                        }),
-                      }
-                    : prev.scheduler,
-                } as SchedulerViewData;
-              });
+              // Calcular nuevo estado fuera del setter para notificar al padre con datos correctos
+              const updatedData: SchedulerViewData = {
+                ...localEventDataRef.current,
+                cotizaciones: localEventDataRef.current.cotizaciones?.map((cot) => ({
+                  ...cot,
+                  cotizacion_items: cot.cotizacion_items?.map((item) => {
+                    const taskId = item?.scheduler_task?.id != null ? String(item.scheduler_task.id) : undefined;
+                    const newOrder = taskId ? orderMap.get(taskId) : undefined;
+                    return newOrder !== undefined && item?.scheduler_task
+                      ? { ...item, scheduler_task: { ...item.scheduler_task, order: newOrder } }
+                      : item;
+                  }),
+                })),
+                scheduler: localEventDataRef.current.scheduler
+                  ? {
+                      ...localEventDataRef.current.scheduler,
+                      tasks: localEventDataRef.current.scheduler.tasks.map((task) => {
+                        const newOrder = orderMap.get(String(task.id));
+                        return newOrder !== undefined ? { ...task, order: newOrder } : task;
+                      }),
+                    }
+                  : localEventDataRef.current.scheduler,
+              };
               
-              // Notificar al padre con el estado actualizado
-              const data = localEventDataRef.current;
-              onDataChangeRef.current?.(data);
+              // Actualizar estado local
+              setLocalEventData(updatedData);
+              
+              // Notificar al padre con los datos ya actualizados
+              onDataChangeRef.current?.(updatedData);
             }
-            
+
             toast.success('Orden guardado');
             window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
             window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+            handleReorderSuccess();
           } finally {
-            reorderInFlightRef.current = false;
-            setUpdatingTaskId(null);
+            if (reorderBackupClearRef.current) {
+              clearTimeout(reorderBackupClearRef.current);
+              reorderBackupClearRef.current = null;
+            }
           }
         }, 300);
       } finally {
+        // No limpiar updatingTaskId aquí: el spinner debe seguir hasta que el debounce llame a la API y termine (éxito o error).
         lastOverIdRef.current = null;
         setActiveDragData(null);
         setOverlayPosition(null);
@@ -1495,6 +1572,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       handleManualTaskMoveStage,
       handleItemTaskMoveCategory,
       reorderSchedulerTasksToOrder,
+      handleReorderSuccess,
     ]
   );
 
@@ -1558,8 +1636,7 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   /**
    * Reindexa un segmento (misma category + catalog_category_id) a orden 0, 1, 2… sin huecos.
-   * Mantiene paridad manuales + cotización: manuales por catalog_category_id, cotización por effectiveCat (service_category_id ?? catalog_category_id).
-   * Misma lógica que la reindexación en servidor (scheduler-actions).
+   * Lista unificada: manuales + cotización en un solo array; reindex 0,1,2 con Map directo.
    */
   const applySegmentOrderNormalization = useCallback(
     (prev: SchedulerViewData, segmentCategory: string, segmentCatalogId: string | null): SchedulerViewData => {
@@ -1581,7 +1658,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         });
       });
       entries.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-      const taskIdToNewOrder = new Map(entries.map((e, i) => [e.id, i]));
+      const taskIdToNewOrder = reindexarOrdenSecuencial(entries, (e) => e.id);
       const next: SchedulerViewData = { ...prev };
       next.cotizaciones = prev.cotizaciones?.map((cot) => ({
         ...cot,
@@ -1699,6 +1776,7 @@ export const EventScheduler = React.memo(function EventScheduler({
       startDate?: Date,
       parentId?: string | null
     ) => {
+      // parent_id puede ser id de tarea manual o de scheduler_task (catálogo); ambos viven en studio_scheduler_event_tasks
       const result = await crearTareaManualScheduler(studioSlug, eventId, {
         sectionId,
         stage,
@@ -1722,6 +1800,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         category: result.data.category,
         cotizacion_item_id: null as const,
         catalog_category_id: result.data.catalog_category_id,
+        scheduler_custom_category_id: result.data.scheduler_custom_category_id,
+        scheduler_custom_category_nombre: result.data.scheduler_custom_category_nombre,
         parent_id: (result.data as { parent_id?: string | null }).parent_id ?? null,
         catalog_category_nombre: result.data.catalog_category_nombre,
         catalog_section_id: (result.data as { catalog_section_id?: string | null }).catalog_section_id ?? sectionId,
@@ -1758,10 +1838,6 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, localEventData, onDataChange, applySegmentOrderNormalization]
   );
 
-  // Paridad con Card: mismos getters y única fuente de orden (ordenarPorEstructuraCanonica). Sin .sort() ni pesos por nombre.
-  const getCategoryId = useCallback((t: CotizacionItem) => t.catalog_category_id ?? null, []);
-  const getName = useCallback((t: CotizacionItem) => t.name ?? null, []);
-
   const itemsMap = useMemo(() => {
     const allItems: CotizacionItem[] = [];
     localEventData.cotizaciones?.forEach((cotizacion) => {
@@ -1774,15 +1850,11 @@ export const EventScheduler = React.memo(function EventScheduler({
       }
     });
 
-    const sortedItems =
-      secciones.length > 0
-        ? ordenarPorEstructuraCanonica(allItems, secciones, getCategoryId, getName)
-        : allItems;
-
+    // Construcción directa del Map sin ordenamiento previo
     const map = new Map<string, CotizacionItem>();
-    sortedItems.forEach((item) => map.set(item.item_id || item.id, item));
+    allItems.forEach((item) => map.set(item.item_id || item.id, item));
     return map;
-  }, [localEventData.cotizaciones, secciones, getCategoryId, getName]);
+  }, [localEventData.cotizaciones]);
 
   // Dependencia en localEventData para que cualquier cambio (p. ej. duración en Popover) entregue un array nuevo al Grid y las keys con end_date.getTime() disparen remontaje de barras.
   const manualTasks = useMemo(
@@ -2296,9 +2368,17 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, router, onDataChange]
   );
 
-  // Manejar eliminación de tareas (vaciar slot)
+  // Manejar eliminación de tareas (vaciar slot). Si tiene hijos, mostrar confirmación en cascada.
   const handleTaskDelete = useCallback(
     async (taskId: string) => {
+      const tasks = localEventData.scheduler?.tasks ?? [];
+      const childIds = tasks
+        .filter((t) => (t as { parent_id?: string | null }).parent_id != null && String((t as { parent_id?: string | null }).parent_id) === String(taskId))
+        .map((t) => t.id);
+      if (childIds.length > 0) {
+        setCascadeDeletePending({ taskId, childIds, isCatalog: true });
+        return;
+      }
       try {
         const result = await eliminarSchedulerTask(studioSlug, eventId, taskId);
 
@@ -2348,7 +2428,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         toast.error('Error al vaciar el slot');
       }
     },
-    [studioSlug, eventId, router, onDataChange]
+    [studioSlug, eventId, router, onDataChange, localEventData.scheduler?.tasks]
   );
 
   const handleDeleteStage = useCallback(
@@ -3051,74 +3131,76 @@ export const EventScheduler = React.memo(function EventScheduler({
           )}
         </>
       )}
-      <SchedulerPanel
-        sidebarWidth={sidebarWidth}
-        onSidebarWidthChange={setSidebarWidth}
-        columnWidth={columnWidth}
-        secciones={seccionesFiltradasConItems}
-        fullSecciones={secciones}
-        itemsMap={itemsMap}
-        manualTasks={manualTasks}
-        studioSlug={studioSlug}
-        eventId={eventId}
-        dateRange={dateRange}
-        activeSectionIds={activeSectionIds}
-        explicitlyActivatedStageIds={explicitlyActivatedStageIds}
-        stageIdsWithDataBySection={stageIdsWithDataBySection}
-        customCategoriesBySectionStage={customCategoriesBySectionStage}
-        timestamp={timestamp}
-        onCategoriesReordered={onCategoriesReordered}
-        onToggleStage={onToggleStage}
-        onAddCustomCategory={onAddCustomCategory}
-        onRemoveEmptyStage={onRemoveEmptyStage}
-        onRenameCustomCategory={onRenameCustomCategory}
-        onDeleteCustomCategory={handleDeleteCustomCategory}
-        onTaskUpdate={handleTaskUpdate}
-        onTaskCreate={handleTaskCreate}
-        onTaskDelete={handleTaskDelete}
-        onTaskToggleComplete={handleTaskToggleComplete}
-        renderSidebarItem={renderSidebarItem}
-        onItemUpdate={handleItemUpdate}
-        onAddManualTaskSubmit={handleAddManualTaskSubmit}
-        onToggleTaskHierarchy={handleToggleTaskHierarchy}
-        onConvertSubtasksToPrincipal={handleConvertSubtasksToPrincipal}
-        onManualTaskPatch={handleManualTaskPatch}
-        onManualTaskDelete={handleManualTaskDelete}
-        onManualTaskReorder={handleReorder}
-        onManualTaskMoveStage={handleManualTaskMoveStage}
-        onItemTaskReorder={handleReorder}
-        onItemTaskMoveCategory={handleItemTaskMoveCategory}
-        onManualTaskDuplicate={handleManualTaskDuplicate}
-        onManualTaskUpdate={() => onRefetchEvent?.()}
-        onNoteAdded={handleNotesCountDelta}
-        onDeleteStage={handleDeleteStage}
-        schedulerDateReminders={eventData?.schedulerDateReminders ?? []}
-        onReminderAdd={onReminderAdd}
-        onReminderUpdate={onReminderUpdate}
-        onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
-        onReminderMoveDateRevert={onReminderMoveDateRevert}
-        onReminderDelete={onReminderDelete}
-        expandedSections={expandedSections}
-        expandedStages={expandedStages}
-        onExpandedSectionsChange={setExpandedSections}
-        onExpandedStagesChange={setExpandedStages}
-        collapsedCategoryIds={collapsedCategoryIds}
-        onCollapsedCategoryIdsChange={setCollapsedCategoryIds}
-        onSchedulerDragStart={handleSchedulerDragStart}
-        onSchedulerDragMove={handleSchedulerDragMove}
-        onSchedulerDragOver={handleSchedulerDragOver}
-        onSchedulerDragEnd={handleSchedulerDragEnd}
-        activeDragData={activeDragData}
-        overlayPosition={overlayPosition}
-        dropIndicator={dropIndicator}
-        updatingTaskId={updatingTaskId}
-        gridRef={gridRef}
-        scrollContainerRef={scrollContainerRef}
-        bulkDragState={bulkDragState}
-        onBulkDragStart={onBulkDragStart}
-        isMaximized={isMaximized}
-        googleCalendarEnabled={googleCalendarEnabled}
-      />
+      <SchedulerUpdatingTaskIdProvider updatingTaskId={updatingTaskId != null ? String(updatingTaskId) : null}>
+        <SchedulerPanel
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={setSidebarWidth}
+          columnWidth={columnWidth}
+          secciones={seccionesFiltradasConItems}
+          fullSecciones={secciones}
+          itemsMap={itemsMap}
+          manualTasks={manualTasks}
+          studioSlug={studioSlug}
+          eventId={eventId}
+          dateRange={dateRange}
+          activeSectionIds={activeSectionIds}
+          explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+          stageIdsWithDataBySection={stageIdsWithDataBySection}
+          customCategoriesBySectionStage={customCategoriesBySectionStage}
+          timestamp={timestamp}
+          onCategoriesReordered={onCategoriesReordered}
+          onToggleStage={onToggleStage}
+          onAddCustomCategory={onAddCustomCategory}
+          onRemoveEmptyStage={onRemoveEmptyStage}
+          onRenameCustomCategory={onRenameCustomCategory}
+          onDeleteCustomCategory={handleDeleteCustomCategory}
+          onTaskUpdate={handleTaskUpdate}
+          onTaskCreate={handleTaskCreate}
+          onTaskDelete={handleTaskDelete}
+          onTaskToggleComplete={handleTaskToggleComplete}
+          renderSidebarItem={renderSidebarItem}
+          onItemUpdate={handleItemUpdate}
+          onAddManualTaskSubmit={handleAddManualTaskSubmit}
+          onToggleTaskHierarchy={handleToggleTaskHierarchy}
+          onConvertSubtasksToPrincipal={handleConvertSubtasksToPrincipal}
+          onManualTaskPatch={handleManualTaskPatch}
+          onManualTaskDelete={handleManualTaskDelete}
+          onManualTaskReorder={handleReorder}
+          onManualTaskMoveStage={handleManualTaskMoveStage}
+          onItemTaskReorder={handleReorder}
+          onItemTaskMoveCategory={handleItemTaskMoveCategory}
+          onManualTaskDuplicate={handleManualTaskDuplicate}
+          onManualTaskUpdate={() => onRefetchEvent?.()}
+          onNoteAdded={handleNotesCountDelta}
+          onDeleteStage={handleDeleteStage}
+          schedulerDateReminders={eventData?.schedulerDateReminders ?? []}
+          onReminderAdd={onReminderAdd}
+          onReminderUpdate={onReminderUpdate}
+          onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+          onReminderMoveDateRevert={onReminderMoveDateRevert}
+          onReminderDelete={onReminderDelete}
+          expandedSections={expandedSections}
+          expandedStages={expandedStages}
+          onExpandedSectionsChange={setExpandedSections}
+          onExpandedStagesChange={setExpandedStages}
+          collapsedCategoryIds={collapsedCategoryIds}
+          onCollapsedCategoryIdsChange={setCollapsedCategoryIds}
+          onSchedulerDragStart={handleSchedulerDragStart}
+          onSchedulerDragMove={handleSchedulerDragMove}
+          onSchedulerDragOver={handleSchedulerDragOver}
+          onSchedulerDragEnd={handleSchedulerDragEnd}
+          activeDragData={activeDragData}
+          overlayPosition={overlayPosition}
+          dropIndicator={dropIndicator}
+          updatingTaskId={updatingTaskId}
+          gridRef={gridRef}
+          scrollContainerRef={scrollContainerRef}
+          bulkDragState={bulkDragState}
+          onBulkDragStart={onBulkDragStart}
+          isMaximized={isMaximized}
+          googleCalendarEnabled={googleCalendarEnabled}
+        />
+      </SchedulerUpdatingTaskIdProvider>
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}
       {pendingTaskCompletion && (
@@ -3137,6 +3219,53 @@ export const EventScheduler = React.memo(function EventScheduler({
           key={pendingTaskCompletion.taskId}
         />
       )}
+
+      {/* Modal: eliminar tarea con subtareas (cascada) */}
+      <ZenConfirmModal
+        isOpen={cascadeDeletePending != null}
+        onClose={() => setCascadeDeletePending(null)}
+        onConfirm={async () => {
+          if (!cascadeDeletePending) return;
+          const { taskId, childIds, isCatalog } = cascadeDeletePending;
+          setCascadeDeletePending(null);
+          const result = await eliminarTareaManualEnCascada(studioSlug, eventId, taskId);
+          if (!result.success) {
+            toast.error(result.error ?? 'Error al eliminar el grupo');
+            return;
+          }
+          const idsToRemove = new Set([taskId, ...childIds]);
+          setLocalEventData((p) => {
+            const next = { ...p };
+            next.scheduler = p.scheduler
+              ? { ...p.scheduler, tasks: p.scheduler.tasks?.filter((t) => !idsToRemove.has(t.id)) ?? [] }
+              : p.scheduler;
+            if (isCatalog && p.cotizaciones) {
+              next.cotizaciones = p.cotizaciones.map((cot) => ({
+                ...cot,
+                cotizacion_items: cot.cotizacion_items?.map((item) =>
+                  String((item as { scheduler_task?: { id: string } | null }).scheduler_task?.id) === String(taskId)
+                    ? {
+                        ...item,
+                        scheduler_task_id: null,
+                        scheduler_task: null,
+                        assigned_to_crew_member_id: null,
+                        assigned_to_crew_member: null,
+                      }
+                    : item
+                ),
+              }));
+            }
+            return next as SchedulerViewData;
+          });
+          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+          toast.success(result.deletedCount && result.deletedCount > 1 ? 'Grupo eliminado' : 'Tarea eliminada');
+        }}
+        title="Eliminar grupo"
+        description="Esta tarea tiene subtareas asociadas. ¿Deseas eliminar todo el grupo?"
+        confirmText="Sí, eliminar todo"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
 
       {/* Modal de confirmación para sueldo fijo (cuando ya tiene personal asignado) */}
       <ZenConfirmModal

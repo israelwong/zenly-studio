@@ -107,8 +107,7 @@ interface SchedulerPanelProps {
  * Utiliza CSS Grid para sincronizar scroll entre sidebar y timeline
  * Opción A: Contenedor único con display: grid que incluye sidebar y timeline
  */
-const SIDEBAR_MIN = 280;
-const SIDEBAR_MAX = 520;
+// Límites dinámicos calculados en handleResizeMouseDown
 
 export const SchedulerPanel = React.memo(({
   sidebarWidth = 340,
@@ -223,9 +222,14 @@ export const SchedulerPanel = React.memo(({
       document.body.style.userSelect = 'none';
       resizeStartX.current = e.clientX;
       resizeStartWidth.current = sidebarWidth;
+      
       const onMove = (ev: MouseEvent) => {
+        // Calcular límites dinámicos en cada movimiento
+        const minWidth = 240; // Mínimo absoluto para legibilidad
+        const maxWidth = Math.floor(window.innerWidth * 0.6); // Máximo 60% del viewport
+        
         const delta = ev.clientX - resizeStartX.current;
-        const next = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, resizeStartWidth.current + delta));
+        const next = Math.max(minWidth, Math.min(maxWidth, resizeStartWidth.current + delta));
         onSidebarWidthChange(next);
       };
       const onUp = () => {

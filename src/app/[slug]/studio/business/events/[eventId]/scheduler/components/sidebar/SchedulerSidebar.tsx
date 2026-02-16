@@ -18,6 +18,7 @@ import {
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useSchedulerUpdatingTaskId } from '../../context/SchedulerUpdatingTaskIdContext';
 import {
   buildSchedulerRows,
   filterRowsByExpandedSections,
@@ -49,7 +50,8 @@ import { SchedulerItemPopover } from './SchedulerItemPopover';
 import { SchedulerManualTaskPopover } from './SchedulerManualTaskPopover';
 import { TaskForm } from './TaskForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarFallback, ZenConfirmModal, ZenDialog } from '@/components/ui/zen';
+import { cn } from '@/lib/utils';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { useSchedulerManualTaskSync } from '../../hooks/useSchedulerManualTaskSync';
 import { useTaskNotesSync } from '../../hooks/useTaskNotesSync';
@@ -60,6 +62,8 @@ import {
   Plus,
   Trash2,
   User,
+  UserPlus,
+  UserMinus,
   MoreHorizontal,
   Pencil,
   Copy,
@@ -68,12 +72,24 @@ import {
   Loader2,
   CornerDownRight,
   MessageSquare,
+  EllipsisVertical,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
 import { differenceInCalendarDays } from 'date-fns';
 import { MoveTaskModal } from './MoveTaskModal';
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
+import { obtenerCrewMembers, asignarCrewAItem } from '@/lib/actions/studio/business/events';
+import { asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { SchedulerBackdropProvider, useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -324,7 +340,7 @@ function SortableTaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-center min-h-[32px] box-border overflow-hidden transition-colors border-b border-white/5 hover:bg-zinc-800/40 cursor-pointer ${isSynced ? 'bg-blue-500/5' : ''} ${className}`}
+      className={`group relative flex items-center min-h-[32px] box-border overflow-hidden transition-colors border-b border-white/5 hover:bg-zinc-800/40 cursor-pointer outline-none focus:outline-none focus-within:ring-0 ${isSynced ? 'bg-blue-500/5' : ''} ${className}`}
       data-scheduler-task-id={taskId}
     >
       {showDropAbove && (
@@ -335,7 +351,7 @@ function SortableTaskRow({
         type="button"
         aria-label={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
         title={disableDrag ? undefined : isSaving ? 'Guardando...' : 'Arrastrar para reordenar'}
-        className={`w-8 shrink-0 flex items-center justify-center rounded touch-none ${isSaving ? 'cursor-wait pointer-events-none' : disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'cursor-grab active:cursor-grabbing opacity-50 group-hover:opacity-100 transition-opacity'}`}
+        className={`w-8 shrink-0 flex items-center justify-center rounded touch-none outline-none border-0 border-transparent shadow-none focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none focus-visible:ring-0 focus-visible:border-transparent ${isSaving ? 'cursor-wait pointer-events-none' : disableDrag ? 'cursor-not-allowed opacity-50 pointer-events-none' : 'cursor-grab active:cursor-grabbing opacity-50 group-hover:opacity-100 transition-opacity'}`}
         style={{ touchAction: 'none' }}
         {...(disableDrag || isSaving ? {} : attributes)}
         {...(disableDrag || isSaving ? {} : listeners)}
@@ -602,10 +618,15 @@ function AddSubtaskButton({
 }
 
 function areEqualManualTask(
-  a: { task: { id: string; order?: number } },
-  b: { task: { id: string; order?: number } }
+  a: { task: { id: string; order?: number }; sortableProps: { isSaving?: boolean }; updatingTaskId?: string | null },
+  b: { task: { id: string; order?: number }; sortableProps: { isSaving?: boolean }; updatingTaskId?: string | null }
 ): boolean {
-  return a.task.id === b.task.id && (a.task.order ?? 0) === (b.task.order ?? 0);
+  return (
+    a.task.id === b.task.id &&
+    (a.task.order ?? 0) === (b.task.order ?? 0) &&
+    a.sortableProps.isSaving === b.sortableProps.isSaving &&
+    (a.updatingTaskId ?? null) === (b.updatingTaskId ?? null)
+  );
 }
 
 interface ManualTaskRowSortableProps {
@@ -622,7 +643,7 @@ interface ManualTaskRowSortableProps {
   dropIndicator?: { overId: string; insertBefore: boolean } | null;
 }
 
-/** Fila manual: badge duración | avatar + nombre | notas (si >0) | HoverCard acciones. */
+/** Fila manual: badge duración | avatar + nombre | notas (si >0) | DropdownMenu acciones. */
 const ManualTaskRow = React.memo(function ManualTaskRow({
   task,
   studioSlug,
@@ -646,15 +667,18 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
   avatarRingClassName,
   sectionId,
   catalogCategoryId,
+  segmentCatalogCategoryId,
   sectionLabel,
   onAddManualTaskSubmit,
   onManualTaskUpdate,
   onNoteAdded,
+  onTaskToggleComplete,
   sortableProps,
   activeDragData,
   customCategoriesBySectionStage = new Map(),
   categoriesWithDataByStage = new Map(),
   onAddCustomCategory,
+  updatingTaskId: updatingTaskIdProp = null,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
@@ -681,6 +705,8 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
   avatarRingClassName?: string;
   sectionId?: string;
   catalogCategoryId?: string | null;
+  /** Categoría del segmento (fila de categoría). Para subtareas debe usarse esta para asociar correctamente. */
+  segmentCatalogCategoryId?: string | null;
   sectionLabel?: string;
   onAddManualTaskSubmit?: (
     sectionId: string,
@@ -692,28 +718,41 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
   ) => Promise<void>;
   onManualTaskUpdate?: () => void;
   onNoteAdded?: (taskId: string, delta: number) => void;
+  onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   sortableProps: ManualTaskRowSortableProps;
   activeDragData?: { taskId: string; isManual: boolean } | null;
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
   categoriesWithDataByStage?: Map<string, Set<string>>;
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => Promise<void>;
+  /** Prop para que areEqual detecte id -> null y re-renderice; Triple Guardia spinner. */
+  updatingTaskId?: string | null;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [hoverOpen, setHoverOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const { isBackdropVisible } = useSchedulerBackdrop() ?? {};
-  useEffect(() => {
-    if (activeDragData) setHoverOpen(false);
-  }, [activeDragData]);
-  useEffect(() => {
-    if (isBackdropVisible) setHoverOpen(false);
-  }, [isBackdropVisible]);
-  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [forceClearSpinner, setForceClearSpinner] = useState(false);
   const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
-  const { localTask } = useSchedulerManualTaskSync(task);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
+  const [showRemoveCrewConfirm, setShowRemoveCrewConfirm] = useState(false);
+  const [isRemovingCrew, setIsRemovingCrew] = useState(false);
+
+  const updatingTaskIdFromContext = useSchedulerUpdatingTaskId();
+  const taskIdStr = String(task.id);
+  const isThisRowSaving = updatingTaskIdFromContext !== null && String(updatingTaskIdFromContext) === String(task.id);
+  useEffect(() => {
+    if (updatingTaskIdFromContext === null) {
+      setForceClearSpinner(true);
+    } else if (String(updatingTaskIdFromContext) === taskIdStr) {
+      setForceClearSpinner(false);
+    }
+  }, [updatingTaskIdFromContext, taskIdStr]);
+
+  const { localTask, updateCompletionStatus, applyPatch } = useSchedulerManualTaskSync(task, onManualTaskPatch);
   const isCompleted = localTask.status === 'COMPLETED' || !!localTask.completed_at;
   const hasCrew = !!localTask.assigned_to_crew_member;
+  const canAssignCrew = !!(studioSlug && eventId);
 
   const taskDurationDays = (() => {
     const t = localTask as { duration_days?: number; start_date?: Date | string; end_date?: Date | string };
@@ -736,6 +775,60 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
     </span>
   ) : null;
 
+  const handleToggleComplete = useCallback(async () => {
+    if (!onTaskToggleComplete || !updateCompletionStatus) return;
+    await updateCompletionStatus(!isCompleted, async () => {
+      await onTaskToggleComplete(localTask.id, !isCompleted);
+    });
+  }, [onTaskToggleComplete, updateCompletionStatus, localTask.id, isCompleted]);
+
+  const handleAssignCrew = useCallback(async (crewMemberId: string | null) => {
+    if (!studioSlug || !eventId || !onManualTaskPatch) return;
+    const snapshot = {
+      assigned_to_crew_member_id: localTask.assigned_to_crew_member_id ?? null,
+      assigned_to_crew_member: localTask.assigned_to_crew_member ?? null,
+    };
+    const membersResult = await obtenerCrewMembers(studioSlug);
+    const selectedMember = crewMemberId && membersResult.success && membersResult.data
+      ? membersResult.data.find(m => m.id === crewMemberId)
+      : null;
+    const optimisticPatch = {
+      assigned_to_crew_member_id: crewMemberId,
+      assigned_to_crew_member: selectedMember
+        ? { id: selectedMember.id, name: selectedMember.name, email: selectedMember.email, tipo: selectedMember.tipo }
+        : null,
+    };
+    onManualTaskPatch(localTask.id, optimisticPatch);
+    applyPatch(optimisticPatch);
+    setSelectCrewModalOpen(false);
+    try {
+      const result = await asignarCrewATareaScheduler(studioSlug, eventId, localTask.id, crewMemberId);
+      if (!result.success) {
+        onManualTaskPatch(localTask.id, snapshot);
+        applyPatch(snapshot);
+        throw new Error(result.error || 'Error al asignar personal');
+      }
+      toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+    } catch (error) {
+      applyPatch(snapshot);
+      toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
+    }
+  }, [studioSlug, eventId, onManualTaskPatch, applyPatch, localTask.id, localTask.assigned_to_crew_member_id, localTask.assigned_to_crew_member]);
+
+  const handleRemoveCrew = useCallback(async () => {
+    if (!studioSlug || !eventId || !onManualTaskPatch) return;
+    setIsRemovingCrew(true);
+    try {
+      await handleAssignCrew(null);
+      setShowRemoveCrewConfirm(false);
+    } catch {
+      // toast ya en handleAssignCrew
+    } finally {
+      setIsRemovingCrew(false);
+    }
+  }, [studioSlug, eventId, onManualTaskPatch, handleAssignCrew]);
+
   const rightSlot = (
     <div className="flex items-center gap-0.5 shrink-0 pl-1">
       {hasNotes && (
@@ -752,189 +845,218 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
           <MessageSquare className="h-4 w-4" />
         </button>
       )}
-    </div>
-  );
-
-  const hoverCardContent = (
-    <div className="flex flex-col gap-0 py-1">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); setHoverOpen(false); }}
-        className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-      >
-        <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
-        Añadir nota
-      </button>
-      {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
-        <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              Añadir subtarea
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-            <TaskForm
-              mode="create"
-              studioSlug={studioSlug}
-              eventId={eventId}
-              parentName={localTask.name}
-              onClose={() => setAddSubtaskOpen(false)}
-              onSubmit={async (data) => {
-                if (!onAddManualTaskSubmit) return;
-                await onAddManualTaskSubmit(sectionId, stageCategory, catalogCategoryId ?? null, data, undefined, localTask.id);
-                setAddSubtaskOpen(false);
-              }}
-            />
-          </PopoverContent>
-        </Popover>
-      )}
-      {/* Convertir jerarquía - Nivel 1 (Hover Principal) */}
-      {onToggleTaskHierarchy && (
-        <>
-          {localTask.parent_id ? (
-            <button
-              type="button"
-              onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); await onToggleTaskHierarchy(localTask.id, null); }}
-              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-            >
-              <CornerDownRight className="h-4 w-4 shrink-0" />
-              Convertir en tarea principal
-            </button>
-          ) : (
-            previousPrincipalId && childTaskIds.length === 0 && (
-              <button
-                type="button"
-                onClick={async (e) => { 
-                  e.stopPropagation(); 
-                  setHoverOpen(false); 
-                  if (previousPrincipalId == null) return; 
-                  if (childTaskIds.length > 0) {
-                    toast.error('No se permite anidación de múltiples niveles');
-                    return;
-                  }
-                  await onToggleTaskHierarchy(localTask.id, previousPrincipalId); 
-                }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-              >
-                <CornerDownRight className="h-4 w-4 shrink-0" />
-                Convertir en tarea secundaria
-              </button>
-            )
-          )}
-        </>
-      )}
-      <div className="my-1 h-px bg-zinc-800" />
-      <HoverCard openDelay={150} closeDelay={80}>
-        <HoverCardTrigger asChild>
+      {actionsMenuOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] bg-transparent backdrop-blur-[1px] pointer-events-auto"
+            aria-hidden
+            onClick={() => setActionsMenuOpen(false)}
+          />,
+          document.body
+        )}
+      <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors justify-between"
+            className="p-1 rounded text-zinc-400 shrink-0 hover:bg-zinc-800 hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer opacity-100 sm:opacity-40 sm:group-hover:opacity-100"
+            aria-label="Opciones"
           >
-            <span className="flex items-center gap-2">
-              <MoreHorizontal className="h-4 w-4 shrink-0" />
-              Más acciones
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            <EllipsisVertical className="h-4 w-4" />
           </button>
-        </HoverCardTrigger>
-        <HoverCardContent
-          side="right"
-          align="start"
-          sideOffset={4}
-          collisionPadding={8}
-          className="w-48 p-2 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
-        >
-          <div className="flex flex-col gap-0 py-1">
-            {onDuplicate && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); onDuplicate(localTask.id); }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56 p-0 bg-zinc-900 border-zinc-800 z-[100000]" align="end" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+          {onTaskToggleComplete && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={async () => {
+                setActionsMenuOpen(false);
+                await handleToggleComplete();
+              }}
+            >
+              {isCompleted ? (
+                <>
+                  <Circle className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span>Marcar como pendiente</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <span>Marcar como completada</span>
+                </>
+              )}
+            </DropdownMenuItem>
+          )}
+          {onTaskToggleComplete && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+            onSelect={() => {
+              setActionsMenuOpen(false);
+              setNotesSheetOpen(true);
+            }}
+          >
+            <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
+            <span>Añadir nota</span>
+          </DropdownMenuItem>
+          {canAssignCrew && !hasCrew && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                setSelectCrewModalOpen(true);
+              }}
+            >
+              <UserPlus className="h-4 w-4 shrink-0 text-zinc-400" />
+              <span>Asignar personal</span>
+            </DropdownMenuItem>
+          )}
+          {canAssignCrew && hasCrew && (
+            <>
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                onSelect={() => {
+                  setActionsMenuOpen(false);
+                  setSelectCrewModalOpen(true);
+                }}
               >
-                <Copy className="h-3.5 w-3.5" /> Duplicar
-              </button>
-            )}
-            {onMoveToStage && stageCategory != null && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setMoveModalOpen(true); }}
-                className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+                <UserPlus className="h-4 w-4 shrink-0 text-zinc-400" />
+                <span>Cambiar personal</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-red-400 focus:text-red-300 focus:bg-red-950/30"
+                onSelect={() => {
+                  setActionsMenuOpen(false);
+                  setShowRemoveCrewConfirm(true);
+                }}
               >
-                <FolderInput className="h-3.5 w-3.5" /> Mover a…
-              </button>
-            )}
-            {childTaskIds.length > 0 && !localTask.parent_id && (
-              <>
-                <div className="my-1 h-px bg-zinc-800" />
-                <button
-                  type="button"
-                  onClick={async (e) => { e.stopPropagation(); setHoverOpen(false); if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds); else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null); }}
-                  className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+                <UserMinus className="h-4 w-4 shrink-0" />
+                <span>Quitar personal</span>
+              </DropdownMenuItem>
+            </>
+          )}
+          {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={(e) => {
+                e.preventDefault();
+                setActionsMenuOpen(false);
+                requestAnimationFrame(() => {
+                  setTimeout(() => setAddSubtaskOpen(true), 200);
+                });
+              }}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span>Añadir subtarea</span>
+            </DropdownMenuItem>
+          )}
+          {onToggleTaskHierarchy && (
+            <>
+              {localTask.parent_id ? (
+                <DropdownMenuItem
+                  className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                  onSelect={async () => {
+                    setActionsMenuOpen(false);
+                    await onToggleTaskHierarchy(localTask.id, null);
+                  }}
                 >
-                  Convertir subtareas en principales
-                </button>
-              </>
-            )}
-            {onManualTaskDelete && (
-              <>
-                <div className="my-1 h-px bg-zinc-800" />
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setHoverOpen(false); setDeleteConfirmOpen(true); }}
-                  className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                </button>
-              </>
-            )}
-          </div>
-        </HoverCardContent>
-      </HoverCard>
+                  <CornerDownRight className="h-4 w-4 shrink-0" />
+                  <span>Convertir en tarea principal</span>
+                </DropdownMenuItem>
+              ) : (
+                previousPrincipalId &&
+                childTaskIds.length === 0 &&
+                onToggleTaskHierarchy && (
+                  <DropdownMenuItem
+                    className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100 data-[highlighted]:bg-zinc-800 data-[highlighted]:text-zinc-100"
+                    onSelect={async () => {
+                      setActionsMenuOpen(false);
+                      if (previousPrincipalId == null) return;
+                      await onToggleTaskHierarchy(localTask.id, previousPrincipalId);
+                    }}
+                  >
+                    <CornerDownRight className="h-4 w-4 shrink-0" />
+                    <span>Convertir en tarea secundaria</span>
+                  </DropdownMenuItem>
+                )
+              )}
+            </>
+          )}
+          {(onDuplicate || onMoveToStage || childTaskIds.length > 0 || onManualTaskDelete) && <DropdownMenuSeparator />}
+          {onDuplicate && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                onDuplicate(localTask.id);
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>Duplicar</span>
+            </DropdownMenuItem>
+          )}
+          {onMoveToStage && stageCategory != null && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                setMoveModalOpen(true);
+              }}
+            >
+              <FolderInput className="h-3.5 w-3.5" />
+              <span>Mover a…</span>
+            </DropdownMenuItem>
+          )}
+          {childTaskIds.length > 0 && !localTask.parent_id && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                onSelect={async () => {
+                  setActionsMenuOpen(false);
+                  if (onConvertSubtasksToPrincipal) await onConvertSubtasksToPrincipal(childTaskIds);
+                  else for (const childId of childTaskIds) await onToggleTaskHierarchy(childId, null);
+                }}
+              >
+                <span>Convertir subtareas en principales</span>
+              </DropdownMenuItem>
+            </>
+          )}
+          {onManualTaskDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-red-400 focus:text-red-300 focus:bg-red-950/30"
+                onSelect={() => {
+                  setActionsMenuOpen(false);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Eliminar</span>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 
   const rowContent = (
-    <SchedulerManualTaskPopover
-      task={localTask}
-      studioSlug={studioSlug}
-      eventId={eventId}
-      onManualTaskPatch={onManualTaskPatch}
-      onManualTaskDelete={onManualTaskDelete}
-      open={popoverOpen}
-      onOpenChange={setPopoverOpen}
-      deleteConfirmOpen={deleteConfirmOpen}
-      onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+    <div
+      className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden cursor-pointer"
+      onClick={() => setPopoverOpen(true)}
+      onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
+      role="button"
+      tabIndex={0}
     >
-      <div
-        className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden"
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
-      >
-        {!!localTask.parent_id && (
-          <CornerDownRight className="h-4 w-4 text-amber-500/40 shrink-0" aria-hidden />
-        )}
-        {avatarRingClassName ? (
-          <span className={avatarRingClassName}>
-            <ZenAvatar className="h-7 w-7 shrink-0">
-              {hasCrew ? (
-                <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
-                  {getInitials(localTask.assigned_to_crew_member!.name)}
-                </ZenAvatarFallback>
-              ) : (
-                <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
-                  <User className="h-3.5 w-3.5" />
-                </ZenAvatarFallback>
-              )}
-            </ZenAvatar>
-          </span>
-        ) : (
+      {!!localTask.parent_id && (
+        <CornerDownRight className="h-4 w-4 text-amber-500/40 shrink-0" aria-hidden />
+      )}
+      {avatarRingClassName ? (
+        <span className={avatarRingClassName}>
           <ZenAvatar className="h-7 w-7 shrink-0">
             {hasCrew ? (
               <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
@@ -946,47 +1068,86 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
               </ZenAvatarFallback>
             )}
           </ZenAvatar>
-        )}
-        <p className={`flex-1 min-w-0 text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : (localTask.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
-          {localTask.name}
-        </p>
-      </div>
-    </SchedulerManualTaskPopover>
+        </span>
+      ) : (
+        <ZenAvatar className="h-7 w-7 shrink-0">
+          {hasCrew ? (
+            <ZenAvatarFallback className={isCompleted ? 'bg-emerald-600/20 text-emerald-400 text-[10px]' : 'bg-blue-600/20 text-blue-400 text-[10px]'}>
+              {getInitials(localTask.assigned_to_crew_member!.name)}
+            </ZenAvatarFallback>
+          ) : (
+            <ZenAvatarFallback className="bg-zinc-700/50 text-zinc-500 text-xs">
+              <User className="h-3.5 w-3.5" />
+            </ZenAvatarFallback>
+          )}
+        </ZenAvatar>
+      )}
+      <p className={`flex-1 min-w-0 text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : (localTask.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
+        {localTask.name}
+      </p>
+    </div>
   );
+
+  const effectiveIsSaving = (sortableProps.isSaving === true || isThisRowSaving) && !forceClearSpinner;
 
   return (
     <>
-      <HoverCard
-        openDelay={200}
-        closeDelay={100}
-        open={hoverOpen && !isBackdropVisible}
-        onOpenChange={(open) => {
-          if (!isBackdropVisible) setHoverOpen(open);
-          else setHoverOpen(false);
-        }}
-      >
-        <HoverCardTrigger asChild>
-          <div className="w-full">
-            <SortableTaskRow
-              {...sortableProps}
-              className={`${sortableProps.className ?? ''} ${hoverOpen ? 'bg-zinc-800/40' : ''}`.trim()}
-              leftSlot={leftSlot}
-              rightSlot={rightSlot}
-              dropIndicator={sortableProps.dropIndicator}
-            >
-              {rowContent}
-            </SortableTaskRow>
-          </div>
-        </HoverCardTrigger>
-        <HoverCardContent
-          side="bottom"
-          align="end"
-          sideOffset={4}
-          className="w-56 p-0 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
+      <div className={cn('w-full relative', isCompleted && 'opacity-70')}>
+        <SortableTaskRow
+          {...sortableProps}
+          isSaving={effectiveIsSaving}
+          leftSlot={leftSlot}
+          rightSlot={rightSlot}
+          dropIndicator={sortableProps.dropIndicator}
         >
-          {hoverCardContent}
-        </HoverCardContent>
-      </HoverCard>
+          <SchedulerManualTaskPopover
+            task={localTask}
+            studioSlug={studioSlug}
+            eventId={eventId}
+            onManualTaskPatch={onManualTaskPatch}
+            onManualTaskDelete={onManualTaskDelete}
+            onSaveSuccess={applyPatch}
+            open={popoverOpen}
+            onOpenChange={setPopoverOpen}
+            deleteConfirmOpen={deleteConfirmOpen}
+            onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+          >
+            {rowContent}
+          </SchedulerManualTaskPopover>
+        </SortableTaskRow>
+        {onAddManualTaskSubmit && sectionId && stageCategory && sectionLabel != null && !localTask.parent_id && (
+          <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
+            <PopoverTrigger asChild>
+              <div className="absolute inset-0 pointer-events-none" aria-hidden />
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-80 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              showBackdrop
+              open={addSubtaskOpen}
+              onOpenChange={setAddSubtaskOpen}
+              onPointerDownOutside={(e) => e.preventDefault()}
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              <TaskForm
+                mode="create"
+                studioSlug={studioSlug}
+                eventId={eventId}
+                parentName={localTask.name}
+                onClose={() => setAddSubtaskOpen(false)}
+                onSubmit={async (data) => {
+                  if (!onAddManualTaskSubmit) return;
+                  const categoryIdForSubtask = segmentCatalogCategoryId ?? catalogCategoryId ?? null;
+                  await onAddManualTaskSubmit(sectionId, stageCategory, categoryIdForSubtask, data, undefined, localTask.id);
+                  setAddSubtaskOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
       {onMoveToStage && stageCategory != null && (
         <MoveTaskModal
           open={moveModalOpen}
@@ -1012,6 +1173,51 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
         eventId={eventId}
         onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
       />
+      {canAssignCrew && (
+        <SelectCrewModal
+          isOpen={selectCrewModalOpen}
+          onClose={() => setSelectCrewModalOpen(false)}
+          onSelect={handleAssignCrew}
+          studioSlug={studioSlug}
+          currentMemberId={localTask.assigned_to_crew_member_id ?? null}
+          title={hasCrew ? 'Cambiar asignación de personal' : 'Asignar personal'}
+          description={hasCrew
+            ? 'Selecciona un nuevo miembro del equipo para esta tarea.'
+            : 'Selecciona un miembro del equipo para asignar a esta tarea.'}
+          eventId={eventId}
+          taskStartDate={localTask.start_date instanceof Date ? localTask.start_date : localTask.start_date ? new Date(localTask.start_date) : undefined}
+          taskEndDate={localTask.end_date instanceof Date ? localTask.end_date : localTask.end_date ? new Date(localTask.end_date) : undefined}
+          taskId={localTask.id}
+        />
+      )}
+      {canAssignCrew && (
+        <ZenConfirmModal
+          isOpen={showRemoveCrewConfirm}
+          onClose={() => setShowRemoveCrewConfirm(false)}
+          onConfirm={handleRemoveCrew}
+          title="¿Quitar personal de esta tarea?"
+          description={
+            <div className="space-y-2">
+              <p className="text-sm text-zinc-300">
+                Se quitará la asignación de personal de esta tarea.
+              </p>
+              {localTask.assigned_to_crew_member && (
+                <p className="text-sm text-zinc-400">
+                  Personal actual: <strong className="text-zinc-200">{localTask.assigned_to_crew_member.name}</strong>
+                </p>
+              )}
+              <p className="text-xs text-zinc-500 mt-2">
+                La tarea quedará como borrador y deberás publicar el cronograma nuevamente si ya estaba sincronizado.
+              </p>
+            </div>
+          }
+          confirmText="Sí, quitar personal"
+          cancelText="Cancelar"
+          variant="destructive"
+          loading={isRemovingCrew}
+          loadingText="Quitando..."
+        />
+      )}
     </>
   );
 }, areEqualManualTask);
@@ -1043,22 +1249,25 @@ function SchedulerItem({
     stage: TaskCategoryStage;
     catalogCategoryId: string | null;
     sectionLabel: string;
+    /** ID de la tarea padre (scheduler_task.id en catálogo). Misma fuente que buildSchedulerRows/taskIdToSegment para que la subtarea anide correctamente. */
+    parentId: string;
     onAddManualTaskSubmit: (sectionId: string, stage: string, catalogCategoryId: string | null, data: { name: string; durationDays: number; budgetAmount?: number }, startDate?: Date, parentId?: string | null) => Promise<void>;
   };
   activeDragData?: { taskId: string; isManual: boolean } | null;
 }) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
   const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
-  const [hoverOpen, setHoverOpen] = useState(false);
-  const { isBackdropVisible } = useSchedulerBackdrop() ?? {};
-  useEffect(() => {
-    if (activeDragData) setHoverOpen(false);
-  }, [activeDragData]);
-  useEffect(() => {
-    if (isBackdropVisible) setHoverOpen(false);
-  }, [isBackdropVisible]);
-  const { localItem } = useSchedulerItemSync(item, onItemUpdate);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
+  const [showRemoveCrewConfirm, setShowRemoveCrewConfirm] = useState(false);
+  const [isRemovingCrew, setIsRemovingCrew] = useState(false);
+  const [forceClearSpinner, setForceClearSpinner] = useState(false);
+
+  const { localItem, updateCompletionStatus, updateCrewMember } = useSchedulerItemSync(item, onItemUpdate);
   const isCompleted = !!localItem.scheduler_task?.completed_at;
+  const hasCrew = !!localItem.assigned_to_crew_member_id;
+  const canAssignCrew = !!(studioSlug && localItem.id);
 
   const st = localItem.scheduler_task as { duration_days?: number; start_date?: Date | string; end_date?: Date | string } | undefined;
   let itemDurationDays = st?.duration_days;
@@ -1069,6 +1278,13 @@ function SchedulerItem({
   }
   const hasDuration = (itemDurationDays ?? 0) > 0;
   const taskId = localItem.scheduler_task?.id;
+  const taskIdStr = taskId != null ? String(taskId) : '';
+  const updatingTaskIdFromContext = useSchedulerUpdatingTaskId();
+  const isThisRowSaving = updatingTaskIdFromContext !== null && taskIdStr !== '' && String(updatingTaskIdFromContext) === taskIdStr;
+  useEffect(() => {
+    if (updatingTaskIdFromContext === null) setForceClearSpinner(true);
+    else if (taskIdStr && String(updatingTaskIdFromContext) === taskIdStr) setForceClearSpinner(false);
+  }, [updatingTaskIdFromContext, taskIdStr]);
   const notesCount = (localItem.scheduler_task as { notes_count?: number })?.notes_count ?? 0;
   const hasNotes = useTaskNotesSync(taskId ?? null, notesCount);
 
@@ -1080,8 +1296,63 @@ function SchedulerItem({
     </span>
   ) : null;
 
+  const handleToggleComplete = useCallback(async () => {
+    if (!onTaskToggleComplete || !taskId || !updateCompletionStatus) return;
+    await updateCompletionStatus(!isCompleted, async () => {
+      await onTaskToggleComplete(taskId, !isCompleted);
+    });
+  }, [onTaskToggleComplete, updateCompletionStatus, taskId, isCompleted]);
+
+  const handleAssignCrew = useCallback(async (crewMemberId: string | null) => {
+    if (!studioSlug || !localItem.id) return;
+    if (onItemUpdate && updateCrewMember) {
+      try {
+        const membersResult = await obtenerCrewMembers(studioSlug);
+        const selectedMember = crewMemberId && membersResult.success && membersResult.data
+          ? membersResult.data.find(m => m.id === crewMemberId)
+          : null;
+        await updateCrewMember(
+          crewMemberId,
+          selectedMember ? { id: selectedMember.id, name: selectedMember.name, tipo: selectedMember.tipo } : null,
+          async () => {
+            const result = await asignarCrewAItem(studioSlug, localItem.id, crewMemberId);
+            if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+          }
+        );
+        toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
+        setSelectCrewModalOpen(false);
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
+      }
+    } else {
+      try {
+        const result = await asignarCrewAItem(studioSlug, localItem.id, crewMemberId);
+        if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+        toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
+        setSelectCrewModalOpen(false);
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
+      }
+    }
+  }, [studioSlug, localItem.id, onItemUpdate, updateCrewMember]);
+
+  const handleRemoveCrew = useCallback(async () => {
+    if (!studioSlug || !localItem.id) return;
+    setIsRemovingCrew(true);
+    try {
+      await handleAssignCrew(null);
+      setShowRemoveCrewConfirm(false);
+    } catch {
+      // toast ya en handleAssignCrew
+    } finally {
+      setIsRemovingCrew(false);
+    }
+  }, [studioSlug, localItem.id, handleAssignCrew]);
+
   const rightSlot = (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 shrink-0 pl-1">
       {hasNotes && taskId && (
         <button
           type="button"
@@ -1093,47 +1364,117 @@ function SchedulerItem({
           <MessageSquare className="h-4 w-4" />
         </button>
       )}
-    </div>
-  );
-
-  const hoverCardContent = (
-    <div className="flex flex-col gap-0 py-1">
       {taskId && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setNotesSheetOpen(true); setHoverOpen(false); }}
-          className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-        >
-          <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
-          Añadir nota
-        </button>
-      )}
-      {addSubtaskProps && taskId && (
-        <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-2 w-full text-left text-sm py-2 px-3 rounded-md text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              Añadir subtarea
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-            <TaskForm
-              mode="create"
-              studioSlug={studioSlug}
-              eventId={eventId}
-              parentName={metadata.servicioNombre}
-              onClose={() => setAddSubtaskOpen(false)}
-              onSubmit={async (data) => {
-                await addSubtaskProps.onAddManualTaskSubmit(addSubtaskProps.sectionId, addSubtaskProps.stage, addSubtaskProps.catalogCategoryId, data, undefined, taskId);
-                setAddSubtaskOpen(false);
+        <>
+          {actionsMenuOpen &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                className="fixed inset-0 z-[99999] bg-transparent backdrop-blur-[1px] pointer-events-auto"
+                aria-hidden
+                onClick={() => setActionsMenuOpen(false)}
+              />,
+              document.body
+            )}
+          <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 rounded text-zinc-400 shrink-0 hover:bg-zinc-800 hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer opacity-100 sm:opacity-40 sm:group-hover:opacity-100"
+                aria-label="Opciones"
+              >
+                <EllipsisVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 p-0 bg-zinc-900 border-zinc-800 z-[100000]" align="end" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+            {onTaskToggleComplete && (
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                onSelect={async () => {
+                  setActionsMenuOpen(false);
+                  await handleToggleComplete();
+                }}
+              >
+                {isCompleted ? (
+                  <>
+                    <Circle className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <span>Marcar como pendiente</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                    <span>Marcar como completada</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+            )}
+            {onTaskToggleComplete && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                setNotesSheetOpen(true);
               }}
-            />
-          </PopoverContent>
-        </Popover>
+            >
+              <MessageSquare className="h-4 w-4 shrink-0 text-amber-500" />
+              <span>Añadir nota</span>
+            </DropdownMenuItem>
+            {canAssignCrew && !hasCrew && (
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                onSelect={() => {
+                  setActionsMenuOpen(false);
+                  setSelectCrewModalOpen(true);
+                }}
+              >
+                <UserPlus className="h-4 w-4 shrink-0 text-zinc-400" />
+                <span>Asignar personal</span>
+              </DropdownMenuItem>
+            )}
+            {canAssignCrew && hasCrew && (
+              <>
+                <DropdownMenuItem
+                  className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                  onSelect={() => {
+                    setActionsMenuOpen(false);
+                    setSelectCrewModalOpen(true);
+                  }}
+                >
+                  <UserPlus className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span>Cambiar personal</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-red-400 focus:text-red-300 focus:bg-red-950/30"
+                  onSelect={() => {
+                    setActionsMenuOpen(false);
+                    setShowRemoveCrewConfirm(true);
+                  }}
+                >
+                  <UserMinus className="h-4 w-4 shrink-0" />
+                  <span>Quitar personal</span>
+                </DropdownMenuItem>
+              </>
+            )}
+            {addSubtaskProps && !localItem.scheduler_task?.parent_id && (
+              <DropdownMenuItem
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setActionsMenuOpen(false);
+                  requestAnimationFrame(() => {
+                    setTimeout(() => setAddSubtaskOpen(true), 200);
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span>Añadir subtarea</span>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        </>
       )}
     </div>
   );
@@ -1154,8 +1495,8 @@ function SchedulerItem({
           </ZenAvatarFallback>
         )}
       </ZenAvatar>
-      <div className="flex-1 min-w-0 min-h-0 overflow-hidden line-clamp-2">
-        <p className={`text-sm leading-tight ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : ((localItem.scheduler_task as { parent_id?: string | null })?.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
+      <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        <p className={`text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : ((localItem.scheduler_task as { parent_id?: string | null })?.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
@@ -1168,52 +1509,75 @@ function SchedulerItem({
   );
 
   const rowContent = (
-    <SchedulerItemPopover
-      item={localItem}
-      studioSlug={studioSlug}
-      eventId={eventId}
-      onItemUpdate={onItemUpdate}
-      onTaskToggleComplete={onTaskToggleComplete}
+    <div 
+      className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden cursor-pointer"
+      onClick={() => setPopoverOpen(true)}
+      onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
+      role="button"
+      tabIndex={0}
     >
-      <button className="w-full text-left">
-        {renderItem ? renderItem(localItem, metadata) : triggerContent}
-      </button>
-    </SchedulerItemPopover>
+      {renderItem ? renderItem(localItem, metadata) : triggerContent}
+    </div>
   );
 
+  const effectiveIsSaving = (sortableProps?.isSaving === true || isThisRowSaving) && !forceClearSpinner;
   if (sortableProps) {
     return (
       <>
-        <HoverCard
-          openDelay={200}
-          closeDelay={100}
-          open={hoverOpen && !isBackdropVisible}
-          onOpenChange={(open) => {
-            if (!isBackdropVisible) setHoverOpen(open);
-            else setHoverOpen(false);
-          }}
-        >
-          <HoverCardTrigger asChild>
-            <div className="w-full">
-              <SortableTaskRow
-                {...sortableProps}
-                className={`${sortableProps.className ?? ''} ${hoverOpen ? 'bg-zinc-800/40' : ''}`.trim()}
-                leftSlot={leftSlot}
-                rightSlot={rightSlot}
-              >
-                {rowContent}
-              </SortableTaskRow>
-            </div>
-          </HoverCardTrigger>
-          <HoverCardContent
-            side="bottom"
-            align="end"
-            sideOffset={4}
-            className="w-56 p-0 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg z-[60]"
+        <div className="w-full relative">
+          <SortableTaskRow
+            {...sortableProps}
+            isSaving={effectiveIsSaving}
+            leftSlot={leftSlot}
+            rightSlot={rightSlot}
           >
-            {hoverCardContent}
-          </HoverCardContent>
-        </HoverCard>
+            {rowContent}
+          </SortableTaskRow>
+          {addSubtaskProps && taskId && !localItem.scheduler_task?.parent_id && (
+            <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
+              <PopoverTrigger asChild>
+                <div className="absolute inset-0 pointer-events-none" aria-hidden />
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-80 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
+                align="start"
+                side="bottom"
+                sideOffset={4}
+                showBackdrop
+                open={addSubtaskOpen}
+                onOpenChange={setAddSubtaskOpen}
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+              >
+                <TaskForm
+                  mode="create"
+                  studioSlug={studioSlug}
+                  eventId={eventId}
+                  parentName={metadata.servicioNombre}
+                  onClose={() => setAddSubtaskOpen(false)}
+                  onSubmit={async (data) => {
+                    if (!addSubtaskProps) return;
+                    const parentId = addSubtaskProps.parentId ?? taskId;
+                    if (!parentId) return;
+                    await addSubtaskProps.onAddManualTaskSubmit(addSubtaskProps.sectionId, addSubtaskProps.stage, addSubtaskProps.catalogCategoryId, data, undefined, parentId);
+                    setAddSubtaskOpen(false);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+        <SchedulerItemPopover
+          item={localItem}
+          studioSlug={studioSlug}
+          eventId={eventId}
+          onItemUpdate={onItemUpdate}
+          onTaskToggleComplete={onTaskToggleComplete}
+          open={popoverOpen}
+          onOpenChange={setPopoverOpen}
+        >
+          <div style={{ display: 'none' }} />
+        </SchedulerItemPopover>
         {taskId && (
           <TaskNotesSheet
             open={notesSheetOpen}
@@ -1225,13 +1589,93 @@ function SchedulerItem({
             onNoteAdded={onNoteAdded}
           />
         )}
+        {canAssignCrew && (
+          <SelectCrewModal
+            isOpen={selectCrewModalOpen}
+            onClose={() => setSelectCrewModalOpen(false)}
+            onSelect={handleAssignCrew}
+            studioSlug={studioSlug}
+            currentMemberId={localItem.assigned_to_crew_member_id ?? null}
+            title={hasCrew ? 'Cambiar asignación de personal' : 'Asignar personal'}
+            description={hasCrew
+              ? 'Selecciona un nuevo miembro del equipo para esta tarea.'
+              : 'Selecciona un miembro del equipo para asignar a esta tarea.'}
+            eventId={eventId}
+            taskStartDate={localItem.scheduler_task?.start_date instanceof Date ? localItem.scheduler_task.start_date : localItem.scheduler_task?.start_date ? new Date(localItem.scheduler_task.start_date as string) : undefined}
+            taskEndDate={localItem.scheduler_task?.end_date instanceof Date ? localItem.scheduler_task.end_date : localItem.scheduler_task?.end_date ? new Date(localItem.scheduler_task.end_date as string) : undefined}
+            taskId={taskId}
+          />
+        )}
+        {canAssignCrew && (
+          <ZenConfirmModal
+            isOpen={showRemoveCrewConfirm}
+            onClose={() => setShowRemoveCrewConfirm(false)}
+            onConfirm={handleRemoveCrew}
+            title="¿Quitar personal de esta tarea?"
+            description={
+              <div className="space-y-2">
+                <p className="text-sm text-zinc-300">
+                  Se quitará la asignación de personal de esta tarea.
+                </p>
+                {localItem.assigned_to_crew_member && (
+                  <p className="text-sm text-zinc-400">
+                    Personal actual: <strong className="text-zinc-200">{localItem.assigned_to_crew_member.name}</strong>
+                  </p>
+                )}
+                <p className="text-xs text-zinc-500 mt-2">
+                  La tarea quedará como borrador y deberás publicar el cronograma nuevamente si ya estaba sincronizado.
+                </p>
+              </div>
+            }
+            confirmText="Sí, quitar personal"
+            cancelText="Cancelar"
+            variant="destructive"
+            loading={isRemovingCrew}
+            loadingText="Quitando..."
+          />
+        )}
       </>
     );
   }
 
   return (
     <>
-      {rowContent}
+      <div className="w-full relative">
+        {rowContent}
+        {addSubtaskProps && taskId && !localItem.scheduler_task?.parent_id && (
+          <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
+            <PopoverTrigger asChild>
+              <div className="absolute inset-0 pointer-events-none" aria-hidden />
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-80 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              showBackdrop
+              open={addSubtaskOpen}
+              onOpenChange={setAddSubtaskOpen}
+              onPointerDownOutside={(e) => e.preventDefault()}
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              <TaskForm
+                mode="create"
+                studioSlug={studioSlug}
+                eventId={eventId}
+                parentName={metadata.servicioNombre}
+                onClose={() => setAddSubtaskOpen(false)}
+                onSubmit={async (data) => {
+                  if (!addSubtaskProps) return;
+                  const parentId = addSubtaskProps.parentId ?? taskId;
+                  if (!parentId) return;
+                  await addSubtaskProps.onAddManualTaskSubmit(addSubtaskProps.sectionId, addSubtaskProps.stage, addSubtaskProps.catalogCategoryId, data, undefined, parentId);
+                  setAddSubtaskOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
       {taskId && (
         <TaskNotesSheet
           open={notesSheetOpen}
@@ -1241,6 +1685,51 @@ function SchedulerItem({
           studioSlug={studioSlug}
           eventId={eventId}
           onNoteAdded={onNoteAdded}
+        />
+      )}
+      {canAssignCrew && (
+        <SelectCrewModal
+          isOpen={selectCrewModalOpen}
+          onClose={() => setSelectCrewModalOpen(false)}
+          onSelect={handleAssignCrew}
+          studioSlug={studioSlug}
+          currentMemberId={localItem.assigned_to_crew_member_id ?? null}
+          title={hasCrew ? 'Cambiar asignación de personal' : 'Asignar personal'}
+          description={hasCrew
+            ? 'Selecciona un nuevo miembro del equipo para esta tarea.'
+            : 'Selecciona un miembro del equipo para asignar a esta tarea.'}
+          eventId={eventId}
+          taskStartDate={localItem.scheduler_task?.start_date instanceof Date ? localItem.scheduler_task.start_date : localItem.scheduler_task?.start_date ? new Date(localItem.scheduler_task.start_date as string) : undefined}
+          taskEndDate={localItem.scheduler_task?.end_date instanceof Date ? localItem.scheduler_task.end_date : localItem.scheduler_task?.end_date ? new Date(localItem.scheduler_task.end_date as string) : undefined}
+          taskId={taskId}
+        />
+      )}
+      {canAssignCrew && (
+        <ZenConfirmModal
+          isOpen={showRemoveCrewConfirm}
+          onClose={() => setShowRemoveCrewConfirm(false)}
+          onConfirm={handleRemoveCrew}
+          title="¿Quitar personal de esta tarea?"
+          description={
+            <div className="space-y-2">
+              <p className="text-sm text-zinc-300">
+                Se quitará la asignación de personal de esta tarea.
+              </p>
+              {localItem.assigned_to_crew_member && (
+                <p className="text-sm text-zinc-400">
+                  Personal actual: <strong className="text-zinc-200">{localItem.assigned_to_crew_member.name}</strong>
+                </p>
+              )}
+              <p className="text-xs text-zinc-500 mt-2">
+                La tarea quedará como borrador y deberás publicar el cronograma nuevamente si ya estaba sincronizado.
+              </p>
+            </div>
+          }
+          confirmText="Sí, quitar personal"
+          cancelText="Cancelar"
+          variant="destructive"
+          loading={isRemovingCrew}
+          loadingText="Quitando..."
         />
       )}
     </>
@@ -1442,7 +1931,7 @@ export const SchedulerSidebar = React.memo(({
         manualTasks,
         activeSectionIds,
         explicitlyActivatedStageIds,
-        customCategoriesBySectionStage
+        customCategoriesBySectionStage,
       ),
     [explicitlyActivatedStageIds, localSecciones, seccionesOrderKey, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
   );
@@ -1769,10 +2258,14 @@ export const SchedulerSidebar = React.memo(({
                       aria-hidden
                     />
                     {(stageSegmentsByStageId.get(stageRow.id) ?? EMPTY_STAGE_SEGMENTS).map((segment, segIdx) => {
-                    const segmentTaskIds = segment.rows
-                      .filter((r: SchedulerRowDescriptor): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r))
-                      .map((t) => String(t.type === 'task' ? t.item.scheduler_task?.id : t.task.id))
-                      .filter((id) => id && id !== 'undefined');
+                    // REGLA: IDs solo string; misma fuente que useSortable en cada fila. Solo incluir filas con id válido para paridad Context ↔ filas.
+                    const taskRowsInSegment = segment.rows.filter((r: SchedulerRowDescriptor): r is import('../../utils/scheduler-section-stages').SchedulerTaskRow | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow => isTaskRow(r) || isManualTaskRow(r));
+                    const segmentTaskIds = taskRowsInSegment
+                      .map((t) => {
+                        const raw = t.type === 'task' ? t.item.scheduler_task?.id : t.task.id;
+                        return raw != null && raw !== '' ? String(raw) : null;
+                      })
+                      .filter((id): id is string => id != null);
                     const categoryRow = segment.categoryRow;
                     const categoryRows = contentRows.filter((r) => isCategoryRow(r)) as Array<{ id: string; stageId: string; label: string }>;
                     const orderedCategories = categoryRows.map((r) => ({
@@ -1841,7 +2334,16 @@ export const SchedulerSidebar = React.memo(({
                                               <span>Añadir categoría personalizada</span>
                                             </button>
                                           </PopoverTrigger>
-                                          <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                                          <PopoverContent
+                                            className="w-72 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
+                                            align="start"
+                                            side="bottom"
+                                            sideOffset={4}
+                                            showBackdrop
+                                            open={isThisAddCatOpen}
+                                            onOpenChange={(open) => { if (!open) setAddPopoverContext(null); }}
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
                                             <AddCustomCategoryForm
                                               sectionId={row.sectionId}
                                               stage={row.stageCategory}
@@ -2105,8 +2607,8 @@ export const SchedulerSidebar = React.memo(({
                       
                       const childTaskIds = segment.rows
                         .filter((r): r is import('../../utils/scheduler-section-stages').SchedulerManualTaskRow | import('../../utils/scheduler-section-stages').SchedulerTaskRow =>
-                          (isManualTaskRow(r) && (r.task.parent_id ?? null) === currentTaskId) ||
-                          (isTaskRow(r) && ((r.item.scheduler_task as { parent_id?: string | null })?.parent_id ?? null) === currentTaskId)
+                          (isManualTaskRow(r) && (r.task as { parent_id?: string | null }).parent_id != null && String((r.task as { parent_id?: string | null }).parent_id) === String(currentTaskId)) ||
+                          (isTaskRow(r) && (r.item.scheduler_task as { parent_id?: string | null })?.parent_id != null && String((r.item.scheduler_task as { parent_id?: string | null })?.parent_id) === String(currentTaskId))
                         )
                         .map((r) => (isManualTaskRow(r) ? r.task.id : r.item.scheduler_task!.id));
                       
@@ -2116,9 +2618,11 @@ export const SchedulerSidebar = React.memo(({
                         parent_id: isValidParent ? currentTaskParentId : null,
                       };
                       
+                      // Israel v2.0: key ${id}-${order} para reconciliación visual tras reorden (evita congelamiento).
+                      const manualDbOrder = (row.task as { order?: number }).order ?? 0;
                       return (
                         <ManualTaskRow
-                          key={`${row.task.id}-${currentTaskParentId ?? 'none'}`}
+                          key={`${row.task.id}-${manualDbOrder}`}
                             task={taskWithValidatedParent}
                             activeDragData={activeDragData}
                             studioSlug={studioSlug}
@@ -2148,15 +2652,15 @@ export const SchedulerSidebar = React.memo(({
                             childTaskIds={childTaskIds}
                             previousPrincipalId={
                               (() => {
+                                // Primera tarea principal hacia arriba: manual o de catálogo (scheduler_task.id). Permite "Convertir en tarea secundaria" bajo catálogo.
                                 for (let i = pos - 1; i >= 0; i--) {
                                   const prev = taskRowsInOrder[i]!;
-                                  const prevParentId = isManualTaskRow(prev)
-                                    ? (prev as import('../../utils/scheduler-section-stages').SchedulerManualTaskRow).task.parent_id
-                                    : ((prev as import('../../utils/scheduler-section-stages').SchedulerTaskRow).item?.scheduler_task as { parent_id?: string | null } | undefined)?.parent_id;
-                                  if (!prevParentId) {
-                                    return isManualTaskRow(prev)
-                                      ? (prev as import('../../utils/scheduler-section-stages').SchedulerManualTaskRow).task.id
-                                      : ((prev as import('../../utils/scheduler-section-stages').SchedulerTaskRow).item?.scheduler_task?.id ?? null);
+                                  if (isManualTaskRow(prev)) {
+                                    const p = (prev as import('../../utils/scheduler-section-stages').SchedulerManualTaskRow).task;
+                                    if (p.parent_id == null) return p.id;
+                                  } else {
+                                    const st = (prev as import('../../utils/scheduler-section-stages').SchedulerTaskRow).item?.scheduler_task as { id?: string; parent_id?: string | null } | null | undefined;
+                                    if (st?.parent_id == null && st?.id) return st.id;
                                   }
                                 }
                                 return null;
@@ -2164,10 +2668,12 @@ export const SchedulerSidebar = React.memo(({
                             }
                             sectionId={row.sectionId}
                             catalogCategoryId={manualCatalogCategoryId}
+                            segmentCatalogCategoryId={catalogCategoryIdForKey}
                             sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label)}
                             onAddManualTaskSubmit={onAddManualTaskSubmit}
                             onManualTaskUpdate={onManualTaskUpdate}
                             onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
+                            onTaskToggleComplete={onTaskToggleComplete}
                             customCategoriesBySectionStage={customCategoriesBySectionStage}
                             categoriesWithDataByStage={categoriesWithDataByStage}
                             onAddCustomCategory={onAddCustomCategory}
@@ -2177,16 +2683,18 @@ export const SchedulerSidebar = React.memo(({
                               catalogCategoryId: manualCatalogCategoryId,
                               stageKey: stageRow.id,
                               disableDrag: updatingTaskId != null,
-                              isSaving: updatingTaskId === String(row.task.id),
+                              isSaving: updatingTaskId !== null && String(updatingTaskId) === String(row.task.id),
                               hasParentId: ((row.task as { parent_id?: string | null }).parent_id ?? null) != null,
                               isLastTaskInSegment: pos === taskRowsInOrder.length - 1,
                               dropIndicator,
                             }}
+                            updatingTaskId={updatingTaskId}
                           />
                       );
                     }
                     if (isTaskRow(row)) {
-                      const taskId = row.item.scheduler_task?.id;
+                      const taskIdRaw = row.item.scheduler_task?.id;
+                      const taskId = taskIdRaw != null && taskIdRaw !== '' ? String(taskIdRaw) : null;
                       const taskRowsInOrder = segment.rows.filter(
                         (r): r is typeof row | import('../../utils/scheduler-section-stages').SchedulerManualTaskRow =>
                           isTaskRow(r) || isManualTaskRow(r)
@@ -2230,9 +2738,11 @@ export const SchedulerSidebar = React.memo(({
                         itemDurationDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
                       }
                       const hasItemDuration = (itemDurationDays ?? 0) > 0;
+                      // Israel v2.0: key ${id}-${order} para reconciliación visual tras reorden.
+                      const catalogDbOrder = (row.item.scheduler_task as { order?: number })?.order ?? 0;
                       return (
                         <SchedulerItem
-                          key={row.item.id}
+                          key={`${taskId ?? row.item.id}-${catalogDbOrder}`}
                           item={row.item}
                           metadata={{
                             seccionNombre: row.seccionNombre,
@@ -2249,25 +2759,26 @@ export const SchedulerSidebar = React.memo(({
                           onItemUpdate={onItemUpdate}
                           onTaskToggleComplete={onTaskToggleComplete}
                           onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
-                          sortableProps={{
-                            taskId: String(taskId!),
+                          sortableProps={taskId != null ? {
+                            taskId,
                             isManual: false,
                             catalogCategoryId: itemEffectiveCatalogCategoryId,
                             stageKey: stageRow.id,
                             disableDrag: updatingTaskId != null,
-                            isSaving: updatingTaskId === String(taskId),
+                            isSaving: updatingTaskId != null && String(updatingTaskId) === taskId,
                             isSynced: (row.item.scheduler_task as { sync_status?: string } | undefined)?.sync_status === 'INVITED',
                             hasParentId: (itemTaskParentId ?? null) != null,
                             isLastTaskInSegment: pos === taskRowsInOrder.length - 1,
                             dropIndicator,
-                          }}
+                          } : undefined}
                           addSubtaskProps={
-                            showAddSubtaskForItem
+                            showAddSubtaskForItem && taskId != null
                               ? {
                                   sectionId: row.sectionId,
                                   stage: stageRow.category,
-                                  catalogCategoryId: itemEffectiveCatalogCategoryId,
+                                  catalogCategoryId: catalogCategoryIdForKey ?? itemEffectiveCatalogCategoryId,
                                   sectionLabel: catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label),
+                                  parentId: taskId,
                                   onAddManualTaskSubmit: onAddManualTaskSubmit!,
                                 }
                               : undefined
@@ -2318,7 +2829,16 @@ export const SchedulerSidebar = React.memo(({
                                   <span>Añadir categoría personalizada</span>
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-800" align="start" side="bottom" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                              <PopoverContent
+                                className="w-72 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
+                                align="start"
+                                side="bottom"
+                                sideOffset={4}
+                                showBackdrop
+                                open={isThisAddCatOpen}
+                                onOpenChange={(open) => { if (!open) setAddPopoverContext(null); }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <AddCustomCategoryForm
                                   sectionId={row.sectionId}
                                   stage={row.stageCategory}
@@ -2386,10 +2906,13 @@ export const SchedulerSidebar = React.memo(({
                               </button>
                             </PopoverTrigger>
                             <PopoverContent
-                            className="w-80 p-3 bg-zinc-900 border-zinc-800"
+                            className="w-80 p-3 bg-zinc-900 border-zinc-800 shadow-lg shadow-black/20"
                             align="start"
                             side="bottom"
                             sideOffset={4}
+                            showBackdrop
+                            open={isThisPopoverOpen}
+                            onOpenChange={(open) => { if (!open) setAddPopoverContext(null); }}
                           >
                             <TaskForm
                               mode="create"

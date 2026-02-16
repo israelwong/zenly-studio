@@ -502,19 +502,47 @@ function normalizeCategoria<T extends { id: string; order?: number }>(cat: T): T
   return { ...cat, order } as T & { order: number };
 }
 
-/** Extrae taskId y parentId de una fila de tarea (ítem o manual). */
+/** Extrae taskId y parentId de una fila de tarea (ítem o manual). Normaliza a string para comparaciones. */
 function getTaskIdAndParent(row: TaskRow): { taskId: string; parentId: string | null } | null {
   if (row.type === 'manual_task') {
-    return { taskId: row.task.id, parentId: row.task.parent_id ?? null };
+    const taskId = row.task.id != null ? String(row.task.id) : '';
+    const parentId = (row.task as { parent_id?: string | null }).parent_id;
+    return { taskId, parentId: parentId != null ? String(parentId) : null };
   }
   const st = row.item.scheduler_task as { id?: string; parent_id?: string | null } | null | undefined;
   if (!st?.id) return null;
-  return { taskId: st.id, parentId: st.parent_id ?? null };
+  return {
+    taskId: String(st.id),
+    parentId: st.parent_id != null ? String(st.parent_id) : null,
+  };
+}
+
+/** Orden definitivo del bucket: por order ascendente; desempate por taskId para evitar saltos con datos sucios. */
+function sortBucketByOrder(
+  bucket: Array<{ order: number; row: TaskRow }>
+): Array<{ order: number; row: TaskRow }> {
+  return [...bucket].sort((a, b) => {
+    const byOrder = (a.order ?? 0) - (b.order ?? 0);
+    if (byOrder !== 0) return byOrder;
+    const idA = getTaskIdAndParent(a.row)?.taskId ?? '';
+    const idB = getTaskIdAndParent(b.row)?.taskId ?? '';
+    return idA.localeCompare(idB);
+  });
 }
 
 /**
- * Israel Algorithm: reordena tareas por jerarquía.
- * Regla: cada padre seguido por sus hijos (ordenados por order). Huérfanas al final (console.warn en dev).
+ * ISRAEL ALGORITHM - Reordenamiento simple con jerarquía padre-hijo.
+ * Versión funcional comprobada: clasificación explícita + sort por order.
+ * 
+ * Algoritmo:
+ * 1. Separar padres (parent_id === null) de hijos
+ * 2. Ordenar padres por order ascendente
+ * 3. Para cada padre, insertar sus hijos inmediatamente después
+ * 4. Ordenar hijos por order ascendente
+ * 5. Huérfanos al final
+ * 
+ * @param list Lista de entradas con orden y fila de tarea
+ * @returns Lista reordenada manteniendo relaciones padre-hijo
  */
 export function reorderWithHierarchy(
   list: Array<{ order: number; row: TaskRow }>
@@ -522,6 +550,7 @@ export function reorderWithHierarchy(
   const byTaskId = new Map<string, { order: number; row: TaskRow }>();
   const taskMeta = new Map<string, { parentId: string | null }>();
 
+  // PASO 1: Indexar todas las tareas
   for (const entry of list) {
     const meta = getTaskIdAndParent(entry.row);
     if (!meta) continue;
@@ -534,6 +563,7 @@ export function reorderWithHierarchy(
   const childrenByParent = new Map<string, string[]>();
   const orphans: string[] = [];
 
+  // PASO 2: Clasificar tareas (roots vs children vs orphans)
   for (const [taskId, meta] of taskMeta.entries()) {
     const parentId = meta.parentId;
     if (!parentId) {
@@ -551,25 +581,32 @@ export function reorderWithHierarchy(
   }
 
   const result: Array<{ order: number; row: TaskRow }> = [];
+  
+  // PASO 3: Ordenar padres por order ascendente
   const sortedRoots = [...roots].sort((a, b) => {
     const ea = byTaskId.get(a)!;
     const eb = byTaskId.get(b)!;
     return (ea.order ?? 0) - (eb.order ?? 0) || a.localeCompare(b);
   });
 
+  // PASO 4: Construir resultado (padre → hijos, padre → hijos, ...)
   for (const rootId of sortedRoots) {
     result.push(byTaskId.get(rootId)!);
     const children = childrenByParent.get(rootId) ?? [];
+    
+    // Ordenar hijos por order ascendente
     const sortedChildren = [...children].sort((a, b) => {
       const ea = byTaskId.get(a)!;
       const eb = byTaskId.get(b)!;
       return (ea.order ?? 0) - (eb.order ?? 0) || a.localeCompare(b);
     });
+    
     for (const cid of sortedChildren) {
       result.push(byTaskId.get(cid)!);
     }
   }
 
+  // PASO 5: Agregar huérfanos al final
   for (const oid of orphans) {
     result.push(byTaskId.get(oid)!);
   }
@@ -665,6 +702,10 @@ export function buildSchedulerRows(
 
   const sectionIdToName = new Map<string, string>();
 
+  /** ISRAEL-ALGORITHM-MASTER §4: taskIdToSegment — evita ceguera de buckets (padre catálogo e hijo manual en mismo segmento).
+   * taskId = scheduler_task.id para ítems de catálogo. Subtareas manuales con parent_id heredan segmento del padre: segment = taskIdToSegment.get(String(parentId)). */
+  const taskIdToSegment = new Map<string, { sectionId: string; stage: TaskCategoryStage; categoryKey: string }>();
+
   // Ítems de cotización: sección y categoría desde snapshot de la tarea (inmutable); fallback a catálogo solo para datos legacy.
   let displayIndex = 0;
   for (const item of itemsMap.values()) {
@@ -687,7 +728,8 @@ export function buildSchedulerRows(
 
     const sectionId = snapshotSectionId ?? resolveSection(catalogCategoryId).sectionId;
     const sectionNombre = snapshotSectionName ?? (catalogCategoryId ? categoryIdToSection.get(catalogCategoryId)?.sectionNombre : null) ?? 'Sin Categoría';
-    const categoryNombre = snapshotCategoryName ?? (sectionId === SIN_CATEGORIA_SECTION_ID && task.catalog_category?.name ? task.catalog_category.name : resolveSection(catalogCategoryId).categoryNombre);
+    const categoryNombreFromMap = catalogCategoryId ? categoryIdToSection.get(catalogCategoryId)?.categoryNombre : null;
+    const categoryNombre = (categoryNombreFromMap ?? snapshotCategoryName ?? (sectionId === SIN_CATEGORIA_SECTION_ID && task.catalog_category?.name ? task.catalog_category.name : resolveSection(catalogCategoryId).categoryNombre)).trim();
 
     sectionIdToName.set(sectionId, sectionNombre);
 
@@ -710,60 +752,60 @@ export function buildSchedulerRows(
       order: task.order ?? displayIndex++,
       row,
     });
+    const taskId = (task as { id?: string }).id;
+    if (taskId) taskIdToSegment.set(String(taskId), { sectionId, stage, categoryKey });
   }
 
-  // Tareas manuales: priorizar catalog_section_id (heredado al crear, también para operativas); categoría = operativa si existe, si no catálogo.
+  // Tareas manuales: inyectar en el segmento del padre (catálogo o manual) si tiene parent_id; si no, resolver por sus datos. Orden topológico para que el padre esté antes que los hijos.
   const firstSectionId = secciones[0]?.id;
   const firstSectionNombre = secciones[0]?.nombre ?? '';
 
-  let manualDisplayIndex = 0;
-  for (const task of manualTasks) {
+  const resolveManualSegment = (task: ManualTaskPayload): { sectionId: string; stage: TaskCategoryStage; categoryKey: string } => {
     const sectionIdSnapshot = task.catalog_section_id ?? (task as { catalog_section_id_snapshot?: string | null }).catalog_section_id_snapshot ?? null;
     const explicitSectionId =
-      sectionIdSnapshot && secciones.some((s) => s.id === sectionIdSnapshot)
-        ? sectionIdSnapshot
-        : null;
+      sectionIdSnapshot && secciones.some((s) => s.id === sectionIdSnapshot) ? sectionIdSnapshot : null;
     const catalogCategoryId = task.catalog_category_id ?? null;
     const customCatName = task.scheduler_custom_category_nombre ?? (task as { scheduler_custom_category?: { name: string } }).scheduler_custom_category?.name ?? null;
     const sectionNameSnapshot = task.catalog_section_name_snapshot ?? (task as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null;
+    const categoryNombreFromMap = catalogCategoryId ? categoryIdToSection.get(catalogCategoryId)?.categoryNombre : null;
     const resolved = explicitSectionId
-      ? {
-        sectionId: explicitSectionId,
-        sectionNombre: sectionNameSnapshot ?? secciones.find((s) => s.id === explicitSectionId)?.nombre ?? '',
-        categoryNombre: customCatName ?? task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría',
-      }
-        : catalogCategoryId
-        ? (categoryIdToSection.get(catalogCategoryId) ?? {
-          sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
-          sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'),
-          categoryNombre: task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría',
-        })
+      ? { sectionId: explicitSectionId, sectionNombre: sectionNameSnapshot ?? secciones.find((s) => s.id === explicitSectionId)?.nombre ?? '', categoryNombre: customCatName ?? (categoryNombreFromMap ?? task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría').trim() }
+      : catalogCategoryId
+        ? (categoryIdToSection.get(catalogCategoryId) ?? { sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID, sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'), categoryNombre: (task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría').trim() })
         : customCatName
-          ? {
-            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
-            sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'),
-            categoryNombre: customCatName,
-          }
-          : {
-            sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID,
-            sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'),
-            categoryNombre: task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría',
-          };
-    const { sectionId, sectionNombre, categoryNombre } = resolved;
-    sectionIdToName.set(sectionId, sectionNombre);
+          ? { sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID, sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'), categoryNombre: customCatName.trim() }
+          : { sectionId: firstSectionId ?? SIN_CATEGORIA_SECTION_ID, sectionNombre: sectionNameSnapshot ?? (firstSectionNombre || 'Sin Categoría'), categoryNombre: (task.catalog_category_nombre ?? (task as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? 'Sin categoría').trim() };
     const stage = normalizeCategory(task.category);
-    const categoryKey = customCatName ?? categoryNombre;
+    const categoryKey = (customCatName ?? (categoryNombreFromMap ?? resolved.categoryNombre)).trim();
+    return { sectionId: resolved.sectionId, stage, categoryKey };
+  };
 
+  let manualDisplayIndex = 0;
+  const manualPending = [...manualTasks];
+  while (manualPending.length > 0) {
+    const parentIdKey = (t: ManualTaskPayload) => (t as { parent_id?: string | null }).parent_id != null ? String((t as { parent_id?: string | null }).parent_id) : null;
+    const idx = manualPending.findIndex((t) => {
+      const pid = parentIdKey(t);
+      return pid === null || taskIdToSegment.has(pid);
+    });
+    const task = idx >= 0 ? manualPending.splice(idx, 1)[0]! : manualPending.shift()!;
+    const parentId = (task as { parent_id?: string | null }).parent_id;
+    const segment = (parentId != null && taskIdToSegment.has(String(parentId)))
+      ? taskIdToSegment.get(String(parentId))!
+      : resolveManualSegment(task);
+
+    sectionIdToName.set(segment.sectionId, sectionIdToName.get(segment.sectionId) ?? segment.sectionId);
     const row: SchedulerManualTaskRow = {
       type: 'manual_task',
       task,
-      sectionId,
-      stageCategory: stage,
+      sectionId: segment.sectionId,
+      stageCategory: segment.stage,
     };
-    getOrCreate(sectionId, stage, categoryKey).push({
+    getOrCreate(segment.sectionId, segment.stage, segment.categoryKey).push({
       order: task.order ?? manualDisplayIndex++,
       row,
     });
+    taskIdToSegment.set(String(task.id), segment);
   }
 
   // Solo seed secciones que tienen categorías custom o etapas activadas explícitamente (no catálogo vacío).
@@ -913,6 +955,8 @@ export function buildSchedulerRows(
         });
 
         for (const { id: catId, label, list, isCustom } of allCategories) {
+          // Aplicar reorderWithHierarchy directamente sin pre-sort
+          // La función maneja el ordenamiento interno por jerarquía
           const sorted = list.length > 0 ? reorderWithHierarchy([...list]) : [];
           sectionRows.push({
             type: 'category',
