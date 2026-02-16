@@ -1508,31 +1508,31 @@ function SchedulerItem({
     </div>
   );
 
-  const rowContent = (
-    <div 
-      className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden cursor-pointer"
-      onClick={() => setPopoverOpen(true)}
-      onKeyDown={(e) => e.key === 'Enter' && setPopoverOpen(true)}
-      role="button"
-      tabIndex={0}
-    >
-      {renderItem ? renderItem(localItem, metadata) : triggerContent}
-    </div>
-  );
-
   const effectiveIsSaving = (sortableProps?.isSaving === true || isThisRowSaving) && !forceClearSpinner;
   if (sortableProps) {
     return (
       <>
         <div className="w-full relative">
-          <SortableTaskRow
-            {...sortableProps}
-            isSaving={effectiveIsSaving}
-            leftSlot={leftSlot}
-            rightSlot={rightSlot}
+          <SchedulerItemPopover
+            item={localItem}
+            studioSlug={studioSlug}
+            eventId={eventId}
+            onItemUpdate={onItemUpdate}
+            onTaskToggleComplete={onTaskToggleComplete}
+            open={popoverOpen}
+            onOpenChange={setPopoverOpen}
           >
-            {rowContent}
-          </SortableTaskRow>
+            <SortableTaskRow
+              {...sortableProps}
+              isSaving={effectiveIsSaving}
+              leftSlot={leftSlot}
+              rightSlot={rightSlot}
+            >
+              <div className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden">
+                {renderItem ? renderItem(localItem, metadata) : triggerContent}
+              </div>
+            </SortableTaskRow>
+          </SchedulerItemPopover>
           {addSubtaskProps && taskId && !localItem.scheduler_task?.parent_id && (
             <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
               <PopoverTrigger asChild>
@@ -1567,17 +1567,6 @@ function SchedulerItem({
             </Popover>
           )}
         </div>
-        <SchedulerItemPopover
-          item={localItem}
-          studioSlug={studioSlug}
-          eventId={eventId}
-          onItemUpdate={onItemUpdate}
-          onTaskToggleComplete={onTaskToggleComplete}
-          open={popoverOpen}
-          onOpenChange={setPopoverOpen}
-        >
-          <div style={{ display: 'none' }} />
-        </SchedulerItemPopover>
         {taskId && (
           <TaskNotesSheet
             open={notesSheetOpen}
