@@ -1103,11 +1103,15 @@ export const EventScheduler = React.memo(function EventScheduler({
       if (foundTask) {
         lastOverIdRef.current = null;
         setActiveDragData(foundTask);
-        const rect = event.active.rect.current;
-        if (rect) {
-          overlayStartRectRef.current = { left: rect.left, top: rect.top };
-          setOverlayPosition({ x: rect.left, y: rect.top });
-          overlayPositionRef.current = { x: rect.left, y: rect.top };
+        
+        // Obtener el rect inicial del elemento DOM
+        const activeElement = document.querySelector(`[data-scheduler-task-id="${taskId}"]`);
+        
+        if (activeElement) {
+          const domRect = activeElement.getBoundingClientRect();
+          overlayStartRectRef.current = { left: domRect.left, top: domRect.top };
+          setOverlayPosition({ x: domRect.left, y: domRect.top });
+          overlayPositionRef.current = { x: domRect.left, y: domRect.top };
         }
       }
     },
@@ -1150,14 +1154,16 @@ export const EventScheduler = React.memo(function EventScheduler({
       dropIndicatorRef.current = null;
       return;
     }
-    const insertBefore = overlayPos.y + ROW_HEIGHTS.TASK_ROW / 2 < rect.top + rect.height / 2;
     
-    const meta = taskIdToMeta.get(overId);
-    if (!meta) {
+    // Obtener metadata del target
+    const targetMeta = taskIdToMeta.get(overId);
+    if (!targetMeta) {
       setDropIndicator(null);
       dropIndicatorRef.current = null;
       return;
     }
+    
+    // Validar que el activeId tenga data
     const activeData = resolveActiveDragDataById(activeId);
     if (!activeData) {
       setDropIndicator(null);
@@ -1166,16 +1172,57 @@ export const EventScheduler = React.memo(function EventScheduler({
     }
     
     // BLOQUEO CROSS-SCOPE TOTAL
-    // Ninguna tarea (Zinc o Amber, principal o secundaria) puede moverse fuera de su scope
     const isSameScope = 
-      activeData.stageKey === meta.stageKey && 
-      normCat(activeData.catalogCategoryId) === normCat(meta.catalogCategoryId);
+      activeData.stageKey === targetMeta.stageKey && 
+      normCat(activeData.catalogCategoryId) === normCat(targetMeta.catalogCategoryId);
     
     if (!isSameScope) {
       setDropIndicator(null);
       dropIndicatorRef.current = null;
-      // Todos los movimientos cross-scope requieren modal "Mover a otro estado"
       return;
+    }
+    
+    // Obtener todas las tareas del mismo scope ordenadas
+    const targetCat = normCat(targetMeta.catalogCategoryId);
+    const targetStage = targetMeta.stageKey;
+    
+    const tasksInScope = Array.from(taskIdToMeta.entries())
+      .filter(([_, meta]) => {
+        const cat = normCat(meta.catalogCategoryId);
+        return cat === targetCat && meta.stageKey === targetStage;
+      })
+      .sort(([, a], [, b]) => (a.order ?? 0) - (b.order ?? 0))
+      .map(([id]) => id);
+    
+    const targetIndexInScope = tasksInScope.indexOf(overId);
+    const activeIndexInScope = tasksInScope.indexOf(activeId);
+    const isLastInScope = targetIndexInScope === tasksInScope.length - 1;
+    const isFirstInScope = targetIndexInScope === 0;
+    const activeIsAbove = activeIndexInScope >= 0 && activeIndexInScope < targetIndexInScope;
+    const activeIsBelow = activeIndexInScope >= 0 && activeIndexInScope > targetIndexInScope;
+    const areAdjacent = Math.abs(targetIndexInScope - activeIndexInScope) === 1;
+    
+    // Calcular insertBefore con lógica especial para extremos y adyacentes
+    const overlayMid = overlayPos.y + ROW_HEIGHTS.TASK_ROW / 2;
+    const threshold = rect.top + rect.height * 0.4;
+    
+    let insertBefore: boolean;
+    
+    if (isLastInScope && activeIsAbove) {
+      // CASO 1: Arrastrar desde arriba sobre el ÚLTIMO → siempre insertar DESPUÉS
+      insertBefore = false;
+    } else if (isFirstInScope && activeIsBelow) {
+      // CASO 2: Arrastrar desde abajo sobre el PRIMERO → siempre insertar ANTES
+      insertBefore = true;
+    } else if (areAdjacent && activeIsAbove) {
+      // CASO 3: Adyacentes, active arriba del target → insertar DESPUÉS (swap)
+      insertBefore = false;
+    } else if (areAdjacent && activeIsBelow) {
+      // CASO 4: Adyacentes, active abajo del target → insertar ANTES (swap)
+      insertBefore = true;
+    } else {
+      // Caso normal: usar threshold 40%
+      insertBefore = overlayMid < threshold;
     }
     
     const indicator = { overId, insertBefore };
@@ -1398,8 +1445,8 @@ export const EventScheduler = React.memo(function EventScheduler({
         const effectiveDropIndicator = dropIndicatorRef.current;
 
         if (overIndexInRest >= 0) {
-          const finalInsertIndex =
-            effectiveDropIndicator && !effectiveDropIndicator.insertBefore ? overIndexInRest + 1 : overIndexInRest;
+          const insertBefore = effectiveDropIndicator?.insertBefore ?? false;
+          const finalInsertIndex = insertBefore ? overIndexInRest : overIndexInRest + 1;
           reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
         } else {
           // over está dentro del bloque movido → fallback splice plano
