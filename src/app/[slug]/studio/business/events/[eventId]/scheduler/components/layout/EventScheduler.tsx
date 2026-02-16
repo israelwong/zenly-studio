@@ -272,6 +272,9 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   /** Indicador visual de drop: línea amber donde caerá la tarea. Solo en posiciones válidas. */
   const [dropIndicator, setDropIndicator] = useState<{ overId: string; insertBefore: boolean } | null>(null);
+  
+  /** Ref para guardar el último dropIndicator válido (persiste durante el drag) */
+  const dropIndicatorRef = useRef<{ overId: string; insertBefore: boolean } | null>(null);
 
   /** Último over durante el drag; si al soltar over es null (extremos), usamos este como fallback. */
   const lastOverIdRef = useRef<string | null>(null);
@@ -1090,8 +1093,11 @@ export const EventScheduler = React.memo(function EventScheduler({
 
   const handleSchedulerDragStart = useCallback(
     (event: DragStartEvent) => {
-      if (updatingTaskId != null) return;
+      if (updatingTaskId != null) {
+        return;
+      }
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       const taskId = String(event.active.id);
       const foundTask = resolveActiveDragDataById(taskId);
       if (foundTask) {
@@ -1125,30 +1131,37 @@ export const EventScheduler = React.memo(function EventScheduler({
     if (event.over?.id != null) lastOverIdRef.current = String(event.over.id);
     const overId = event.over?.id ? String(event.over.id) : null;
     const activeId = String(event.active.id);
+    
     if (!overId || overId === activeId || overId.startsWith('cat::')) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       return;
     }
     const overEl = document.querySelector(`[data-scheduler-task-id="${overId}"]`);
     if (!overEl) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       return;
     }
     const rect = overEl.getBoundingClientRect();
     const overlayPos = overlayPositionRef.current;
     if (!overlayPos) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       return;
     }
     const insertBefore = overlayPos.y + ROW_HEIGHTS.TASK_ROW / 2 < rect.top + rect.height / 2;
+    
     const meta = taskIdToMeta.get(overId);
     if (!meta) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       return;
     }
     const activeData = resolveActiveDragDataById(activeId);
     if (!activeData) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       return;
     }
     
@@ -1160,11 +1173,14 @@ export const EventScheduler = React.memo(function EventScheduler({
     
     if (!isSameScope) {
       setDropIndicator(null);
+      dropIndicatorRef.current = null;
       // Todos los movimientos cross-scope requieren modal "Mover a otro estado"
       return;
     }
     
-    setDropIndicator({ overId, insertBefore });
+    const indicator = { overId, insertBefore };
+    setDropIndicator(indicator);
+    dropIndicatorRef.current = indicator;
   }, [taskIdToMeta, resolveActiveDragDataById, normCat]);
 
   const handleSchedulerDragEnd = useCallback(
@@ -1378,9 +1394,12 @@ export const EventScheduler = React.memo(function EventScheduler({
         const overIndexInRest = rest.findIndex((e) => String(e.taskId) === overIdStr);
         let reorderedEntries: Entry[];
 
+        // Usar dropIndicatorRef (persiste durante todo el drag) en lugar del estado (puede ser null)
+        const effectiveDropIndicator = dropIndicatorRef.current;
+
         if (overIndexInRest >= 0) {
           const finalInsertIndex =
-            dropIndicator && !dropIndicator.insertBefore ? overIndexInRest + 1 : overIndexInRest;
+            effectiveDropIndicator && !effectiveDropIndicator.insertBefore ? overIndexInRest + 1 : overIndexInRest;
           reorderedEntries = [...rest.slice(0, finalInsertIndex), ...block, ...rest.slice(finalInsertIndex)];
         } else {
           // over está dentro del bloque movido → fallback splice plano
@@ -1389,7 +1408,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (fromIndex < 0 || overIndex < 0) return;
           const ids = combined.map((e) => String(e.taskId));
           ids.splice(fromIndex, 1);
-          let destIndex = dropIndicator && !dropIndicator.insertBefore ? overIndex + 1 : overIndex;
+          let destIndex = effectiveDropIndicator && !effectiveDropIndicator.insertBefore ? overIndex + 1 : overIndex;
           if (fromIndex < destIndex) destIndex -= 1;
           ids.splice(destIndex, 0, activeIdStr);
           reorderedEntries = ids
@@ -1410,7 +1429,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         if (reorderBackupClearRef.current) clearTimeout(reorderBackupClearRef.current);
         reorderBackupClearRef.current = setTimeout(() => {
           reorderBackupClearRef.current = null;
-          setUpdatingTaskIdRef.current(null);
+          setUpdatingTaskId(null);
         }, 8000);
         const normalizedActiveId = String(activeId);
         setUpdatingTaskId(normalizedActiveId);
@@ -1556,6 +1575,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         overlayPositionRef.current = null;
         overlayStartRectRef.current = null;
         setDropIndicator(null);
+        dropIndicatorRef.current = null;
       }
     },
     [

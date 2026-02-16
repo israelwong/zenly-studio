@@ -1631,8 +1631,6 @@ export async function reorderSchedulerTasksToOrder(
 }> {
   if (taskIdsInOrder.length === 0) return { success: true, data: [] };
   
-  console.log('[Server Reorder] Input IDs:', taskIdsInOrder.length);
-  
   try {
     const tasksInList = await prisma.studio_scheduler_event_tasks.findMany({
       where: { id: { in: taskIdsInOrder }, scheduler_instance: { event_id: eventId } },
@@ -1690,8 +1688,6 @@ export async function reorderSchedulerTasksToOrder(
         reorderedTasks.push({ taskId, newOrder: index });
       }
     }, { maxWait: 5_000 });
-
-    console.log('[Server Reorder] Success - Updated count:', reorderedTasks.length);
     
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
