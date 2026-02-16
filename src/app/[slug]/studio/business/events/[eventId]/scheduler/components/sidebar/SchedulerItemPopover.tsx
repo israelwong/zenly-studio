@@ -521,8 +521,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                         </ZenButton>
                                     )}
 
-                                    {/* Checkbox de completado */}
-                                    <div className="flex items-center gap-2 py-2">
+                                    {/* Checkbox de completado - Simplificado */}
+                                    <div className="flex items-center gap-2 py-1.5">
                                         <Checkbox
                                             id={`task-completed-${item.id}`}
                                             checked={isTaskCompleted}
@@ -533,24 +533,15 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                         <label
                                             htmlFor={`task-completed-${item.id}`}
                                             className={cn(
-                                                "text-sm font-medium cursor-pointer select-none",
-                                                isTaskCompleted ? "text-emerald-400" : "text-zinc-400",
+                                                "text-sm cursor-pointer select-none",
+                                                isTaskCompleted ? "text-zinc-300" : "text-zinc-500",
                                                 isUpdatingCompletion && "opacity-60"
                                             )}
                                         >
-                                            <div className="flex items-center gap-1.5">
-                                                {isUpdatingCompletion ? (
-                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
-                                                ) : (
-                                                    isTaskCompleted && <CheckCircle2 className="h-3.5 w-3.5" />
-                                                )}
-                                                <span>
-                                                    {isUpdatingCompletion
-                                                        ? (isTaskCompleted ? 'Desmarcando...' : 'Marcando...')
-                                                        : 'Tarea completada'
-                                                    }
-                                                </span>
-                                            </div>
+                                            {isUpdatingCompletion
+                                                ? (isTaskCompleted ? 'Desmarcando...' : 'Marcando...')
+                                                : 'Completada'
+                                            }
                                         </label>
                                     </div>
                                 </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Bell, Trash2, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
@@ -191,29 +190,8 @@ export function SchedulerHeaderDatePopover({
     }
   };
 
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setOpen(false);
-    },
-    []
-  );
-
   return (
     <>
-      {open &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            role="presentation"
-            className="fixed inset-0 z-[99999] pointer-events-auto bg-transparent backdrop-blur-[2px]"
-            onClick={handleOverlayClick}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-hidden
-          />,
-          document.body
-        )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -232,9 +210,13 @@ export function SchedulerHeaderDatePopover({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-72 p-3 bg-zinc-900 border-amber-800/50 focus:outline-none z-[100000]"
+          className="w-72 p-3 bg-zinc-900 border-amber-800/50 focus:outline-none shadow-lg shadow-black/20"
           align="start"
+          side="bottom"
           sideOffset={4}
+          showBackdrop
+          open={open}
+          onOpenChange={setOpen}
         >
           <div className="flex items-center gap-2 mb-3">
             <div className="h-6 w-6 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">

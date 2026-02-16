@@ -1,6 +1,10 @@
 /**
  * Fuente única de verdad para la jerarquía Sección > Categoría > Ítem en eventos.
  * Workflow Card y Scheduler deben consumir solo esta librería para orden/estructura.
+ *
+ * Nota: La jerarquía de subtareas del Scheduler (parent_id) no se gestiona aquí;
+ * vive en scheduler-actions y frontend. Las comparaciones de IDs en este archivo
+ * usan string (safeGetCategoryId, validCategoryIds); IDs de catálogo son siempre string.
  */
 
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -112,6 +116,20 @@ export function ordenarPorEstructuraCanonica<T>(
     if (ordA.categoryOrden !== ordB.categoryOrden) return ordA.categoryOrden - ordB.categoryOrden;
     return (indexOf.get(a) ?? 0) - (indexOf.get(b) ?? 0);
   });
+}
+
+/**
+ * Función maestra de reindexación lineal: asigna order = 0, 1, 2… según la posición en el array.
+ * Usar en Scheduler tras DnD: lista unificada (Zinc + Amber) en orden final → Map<id, newOrder>.
+ * No distingue origen (SchedulerTaskRow vs SchedulerManualTaskRow); el order es puramente por posición.
+ */
+export function reindexarOrdenSecuencial<T>(items: T[], getId: (item: T) => string): Map<string, number> {
+  const map = new Map<string, number>();
+  (items ?? []).forEach((item, index) => {
+    const id = getId(item);
+    if (id != null && id !== '') map.set(String(id), index);
+  });
+  return map;
 }
 
 /**

@@ -43,7 +43,7 @@ const PopoverContent = React.forwardRef<
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[99999] pointer-events-auto bg-transparent backdrop-blur-[2px]"
+            className="fixed inset-0 z-[99999] pointer-events-auto bg-transparent backdrop-blur-[1px]"
             aria-hidden
             onClick={() => onOpenChange?.(false)}
           />,

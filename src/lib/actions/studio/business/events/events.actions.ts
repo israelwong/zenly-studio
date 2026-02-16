@@ -273,6 +273,14 @@ function serializeCotizacionItemBasic(item: Record<string, unknown>) {
  * @param item - Item de cotización de Prisma con campos adicionales
  */
 function serializeCotizacionItemComplete(item: Record<string, unknown>) {
+  const schedulerTask = item.scheduler_task as { 
+    _count?: { activity_log: number };
+    status?: string;
+    progress_percent?: number;
+    completed_at?: Date | string | null;
+  } | null | undefined;
+  const notesCount = schedulerTask?._count?.activity_log ?? 0;
+  
   return {
     ...(item as Record<string, unknown>),
     unit_price: item.unit_price ? Number(item.unit_price) : 0,
@@ -281,6 +289,13 @@ function serializeCotizacionItemComplete(item: Record<string, unknown>) {
     cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
     internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
     client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
+    scheduler_task: schedulerTask ? {
+      ...schedulerTask,
+      notes_count: notesCount,
+      status: schedulerTask.status,
+      progress_percent: schedulerTask.progress_percent,
+      completed_at: schedulerTask.completed_at,
+    } : null,
   };
 }
 
@@ -742,9 +757,12 @@ export async function obtenerEventoDetalle(
           assigned_to_crew_member: {
             select: { id: true, name: true, email: true, tipo: true },
           },
-          activity_log: {
-            where: { action: 'NOTE_ADDED' },
-            select: { id: true },
+          _count: {
+            select: {
+              activity_log: {
+                where: { action: 'NOTE_ADDED' }
+              }
+            }
           },
         },
         orderBy: [{ category: 'asc' }, { order: 'asc' }],
@@ -826,9 +844,12 @@ export async function obtenerEventoDetalle(
               },
               sync_status: true,
               invitation_status: true,
-              activity_log: {
-                where: { action: 'NOTE_ADDED' },
-                select: { id: true },
+              _count: {
+                select: {
+                  activity_log: {
+                    where: { action: 'NOTE_ADDED' }
+                  }
+                }
               },
             },
           },
@@ -928,6 +949,7 @@ export async function obtenerEventoDetalle(
               assigned_to_crew_member_id: t.assigned_to_crew_member_id,
               status: t.status,
               progress_percent: t.progress_percent,
+              completed_at: t.completed_at,
               cotizacion_item_id: t.cotizacion_item_id,
               scheduler_custom_category_id: (t as { scheduler_custom_category_id?: string | null }).scheduler_custom_category_id ?? null,
               scheduler_custom_category: (t as { scheduler_custom_category?: { id: string; name: string } | null }).scheduler_custom_category ?? null,
@@ -943,9 +965,7 @@ export async function obtenerEventoDetalle(
                     tipo: t.assigned_to_crew_member.tipo,
                   }
                 : null,
-              notes_count: Array.isArray((t as { activity_log?: { id: string }[] }).activity_log)
-                ? (t as { activity_log: { id: string }[] }).activity_log.length
-                : 0,
+              notes_count: (t as { _count?: { activity_log: number } })._count?.activity_log ?? 0,
               catalog_category_id: t.catalog_category_id,
               catalog_category_name_snapshot: (t as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? null,
               catalog_section_id: (t as { catalog_section_id_snapshot?: string | null }).catalog_section_id_snapshot ?? null,
@@ -953,6 +973,7 @@ export async function obtenerEventoDetalle(
               catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
               catalog_category: t.catalog_category,
               order: t.order,
+              parent_id: t.parent_id,
             })),
           };
         })()
@@ -1029,8 +1050,29 @@ export async function obtenerEventoDetalle(
       })() : null,
       cotizaciones: todasLasCotizaciones.map((cotizacion) => {
         const cot = cotizacion as any;
-        // Orden estándar: seccion > categoria (catálogo) > item_order (catálogo) > order (cotización)
-        const itemsOrdenados = ordenarCotizacionItemsPorCatalogo(cot.cotizacion_items).map(serializeCotizacionItemComplete);
+        // ISRAEL ALGORITHM V3.3 - Sort Blindado (maneja nulos y tipos robustamente)
+        const itemsOrdenados = [...cot.cotizacion_items].sort((a: any, b: any) => {
+          // 1. Extracción Segura: Aseguramos que sea número o undefined
+          const taskOrderA = a.scheduler_task?.order;
+          const taskOrderB = b.scheduler_task?.order;
+
+          const hasOrderA = typeof taskOrderA === 'number';
+          const hasOrderB = typeof taskOrderB === 'number';
+
+          // 2. Lógica de "Verdad Absoluta" del Scheduler
+          // Si AMBOS tienen tarea de scheduler, obedecemos a la BD ciegamente
+          if (hasOrderA && hasOrderB) {
+            return taskOrderA! - taskOrderB!;
+          }
+
+          // 3. Casos Mixtos: Si uno tiene tarea (ya movido) y otro no (nuevo)
+          // Priorizamos el que tiene orden explícito del scheduler
+          if (hasOrderA && !hasOrderB) return -1;
+          if (!hasOrderA && hasOrderB) return 1;
+
+          // 4. Fallback Legacy (Orden original de cotización)
+          return (a.order ?? 0) - (b.order ?? 0);
+        }).map(serializeCotizacionItemComplete);
 
         return {
           ...cot,

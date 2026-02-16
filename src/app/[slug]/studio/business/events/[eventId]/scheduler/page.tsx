@@ -705,9 +705,7 @@ export default function EventSchedulerPage() {
     schedulerDateReminders: payload.schedulerDateReminders ?? [],
   };
 
-  const cronogramaLabel = cotizacionId
-    ? payload.cotizaciones?.find(c => c.id === cotizacionId)?.name || 'Cronograma'
-    : 'Cronograma';
+  const cronogramaLabel = 'Regresar';
 
   const schedulerContent = (
     <div
@@ -753,12 +751,12 @@ export default function EventSchedulerPage() {
               variant="ghost"
               size="sm"
               onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventId}`)}
-              className="p-2 shrink-0"
+              className="p-2 shrink-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
               aria-label="Volver al evento"
             >
               <ArrowLeft className="h-4 w-4" />
             </ZenButton>
-            <span className="text-sm font-medium text-zinc-200 truncate">{cronogramaLabel}</span>
+            <span className="text-sm font-medium text-emerald-400 truncate">{cronogramaLabel}</span>
           </div>
 
           {/* Derecha: Stats (desktop) + Fecha. Etiquetas con text-[10px] sm:text-xs; en móvil texto opcional (hidden sm:inline) */}

@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { X, UserPlus, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import type { ManualTaskPatch } from './SchedulerManualTaskPopover';
@@ -102,7 +102,7 @@ function TaskFormCreate({
   return (
     <div className="space-y-3">
       <p className={`text-[10px] font-medium uppercase tracking-wide text-emerald-400`} data-scheduler-label="manual-task">
-        {parentName ? `Nueva subtarea · ${parentName.length > 40 ? parentName.slice(0, 37) + '...' : parentName}` : `Nueva tarea manual${sectionLabel ? ` · ${sectionLabel}` : ''}`}
+        {parentName ? `Tarea secundaria · Principal: ${parentName.length > 35 ? parentName.slice(0, 32) + '...' : parentName}` : `Nueva tarea manual${sectionLabel ? ` · ${sectionLabel}` : ''}`}
       </p>
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <div className="space-y-2">
@@ -304,7 +304,7 @@ function TaskFormEdit({
             <span className="text-zinc-400">—</span>
           )}
         </div>
-        <div className="flex items-center gap-2 py-2">
+        <div className="flex items-center gap-2 py-1.5">
           <Checkbox
             id={`manual-completed-${task.id}`}
             checked={localCompleted}
@@ -318,14 +318,14 @@ function TaskFormEdit({
           <label
             htmlFor={`manual-completed-${task.id}`}
             className={cn(
-              'text-sm font-medium cursor-pointer select-none',
-              localCompleted ? 'text-emerald-400' : 'text-zinc-400'
+              'text-sm cursor-pointer select-none',
+              localCompleted ? 'text-zinc-300' : 'text-zinc-500'
             )}
           >
-            <div className="flex items-center gap-1.5">
-              {localCompleted && <CheckCircle2 className="h-3.5 w-3.5" />}
-              <span>Tarea completada</span>
-            </div>
+            {isUpdatingCompletion
+              ? (localCompleted ? 'Desmarcando...' : 'Marcando...')
+              : 'Completada'
+            }
           </label>
         </div>
       </div>

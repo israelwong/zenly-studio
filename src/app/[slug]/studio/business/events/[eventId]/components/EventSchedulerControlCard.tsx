@@ -40,11 +40,9 @@ import {
   checkSchedulerStatus,
   sincronizarTareasEvento,
   actualizarRangoScheduler,
-} from '@/lib/actions/studio/business/events/events.actions';
-import {
   obtenerSchedulerTareas,
   clasificarTareaScheduler,
-} from '@/lib/actions/studio/business/events/scheduler-actions';
+} from '@/lib/actions/studio/business/events';
 
 const PHASE_ORDER = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'] as const;
 type PhaseKey = (typeof PHASE_ORDER)[number];

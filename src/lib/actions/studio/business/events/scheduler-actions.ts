@@ -290,6 +290,13 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
             items: { select: { service_category_id: true } },
           },
         },
+        _count: {
+          select: {
+            activity_log: {
+              where: { action: 'NOTE_ADDED' }
+            }
+          }
+        },
       },
       orderBy: [{ category: 'asc' }, { order: 'asc' }],
     });
@@ -297,9 +304,11 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
     const data = tareas.map((t) => {
       const fromItem = t.cotizacion_item?.service_category_id ?? t.cotizacion_item?.items?.service_category_id ?? null;
       const catalog_category_id = t.catalog_category_id ?? fromItem ?? 'uncategorized';
+      const { _count, ...rest } = t;
       return {
-        ...t,
+        ...rest,
         catalog_category_id,
+        notes_count: _count.activity_log,
       };
     });
 
@@ -1056,11 +1065,6 @@ export async function crearTareaManualScheduler(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    const category =
-      MANUAL_TASK_CATEGORIES.includes(params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
-        ? (params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
-        : 'PLANNING';
-
     let instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { event_id: eventId },
       select: { id: true, start_date: true, end_date: true },
@@ -1088,20 +1092,31 @@ export async function crearTareaManualScheduler(
       });
     }
 
+    // parent_id puede ser id de tarea manual o de instancia de catálogo (scheduler_task). Normalizar a string para evitar fallos string vs number.
     const parentId = params.parent_id ?? null;
-    const rawCategoryId = params.catalog_category_id ?? null;
+    const parentIdNorm = parentId != null ? (typeof parentId === 'string' ? parentId : String(parentId)) : null;
+    let rawCategoryId = params.catalog_category_id ?? null;
+    let categoryFromParams = MANUAL_TASK_CATEGORIES.includes(params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
+      ? (params.stage as (typeof MANUAL_TASK_CATEGORIES)[number])
+      : 'PLANNING';
+    let parent: { id: string; catalog_category_id: string | null; category: string; parent_id: string | null } | null = null;
+    if (parentIdNorm) {
+      parent = await prisma.studio_scheduler_event_tasks.findFirst({
+        where: { id: parentIdNorm, scheduler_instance_id: instance.id },
+        select: { id: true, catalog_category_id: true, category: true, parent_id: true },
+      });
+      if (!parent) return { success: false, error: 'Tarea padre no encontrada' };
+      if (parent.parent_id != null) {
+        return { success: false, error: 'Solo se permite un nivel de profundidad. El padre no puede ser a su vez una subtarea.' };
+      }
+      if (rawCategoryId == null && parent.catalog_category_id != null) rawCategoryId = parent.catalog_category_id;
+      if (parent.category) categoryFromParams = parent.category;
+    }
     const { resolveCategoryIdForManualTask } = await import('./scheduler-custom-categories.actions');
     const resolved = await resolveCategoryIdForManualTask(studioSlug, eventId, rawCategoryId);
     const schedulerCustomCategoryId = resolved?.scheduler_custom_category_id ?? null;
     const catalogCategoryId = resolved?.catalog_category_id ?? null;
-    if (parentId) {
-      const parent = await prisma.studio_scheduler_event_tasks.findFirst({
-        where: { id: parentId, scheduler_instance_id: instance.id },
-        select: { id: true, catalog_category_id: true, category: true, parent_id: true },
-      });
-      if (!parent) return { success: false, error: 'Tarea padre no encontrada' };
-      if (parent.parent_id != null) return { success: false, error: 'Solo se permite un nivel de profundidad. El padre no puede ser a su vez una subtarea.' };
-    }
+    const category = categoryFromParams;
 
     // "Everything" query: todas las tareas del evento. include obligatorio para que cotizacion_item no llegue null.
     const allEventTasks = await prisma.studio_scheduler_event_tasks.findMany({
@@ -1133,8 +1148,8 @@ export async function crearTareaManualScheduler(
     const itemsInSegment = allEventTasks.filter(belongsToSegment);
 
     let newOrder: number;
-    if (parentId) {
-      const parent = itemsInSegment.find((t) => t.id === parentId);
+    if (parentIdNorm) {
+      const parent = itemsInSegment.find((t) => t.id === parentIdNorm);
       newOrder = parent != null ? parent.order + 1 : (itemsInSegment.length > 0 ? Math.max(...itemsInSegment.map((t) => t.order)) + 1 : 0);
       // Shift: incrementar order de tareas con order >= newOrder para abrir hueco
       const toShift = itemsInSegment.filter((t) => t.order >= newOrder);
@@ -1181,7 +1196,7 @@ export async function crearTareaManualScheduler(
       catalog_section_id_snapshot: params.sectionId || null,
       catalog_section_name_snapshot: params.catalog_section_name_snapshot ?? null,
       catalog_category_name_snapshot: params.catalog_category_name_snapshot ?? null,
-      parent_id: parentId,
+      parent_id: parentIdNorm,
       order: newOrder,
       budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
     };
@@ -1370,6 +1385,56 @@ export async function eliminarTareaManual(
 }
 
 /**
+ * Elimina una tarea manual y todas sus subtareas (parent_id === taskId) en una sola transacción.
+ * Solo elimina tareas manuales (cotizacion_item_id null). El padre puede ser manual o de catálogo.
+ */
+export async function eliminarTareaManualEnCascada(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  try {
+    const instance = await prisma.studio_scheduler_event_instances.findFirst({
+      where: { event_id: eventId, event: { studio: { slug: studioSlug } } },
+      select: { id: true },
+    });
+    if (!instance) return { success: false, error: 'Evento no encontrado' };
+
+    const parent = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance_id: instance.id,
+      },
+      select: { id: true, cotizacion_item_id: true },
+    });
+    if (!parent) return { success: false, error: 'Tarea no encontrada' };
+
+    const childIds = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        parent_id: taskId,
+        scheduler_instance_id: instance.id,
+        cotizacion_item_id: null,
+      },
+      select: { id: true },
+    });
+    const idsToDelete = [taskId, ...childIds.map((c) => c.id)];
+
+    await prisma.$transaction(
+      idsToDelete.map((id) =>
+        prisma.studio_scheduler_event_tasks.delete({ where: { id } })
+      )
+    );
+    return { success: true, deletedCount: idsToDelete.length };
+  } catch (error) {
+    console.error('[eliminarTareaManualEnCascada] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar el grupo',
+    };
+  }
+}
+
+/**
  * Actualiza el nombre de una tarea manual del scheduler.
  */
 export async function actualizarNombreTareaManual(
@@ -1511,7 +1576,7 @@ export async function moveSchedulerTask(
     const unified = siblings.filter((t) => (effectiveCat(t) ?? null) === (targetCatId ?? null));
 
     const principalsOnly = unified.filter((t) => t.parent_id == null);
-    const idx = principalsOnly.findIndex((s) => s.id === taskId);
+    const idx = principalsOnly.findIndex((s) => String(s.id) === String(taskId));
     if (idx < 0) return { success: false, error: 'Tarea no encontrada' };
     if (direction === 'up' && idx === 0) return { success: true };
     if (direction === 'down' && idx === principalsOnly.length - 1) return { success: true };
@@ -1523,7 +1588,7 @@ export async function moveSchedulerTask(
     const flatOrdered: string[] = [];
     for (const p of reorderedPrincipals) {
       flatOrdered.push(p.id);
-      const children = unified.filter((t) => t.parent_id === p.id).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const children = unified.filter((t) => t.parent_id != null && String(t.parent_id) === String(p.id)).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
       for (const c of children) flatOrdered.push(c.id);
     }
 
@@ -1550,10 +1615,10 @@ export async function moveSchedulerTask(
 
 /**
  * Reordena tareas dentro del mismo stage (mismo instance, category).
- * Israel Algorithm: subtareas siguen al padre; el order aplica a la lista plana (padre, hijos, siguiente…).
- * taskIdsInOrder = lista ordenada de task ids; se persiste order 0, 1, 2... (serie continua).
- * 
- * @returns success + data con el orden actualizado para reconciliación inmediata en el cliente
+ * Reorden a nivel categoría: ítems de catálogo y custom (manual) son indistinguibles.
+ * Recibe la lista de taskId en orden final; asigna order = 0, 1, 2… a todos por igual.
+ *
+ * @returns success + data (taskId, newOrder) para reconciliación inmediata en el cliente
  */
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
@@ -1565,6 +1630,9 @@ export async function reorderSchedulerTasksToOrder(
   error?: string;
 }> {
   if (taskIdsInOrder.length === 0) return { success: true, data: [] };
+  
+  console.log('[Server Reorder] Input IDs:', taskIdsInOrder.length);
+  
   try {
     const tasksInList = await prisma.studio_scheduler_event_tasks.findMany({
       where: { id: { in: taskIdsInOrder }, scheduler_instance: { event_id: eventId } },
@@ -1577,7 +1645,10 @@ export async function reorderSchedulerTasksToOrder(
         cotizacion_item: { select: { service_category_id: true } },
       },
     });
-    if (tasksInList.length !== taskIdsInOrder.length) return { success: false, error: 'Una o más tareas no encontradas' };
+    
+    if (tasksInList.length !== taskIdsInOrder.length) {
+      return { success: false, error: 'Una o más tareas no encontradas' };
+    }
 
     const first = tasksInList.find((t) => t.id === taskIdsInOrder[0]);
     if (!first) return { success: false, error: 'Tarea no encontrada' };
@@ -1588,32 +1659,46 @@ export async function reorderSchedulerTasksToOrder(
     const targetCategory = first.category;
     const instanceId = first.scheduler_instance_id;
 
-    const allSameStage = tasksInList.every((t) => t.scheduler_instance_id === instanceId && t.category === targetCategory);
-    if (!allSameStage) return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
+    const allSameStage = tasksInList.every((t) => 
+      t.scheduler_instance_id === instanceId && 
+      t.category === targetCategory
+    );
+    
+    if (!allSameStage) {
+      return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
+    }
 
-    // Capturar el orden actualizado para devolverlo al cliente
+    // ISRAEL ALGORITHM V3 - PASO 1: Persistencia
+    // Un solo bucle: índice secuencial (0, 1, 2...)
+    // Tareas manuales y de catálogo se mezclan en un solo array
     const reorderedTasks: Array<{ taskId: string; newOrder: number }> = [];
 
     await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < taskIdsInOrder.length; i++) {
-        const task = tasksInList.find((t) => t.id === taskIdsInOrder[i])!;
+      for (let index = 0; index < taskIdsInOrder.length; index++) {
+        const taskId = taskIdsInOrder[index]!;
+        const task = tasksInList.find((t) => t.id === taskId)!;
         const isManual = task.cotizacion_item_id == null;
+        
         await tx.studio_scheduler_event_tasks.update({
-          where: { id: taskIdsInOrder[i] },
+          where: { id: taskId },
           data: {
-            order: i,
+            order: index,
             ...(isManual ? { catalog_category_id: targetCatId } : {}),
           },
         });
         
-        // Capturar el orden actualizado
-        reorderedTasks.push({ taskId: taskIdsInOrder[i], newOrder: i });
+        reorderedTasks.push({ taskId, newOrder: index });
       }
     }, { maxWait: 5_000 });
 
+    console.log('[Server Reorder] Success - Updated count:', reorderedTasks.length);
+    
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    
     return { success: true, data: reorderedTasks };
   } catch (error) {
-    console.error('[reorderSchedulerTasksToOrder] Error:', error);
+    console.error('[Server Reorder] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al reordenar',
@@ -2575,6 +2660,7 @@ export async function obtenerTareasScheduler(
 
 /**
  * Actualiza la jerarquía de una tarea: parent_id (null = principal, string = secundaria).
+ * parentId puede ser id de tarea manual o de instancia de catálogo.
  */
 export async function toggleTaskHierarchy(
   studioSlug: string,
@@ -2604,7 +2690,7 @@ export async function toggleTaskHierarchy(
     if (parentId) {
       const parent = await prisma.studio_scheduler_event_tasks.findFirst({
         where: { id: parentId, scheduler_instance_id: instance.id },
-        select: { id: true },
+        select: { id: true, parent_id: true },
       });
       if (!parent) return { success: false, error: 'Tarea padre no encontrada' };
     }

@@ -32,6 +32,8 @@ interface SchedulerManualTaskPopoverProps {
   children: React.ReactNode;
   onManualTaskPatch?: (taskId: string, patch: ManualTaskPatch) => void;
   onManualTaskDelete?: (taskId: string) => Promise<void>;
+  /** Actualización local inmediata tras guardar (sidebar aplica patch a localTask sin esperar al padre). */
+  onSaveSuccess?: (patch: ManualTaskPatch) => void;
   /** Control externo del popover (p. ej. desde menú "Editar") */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -53,6 +55,7 @@ export function SchedulerManualTaskPopover({
   children,
   onManualTaskPatch,
   onManualTaskDelete,
+  onSaveSuccess,
   open: openProp,
   onOpenChange,
   deleteConfirmOpen: deleteConfirmOpenProp,
@@ -145,6 +148,19 @@ export function SchedulerManualTaskPopover({
       status: initialCompleted ? 'COMPLETED' : 'PENDING',
       completed_at: initialCompleted ? task.completed_at ?? null : null,
     };
+    // Actualización optimista: actualizar UI (sidebar/grid) de inmediato antes de las APIs
+    const optimisticPatch: ManualTaskPatch = {};
+    if (nameChanged) optimisticPatch.name = newName;
+    if (costChanged) optimisticPatch.budget_amount = patch.budget_amount;
+    if (durationChanged && anchorStart && computedEndDate) {
+      optimisticPatch.start_date = anchorStart;
+      optimisticPatch.end_date = computedEndDate;
+      optimisticPatch.duration_days = newDurationDays ?? undefined;
+    }
+    if (Object.keys(optimisticPatch).length > 0) {
+      onManualTaskPatch?.(task.id, optimisticPatch);
+      onSaveSuccess?.(optimisticPatch);
+    }
     setIsSaving(true);
     try {
       if (durationChanged && anchorStart && computedEndDate) {
@@ -155,11 +171,6 @@ export function SchedulerManualTaskPopover({
           toast.error(res.error ?? 'Error al actualizar fechas');
           return;
         }
-        onManualTaskPatch?.(task.id, {
-          start_date: anchorStart,
-          end_date: computedEndDate,
-          duration_days: newDurationDays,
-        });
       }
       const promises: Promise<{ success: boolean; error?: string }>[] = [];
       if (nameChanged) promises.push(actualizarNombreTareaManual(studioSlug, eventId, task.id, newName));
@@ -170,6 +181,11 @@ export function SchedulerManualTaskPopover({
         onManualTaskPatch?.(task.id, snapshot);
         toast.error(failed.error ?? 'Error al guardar');
         return;
+      }
+      // Sincronización post-éxito: estado global (scheduler) y local (sidebar) para reactividad inmediata
+      if (Object.keys(optimisticPatch).length > 0) {
+        onManualTaskPatch?.(task.id, optimisticPatch);
+        onSaveSuccess?.(optimisticPatch);
       }
       toast.success('Cambios guardados');
       setOpen(false);
@@ -193,6 +209,7 @@ export function SchedulerManualTaskPopover({
     task.assigned_to_crew_member_id,
     task.assigned_to_crew_member,
     onManualTaskPatch,
+    onSaveSuccess,
     setOpen,
   ]);
 
@@ -206,7 +223,9 @@ export function SchedulerManualTaskPopover({
       const assigned_to_crew_member = resolvedMember
         ? { id: resolvedMember.id, name: resolvedMember.name, email: resolvedMember.email ?? null, tipo: resolvedMember.tipo }
         : null;
-      onManualTaskPatch?.(task.id, { assigned_to_crew_member_id: memberId, assigned_to_crew_member });
+      const crewPatch = { assigned_to_crew_member_id: memberId, assigned_to_crew_member };
+      onManualTaskPatch?.(task.id, crewPatch);
+      onSaveSuccess?.(crewPatch);
       setLocalCrewId(memberId);
       setLocalCrewMember(assigned_to_crew_member ?? null);
       setSelectCrewModalOpen(false);
@@ -215,15 +234,18 @@ export function SchedulerManualTaskPopover({
         const result = await asignarCrewATareaScheduler(studioSlug, eventId, task.id, memberId);
         if (!result.success) {
           onManualTaskPatch?.(task.id, snapshot);
+          onSaveSuccess?.(snapshot);
           setLocalCrewId(task.assigned_to_crew_member_id ?? null);
           setLocalCrewMember(task.assigned_to_crew_member ?? null);
           toast.error(result.error ?? 'Error al asignar personal');
           return;
         }
+        onSaveSuccess?.(crewPatch);
         toast.success(memberId ? 'Personal asignado' : 'Asignación removida');
         if (!memberId) setOpen(false);
       } catch {
         onManualTaskPatch?.(task.id, snapshot);
+        onSaveSuccess?.(snapshot);
         setLocalCrewId(task.assigned_to_crew_member_id ?? null);
         setLocalCrewMember(task.assigned_to_crew_member ?? null);
         toast.error('Error al asignar personal');
@@ -231,7 +253,7 @@ export function SchedulerManualTaskPopover({
         setIsAssigningCrew(false);
       }
     },
-    [task.id, task.assigned_to_crew_member_id, task.assigned_to_crew_member, members, studioSlug, eventId, onManualTaskPatch, setOpen]
+    [task.id, task.assigned_to_crew_member_id, task.assigned_to_crew_member, members, studioSlug, eventId, onManualTaskPatch, onSaveSuccess, setOpen]
   );
 
   const handleCompletedChange = useCallback(
@@ -240,10 +262,12 @@ export function SchedulerManualTaskPopover({
         status: initialCompleted ? 'COMPLETED' : 'PENDING',
         completed_at: initialCompleted ? task.completed_at ?? null : null,
       };
+      const completedAtIso = checked ? new Date().toISOString() : null;
       onManualTaskPatch?.(task.id, {
         status: checked ? 'COMPLETED' : 'PENDING',
-        completed_at: checked ? new Date() : null,
+        completed_at: completedAtIso,
       });
+      onSaveSuccess?.({ status: checked ? 'COMPLETED' : 'PENDING', completed_at: completedAtIso });
       setIsUpdatingCompletion(true);
       try {
         const result = await actualizarSchedulerTask(studioSlug, eventId, task.id, {
@@ -253,6 +277,8 @@ export function SchedulerManualTaskPopover({
         if (!result.success) {
           onManualTaskPatch?.(task.id, snapshot);
           toast.error('Error al actualizar estado');
+        } else {
+          onSaveSuccess?.({ status: checked ? 'COMPLETED' : 'PENDING', completed_at: checked ? new Date().toISOString() : null });
         }
       } catch {
         onManualTaskPatch?.(task.id, snapshot);
@@ -261,7 +287,7 @@ export function SchedulerManualTaskPopover({
         setIsUpdatingCompletion(false);
       }
     },
-    [task.id, task.completed_at, initialCompleted, localCrewId, studioSlug, eventId, onManualTaskPatch]
+    [task.id, task.completed_at, initialCompleted, localCrewId, studioSlug, eventId, onManualTaskPatch, onSaveSuccess]
   );
 
   const handleConfirmDelete = async () => {
@@ -269,6 +295,26 @@ export function SchedulerManualTaskPopover({
     setOpen(false);
     await onManualTaskDelete?.(task.id);
   };
+
+  const taskFormContent = (
+    <TaskForm
+      mode="edit"
+      studioSlug={studioSlug}
+      eventId={eventId}
+      task={task}
+      localCrewId={localCrewId}
+      localCrewMember={localCrewMember}
+      onClose={() => setOpen(false)}
+      onSave={handleSavePatch}
+      onSaveSubmit={handleSaveSubmit}
+      onCompletedChange={handleCompletedChange}
+      onOpenSelectCrew={() => setSelectCrewModalOpen(true)}
+      onRemoveCrew={() => void handleSelectCrewFromModal(null)}
+      isSaving={isSaving}
+      isAssigningCrew={isAssigningCrew}
+      isUpdatingCompletion={isUpdatingCompletion}
+    />
+  );
 
   const triggerContent = rightSlot != null ? (
     <div className="h-12 min-h-12 w-full min-w-0 flex items-center gap-2 hover:bg-zinc-900/50 transition-colors cursor-pointer group">
@@ -294,23 +340,7 @@ export function SchedulerManualTaskPopover({
           open={open}
           onOpenChange={setOpen}
         >
-          <TaskForm
-            mode="edit"
-            studioSlug={studioSlug}
-            eventId={eventId}
-            task={task}
-            localCrewId={localCrewId}
-            localCrewMember={localCrewMember}
-            onClose={() => setOpen(false)}
-            onSave={handleSavePatch}
-            onSaveSubmit={handleSaveSubmit}
-            onCompletedChange={handleCompletedChange}
-            onOpenSelectCrew={() => setSelectCrewModalOpen(true)}
-            onRemoveCrew={() => void handleSelectCrewFromModal(null)}
-            isSaving={isSaving}
-            isAssigningCrew={isAssigningCrew}
-            isUpdatingCompletion={isUpdatingCompletion}
-          />
+          {taskFormContent}
         </PopoverContent>
       </Popover>
 

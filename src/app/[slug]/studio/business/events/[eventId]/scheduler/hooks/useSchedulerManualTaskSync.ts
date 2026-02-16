@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ManualTaskPayload } from '../utils/scheduler-section-stages';
 
 /**
@@ -6,7 +6,10 @@ import type { ManualTaskPayload } from '../utils/scheduler-section-stages';
  * la tarea vía handleManualTaskPatch (Popover o Grid); el hook detecta el cambio por taskKey y hace setState,
  * para que el Sidebar muestre nombre, completado y fechas/duración sin retraso.
  */
-export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
+export function useSchedulerManualTaskSync(
+  task: ManualTaskPayload,
+  onTaskPatch?: (taskId: string, patch: { status?: string; completed_at?: string | null }) => void
+) {
   const [localTask, setLocalTask] = useState(task);
 
   // Comparar objeto completo assigned_to_crew_member para que null → objeto dispare sync (persistencia tras refresh)
@@ -28,6 +31,7 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
   }, [task.start_date, task.end_date, (task as { duration_days?: number }).duration_days]);
 
   const parentId = (task as { parent_id?: string | null }).parent_id ?? null;
+  const budgetAmount = (task as { budget_amount?: number | null }).budget_amount ?? null;
   const taskKey = useMemo(
     () =>
       JSON.stringify({
@@ -39,13 +43,45 @@ export function useSchedulerManualTaskSync(task: ManualTaskPayload) {
         assignedToCrewKey,
         startEndDurationKey,
         parent_id: parentId,
+        budget_amount: budgetAmount,
       }),
-    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey, startEndDurationKey, parentId]
+    [task.id, task.name, task.status, task.completed_at, task.assigned_to_crew_member_id, assignedToCrewKey, startEndDurationKey, parentId, budgetAmount]
   );
 
   useEffect(() => {
     setLocalTask(task);
   }, [task.id, taskKey]);
 
-  return { localTask };
+  /** Aplica un patch al estado local de inmediato (p. ej. tras guardar en el Popover) para reactividad sin esperar al padre. */
+  const applyPatch = useCallback((patch: Partial<ManualTaskPayload>) => {
+    setLocalTask((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  // Actualización optimista del estado de completado
+  const updateCompletionStatus = useCallback(
+    async (isCompleted: boolean, syncFn: () => Promise<void>) => {
+      let updatedTask: ManualTaskPayload;
+      // Actualización optimista local
+      setLocalTask(prev => {
+        updatedTask = {
+          ...prev,
+          completed_at: isCompleted ? new Date().toISOString() : null,
+          status: isCompleted ? 'COMPLETED' : 'PENDING',
+        };
+        return updatedTask;
+      });
+      // Notificar al padre para sincronización inmediata
+      if (onTaskPatch && updatedTask!) {
+        onTaskPatch(task.id, {
+          status: isCompleted ? 'COMPLETED' : 'PENDING',
+          completed_at: isCompleted ? new Date().toISOString() : null,
+        });
+      }
+      // Ejecutar acción del servidor
+      await syncFn();
+    },
+    [task.id, onTaskPatch]
+  );
+
+  return { localTask, updateCompletionStatus, applyPatch };
 }
