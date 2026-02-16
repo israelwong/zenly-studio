@@ -1513,26 +1513,26 @@ function SchedulerItem({
     return (
       <>
         <div className="w-full relative">
-          <SchedulerItemPopover
-            item={localItem}
-            studioSlug={studioSlug}
-            eventId={eventId}
-            onItemUpdate={onItemUpdate}
-            onTaskToggleComplete={onTaskToggleComplete}
-            open={popoverOpen}
-            onOpenChange={setPopoverOpen}
+          <SortableTaskRow
+            {...sortableProps}
+            isSaving={effectiveIsSaving}
+            leftSlot={leftSlot}
+            rightSlot={rightSlot}
           >
-            <SortableTaskRow
-              {...sortableProps}
-              isSaving={effectiveIsSaving}
-              leftSlot={leftSlot}
-              rightSlot={rightSlot}
+            <SchedulerItemPopover
+              item={localItem}
+              studioSlug={studioSlug}
+              eventId={eventId}
+              onItemUpdate={onItemUpdate}
+              onTaskToggleComplete={onTaskToggleComplete}
+              open={popoverOpen}
+              onOpenChange={setPopoverOpen}
             >
               <div className="flex items-center gap-2 min-h-0 min-w-0 flex-1 overflow-hidden">
                 {renderItem ? renderItem(localItem, metadata) : triggerContent}
               </div>
-            </SortableTaskRow>
-          </SchedulerItemPopover>
+            </SchedulerItemPopover>
+          </SortableTaskRow>
           {addSubtaskProps && taskId && !localItem.scheduler_task?.parent_id && (
             <Popover open={addSubtaskOpen} onOpenChange={setAddSubtaskOpen}>
               <PopoverTrigger asChild>
