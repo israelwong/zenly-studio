@@ -807,6 +807,9 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
         applyPatch(snapshot);
         throw new Error(result.error || 'Error al asignar personal');
       }
+      if (result.googleSyncFailed) {
+        toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+      }
       toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
       window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
     } catch (error) {
@@ -1341,6 +1344,9 @@ function SchedulerItem({
           async () => {
             const result = await asignarCrewAItem(studioSlug, localItem.id, crewMemberId);
             if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+            if (result.googleSyncFailed) {
+              toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+            }
           }
         );
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
@@ -1353,6 +1359,9 @@ function SchedulerItem({
       try {
         const result = await asignarCrewAItem(studioSlug, localItem.id, crewMemberId);
         if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+        if (result.googleSyncFailed) {
+          toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+        }
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
         setSelectCrewModalOpen(false);
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
@@ -3076,10 +3085,10 @@ export const SchedulerSidebar = ({
         isOpen={deleteCategoryModal.open}
         onClose={() => setDeleteCategoryModal((p) => ({ ...p, open: false }))}
         onConfirm={handleDeleteCategoryConfirm}
-        title="Eliminar categoría"
+        title={deleteCategoryModal.taskIds.length > 0 ? '¿Eliminar categoría y sus tareas?' : 'Eliminar categoría'}
         description={
           deleteCategoryModal.taskIds.length > 0
-            ? `Esta categoría tiene ${deleteCategoryModal.taskIds.length} tarea(s). Se eliminarán también. ¿Continuar?`
+            ? `Esta categoría contiene ${deleteCategoryModal.taskIds.length} tarea(s). Si la eliminas, también se eliminarán permanentemente todas las tareas que contiene. ¿Deseas continuar?`
             : '¿Eliminar esta categoría?'
         }
         confirmText="Eliminar"

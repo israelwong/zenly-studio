@@ -24,6 +24,7 @@ import {
   setSchedulerStaging,
   clearSchedulerStaging,
   customCategoriesToStaging,
+  customCategoriesMapFromStaging,
   isValidStageKey,
 } from './utils/scheduler-staging-storage';
 import { crearCategoriaOperativa, listarCategoriasOperativas } from '@/lib/actions/studio/business/events/scheduler-custom-categories.actions';
@@ -75,6 +76,27 @@ export default function EventSchedulerPage() {
   const [timestamp, setTimestamp] = useState(Date.now());
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
+  /** Fase 2.1: localStorage solo como fallback antes del primer payload; una vez hay servidor, nunca sobrescribir con localStorage. */
+  const hasHydratedFromLocalStorageRef = React.useRef(false);
+  /** Refs para sincronizar localStorage tras actualizarSchedulerStaging (estado puede ser asíncrono). */
+  const stagingExplicitIdsRef = React.useRef<string[]>(explicitlyActivatedStageIds);
+  const stagingCustomMapRef = React.useRef<Map<string, Array<{ id: string; name: string }>>>(customCategoriesBySectionStage);
+  React.useEffect(() => {
+    stagingExplicitIdsRef.current = explicitlyActivatedStageIds;
+    stagingCustomMapRef.current = customCategoriesBySectionStage;
+  }, [explicitlyActivatedStageIds, customCategoriesBySectionStage]);
+
+  /** Fase 2.1: Tras persistir en BD, mantener localStorage alineado con el servidor. */
+  const syncStagingToLocalStorage = useCallback(
+    (explicitIds: string[], customMap: Map<string, Array<{ id: string; name: string }>>) => {
+      if (typeof window === 'undefined' || !eventId) return;
+      setSchedulerStaging(eventId, {
+        explicitlyActivatedStageIds: explicitIds,
+        customCategoriesBySectionStage: customCategoriesToStaging(customMap),
+      });
+    },
+    [eventId]
+  );
 
   // V6: Estado atómico. Sin ref de secciones; el hijo no envía secciones y prev en onDataChange ya tiene el estado actual.
 
@@ -108,16 +130,17 @@ export default function EventSchedulerPage() {
       startTransition(() => setTimestamp(Date.now()));
 
       if (newOrder) {
-        await actualizarSchedulerStaging(studioSlug, eventId, {
+        const result = await actualizarSchedulerStaging(studioSlug, eventId, {
           catalogCategoryOrderByStage: newOrder,
         });
+        if (result.success) syncStagingToLocalStorage(stagingExplicitIdsRef.current, stagingCustomMapRef.current);
       }
     } catch (error) {
       console.error('[actualizarSchedulerStaging]', error);
     } finally {
       setIsUpdatingStructure(false);
     }
-  }, [studioSlug, eventId]);
+  }, [studioSlug, eventId, syncStagingToLocalStorage]);
 
   const activeSectionIds = useMemo(() => {
     if (!payload?.secciones?.length) return new Set<string>();
@@ -254,14 +277,12 @@ export default function EventSchedulerPage() {
           }
         }
         setCustomCategoriesBySectionStage(customMap);
-        // Trinity: Cargar estados activados desde DB (no localStorage)
+        // Fase 2.1: Ley absoluta = JSONB del servidor (catalog_category_order_by_stage ya está en payload; etapas y custom aquí).
         const rawActivated = data.scheduler?.explicitly_activated_stage_ids
           ? (Array.isArray(data.scheduler.explicitly_activated_stage_ids)
             ? data.scheduler.explicitly_activated_stage_ids
             : [])
           : [];
-        
-        // Limpieza: filtrar solo llaves válidas (formato: sectionId-STAGE)
         const validStages = new Set(['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY']);
         const cleanedActivated = rawActivated.filter((key: string) => {
           const parts = key.split('-');
@@ -269,8 +290,14 @@ export default function EventSchedulerPage() {
           const stage = parts[parts.length - 1];
           return validStages.has(stage);
         });
-        
         setExplicitlyActivatedStageIds(cleanedActivated);
+        // Sincronizar localStorage con lo que devolvió el servidor para no desviarse.
+        if (typeof window !== 'undefined') {
+          setSchedulerStaging(eventId, {
+            explicitlyActivatedStageIds: cleanedActivated,
+            customCategoriesBySectionStage: customCategoriesToStaging(customMap),
+          });
+        }
       } else {
         toast.error(result.error || 'Evento no encontrado');
         router.push(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -309,6 +336,7 @@ export default function EventSchedulerPage() {
       
       if (result.success) {
         setExplicitlyActivatedStageIds(next);
+        syncStagingToLocalStorage(next, customCategoriesBySectionStage);
         toast.success(`Estado ${enabled ? 'activado' : 'desactivado'}`);
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         setTimeout(() => router.refresh(), 100);
@@ -319,21 +347,20 @@ export default function EventSchedulerPage() {
       console.error('[handleToggleStage]', error);
       toast.error('Error al activar estado');
     }
-  }, [eventId, studioSlug, explicitlyActivatedStageIds]);
+  }, [eventId, studioSlug, explicitlyActivatedStageIds, customCategoriesBySectionStage, syncStagingToLocalStorage]);
 
   const persistStagingCustomCats = useCallback(async (next: Map<string, Array<{ id: string; name: string }>>) => {
     if (!eventId || !studioSlug) return;
-    
-    // Trinity: Persistir en DB directamente (no localStorage)
     try {
       const { actualizarSchedulerStaging } = await import('@/lib/actions/studio/business/events/scheduler-tasks.actions');
-      await actualizarSchedulerStaging(studioSlug, eventId, {
+      const result = await actualizarSchedulerStaging(studioSlug, eventId, {
         customCategoriesBySectionStage: customCategoriesToStaging(next),
       });
+      if (result.success) syncStagingToLocalStorage(stagingExplicitIdsRef.current, next);
     } catch (error) {
       console.error('[persistStagingCustomCats]', error);
     }
-  }, [eventId, studioSlug]);
+  }, [eventId, studioSlug, syncStagingToLocalStorage]);
 
   const handleAddCustomCategory = useCallback(
     async (sectionId: string, stage: string, name: string) => {
@@ -384,7 +411,8 @@ export default function EventSchedulerPage() {
             };
           });
           if (orderToPersist) {
-            await actualizarSchedulerStaging(studioSlug, eventId, { catalogCategoryOrderByStage: orderToPersist });
+            const res = await actualizarSchedulerStaging(studioSlug, eventId, { catalogCategoryOrderByStage: orderToPersist });
+            if (res.success) syncStagingToLocalStorage(stagingExplicitIdsRef.current, stagingCustomMapRef.current);
           }
           window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         } else {
@@ -398,25 +426,44 @@ export default function EventSchedulerPage() {
   );
 
   const doSwapCustom = useCallback(
-    (stageKey: string, catalogCategoryId: string, direction: 'up' | 'down') => {
-      setCustomCategoriesBySectionStage((prev) => {
-        const list = prev.get(stageKey) ?? [];
-        const idx = list.findIndex((c) => c.id === catalogCategoryId);
-        if (idx < 0) return prev;
-        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-        if (swapIdx < 0 || swapIdx >= list.length) return prev;
-        const next = [...list];
-        [next[idx], next[swapIdx]] = [next[swapIdx]!, next[idx]!];
-        const nextMap = new Map([...prev.entries()].map(([k, v]) => [k, k === stageKey ? next : [...v]]));
-        if (eventId && typeof window !== 'undefined') {
-          const staging = getSchedulerStaging(eventId) ?? { explicitlyActivatedStageIds: [], customCategoriesBySectionStage: [] };
-          setSchedulerStaging(eventId, { ...staging, customCategoriesBySectionStage: customCategoriesToStaging(nextMap) });
-        }
-        return nextMap;
-      });
+    async (stageKey: string, catalogCategoryId: string, direction: 'up' | 'down') => {
+      const list = customCategoriesBySectionStage.get(stageKey) ?? [];
+      const idx = list.findIndex((c) => c.id === catalogCategoryId);
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
+      const next = [...list];
+      [next[idx], next[swapIdx]] = [next[swapIdx]!, next[idx]!];
+      const nextMap = new Map(customCategoriesBySectionStage);
+      nextMap.set(stageKey, next);
+      setCustomCategoriesBySectionStage(nextMap);
+
+      const currentOrder = (payload?.scheduler?.catalog_category_order_by_stage as Record<string, string[]> | null | undefined)?.[stageKey] ?? [];
+      const id1 = list[idx]!.id;
+      const id2 = list[swapIdx]!.id;
+      const i1 = currentOrder.indexOf(id1);
+      const i2 = currentOrder.indexOf(id2);
+      if (i1 === -1 || i2 === -1) {
+        window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        return;
+      }
+      const swappedOrder = [...currentOrder];
+      [swappedOrder[i1], swappedOrder[i2]] = [swappedOrder[i2]!, swappedOrder[i1]!];
+      const newOrder = { ...((payload?.scheduler?.catalog_category_order_by_stage as Record<string, string[]> | null | undefined) ?? {}), [stageKey]: swappedOrder };
+      setPayload((prev) =>
+        prev?.scheduler
+          ? { ...prev, scheduler: { ...prev.scheduler, catalog_category_order_by_stage: newOrder } }
+          : prev
+      );
+      try {
+        const { actualizarSchedulerStaging } = await import('@/lib/actions/studio/business/events/scheduler-tasks.actions');
+        const result = await actualizarSchedulerStaging(studioSlug, eventId, { catalogCategoryOrderByStage: newOrder });
+        if (result.success) syncStagingToLocalStorage(stagingExplicitIdsRef.current, nextMap);
+      } catch (e) {
+        console.error('[doSwapCustom]', e);
+      }
       window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
     },
-    [eventId]
+    [eventId, studioSlug, payload?.scheduler?.catalog_category_order_by_stage, customCategoriesBySectionStage, syncStagingToLocalStorage]
   );
 
   const doSwapCatalog = useCallback(
@@ -484,30 +531,42 @@ export default function EventSchedulerPage() {
 
   const handleRemoveCustomCategory = useCallback(
     async (sectionId: string, stage: string, categoryId: string) => {
-      const key = `${sectionId}-${stage}`;
-      
-      // Actualización optimista local
+      const stageKey = `${sectionId}-${stage}`;
+
       setCustomCategoriesBySectionStage((prev) => {
         const next = new Map(prev);
-        const list = next.get(key) ?? [];
+        const list = next.get(stageKey) ?? [];
         const nextList = list.filter((c) => c.id !== categoryId);
-        if (nextList.length > 0) next.set(key, nextList);
-        else next.delete(key);
+        if (nextList.length > 0) next.set(stageKey, nextList);
+        else next.delete(stageKey);
         persistStagingCustomCats(next);
         return next;
       });
-      
-      // Eliminar de la DB
+
       try {
         const { eliminarCategoriaOperativa } = await import('@/lib/actions/studio/business/events/scheduler-custom-categories.actions');
         const result = await eliminarCategoriaOperativa(studioSlug, eventId, categoryId);
-        
+
         if (result.success) {
+          setPayload((prev) => {
+            if (!prev?.scheduler) return prev;
+            const current = (prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined) ?? {};
+            const ids = current[stageKey] ?? [];
+            return {
+              ...prev,
+              scheduler: {
+                ...prev.scheduler,
+                catalog_category_order_by_stage: {
+                  ...current,
+                  [stageKey]: ids.filter((id) => id !== categoryId),
+                },
+              },
+            };
+          });
           toast.success('Categoría eliminada');
           window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         } else {
           toast.error(result.error ?? 'Error al eliminar la categoría');
-          // Revertir optimistic update
           loadScheduler();
         }
       } catch (error) {
@@ -535,13 +594,14 @@ export default function EventSchedulerPage() {
       if (result.success) {
         setExplicitlyActivatedStageIds(nextStages);
         setCustomCategoriesBySectionStage(nextCustom);
+        syncStagingToLocalStorage(nextStages, nextCustom);
         window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         setTimeout(() => router.refresh(), 100);
       }
     } catch (error) {
       console.error('[handleRemoveEmptyStage]', error);
     }
-  }, [eventId, studioSlug, explicitlyActivatedStageIds, customCategoriesBySectionStage, router]);
+  }, [eventId, studioSlug, explicitlyActivatedStageIds, customCategoriesBySectionStage, router, syncStagingToLocalStorage]);
 
   const eventDataForHook: SchedulerData | null = payload
     ? { id: payload.id, name: payload.name, event_date: payload.event_date, promise: payload.promise, cotizaciones: payload.cotizaciones, scheduler: payload.scheduler }
@@ -573,6 +633,17 @@ export default function EventSchedulerPage() {
     if (!eventId || !studioSlug) return;
     loadScheduler();
   }, [eventId, studioSlug, loadScheduler]);
+
+  // Fase 2.1: Fallback efímero: hidratar desde localStorage solo una vez, antes del primer payload (esqueleto / servidor no respondió).
+  useEffect(() => {
+    if (!eventId || payload != null || hasHydratedFromLocalStorageRef.current || typeof window === 'undefined') return;
+    hasHydratedFromLocalStorageRef.current = true;
+    const staging = getSchedulerStaging(eventId);
+    if (staging) {
+      setExplicitlyActivatedStageIds(staging.explicitlyActivatedStageIds);
+      setCustomCategoriesBySectionStage(customCategoriesMapFromStaging(staging.customCategoriesBySectionStage));
+    }
+  }, [eventId, payload]);
 
   // Trinity: Ya no necesitamos sincronizar desde localStorage porque todo se guarda directo en DB
   // Este listener causaba que se borraran los estados porque leía localStorage vacío

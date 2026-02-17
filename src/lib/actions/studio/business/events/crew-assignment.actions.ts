@@ -97,6 +97,7 @@ export async function asignarCrewAItem(
 ): Promise<{
   success: boolean;
   payrollResult?: { success: boolean; personalNombre?: string; error?: string };
+  googleSyncFailed?: boolean;
   error?: string;
 }> {
   try {
@@ -240,96 +241,31 @@ export async function asignarCrewAItem(
       revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     }
 
-    // Marcar tarea como DRAFT si se asignó o removió personal (NO sincronizar automáticamente)
-    // El usuario debe usar "Publicar Cronograma" para sincronizar con Google Calendar
+    let googleSyncFailed = false;
     if (eventId) {
       try {
         const task = await prisma.studio_scheduler_event_tasks.findFirst({
           where: {
             cotizacion_item_id: itemId,
-            scheduler_instance: {
-              event_id: eventId,
-            },
+            scheduler_instance: { event_id: eventId },
           },
-          select: {
-            id: true,
-            sync_status: true,
-            google_event_id: true,
-            google_calendar_id: true,
-          },
+          select: { id: true, sync_status: true },
         });
 
-        if (task) {
-          // Si la tarea estaba sincronizada/publicada y cambió el personal, marcar como DRAFT
-          if (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED') {
-            // Si se removió personal y la tarea estaba INVITED, cancelar invitación en Google Calendar
-            if (
-              crewMemberId === null &&
-              task.sync_status === 'INVITED' &&
-              task.google_event_id &&
-              task.google_calendar_id
-            ) {
-              try {
-                const { tieneGoogleCalendarHabilitado, eliminarEventoEnBackground } = await import(
-                  '@/lib/integrations/google/clients/calendar/helpers'
-                );
-                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-                  // Cancelar invitación en segundo plano (no bloquea la respuesta)
-                  await eliminarEventoEnBackground(task.google_calendar_id, task.google_event_id);
-                }
-              } catch (error) {
-                // Log error pero no bloquear la operación principal
-                console.error(
-                  '[Scheduler] Error cancelando invitación al quitar personal (no crítico):',
-                  error
-                );
-              }
-            }
-
-            // Si se cambió personal (de un miembro a otro) y la tarea estaba INVITED, cancelar invitación anterior
-            if (
-              crewMemberId !== null &&
-              task.sync_status === 'INVITED' &&
-              task.google_event_id &&
-              task.google_calendar_id
-            ) {
-              try {
-                const { tieneGoogleCalendarHabilitado, eliminarEventoEnBackground } = await import(
-                  '@/lib/integrations/google/clients/calendar/helpers'
-                );
-                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-                  // Cancelar invitación anterior en segundo plano
-                  await eliminarEventoEnBackground(task.google_calendar_id, task.google_event_id);
-                }
-              } catch (error) {
-                // Log error pero no bloquear la operación principal
-                console.error(
-                  '[Scheduler] Error cancelando invitación anterior al cambiar personal (no crítico):',
-                  error
-                );
-              }
-            }
-
-            await prisma.studio_scheduler_event_tasks.update({
-              where: { id: task.id },
-              data: {
-                sync_status: 'DRAFT',
-                // Limpiar referencias de Google cuando se quita o cambia personal
-                ...(((crewMemberId === null || (crewMemberId !== null && task.google_event_id)) &&
-                task.google_event_id
-                  ? {
-                      google_event_id: null,
-                      google_calendar_id: null,
-                    }
-                  : {})),
-              },
-            });
+        if (task && (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
+          try {
+            const { sincronizarTareaConGoogle } = await import(
+              '@/lib/integrations/google/clients/calendar/sync-manager'
+            );
+            await sincronizarTareaConGoogle(task.id, studioSlug);
+          } catch (err) {
+            console.error('[asignarCrewAItem] Sync Google falló (personal ya guardado en BD):', err);
+            googleSyncFailed = true;
           }
         }
       } catch (error) {
-        // Log error pero no bloquear la operación principal
         console.error(
-          '[Scheduler] Error actualizando estado de tarea después de asignar/remover personal (no crítico):',
+          '[Scheduler] Error en sincronización reactiva Google tras asignar crew (no crítico):',
           error
         );
       }
@@ -338,6 +274,7 @@ export async function asignarCrewAItem(
     return {
       success: true,
       payrollResult: payrollResult || undefined,
+      ...(googleSyncFailed ? { googleSyncFailed: true } : {}),
     };
   } catch (error) {
     console.error('[CREW] Error asignando crew a item:', error);

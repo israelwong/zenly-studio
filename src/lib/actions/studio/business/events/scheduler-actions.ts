@@ -371,16 +371,30 @@ async function limpiarPayrollHuérfanosAntesDePublicar(eventId: string): Promise
   }
 }
 
+/** Resultado de una tarea que falló al publicar (sync Google o eliminación). Permite reintento selectivo. */
+export interface PublicarCronogramaFailedTask {
+  taskId: string;
+  taskName?: string;
+  error: string;
+}
+
 /**
- * Publica el cronograma de un evento
- * Opción 1: Solo Publicar - Cambia estado DRAFT a PUBLISHED (visible en plataforma)
- * Opción 2: Publicar e Invitar - Cambia a INVITED y sincroniza con Google Calendar
+ * Publica el cronograma de un evento.
+ * Opción 1: Solo Publicar - Cambia estado DRAFT a PUBLISHED (visible en plataforma).
+ * Opción 2: Publicar e Invitar - Sincroniza con Google Calendar y solo entonces actualiza sync_status a INVITED/PUBLISHED.
+ * Atomicidad: si la sync con Google falla para una tarea, su sync_status no cambia; se reporta en failedTasks para reintento.
  */
 export async function publicarCronograma(
   studioSlug: string,
   eventId: string,
   enviarInvitaciones: boolean = true
-): Promise<{ success: boolean; publicado?: number; sincronizado?: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  publicado?: number;
+  sincronizado?: number;
+  failedTasks?: PublicarCronogramaFailedTask[];
+  error?: string;
+}> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -391,24 +405,20 @@ export async function publicarCronograma(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener todas las tareas DRAFT del evento
     const tareasDraft = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
-        scheduler_instance: {
-          event_id: eventId,
-        },
+        scheduler_instance: { event_id: eventId },
         sync_status: 'DRAFT',
       },
       include: {
         cotizacion_item: {
           select: {
             id: true,
+            name: true,
+            name_snapshot: true,
             assigned_to_crew_member_id: true,
             assigned_to_crew_member: {
-              select: {
-                id: true,
-                email: true,
-              },
+              select: { id: true, email: true },
             },
           },
         },
@@ -416,63 +426,44 @@ export async function publicarCronograma(
     });
 
     if (tareasDraft.length === 0) {
-      return {
-        success: true,
-        publicado: 0,
-        sincronizado: 0,
-      };
+      return { success: true, publicado: 0, sincronizado: 0 };
     }
 
-    // Limpieza de huérfanos: eliminar líneas de nómina (solo pendientes) cuyo ítem ya no tiene tarea
     await limpiarPayrollHuérfanosAntesDePublicar(eventId);
 
     let publicado = 0;
     let sincronizado = 0;
+    const failedTasks: PublicarCronogramaFailedTask[] = [];
 
-    // Verificar si hay Google Calendar conectado
-    const { tieneGoogleCalendarHabilitado, sincronizarTareaEnBackground } =
-      await import('@/lib/integrations/google/clients/calendar/helpers');
-
+    const { tieneGoogleCalendarHabilitado } = await import('@/lib/integrations/google/clients/calendar/helpers');
     const tieneGoogle = await tieneGoogleCalendarHabilitado(studioSlug);
 
-    // PATRÓN STAGING: Aplicar todos los cambios de golpe
     if (tieneGoogle && enviarInvitaciones) {
-      // Sincronizar cada tarea que tenga personal asignado
+      const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+      const { eliminarEventoGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+
       for (const tarea of tareasDraft) {
+        const taskName =
+              tarea.name ?? tarea.cotizacion_item?.name ?? tarea.cotizacion_item?.name_snapshot ?? tarea.id;
+
         try {
-          // Si no tiene item asociado, es una tarea eliminada que necesita cancelación
           if (!tarea.cotizacion_item_id && tarea.google_event_id) {
-            // Cancelar en Google Calendar y eliminar la tarea
-            const { eliminarEventoEnBackground } = await import('@/lib/integrations/google/clients/calendar/helpers');
             if (tarea.google_calendar_id && tarea.google_event_id) {
-              await eliminarEventoEnBackground(tarea.google_calendar_id, tarea.google_event_id);
+              await eliminarEventoGoogle(tarea.google_calendar_id, tarea.google_event_id);
             }
-            // Eliminar la tarea después de cancelar (ahora sí, porque se está publicando)
-            await prisma.studio_scheduler_event_tasks.delete({
-              where: { id: tarea.id },
-            });
+            await prisma.studio_scheduler_event_tasks.delete({ where: { id: tarea.id } });
             publicado++;
           } else if (tarea.cotizacion_item?.assigned_to_crew_member_id) {
-            // Solo sincronizar si tiene personal asignado
-            await sincronizarTareaEnBackground(tarea.id, studioSlug);
-            sincronizado++;
-
-            // Actualizar estado a INVITED
+            await sincronizarTareaConGoogle(tarea.id, studioSlug);
             await prisma.studio_scheduler_event_tasks.update({
               where: { id: tarea.id },
-              data: {
-                sync_status: 'INVITED',
-                invitation_status: 'PENDING',
-              },
+              data: { sync_status: 'INVITED', invitation_status: 'PENDING' },
             });
+            sincronizado++;
+            publicado++;
           } else {
-            // Sin personal asignado
-            // Si tiene google_event_id, fue invitada anteriormente, cancelar invitación
             if (tarea.google_event_id && tarea.google_calendar_id) {
-              const { eliminarEventoEnBackground } = await import('@/lib/integrations/google/clients/calendar/helpers');
-              await eliminarEventoEnBackground(tarea.google_calendar_id, tarea.google_event_id);
-              
-              // Limpiar referencias de Google Calendar
+              await eliminarEventoGoogle(tarea.google_calendar_id, tarea.google_event_id);
               await prisma.studio_scheduler_event_tasks.update({
                 where: { id: tarea.id },
                 data: {
@@ -483,44 +474,39 @@ export async function publicarCronograma(
                 },
               });
             } else {
-              // Sin personal y sin evento previo, solo marcar como PUBLISHED
               await prisma.studio_scheduler_event_tasks.update({
                 where: { id: tarea.id },
-                data: {
-                  sync_status: 'PUBLISHED',
-                },
+                data: { sync_status: 'PUBLISHED' },
               });
             }
             publicado++;
           }
-        } catch (error) {
-          console.error(`[Publicar Cronograma] Error sincronizando tarea ${tarea.id}:`, error);
-          // Continuar con las demás tareas aunque una falle
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Error desconocido';
+          console.error(`[Publicar Cronograma] Tarea ${tarea.id}:`, err);
+          failedTasks.push({ taskId: tarea.id, taskName, error: message });
         }
       }
     } else {
-      // Sin Google Calendar, procesar tareas (eliminar las que fueron marcadas como eliminadas)
       for (const tarea of tareasDraft) {
         try {
-          // Si no tiene item asociado, es una tarea eliminada, eliminarla completamente
           if (!tarea.cotizacion_item_id) {
-            await prisma.studio_scheduler_event_tasks.delete({
-              where: { id: tarea.id },
-            });
-            publicado++;
+            await prisma.studio_scheduler_event_tasks.delete({ where: { id: tarea.id } });
           } else {
-            // Tareas normales, solo marcar como PUBLISHED
             await prisma.studio_scheduler_event_tasks.update({
               where: { id: tarea.id },
-              data: {
-                sync_status: 'PUBLISHED',
-              },
+              data: { sync_status: 'PUBLISHED' },
             });
-            publicado++;
           }
-        } catch (error) {
-          console.error(`[Publicar Cronograma] Error procesando tarea ${tarea.id}:`, error);
-          // Continuar con las demás tareas aunque una falle
+          publicado++;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Error desconocido';
+          console.error(`[Publicar Cronograma] Tarea ${tarea.id}:`, err);
+          failedTasks.push({
+            taskId: tarea.id,
+            taskName: tarea.name ?? undefined,
+            error: message,
+          });
         }
       }
     }
@@ -532,6 +518,7 @@ export async function publicarCronograma(
       success: true,
       publicado,
       sincronizado,
+      ...(failedTasks.length > 0 ? { failedTasks } : {}),
     };
   } catch (error) {
     console.error('[Publicar Cronograma] Error:', error);
@@ -641,21 +628,13 @@ export async function obtenerConteoTareasDraft(
   eventId: string
 ): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
-    // Contar tareas con sync_status DRAFT
-    // Nota: sync_status tiene @default(DRAFT), por lo que todas las tareas tienen un valor
     const count = await prisma.studio_scheduler_event_tasks.count({
       where: {
-        scheduler_instance: {
-          event_id: eventId,
-        },
+        scheduler_instance: { event_id: eventId },
         sync_status: 'DRAFT',
       },
     });
-
-    return {
-      success: true,
-      count,
-    };
+    return { success: true, count };
   } catch (error) {
     console.error('[Conteo Tareas DRAFT] Error:', error);
     return {
@@ -663,6 +642,25 @@ export async function obtenerConteoTareasDraft(
       error: error instanceof Error ? error.message : 'Error al contar tareas',
     };
   }
+}
+
+/**
+ * Indica si el evento tiene cambios pendientes de publicación (para indicador "Modo Edición").
+ * Hoy: hay cambios si existe al menos una tarea con sync_status === 'DRAFT'.
+ * Futuro: se puede extender comparando staging JSONB actual vs último publicado (last_published_staging_snapshot).
+ */
+export async function tieneCambiosPendientes(
+  studioSlug: string,
+  eventId: string
+): Promise<{ success: boolean; hasChanges?: boolean; draftCount?: number; error?: string }> {
+  const result = await obtenerConteoTareasDraft(studioSlug, eventId);
+  if (!result.success) return { success: false, error: result.error };
+  const draftCount = result.count ?? 0;
+  return {
+    success: true,
+    hasChanges: draftCount > 0,
+    draftCount,
+  };
 }
 
 /**
@@ -1519,21 +1517,22 @@ export async function actualizarNombreTareaManual(
 }
 
 /**
- * Asigna o quita personal (crew) en una tarea del scheduler (para tareas manuales).
+ * Asigna o quita personal (crew) en una tarea del scheduler (para tareas con ítem o manuales).
+ * Si la tarea está INVITED/PUBLISHED, sincroniza attendees con Google Calendar de forma reactiva.
  */
 export async function asignarCrewATareaScheduler(
   studioSlug: string,
   eventId: string,
   taskId: string,
   crewMemberId: string | null
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; googleSyncFailed?: boolean }> {
   try {
     const task = await prisma.studio_scheduler_event_tasks.findFirst({
       where: {
         id: taskId,
         scheduler_instance: { event_id: eventId },
       },
-      select: { id: true, scheduler_instance_id: true },
+      select: { id: true, scheduler_instance_id: true, sync_status: true },
     });
     if (!task) {
       return { success: false, error: 'Tarea no encontrada' };
@@ -1550,11 +1549,23 @@ export async function asignarCrewATareaScheduler(
         return { success: false, error: 'Colaborador no encontrado' };
       }
     }
-    const data = { assigned_to_crew_member_id: crewMemberId };
     await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
-      data,
+      data: { assigned_to_crew_member_id: crewMemberId },
     });
+
+    if (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED') {
+      try {
+        const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+        await sincronizarTareaConGoogle(taskId, studioSlug);
+      } catch (err) {
+        console.error('[asignarCrewATareaScheduler] Sync Google falló (personal ya guardado en BD):', err);
+        revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+        revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+        return { success: true, googleSyncFailed: true };
+      }
+    }
+
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
     return { success: true };

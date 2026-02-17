@@ -151,6 +151,9 @@ export function TaskBarContextMenu({
           onManualTaskPatch(taskId, snapshot);
           throw new Error(result.error || 'Error al asignar personal');
         }
+        if (result.googleSyncFailed) {
+          toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+        }
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
       } catch (error) {
@@ -172,6 +175,9 @@ export function TaskBarContextMenu({
           async () => {
             const result = await asignarCrewAItem(studioSlug, itemId!, crewMemberId);
             if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+            if (result.googleSyncFailed) {
+              toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+            }
           }
         );
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
@@ -184,6 +190,9 @@ export function TaskBarContextMenu({
       try {
         const result = await asignarCrewAItem(studioSlug, itemId!, crewMemberId);
         if (!result.success) throw new Error(result.error || 'Error al asignar personal');
+        if (result.googleSyncFailed) {
+          toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+        }
         toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
         setSelectCrewModalOpen(false);
         window.dispatchEvent(new CustomEvent('scheduler-task-updated'));

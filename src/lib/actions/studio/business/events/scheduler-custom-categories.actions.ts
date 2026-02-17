@@ -170,6 +170,45 @@ export async function resolveCategoryIdForManualTask(
 }
 
 /**
+ * Información para decidir si se puede eliminar una categoría operativa (cascada + escudo financiero).
+ */
+export async function obtenerInfoCategoriaParaEliminar(
+  studioSlug: string,
+  eventId: string,
+  categoryId: string
+): Promise<{ success: boolean; taskCount?: number; hasPaidPayroll?: boolean; error?: string }> {
+  const r = await getInstanceForEvent(studioSlug, eventId);
+  if (!r.success) return { success: false, error: r.error };
+
+  const taskIds = await prisma.studio_scheduler_event_tasks.findMany({
+    where: {
+      scheduler_instance_id: r.instanceId,
+      scheduler_custom_category_id: categoryId,
+    },
+    select: { id: true, cotizacion_item_id: true },
+  });
+  const taskCount = taskIds.length;
+
+  const itemIds = taskIds.map((t) => t.cotizacion_item_id).filter((id): id is string => id != null);
+  let hasPaidPayroll = false;
+  if (itemIds.length > 0) {
+    const nominaNoPendiente = await prisma.studio_nominas.findFirst({
+      where: {
+        evento_id: eventId,
+        status: { not: 'pendiente' },
+        payroll_services: {
+          some: { quote_service_id: { in: itemIds } },
+        },
+      },
+      select: { id: true },
+    });
+    hasPaidPayroll = nominaNoPendiente != null;
+  }
+
+  return { success: true, taskCount, hasPaidPayroll };
+}
+
+/**
  * Elimina una categoría operativa. Las tareas que la referencian quedan con scheduler_custom_category_id = null.
  */
 export async function eliminarCategoriaOperativa(

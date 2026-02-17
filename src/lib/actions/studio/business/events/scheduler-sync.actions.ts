@@ -431,6 +431,27 @@ export async function sincronizarTareasEvento(
     const allItems = cotizacionesRows.flatMap((c) => c.cotizacion_items ?? []);
     const orderedItems = aplanarOrdenCanonico(allItems);
 
+    // Huérfanas DRAFT (soft-delete operativo): tareas con cotizacion_item_id = null que "ocupan" un slot de servicio
+    const orphanDrafts = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance_id: schedulerInstanceId,
+        sync_status: 'DRAFT',
+        cotizacion_item_id: null,
+      },
+      select: {
+        catalog_category_id: true,
+        category: true,
+        catalog_section_id_snapshot: true,
+      },
+    });
+    const serviceKey = (catId: string | null, sectionId: string | null, cat: string) =>
+      `${catId ?? ''}|${sectionId ?? ''}|${cat}`;
+    const orphanBudget = new Map<string, number>();
+    for (const t of orphanDrafts) {
+      const key = serviceKey(t.catalog_category_id, t.catalog_section_id_snapshot, t.category);
+      orphanBudget.set(key, (orphanBudget.get(key) ?? 0) + 1);
+    }
+
     console.log('[SYNC] Sincronizando scheduler con cotización', {
       eventId,
       cotizaciones: cotizacionesRows.length,
@@ -446,11 +467,11 @@ export async function sincronizarTareasEvento(
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
     let created = 0;
     let updated = 0;
+    let orderIndex = 0;
 
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < orderedItems.length; i++) {
         const item = orderedItems[i]!;
-        const order = i;
 
         const catalogCategoryId =
           item.scheduler_task?.catalog_category_id ??
@@ -479,6 +500,15 @@ export async function sincronizarTareasEvento(
         const snapshotSectionName = sectionRef?.service_sections?.name ?? 'Sin sección';
         const snapshotCategoryName = categoryName ?? 'Sin categoría';
 
+        // Exclusión: ítem cuyo “servicio” ya está ocupado por una tarea huérfana DRAFT (soft-delete operativo)
+        const itemServiceKey = serviceKey(catalogCategoryId, snapshotSectionId, category);
+        const budget = orphanBudget.get(itemServiceKey) ?? 0;
+        if (budget > 0) {
+          orphanBudget.set(itemServiceKey, budget - 1);
+          continue;
+        }
+
+        const order = orderIndex++;
         const endDate = new Date(eventDate);
         endDate.setDate(endDate.getDate() + Math.max(1, durationDays));
 
@@ -527,11 +557,12 @@ export async function sincronizarTareasEvento(
         }
       }
 
-      // Limpieza de huérfanos: tareas con catalog_category_id no vinculadas a un ítem real de la cotización autorizada
+      // Limpieza de huérfanos: tareas con catalog_category_id no vinculadas a un ítem real. No tocar DRAFT con cotizacion_item_id null (soft-delete operativo).
       const validItemIds = new Set(orderedItems.map((it) => it.id));
       const orphanWhere = {
         scheduler_instance_id: schedulerInstanceId,
         catalog_category_id: { not: null },
+        NOT: { sync_status: 'DRAFT', cotizacion_item_id: null },
         OR: validItemIds.size > 0
           ? [
               { cotizacion_item_id: null },

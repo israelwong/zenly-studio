@@ -240,6 +240,9 @@ export function SchedulerManualTaskPopover({
           toast.error(result.error ?? 'Error al asignar personal');
           return;
         }
+        if (result.googleSyncFailed) {
+          toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+        }
         onSaveSuccess?.(crewPatch);
         toast.success(memberId ? 'Personal asignado' : 'Asignación removida');
         if (!memberId) setOpen(false);
@@ -278,6 +281,9 @@ export function SchedulerManualTaskPopover({
           onManualTaskPatch?.(task.id, snapshot);
           toast.error('Error al actualizar estado');
         } else {
+          if (result.googleSyncFailed) {
+            toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+          }
           onSaveSuccess?.({ status: checked ? 'COMPLETED' : 'PENDING', completed_at: checked ? new Date().toISOString() : null });
         }
       } catch {

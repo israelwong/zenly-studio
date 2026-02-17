@@ -269,8 +269,9 @@ export async function actualizarSchedulerTask(
       itemName?: string;
     };
   }
-): Promise<{ success: boolean; error?: string; payrollResult?: { success: boolean; personalNombre?: string; error?: string } }> {
+): Promise<{ success: boolean; error?: string; payrollResult?: { success: boolean; personalNombre?: string; error?: string }; googleSyncFailed?: boolean }> {
   try {
+    let googleSyncFailed = false;
     const studioResult = await validateStudio(studioSlug);
     if (!studioResult.success || !studioResult.studioId) {
       return { success: false, error: studioResult.error };
@@ -414,21 +415,31 @@ export async function actualizarSchedulerTask(
       }
     }
 
-    // Usar helper de revalidación
+    // Si cambió el personal y la tarea está publicada, actualizar attendees en Google Calendar
+    if (
+      data.assignedToCrewMemberId !== undefined &&
+      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')
+    ) {
+      try {
+        const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+        await sincronizarTareaConGoogle(taskId, studioSlug);
+      } catch (err) {
+        console.error('[actualizarSchedulerTask] Sync Google falló (personal ya guardado en BD):', err);
+        googleSyncFailed = true;
+      }
+    }
+
     await revalidateSchedulerPaths(studioSlug, eventId);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
 
-    // Revalidar finanzas si se eliminó una nómina
     if (data.isCompleted === false && task.cotizacion_item_id) {
       revalidatePath(`/${studioSlug}/studio/business/finanzas`);
     }
 
-    // NO sincronizar inmediatamente - el usuario debe "Publicar" los cambios
-    // La sincronización se hará cuando el usuario publique el cronograma
-
     return {
       success: true,
       payrollResult: payrollResult || undefined,
+      ...(googleSyncFailed ? { googleSyncFailed: true } : {}),
     };
   } catch (error) {
     console.error('[SCHEDULER] Error actualizando tarea:', error);

@@ -109,16 +109,20 @@ export function PublicationBar({ studioSlug, eventId, onPublished }: Publication
 
   return (
     <>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700/50 rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4 min-w-[500px]">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50" role="status" aria-label="Cambios sin publicar">
+        <div className="bg-zinc-900/95 backdrop-blur-sm border border-amber-800/40 rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4 min-w-[500px]">
           <div className="flex items-center gap-3 flex-1">
             <div className="flex items-center gap-2">
-              <div className="relative">
+              <div className="relative" aria-hidden>
                 <div className="h-2 w-2 bg-amber-400 rounded-full animate-pulse" />
                 <div className="absolute inset-0 h-2 w-2 bg-amber-400 rounded-full animate-ping opacity-75" />
               </div>
+              <span className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">
+                Modo Edición
+              </span>
+              <span className="text-zinc-500">·</span>
               <span className="text-sm text-white font-medium">
-                {draftCount} {draftCount === 1 ? 'cambio realizado' : 'cambios realizados'}
+                {draftCount} {draftCount === 1 ? 'cambio sin publicar' : 'cambios sin publicar'}
               </span>
             </div>
             <div className="h-6 w-px bg-zinc-700/50" />

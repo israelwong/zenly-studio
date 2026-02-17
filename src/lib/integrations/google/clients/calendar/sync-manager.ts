@@ -141,13 +141,12 @@ export async function sincronizarTareaConGoogle(
             name: true,
             name_snapshot: true,
             assigned_to_crew_member: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
+              select: { id: true, name: true, email: true },
             },
           },
+        },
+        assigned_to_crew_member: {
+          select: { email: true },
         },
       },
     });
@@ -174,8 +173,11 @@ export async function sincronizarTareaConGoogle(
     const eventName = task.scheduler_instance.event.promise?.name || 'Evento sin nombre';
     const eventTypeName = task.scheduler_instance.event.event_type?.name || null;
 
-    // Obtener emails de colaboradores desde cotizacion_item.assigned_to_crew_member
-    const attendees = await obtenerEmailsColaboradores(task.cotizacion_item_id);
+    // Ítems: desde cotizacion_item.assigned_to_crew_member; tareas manuales: desde task.assigned_to_crew_member
+    let attendees = await obtenerEmailsColaboradores(task.cotizacion_item_id);
+    if (attendees.length === 0 && task.assigned_to_crew_member?.email && esEmailValido(task.assigned_to_crew_member.email)) {
+      attendees = [{ email: task.assigned_to_crew_member.email }];
+    }
 
     // Si la tarea tiene google_event_id pero no tiene personal asignado, cancelar el evento
     if (task.google_event_id && attendees.length === 0) {

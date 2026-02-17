@@ -156,8 +156,11 @@ export function PublicationSummarySheet({
       const result = await publicarCronograma(studioSlug, eventId, enviarInvitaciones);
 
       if (result.success) {
-        const total = (result.publicado || 0) + (result.sincronizado || 0);
-        if (result.sincronizado && result.sincronizado > 0) {
+        if (result.failedTasks && result.failedTasks.length > 0) {
+          toast.warning(
+            `${result.publicado ?? 0} publicada(s). ${result.failedTasks.length} tarea(s) fallaron (ej. red). Siguen en borrador; puedes volver a publicar para reintentar.`
+          );
+        } else if (result.sincronizado && result.sincronizado > 0) {
           toast.success(
             `${result.sincronizado} tarea(s) sincronizada(s) con Google Calendar. ${result.publicado || 0} publicada(s) sin sincronizar.`
           );
@@ -211,9 +214,9 @@ export function PublicationSummarySheet({
           {loadingResumen ? (
             <PublicationSheetSkeleton />
           ) : resumen ? (
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            <div className="flex-1 flex flex-col min-h-0 px-6 py-4 gap-4">
               {/* Stats - Grid de 4 columnas */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2 flex-shrink-0">
                 <div className="bg-zinc-800/50 rounded-lg p-2 border border-zinc-700">
                   <div className="text-xs text-zinc-400 mb-0.5">Total</div>
                   <div className="text-lg font-bold text-white">{resumen.total}</div>
@@ -232,8 +235,8 @@ export function PublicationSummarySheet({
                 </div>
               </div>
 
-              {/* Lista de tareas agrupadas */}
-              <div className="space-y-4 max-h-[400px] overflow-y-auto">
+              {/* Lista de tareas agrupadas: ocupa el alto disponible y hace scroll */}
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
                 {/* Nuevas */}
                 {tareasAgrupadas.nuevas.length > 0 && (
                   <div>

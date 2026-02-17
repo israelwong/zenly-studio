@@ -16,9 +16,10 @@ export function SchedulerPersonalCell({ item, studioSlug }: SchedulerPersonalCel
             memberId
         );
         if (result.success) {
+            if (result.googleSyncFailed) {
+                toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+            }
             toast.success('Personal asignado correctamente');
-            // In a real implementation we should revalidate or update local state
-            // window.location.reload(); // Avoid full reload if possible
         } else {
             toast.error(result.error || 'Error al asignar personal');
         }

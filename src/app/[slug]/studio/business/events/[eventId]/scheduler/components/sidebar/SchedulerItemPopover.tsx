@@ -153,6 +153,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     if (!result.success) {
                         throw new Error(result.error || 'Error al asignar personal');
                     }
+                    if (result.googleSyncFailed) {
+                        toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+                    }
 
                     // Si se asignó personal y la tarea está completada, mostrar notificación de nómina
                     if (memberId && isTaskCompleted && result.payrollResult) {
@@ -315,6 +318,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     if (!assignResult.success) {
                         throw new Error(assignResult.error || 'Error al asignar personal');
                     }
+                    if (assignResult.googleSyncFailed) {
+                        toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+                    }
                 }
             );
 
@@ -335,7 +341,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
 
                 if (result.success) {
                     setAssignCrewModalOpen(false);
-
+                    if (result.googleSyncFailed) {
+                        toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+                    }
                     if (skipPayment) {
                         toast.success('Personal asignado y tarea completada (sin generar pago de nómina)');
                     } else if (result.payrollResult?.success && result.payrollResult.personalNombre) {

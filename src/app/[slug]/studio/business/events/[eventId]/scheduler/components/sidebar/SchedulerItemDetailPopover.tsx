@@ -110,6 +110,9 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
                     if (!result.success) {
                         throw new Error(result.error || 'Error al asignar personal');
                     }
+                    if (result.googleSyncFailed) {
+                        toast.warning('Personal asignado localmente, pero falló la actualización en Google Calendar. Intenta publicar nuevamente para sincronizar invitados.');
+                    }
                 }
             );
 
