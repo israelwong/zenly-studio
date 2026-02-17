@@ -39,6 +39,7 @@ interface SchedulerTimelineProps {
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
   customCategoriesBySectionStage?: Map<string, Array<{ id: string; name: string }>>;
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
   gridRef?: React.RefObject<HTMLDivElement | null>;
   bulkDragState?: { segmentKey: string; taskIds: string[]; daysOffset?: number } | null;
   onBulkDragStart?: (segmentKey: string, taskIds: string[], clientX: number, clientY: number) => void;
@@ -73,6 +74,7 @@ export const SchedulerTimeline = React.memo(({
   activeSectionIds,
   explicitlyActivatedStageIds,
   customCategoriesBySectionStage,
+  catalogCategoryOrderByStage,
   gridRef,
   bulkDragState = null,
   onBulkDragStart,
@@ -151,6 +153,7 @@ export const SchedulerTimeline = React.memo(({
         activeSectionIds={activeSectionIds}
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         customCategoriesBySectionStage={customCategoriesBySectionStage}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
         onTaskUpdate={onTaskUpdate}
         onTaskCreate={onTaskCreate}
         onTaskDelete={onTaskDelete}

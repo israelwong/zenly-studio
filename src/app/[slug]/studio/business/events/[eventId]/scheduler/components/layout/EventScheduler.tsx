@@ -88,8 +88,10 @@ interface EventSchedulerProps {
   onRefetchEvent?: () => Promise<void>;
   /** Marca de tiempo para key del sidebar (anti-caché tras reordenar). */
   timestamp?: number;
-  /** Llamado tras reordenar categorías con éxito. */
-  onCategoriesReordered?: () => void;
+  /** Llamado tras reordenar categorías con éxito (actualización optimista). */
+  onCategoriesReordered?: (updatedOrder?: { stageKey: string; categoryIds: string[] }) => void;
+  /** Orden de categorías por stage (JSONB). Prop separada para mejor detección de cambios. */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -121,6 +123,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   onRefetchEvent,
   timestamp,
   onCategoriesReordered,
+  catalogCategoryOrderByStage,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -139,6 +142,7 @@ export const EventScheduler = React.memo(function EventScheduler({
   scrollToDate,
 }: EventSchedulerProps) {
   const router = useRouter();
+
 
   // Estado local para actualizaciones optimistas
   const [localEventData, setLocalEventData] = useState(eventData);
@@ -1070,7 +1074,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     // buildSchedulerRows se encarga del ordenamiento usando scheduler_task.order
     const itemsMapForRows = new Map<string, CotizacionItem>();
     allItemsForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
-    const rows = buildSchedulerRows(secciones, itemsMapForRows, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage);
+    const rows = buildSchedulerRows(secciones, itemsMapForRows, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage, eventData.scheduler?.catalog_category_order_by_stage ?? null);
     const blocks = groupRowsIntoBlocks(rows);
     const map = new Map<string, { stageKey: string; catalogCategoryId: string | null }>();
     for (const b of blocks) {
@@ -1276,7 +1280,8 @@ export const EventScheduler = React.memo(function EventScheduler({
           manualTasksForRows,
           activeSectionIds,
           explicitlyActivatedStageIds,
-          customCategoriesBySectionStage
+          customCategoriesBySectionStage,
+          eventData.scheduler?.catalog_category_order_by_stage ?? null
         );
         const blocks = groupRowsIntoBlocks(rows);
         const allTaskIds = new Set<string>();
@@ -3214,6 +3219,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           explicitlyActivatedStageIds={explicitlyActivatedStageIds}
           stageIdsWithDataBySection={stageIdsWithDataBySection}
           customCategoriesBySectionStage={customCategoriesBySectionStage}
+          catalogCategoryOrderByStage={catalogCategoryOrderByStage}
           timestamp={timestamp}
           onCategoriesReordered={onCategoriesReordered}
           onToggleStage={onToggleStage}
@@ -3266,6 +3272,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           onBulkDragStart={onBulkDragStart}
           isMaximized={isMaximized}
           googleCalendarEnabled={googleCalendarEnabled}
+          catalogCategoryOrderByStage={catalogCategoryOrderByStage}
         />
       </SchedulerUpdatingTaskIdProvider>
 

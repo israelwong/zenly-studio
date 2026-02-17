@@ -374,7 +374,10 @@ export function getCategoryIdsInStageFromEventData(
         catalog_category_id?: string | null;
       }> | null;
     }> | null;
-    scheduler?: { tasks?: Array<{ catalog_category_id?: string | null; category?: string | null }> } | null;
+    scheduler?: { 
+      tasks?: Array<{ catalog_category_id?: string | null; category?: string | null }>;
+      catalog_category_order_by_stage?: Record<string, string[]> | null;
+    } | null;
   },
   secciones: SeccionData[],
   stageKey: string,
@@ -387,6 +390,12 @@ export function getCategoryIdsInStageFromEventData(
   
   if (!stage) {
     return [];
+  }
+  
+  // PRIORIDAD 1: Si existe el orden guardado en JSONB, usarlo directamente
+  const catalogOrderByStage = eventData.scheduler?.catalog_category_order_by_stage;
+  if (catalogOrderByStage && Array.isArray(catalogOrderByStage[stageKey])) {
+    return catalogOrderByStage[stageKey];
   }
   
   const stageNorm = normalizeCategory(stage);
@@ -654,8 +663,10 @@ export function buildSchedulerRows(
   manualTasks: ManualTaskPayload[] = [],
   activeSectionIds?: Set<string>,
   explicitlyActivatedStageIds?: Set<string> | string[],
-  customCategoriesBySectionStage?: Map<string, CustomCategoryItem[]>
+  customCategoriesBySectionStage?: Map<string, CustomCategoryItem[]>,
+  catalogCategoryOrderByStage?: Record<string, string[]> | null
 ): SchedulerRowDescriptor[] {
+  
   const rows: SchedulerRowDescriptor[] = [];
   const categoryIdToSection = buildCategoryIdToSection(secciones);
   const stageSet = new Set(Array.isArray(explicitlyActivatedStageIds) ? explicitlyActivatedStageIds : (explicitlyActivatedStageIds ?? []));
@@ -856,7 +867,31 @@ export function buildSchedulerRows(
       if (isEmptyStage && !isExplicitlyActivated && !hasCustomCategories) continue;
 
       const stageId = `${sectionId}-${stage}`;
-      const ordenMapById = new Map<string, number>(customCatsForStage.map((c, i) => [c.id, 1000 + i]));
+      
+      // Construir mapa de orden: prioritizar JSONB catalog_category_order_by_stage
+      const ordenMapById = new Map<string, number>();
+      
+      // Si existe order personalizado en el JSONB, usarlo
+      const customOrderForStage = catalogCategoryOrderByStage?.[stageKey];
+      
+      if (customOrderForStage && Array.isArray(customOrderForStage)) {
+        // El JSONB contiene el order definitivo (catalog + custom mezclados)
+        for (let i = 0; i < customOrderForStage.length; i++) {
+          ordenMapById.set(customOrderForStage[i], i);
+        }
+      } else {
+        // Fallback: usar order de sec.categorias + offset 1000 para custom
+        const sec = secciones.find(s => s.id === sectionId);
+        if (sec && sec.categorias) {
+          for (const cat of sec.categorias) {
+            ordenMapById.set(cat.id, cat.order ?? 0);
+          }
+        }
+        
+        for (let i = 0; i < customCatsForStage.length; i++) {
+          ordenMapById.set(customCatsForStage[i].id, 1000 + i);
+        }
+      }
 
       if (isEmptyStage) {
         const customInStage = customCatsForStage.map((cat, i) => ({
@@ -1117,10 +1152,12 @@ export function filterRowsByExpandedCategories(
       continue;
     }
     if (isAddCategoryPhantomRow(row)) {
+      // add_category_phantom siempre visible (botón para agregar nueva categoría)
       result.push(row);
       currentCategoryCollapsed = false;
       continue;
     }
+    // TODAS las filas hijas de una categoría colapsada (tareas y add_phantom) se ocultan
     if (!currentCategoryCollapsed) {
       result.push(row);
     }

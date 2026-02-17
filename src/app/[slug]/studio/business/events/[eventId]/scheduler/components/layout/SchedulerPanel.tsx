@@ -66,8 +66,8 @@ interface SchedulerPanelProps {
   onCollapsedCategoryIdsChange?: React.Dispatch<React.SetStateAction<Set<string>>>;
   /** Marca de tiempo para key del sidebar (anti-caché tras reordenar). */
   timestamp?: number;
-  /** Llamado tras reordenar categorías con éxito. */
-  onCategoriesReordered?: () => void;
+  /** Llamado tras reordenar categorías con éxito (actualización optimista). */
+  onCategoriesReordered?: (updatedOrder?: { stageKey: string; categoryIds: string[] }) => void;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -99,6 +99,8 @@ interface SchedulerPanelProps {
   onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
   onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
   onReminderDelete?: (reminderId: string) => Promise<void>;
+  /** Order de categorías (catalog + custom) por stage desde JSONB del scheduler instance. */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
 }
 
 /**
@@ -176,6 +178,7 @@ export const SchedulerPanel = React.memo(({
   onReminderMoveDateOptimistic,
   onReminderMoveDateRevert,
   onReminderDelete,
+  catalogCategoryOrderByStage,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [ghostPortalEl, setGhostPortalEl] = useState<HTMLDivElement | null>(null);
@@ -340,6 +343,7 @@ export const SchedulerPanel = React.memo(({
             onExpandedStagesChange={onExpandedStagesChange}
             collapsedCategoryIds={collapsedCategoryIds}
             onCollapsedCategoryIdsChange={onCollapsedCategoryIdsChange}
+            catalogCategoryOrderByStage={catalogCategoryOrderByStage}
             onSchedulerDragStart={onSchedulerDragStart}
             onSchedulerDragMove={onSchedulerDragMove}
             onSchedulerDragOver={onSchedulerDragOver}
@@ -368,6 +372,7 @@ export const SchedulerPanel = React.memo(({
             activeSectionIds={activeSectionIds}
             explicitlyActivatedStageIds={explicitlyActivatedStageIds}
             customCategoriesBySectionStage={customCategoriesBySectionStage}
+            catalogCategoryOrderByStage={catalogCategoryOrderByStage}
             onTaskUpdate={handleTaskUpdate}
             onTaskCreate={onTaskCreate}
             onTaskDelete={onTaskDelete}

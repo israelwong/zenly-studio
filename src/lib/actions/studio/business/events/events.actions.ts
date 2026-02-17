@@ -480,6 +480,7 @@ export interface EventoDetalle extends EventoBasico {
     start_date: Date;
     end_date: Date;
     is_custom: boolean;
+    catalog_category_order_by_stage?: Record<string, string[]> | null;
     tasks?: Array<{
       id: string;
       name: string;
@@ -727,6 +728,7 @@ export async function obtenerEventoDetalle(
       start_date: true,
       end_date: true,
       is_custom: true,
+      catalog_category_order_by_stage: true,
       custom_categories: {
         select: { id: true, name: true, section_id: true, stage: true, order: true },
         orderBy: [{ section_id: 'asc' }, { stage: 'asc' }, { order: 'asc' }],
@@ -929,12 +931,15 @@ export async function obtenerEventoDetalle(
       ? (() => {
           const raw = schedulerInstanceRaw;
           const customCategories = (raw as { custom_categories?: Array<{ id: string; name: string; section_id: string; stage: string; order: number }> }).custom_categories ?? [];
+          const catalogOrderByStage = (raw as { catalog_category_order_by_stage?: unknown }).catalog_category_order_by_stage as Record<string, string[]> | null | undefined;
+          
           return {
             id: raw.id,
             event_date: raw.event_date,
             start_date: raw.start_date,
             end_date: raw.end_date,
             is_custom: raw.is_custom,
+            catalog_category_order_by_stage: catalogOrderByStage,
             custom_categories: customCategories,
             tasks: raw.tasks.map((t: InstanceTask) => ({
               id: t.id,

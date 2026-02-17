@@ -41,6 +41,7 @@ interface SchedulerGridProps {
     data: { name: string; durationDays: number; budgetAmount?: number },
     startDate?: Date
   ) => Promise<void>;
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
 }
 
 function SchedulerGridInner(
@@ -68,6 +69,7 @@ function SchedulerGridInner(
     onBulkDragStart,
     columnWidth = 60,
     onAddManualTaskSubmit,
+    catalogCategoryOrderByStage,
   }: SchedulerGridProps,
   ref: React.ForwardedRef<HTMLDivElement>
 ) {
@@ -80,9 +82,10 @@ function SchedulerGridInner(
         manualTasks,
         activeSectionIds,
         explicitlyActivatedStageIds,
-        customCategoriesBySectionStage
+        customCategoriesBySectionStage,
+        catalogCategoryOrderByStage
       ),
-    [explicitlyActivatedStageIds, secciones, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
+    [explicitlyActivatedStageIds, secciones, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage, catalogCategoryOrderByStage]
   );
   const filteredRows = useMemo(
     () =>
@@ -401,6 +404,7 @@ function schedulerGridPropsEqual(
   const activeSectionIdsEqual = prevProps.activeSectionIds === nextProps.activeSectionIds;
   const explicitStagesEqual = prevProps.explicitlyActivatedStageIds === nextProps.explicitlyActivatedStageIds;
   const customCatsEqual = prevProps.customCategoriesBySectionStage === nextProps.customCategoriesBySectionStage;
+  const catalogOrderEqual = prevProps.catalogCategoryOrderByStage === nextProps.catalogCategoryOrderByStage;
   const bulkDragEqual =
     prevProps.bulkDragState === nextProps.bulkDragState ||
     (!!prevProps.bulkDragState === !!nextProps.bulkDragState &&
@@ -408,7 +412,7 @@ function schedulerGridPropsEqual(
       prevProps.bulkDragState?.daysOffset === nextProps.bulkDragState?.daysOffset);
   const onAddManualTaskSubmitEqual = prevProps.onAddManualTaskSubmit === nextProps.onAddManualTaskSubmit;
   const columnWidthEqual = prevProps.columnWidth === nextProps.columnWidth;
-  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && bulkDragEqual && onAddManualTaskSubmitEqual && columnWidthEqual;
+  return datesEqual && itemsEqual && manualTasksEqual && seccionesEqual && expandedSectionsEqual && expandedStagesEqual && collapsedCategoryIdsEqual && activeSectionIdsEqual && explicitStagesEqual && customCatsEqual && catalogOrderEqual && bulkDragEqual && onAddManualTaskSubmitEqual && columnWidthEqual;
 }
 
 export const SchedulerGrid = React.memo(

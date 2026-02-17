@@ -1963,125 +1963,75 @@ const SIN_CATEGORIA_SECTION_ID = '__sin_categoria__';
  * Reordena categorías por Stage/Estado.
  * Recibe array completo de IDs en el orden deseado y actualiza studio_section_categories.
  */
+/**
+ * Reordena categorías (catalog + custom mezcladas) dentro de un stage específico.
+ * El order se guarda en el JSONB catalog_category_order_by_stage del scheduler instance.
+ * NO modifica el catálogo global (studio_section_categories).
+ */
 export async function reorderCategoriesByStage(
   studioSlug: string,
   sectionId: string,
-  orderedCategoryIds: string[]
+  stage: string,
+  orderedCategoryIds: string[],
+  eventId: string
 ): Promise<{ 
   success: boolean; 
-  data?: Array<{ categoryId: string; newOrder: number }>; 
   error?: string 
 }> {
-  console.log('🔵 [SERVER] reorderCategoriesByStage INICIADO', {
-    studioSlug,
-    sectionId: sectionId.slice(-8),
-    orderedCategoryIds: orderedCategoryIds.map(id => id.slice(-8)),
-    totalCategories: orderedCategoryIds.length,
-  });
+  if (!eventId) {
+    return { success: false, error: 'Event ID es requerido' };
+  }
   
   if (orderedCategoryIds.length === 0) {
-    console.log('⚠️ [SERVER] Array vacío, retornando success sin cambios');
-    return { success: true, data: [] };
+    return { success: true };
   }
   
   try {
+    // Validar studio
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
       select: { id: true },
     });
     
     if (!studio) {
-      console.log('❌ [SERVER] Studio no encontrado');
       return { success: false, error: 'Studio no encontrado' };
     }
     
-    console.log('✅ [SERVER] Studio validado:', studio.id.slice(-8));
-    
-    // Leer estado ANTES de la transacción
-    const beforeState = await prisma.studio_section_categories.findMany({
-      where: { 
-        section_id: sectionId,
-        category_id: { in: orderedCategoryIds }
+    // Obtener scheduler instance
+    const schedulerInstance = await prisma.studio_scheduler_event_instances.findUnique({
+      where: { event_id: eventId },
+      select: { 
+        id: true, 
+        catalog_category_order_by_stage: true 
       },
-      select: { category_id: true, order: true },
-      orderBy: { order: 'asc' },
     });
     
-    console.log('📊 [SERVER] Estado DB ANTES:', beforeState.map(c => ({
-      id: c.category_id.slice(-8),
-      order: c.order,
-    })));
+    if (!schedulerInstance) {
+      return { success: false, error: 'Scheduler instance no encontrado' };
+    }
     
-    const updatedCategories = await prisma.$transaction(async (tx) => {
-      console.log('🔄 [SERVER] Iniciando transacción DB...');
-      
-      // RE-INDEXACIÓN FORZADA (0, 1, 2...)
-      for (let i = 0; i < orderedCategoryIds.length; i++) {
-        await tx.studio_section_categories.update({
-          where: { category_id: orderedCategoryIds[i] },
-          data: { order: i },
-        });
-        console.log(`  ✏️ [SERVER] UPDATE: ${orderedCategoryIds[i].slice(-8)} → order: ${i}`);
-      }
-      
-      // Re-indexar otras categorías de la sección
-      const updatedIds = new Set(orderedCategoryIds);
-      const others = await tx.studio_section_categories.findMany({
-        where: { 
-          section_id: sectionId,
-          category_id: { notIn: orderedCategoryIds }
-        },
-        select: { category_id: true },
-        orderBy: { order: 'asc' },
-      });
-      
-      console.log(`📦 [SERVER] Otras categorías en sección: ${others.length}`);
-      
-      let nextOrder = orderedCategoryIds.length;
-      for (const cat of others) {
-        await tx.studio_section_categories.update({
-          where: { category_id: cat.category_id },
-          data: { order: nextOrder },
-        });
-        console.log(`  ➕ [SERVER] OTHER: ${cat.category_id.slice(-8)} → order: ${nextOrder}`);
-        nextOrder++;
-      }
-      
-      // Devolver todas las categorías actualizadas de la sección
-      const allCategories = await tx.studio_section_categories.findMany({
-        where: { section_id: sectionId },
-        select: { category_id: true, order: true },
-        orderBy: { order: 'asc' },
-      });
-      
-      console.log('📊 [SERVER] Estado DB DESPUÉS:', allCategories.map(c => ({
-        id: c.category_id.slice(-8),
-        order: c.order,
-      })));
-      
-      return allCategories.map(c => ({
-        categoryId: c.category_id,
-        newOrder: c.order,
-      }));
-    }, { maxWait: 5000, timeout: 10000 });
+    // Construir stageKey y actualizar order
+    const stageKey = `${sectionId}-${stage}`;
+    const currentOrder = (schedulerInstance.catalog_category_order_by_stage as Record<string, string[]>) ?? {};
+    const updatedOrder = {
+      ...currentOrder,
+      [stageKey]: orderedCategoryIds,
+    };
     
-    console.log('✅ [SERVER] Transacción completada exitosamente');
-    console.log('📤 [SERVER] Retornando data:', {
-      totalUpdated: updatedCategories.length,
-      sample: updatedCategories.slice(0, 3).map(c => ({
-        id: c.categoryId.slice(-8),
-        order: c.newOrder,
-      })),
+    // Persistir en DB
+    await prisma.studio_scheduler_event_instances.update({
+      where: { id: schedulerInstance.id },
+      data: { 
+        catalog_category_order_by_stage: updatedOrder 
+      },
     });
     
-    // Revalidar: opción nuclear para que el refresh traiga datos frescos de la DB
-    revalidatePath('/', 'layout');
+    // Revalidar scheduler paths
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     
-    console.log('🔵 [SERVER] reorderCategoriesByStage FINALIZADO con éxito');
-    
-    return { success: true, data: updatedCategories };
+    return { success: true };
   } catch (error) {
-    console.error('❌ [SERVER] Error en reorderCategoriesByStage:', error);
+    console.error('[CATEGORY_REORDER] Error en servidor:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al reordenar',
@@ -2293,6 +2243,7 @@ export interface TareasSchedulerPayload {
     start_date: Date | null;
     end_date: Date | null;
     custom_categories?: Array<{ id: string; name: string; section_id: string; stage: string; order: number }>;
+    catalog_category_order_by_stage?: Record<string, string[]> | null;
     tasks: Array<{
       id: string;
       name: string;
@@ -2365,13 +2316,14 @@ export async function obtenerTareasScheduler(
     });
     if (!event) return { success: false, error: 'Evento no encontrado' };
 
-    type InstanceWithStaging = { id: string; start_date: Date; end_date: Date; tasks: Array<Record<string, unknown>>; custom_categories_by_section_stage?: unknown; explicitly_activated_stage_ids?: unknown };
+    type InstanceWithStaging = { id: string; start_date: Date; end_date: Date; tasks: Array<Record<string, unknown>>; custom_categories_by_section_stage?: unknown; explicitly_activated_stage_ids?: unknown; catalog_category_order_by_stage?: unknown };
     const schedulerSelect = {
       id: true,
       start_date: true,
       end_date: true,
       custom_categories_by_section_stage: true,
       explicitly_activated_stage_ids: true,
+      catalog_category_order_by_stage: true,
       tasks: {
             select: {
               id: true,
@@ -2594,13 +2546,25 @@ export async function obtenerTareasScheduler(
           }
         : null,
       cotizaciones,
-      scheduler: schedulerInstance
-        ? {
+      scheduler: (() => {
+        if (!schedulerInstance) return null;
+        
+        const catalogOrderByStage = schedulerInstance.catalog_category_order_by_stage as Record<string, string[]> | null | undefined;
+        
+        console.log('📦 [PAYLOAD] Construyendo scheduler en payload:', {
+          instanceId: schedulerInstance.id.slice(-8),
+          hasCatalogOrder: !!catalogOrderByStage,
+          catalogOrderKeys: catalogOrderByStage ? Object.keys(catalogOrderByStage) : [],
+          totalTasks: schedulerInstance.tasks?.length ?? 0,
+        });
+        
+        return {
             id: schedulerInstance.id,
             start_date: schedulerInstance.start_date,
             end_date: schedulerInstance.end_date,
             explicitly_activated_stage_ids: schedulerInstance.explicitly_activated_stage_ids,
             custom_categories: schedulerInstance.custom_categories_by_section_stage,
+            catalog_category_order_by_stage: catalogOrderByStage,
             tasks: tasks.map((t) => {
               const row = t as {
                 activity_log?: { id: string }[];
@@ -2625,8 +2589,8 @@ export async function obtenerTareasScheduler(
                 notes_count: activity_log?.length ?? 0,
               };
             }),
-          }
-        : null,
+          };
+      })(),
       secciones: seccionesForPayload,
       explicitlyActivatedStageIds:
         schedulerInstance?.explicitly_activated_stage_ids != null && Array.isArray(schedulerInstance.explicitly_activated_stage_ids)

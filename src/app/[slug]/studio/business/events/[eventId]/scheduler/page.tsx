@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
@@ -74,12 +75,34 @@ export default function EventSchedulerPage() {
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
 
-  const onCategoriesReordered = useCallback(() => {
-    startTransition(() => {
-      router.refresh();
+  const onCategoriesReordered = useCallback((updatedOrder?: { stageKey: string; categoryIds: string[] }) => {
+    // Actualización optimista del payload local con flushSync para aplicar inmediatamente
+    if (updatedOrder) {
+      flushSync(() => {
+        setPayload((prev) => {
+          if (!prev?.scheduler) return prev;
+          
+          const currentOrder = prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined;
+          const newOrder = {
+            ...(currentOrder || {}),
+            [updatedOrder.stageKey]: updatedOrder.categoryIds,
+          };
+          
+          
+          return {
+            ...prev,
+            scheduler: {
+              ...prev.scheduler,
+              catalog_category_order_by_stage: newOrder,
+            },
+          };
+        });
+      });
+      
+      // Incrementar timestamp DESPUÉS de que payload se haya aplicado síncronamente
       setTimestamp(Date.now());
-    });
-  }, [router]);
+    }
+  }, []);
 
   const activeSectionIds = useMemo(() => {
     if (!payload?.secciones?.length) return new Set<string>();
@@ -363,8 +386,10 @@ export default function EventSchedulerPage() {
   );
 
   const handleRemoveCustomCategory = useCallback(
-    (sectionId: string, stage: string, categoryId: string) => {
+    async (sectionId: string, stage: string, categoryId: string) => {
       const key = `${sectionId}-${stage}`;
+      
+      // Actualización optimista local
       setCustomCategoriesBySectionStage((prev) => {
         const next = new Map(prev);
         const list = next.get(key) ?? [];
@@ -374,9 +399,27 @@ export default function EventSchedulerPage() {
         persistStagingCustomCats(next);
         return next;
       });
-      window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+      
+      // Eliminar de la DB
+      try {
+        const { eliminarCategoriaOperativa } = await import('@/lib/actions/studio/business/events/scheduler-custom-categories.actions');
+        const result = await eliminarCategoriaOperativa(studioSlug, eventId, categoryId);
+        
+        if (result.success) {
+          toast.success('Categoría eliminada');
+          window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
+        } else {
+          toast.error(result.error ?? 'Error al eliminar la categoría');
+          // Revertir optimistic update
+          loadScheduler();
+        }
+      } catch (error) {
+        console.error('[handleRemoveCustomCategory]', error);
+        toast.error('Error al eliminar la categoría');
+        loadScheduler();
+      }
     },
-    [persistStagingCustomCats]
+    [studioSlug, eventId, persistStagingCustomCats, loadScheduler]
   );
 
   const handleRemoveEmptyStage = useCallback(async (sectionId: string, stage: string) => {
@@ -585,6 +628,26 @@ export default function EventSchedulerPage() {
     [studioSlug, payload?.schedulerDateReminders]
   );
 
+  // Extraer catalogCategoryOrderByStage como prop separada para detección de cambios
+  const catalogCategoryOrderByStage = useMemo(
+    () => payload?.scheduler?.catalog_category_order_by_stage ?? null,
+    [payload?.scheduler?.catalog_category_order_by_stage, timestamp]
+  );
+
+  const eventDataForWrapper: SchedulerData | null = useMemo(() => {
+    if (!payload) return null;
+    
+    return {
+      id: payload.id,
+      name: payload.name,
+      event_date: payload.event_date,
+      promise: payload.promise,
+      cotizaciones: payload.cotizaciones,
+      scheduler: payload.scheduler,
+      schedulerDateReminders: payload.schedulerDateReminders ?? [],
+    };
+  }, [payload, timestamp]);
+
   if (loading) {
     return (
       <div className="w-full max-w-7xl mx-auto">
@@ -691,19 +754,9 @@ export default function EventSchedulerPage() {
     );
   }
 
-  if (!payload) {
+  if (!eventDataForWrapper) {
     return null;
   }
-
-  const eventDataForWrapper: SchedulerData = {
-    id: payload.id,
-    name: payload.name,
-    event_date: payload.event_date,
-    promise: payload.promise,
-    cotizaciones: payload.cotizaciones,
-    scheduler: payload.scheduler,
-    schedulerDateReminders: payload.schedulerDateReminders ?? [],
-  };
 
   const cronogramaLabel = 'Regresar';
 
@@ -888,6 +941,7 @@ export default function EventSchedulerPage() {
             initialSecciones={payload.secciones}
             timestamp={timestamp}
             onCategoriesReordered={onCategoriesReordered}
+            catalogCategoryOrderByStage={catalogCategoryOrderByStage}
             activeSectionIds={activeSectionIds}
             explicitlyActivatedStageIds={explicitlyActivatedStageIds}
             stageIdsWithDataBySection={stageIdsWithDataBySection}

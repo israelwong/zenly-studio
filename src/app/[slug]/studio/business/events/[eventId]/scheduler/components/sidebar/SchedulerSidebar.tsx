@@ -41,6 +41,7 @@ import {
   POWER_BAR_STAGE_CLASSES,
   INDENT,
   BRANCH_LEFT,
+  getCategoryIdsInStageFromEventData,
   type SchedulerRowDescriptor,
   type StageBlock,
   type TaskCategoryStage,
@@ -89,7 +90,7 @@ import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
 import { obtenerCrewMembers, asignarCrewAItem } from '@/lib/actions/studio/business/events';
-import { asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { asignarCrewATareaScheduler, reorderCategoriesByStage } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { SchedulerBackdropProvider, useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -169,8 +170,10 @@ interface SchedulerSidebarProps {
   ghostPortalEl?: HTMLDivElement | null;
   /** Marca de tiempo para key del contenedor (anti-caché tras reordenar categorías). */
   timestamp?: number;
-  /** Llamado tras reordenar categorías con éxito (refresh + actualizar timestamp en padre). */
-  onCategoriesReordered?: () => void;
+  /** Llamado tras reordenar categorías con éxito (actualización optimista local). */
+  onCategoriesReordered?: (updatedOrder?: { stageKey: string; categoryIds: string[] }) => void;
+  /** Order de categorías (catalog + custom) por stage desde JSONB del scheduler instance. */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
 }
 
 
@@ -1778,6 +1781,7 @@ export const SchedulerSidebar = React.memo(({
   ghostPortalEl,
   timestamp,
   onCategoriesReordered,
+  catalogCategoryOrderByStage,
 }: SchedulerSidebarProps) => {
   /** Ordena secciones por order de categorías (Visual Order = Logical Order desde el primer render). */
   const sortSeccionesByCategoryOrder = useCallback((secciones: typeof seccionesProp) => {
@@ -1811,82 +1815,7 @@ export const SchedulerSidebar = React.memo(({
 
   const router = useRouter();
 
-  const handleLocalMoveCategory = useCallback(
-    async (sectionIdInput: string, categoryIdInput: string, direction: 'up' | 'down') => {
-      // Mismo ID: exacto, o uno termina en el otro (CUID completo vs últimos 8 chars). Normalizar string.
-      const sameCategoryId = (a: string | undefined, b: string | undefined) => {
-        const x = a != null ? String(a).trim() : '';
-        const y = b != null ? String(b).trim() : '';
-        if (x === '' || y === '') return false;
-        return x === y || x.endsWith(y) || y.endsWith(x);
-      };
-
-      const searchIn =
-        fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
-
-      let sectionIndex = searchIn.findIndex((s) =>
-        (s.categorias ?? []).some((c) => sameCategoryId(c?.id, categoryIdInput))
-      );
-
-      // Fallback: buscar por sectionId del click (por si la categoría no matchea por id en searchIn).
-      if (sectionIndex === -1 && sectionIdInput) {
-        const bySectionId = searchIn.findIndex(
-          (s) => (s.id != null && sectionIdInput != null && (s.id === sectionIdInput || s.id.endsWith(sectionIdInput) || sectionIdInput.endsWith(s.id)))
-        );
-        if (bySectionId >= 0) {
-          const sec = searchIn[bySectionId];
-          const hasCat = (sec.categorias ?? []).some((c) => sameCategoryId(c?.id, categoryIdInput));
-          if (hasCat) sectionIndex = bySectionId;
-        }
-      }
-
-      if (sectionIndex === -1) {
-        toast.error('Categoría no encontrada');
-        return;
-      }
-
-      const section = searchIn[sectionIndex];
-      const categories = [...(section.categorias ?? [])];
-
-      const currentIndex = categories.findIndex((c) => sameCategoryId(c?.id, categoryIdInput));
-
-      if (currentIndex === -1) {
-        toast.error('Categoría no encontrada en esta sección');
-        return;
-      }
-
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-
-      if (targetIndex < 0 || targetIndex >= categories.length) return;
-
-      const currentCat = categories[currentIndex]!;
-      const targetCat = categories[targetIndex]!;
-
-      [categories[currentIndex], categories[targetIndex]] = [targetCat, currentCat];
-
-      const newCategories = categories.map((c, idx) => ({ ...c, order: idx }));
-
-      setLocalSecciones((prev) =>
-        prev.map((s) => (s.id === section.id ? { ...s, categorias: newCategories } : s))
-      );
-
-      try {
-        const { reorderCategoriesByStage } = await import('@/lib/actions/studio/business/events/scheduler-actions');
-        const idsToSend = newCategories.map((c) => c.id);
-        const response = await reorderCategoriesByStage(studioSlug, section.id, idsToSend);
-
-        if (response.success) {
-          startTransition(() => router.refresh());
-          onCategoriesReordered?.();
-        } else {
-          toast.error(response.error ?? 'Error al guardar el orden');
-        }
-      } catch {
-        toast.error('Error al guardar el orden');
-      }
-    },
-    [localSecciones, fullSeccionesProp, studioSlug, router, onCategoriesReordered]
-  );
+  // NOTE: handleLocalMoveCategory movido después de `rows` para poder usarlo en el callback
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1921,8 +1850,9 @@ export const SchedulerSidebar = React.memo(({
         activeSectionIds,
         explicitlyActivatedStageIds,
         customCategoriesBySectionStage,
+        catalogCategoryOrderByStage
       ),
-    [explicitlyActivatedStageIds, localSecciones, seccionesOrderKey, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage]
+    [explicitlyActivatedStageIds, localSecciones, seccionesOrderKey, itemsMap, manualTasks, activeSectionIds, customCategoriesBySectionStage, catalogCategoryOrderByStage, timestamp]
   );
   
   /** Construir mapa de categorías con datos por estado (stageKey -> Set<categoryId>) */
@@ -1963,6 +1893,86 @@ export const SchedulerSidebar = React.memo(({
     
     return map;
   }, [rows, localSecciones, customCategoriesBySectionStage]);
+  
+  /** Callback para reordenar categorías por stage (up/down) */
+  const handleLocalMoveCategory = useCallback(
+    async (stageKey: string, categoryIdInput: string, direction: 'up' | 'down') => {
+      // Extraer sectionId y stage del stageKey (formato: "sectionId-STAGE")
+      const stageMatch = stageKey.match(/-(PLANNING|PRODUCTION|EDITING|DELIVERY)$/);
+      if (!stageMatch) {
+        toast.error('Error: formato de stage inválido');
+        return;
+      }
+      
+      const stage = stageMatch[1] as TaskCategoryStage;
+      const sectionId = stageKey.slice(0, -stageMatch[0].length);
+      
+      if (!sectionId || sectionId.length < 20) {
+        toast.error('Error: ID de sección inválido');
+        return;
+      }
+      
+      const searchIn = fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
+      
+      // Construir eventData con el orden actual del JSONB
+      const eventData = {
+        cotizaciones: [{
+          cotizacion_items: Array.from(itemsMap.values())
+        }],
+        scheduler: {
+          tasks: manualTasks ?? [],
+          catalog_category_order_by_stage: catalogCategoryOrderByStage
+        }
+      };
+      
+      const categoryIdsInStage = getCategoryIdsInStageFromEventData(
+        eventData,
+        searchIn,
+        stageKey,
+        customCategoriesBySectionStage
+      );
+      
+      if (categoryIdsInStage.length === 0) {
+        toast.error('No hay categorías en este stage');
+        return;
+      }
+      
+      // Encontrar índice de la categoría a mover
+      const currentIndex = categoryIdsInStage.findIndex(id => 
+        id === categoryIdInput || id.endsWith(categoryIdInput) || categoryIdInput.endsWith(id)
+      );
+      
+      if (currentIndex === -1) {
+        toast.error('Categoría no encontrada en este stage');
+        return;
+      }
+      
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      
+      if (targetIndex < 0 || targetIndex >= categoryIdsInStage.length) {
+        return; // Ya está en el límite
+      }
+      
+      // Hacer swap en el array del stage
+      const newOrderedIds = [...categoryIdsInStage];
+      [newOrderedIds[currentIndex], newOrderedIds[targetIndex]] = [newOrderedIds[targetIndex], newOrderedIds[currentIndex]];
+      
+      // Actualización optimista local
+      onCategoriesReordered?.({ stageKey, categoryIds: newOrderedIds });
+      
+      try {
+        const response = await reorderCategoriesByStage(studioSlug, sectionId, stage, newOrderedIds, eventId);
+
+        if (!response.success) {
+          toast.error(response.error ?? 'Error al guardar el orden');
+        }
+      } catch (error) {
+        console.error('[CATEGORY_REORDER] Error:', error);
+        toast.error('Error al guardar el orden');
+      }
+    },
+    [localSecciones, fullSeccionesProp, itemsMap, manualTasks, customCategoriesBySectionStage, catalogCategoryOrderByStage, studioSlug, eventId, onCategoriesReordered]
+  );
   
   const sectionTaskCounts = useMemo(() => getSectionTaskCounts(rows), [rows]);
   const [internalCollapsedCategoryIds, setInternalCollapsedCategoryIds] = useState<Set<string>>(new Set());
@@ -2380,8 +2390,12 @@ export const SchedulerSidebar = React.memo(({
                           const hasTypoLegacy = /peronalizada/i.test(catRow.label ?? '');
                           // Solo categorías operativas (en customList) muestran borrar/renombrar; categorías de catálogo nunca llaman al catálogo global.
                           const isCustomCategory = isInCustomList;
+                          
+                          // Los botones se calculan con el orden actual de segments (ya ordenados por buildSchedulerRows)
+                          // segments está actualizado porque viene del useMemo de rows que depende de catalogCategoryOrderByStage
                           const canMoveUp = catalogCategoryId && Number(segIdx) > 0;
                           const canMoveDown = catalogCategoryId && Number(segIdx) < Number(segments.length) - 1;
+                          
                           const showCustomButtons = (canMoveUp || canMoveDown) || isCustomCategory || hasCustomNamePattern || hasTypoLegacy;
                           const isValidDrop = activeDragData != null && isCategoryValidDrop(stageRow.id, catalogCategoryId);
                           const isCategoryCollapsed = collapsedCategoryIds.has(catRow.id);
@@ -2391,16 +2405,10 @@ export const SchedulerSidebar = React.memo(({
                             addPopoverContext.stage === stageRow.category &&
                             addPopoverContext.categoryId === categoryId;
                           
-                          // Obtener order de la DB para forzar re-render cuando cambie el orden
-                          const categoryOrderFromDB = (() => {
-                            if (!catalogCategoryId) return categoriaOrder;
-                            const section = localSecciones.find((s) => s.id === catRow.sectionId);
-                            const cat = section?.categorias?.find((c) => c.id === catalogCategoryId);
-                            return cat?.order ?? categoriaOrder;
-                          })();
-                          
+                          // Usar segIdx en el key para forzar re-render cuando cambie el orden
+                          // (segments ya está ordenado según catalogCategoryOrderByStage actualizado)
                           return (
-                            <React.Fragment key={`${catRow.id}-${categoryOrderFromDB}`}>
+                            <React.Fragment key={`${catRow.id}-${segIdx}-${timestamp ?? 0}`}>
                               <CategoryDroppableHeader
                                 stageKey={stageRow.id}
                                 catalogCategoryId={catalogCategoryId}
@@ -2450,8 +2458,9 @@ export const SchedulerSidebar = React.memo(({
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   e.preventDefault();
-                                                  if (catalogCategoryId) {
-                                                    handleLocalMoveCategory(catRow.sectionId, catalogCategoryId, 'up');
+                                                  const categoryIdToMove = catalogCategoryId ?? categoryId;
+                                                  if (categoryIdToMove && stageRow?.id) {
+                                                    handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'up');
                                                   }
                                                 }}
                                                 disabled={isReordering}
@@ -2467,8 +2476,9 @@ export const SchedulerSidebar = React.memo(({
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   e.preventDefault();
-                                                  if (catalogCategoryId) {
-                                                    handleLocalMoveCategory(catRow.sectionId, catalogCategoryId, 'down');
+                                                  const categoryIdToMove = catalogCategoryId ?? categoryId;
+                                                  if (categoryIdToMove && stageRow?.id) {
+                                                    handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'down');
                                                   }
                                                 }}
                                                 disabled={isReordering}
@@ -2551,9 +2561,8 @@ export const SchedulerSidebar = React.memo(({
                                   </span>
                                 )}
                               </CategoryDroppableHeader>
-                              {!isCategoryCollapsed && (
-                                <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
-                                  <div className="relative">
+                              <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
+                                <div className="relative">
                                   {segment.rows
                                     .filter((r) => isTaskRow(r) || isManualTaskRow(r))
                                     .map((row) => {
@@ -2778,10 +2787,11 @@ export const SchedulerSidebar = React.memo(({
                     }
                     return null;
                   })}
-                                  </div>
-                                  {segment.rows
-                                    .filter((r) => isAddPhantomRow(r) || isAddCategoryPhantomRow(r))
-                                    .map((row) => {
+                                </div>
+                              </SortableContext>
+                              {segment.rows
+                                .filter((r) => isAddPhantomRow(r) || isAddCategoryPhantomRow(r))
+                                .map((row) => {
                     if (isAddCategoryPhantomRow(row)) {
                       const isThisAddCatOpen =
                         addPopoverContext?.type === 'add_category' &&
@@ -2922,8 +2932,6 @@ export const SchedulerSidebar = React.memo(({
                     }
                     return null;
                   })}
-                                </SortableContext>
-                              )}
                             </React.Fragment>
                           );
                         })()}

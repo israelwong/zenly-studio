@@ -25,6 +25,8 @@ interface EventSchedulerViewProps {
   timestamp?: number;
   /** Llamado tras reordenar categorías con éxito. */
   onCategoriesReordered?: () => void;
+  /** Orden de categorías por stage (JSONB). Prop separada para mejor detección de cambios. */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
   /** Secciones activas (solo se muestran estas). */
   activeSectionIds?: Set<string>;
   explicitlyActivatedStageIds?: string[];
@@ -57,6 +59,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   initialSecciones,
   timestamp,
   onCategoriesReordered,
+  catalogCategoryOrderByStage,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -201,6 +204,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onRefetchEvent={onRefetchEvent}
         timestamp={timestamp}
         onCategoriesReordered={onCategoriesReordered}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
         activeSectionIds={activeSectionIds}
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         stageIdsWithDataBySection={stageIdsWithDataBySection}

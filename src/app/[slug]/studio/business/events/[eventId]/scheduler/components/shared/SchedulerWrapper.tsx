@@ -25,6 +25,8 @@ interface SchedulerWrapperProps {
   timestamp?: number;
   /** Llamado tras reordenar categorías con éxito: refresh + actualizar timestamp. */
   onCategoriesReordered?: () => void;
+  /** Orden de categorías por stage (JSONB). Prop separada para mejor detección de cambios. */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
   /** Secciones activas (con datos o activadas por usuario). */
   activeSectionIds?: Set<string>;
   /** Keys `${sectionId}-${stage}`: etapas vacías activadas. */
@@ -63,6 +65,7 @@ export function SchedulerWrapper({
   initialSecciones,
   timestamp,
   onCategoriesReordered,
+  catalogCategoryOrderByStage,
   activeSectionIds,
   explicitlyActivatedStageIds,
   stageIdsWithDataBySection,
@@ -105,6 +108,7 @@ export function SchedulerWrapper({
         initialSecciones={initialSecciones}
         timestamp={timestamp}
         onCategoriesReordered={onCategoriesReordered}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
         activeSectionIds={activeSectionIds}
         explicitlyActivatedStageIds={explicitlyActivatedStageIds}
         stageIdsWithDataBySection={stageIdsWithDataBySection}
