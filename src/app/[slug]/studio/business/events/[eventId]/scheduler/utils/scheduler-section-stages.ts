@@ -432,14 +432,24 @@ export function getCategoryIdsInStageFromEventData(
   // Filtrar categorías que tienen tareas en este stage
   const catalogInStage = [...(sec?.categorias ?? [])]
     .filter((c) => catalogIdsInStage.has(c.id))
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .sort((a, b) => {
+      const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+      // ✅ DESEMPATE: Si order es igual, usar ID para estabilidad
+      if (orderDiff !== 0) return orderDiff;
+      return a.id.localeCompare(b.id);
+    })
     .map((c) => ({ id: c.id, order: c.order ?? 0 }));
   
   // FALLBACK: Si no hay tareas, usar TODAS las categorías de la sección
   if (catalogInStage.length === 0 && (customCategoriesBySectionStage.get(stageKey) ?? []).length === 0) {
     const allSectionCats = (sec?.categorias ?? [])
       .map(normalizeCategoria)
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+      .sort((a, b) => {
+        const orderDiff = (a.order ?? 999) - (b.order ?? 999);
+        // ✅ DESEMPATE: Si order es igual, usar ID
+        if (orderDiff !== 0) return orderDiff;
+        return a.id.localeCompare(b.id);
+      });
     
     return allSectionCats.map(c => c.id);
   }
@@ -868,37 +878,39 @@ export function buildSchedulerRows(
 
       const stageId = `${sectionId}-${stage}`;
       
-      // Construir mapa de orden: prioritizar JSONB catalog_category_order_by_stage
+      // V4.0: Motor Tonto - Confianza total en el índice físico del JSONB
       const ordenMapById = new Map<string, number>();
       
-      // Si existe order personalizado en el JSONB, usarlo
+      // Si existe order personalizado en el JSONB, usarlo (fuente de verdad única)
       const customOrderForStage = catalogCategoryOrderByStage?.[stageKey];
       
       if (customOrderForStage && Array.isArray(customOrderForStage)) {
-        // El JSONB contiene el order definitivo (catalog + custom mezclados)
+        // El JSONB contiene el order definitivo (0, 1, 2...) normalizado por page.tsx
         for (let i = 0; i < customOrderForStage.length; i++) {
           ordenMapById.set(customOrderForStage[i], i);
         }
       } else {
-        // Fallback: usar order de sec.categorias + offset 1000 para custom
+        // Fallback: usar .order de cada categoría (ya normalizado)
         const sec = secciones.find(s => s.id === sectionId);
         if (sec && sec.categorias) {
           for (const cat of sec.categorias) {
-            ordenMapById.set(cat.id, cat.order ?? 0);
+            ordenMapById.set(cat.id, cat.order ?? 999);
           }
         }
         
+        // Custom categories: usar el índice en el array
         for (let i = 0; i < customCatsForStage.length; i++) {
-          ordenMapById.set(customCatsForStage[i].id, 1000 + i);
+          ordenMapById.set(customCatsForStage[i].id, (sec?.categorias?.length ?? 0) + i);
         }
       }
 
       if (isEmptyStage) {
+        // V4.0: Ordenamiento simple por índice (sin desempate complejo)
         const customInStage = customCatsForStage.map((cat, i) => ({
           id: cat.id,
           label: cat.name,
           order: ordenMapById.get(cat.id) ?? 1000 + i,
-        })).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+        })).sort((a, b) => a.order - b.order);
         
         sectionRows.push({
           type: 'stage',
@@ -976,7 +988,12 @@ export function buildSchedulerRows(
           });
         }
 
-        const allCategories = categoriesToRender.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+        const allCategories = categoriesToRender.sort((a, b) => {
+          const orderDiff = (a.order ?? 999) - (b.order ?? 999);
+          // ✅ DESEMPATE: Si order es igual, usar ID
+          if (orderDiff !== 0) return orderDiff;
+          return a.id.localeCompare(b.id);
+        });
 
         // Etapa solo se muestra si hay al menos una categoría visible.
         if (allCategories.length === 0) continue;

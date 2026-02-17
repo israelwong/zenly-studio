@@ -45,6 +45,8 @@ interface EventSchedulerViewProps {
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
   scrollToDate?: string;
+  /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
+  isUpdatingStructure?: boolean;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -76,6 +78,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onReminderMoveDateRevert,
   onReminderDelete,
   scrollToDate,
+  isUpdatingStructure,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -217,6 +220,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onReminderAdd={onReminderAdd}
         onReminderUpdate={onReminderUpdate}
         onReminderMoveDateOptimistic={onReminderMoveDateOptimistic}
+        isUpdatingStructure={isUpdatingStructure}
         onReminderMoveDateRevert={onReminderMoveDateRevert}
         onReminderDelete={onReminderDelete}
         scrollToDate={scrollToDate}

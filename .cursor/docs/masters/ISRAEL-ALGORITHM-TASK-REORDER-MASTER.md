@@ -1170,6 +1170,60 @@ console.log('Combined:', combined.map(e => ({
 
 ---
 
+## 16. Issues Conocidos y Fixes
+
+### Issue #1: Tareas Custom/Manuales no Reconocen Drag & Drop
+
+**Fecha**: 2026-02-17  
+**Síntoma**: Al arrastrar una tarea custom/manual, aparece el mensaje:
+```
+"Usa el menú 'Mover a otro estado' para cambiar de sección"
+```
+
+**Causa Raíz**:
+Las tareas custom/manuales tienen `catalog_section_id: undefined` en ciertos casos. Cuando `resolveActiveDragDataById()` construye el `stageKey`, usa:
+
+```typescript
+stageKey: `${manual.catalog_section_id ?? SIN_CATEGORIA_SECTION_ID}-${manual.category}`
+// Resultado: '__sin_categoria__-PRODUCTION' ❌
+```
+
+Pero visualmente la tarea está renderizada en:
+```
+overStage: 'cmiqfsulg0000ilguop4h0e81-PRODUCTION' ✅
+```
+
+El `scopeMatch` falla porque compara diferentes `stageKey`, bloqueando el drag & drop.
+
+**Fix Aplicado**:
+En `EventScheduler.tsx` → `resolveActiveDragDataById()`, derivar `sectionId` desde `catalog_category_id` cuando `catalog_section_id` es `undefined`:
+
+```typescript
+// ✅ FIX: Si catalog_section_id es undefined, derivarlo desde catalog_category_id
+let sectionId = manual.catalog_section_id;
+if (!sectionId && manual.catalog_category_id) {
+  sectionId = getSectionIdFromCatalog(manual.catalog_category_id);
+}
+
+const resolved = {
+  taskId: String(id),
+  isManual: true,
+  catalogCategoryId: manual.catalog_category_id ?? null,
+  stageKey: `${sectionId ?? SIN_CATEGORIA_SECTION_ID}-${manual.category ?? 'PLANNING'}`,
+};
+```
+
+**Ubicación del Fix**:
+- Archivo: `src/app/[slug]/studio/business/events/[eventId]/scheduler/components/layout/EventScheduler.tsx`
+- Función: `resolveActiveDragDataById` (línea ~1097-1120)
+- Helper usado: `getSectionIdFromCatalog(catalogCategoryId)` (línea ~1063-1076)
+
+**Validación**:
+El drag & drop de tareas custom ahora funciona correctamente dentro de su categoría y stage, respetando las reglas de scope.
+
+---
+
 **Documento consolidado**: 2026-02-16  
+**Última actualización**: 2026-02-17  
 **Autor**: Sistema de reordenamiento funcional del Scheduler  
 **Commit de referencia**: `3025fd63` (versión funcional sin rebote)

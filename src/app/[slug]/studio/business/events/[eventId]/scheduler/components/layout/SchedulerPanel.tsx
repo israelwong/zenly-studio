@@ -98,6 +98,8 @@ interface SchedulerPanelProps {
   onReminderUpdate?: (reminderId: string, subjectText: string, description: string | null) => Promise<void>;
   onReminderMoveDateOptimistic?: (reminderId: string, newDate: Date) => void;
   onReminderMoveDateRevert?: (reminderId: string, previousDate: Date) => void;
+  /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
+  isUpdatingStructure?: boolean;
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Order de categorías (catalog + custom) por stage desde JSONB del scheduler instance. */
   catalogCategoryOrderByStage?: Record<string, string[]> | null;
@@ -179,6 +181,7 @@ export const SchedulerPanel = React.memo(({
   onReminderMoveDateRevert,
   onReminderDelete,
   catalogCategoryOrderByStage,
+  isUpdatingStructure,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [ghostPortalEl, setGhostPortalEl] = useState<HTMLDivElement | null>(null);
@@ -352,6 +355,7 @@ export const SchedulerPanel = React.memo(({
             overlayPosition={overlayPosition}
             dropIndicator={dropIndicator}
             updatingTaskId={updatingTaskId}
+            isUpdatingStructure={isUpdatingStructure}
             googleCalendarEnabled={googleCalendarEnabled}
           />
         </div>

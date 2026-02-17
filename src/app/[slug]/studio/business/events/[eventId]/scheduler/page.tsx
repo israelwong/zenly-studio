@@ -44,6 +44,7 @@ export default function EventSchedulerPage() {
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isUpdatingStructure, setIsUpdatingStructure] = useState(false);
   const [columnWidth, setColumnWidth] = useState(() => {
     if (typeof window === 'undefined') return 60;
     try {
@@ -75,19 +76,25 @@ export default function EventSchedulerPage() {
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
 
-  const onCategoriesReordered = useCallback((updatedOrder?: { stageKey: string; categoryIds: string[] }) => {
-    // Actualización optimista del payload local con flushSync para aplicar inmediatamente
-    if (updatedOrder) {
+  const onCategoriesReordered = useCallback(async (updatedOrder?: { stageKey: string; categoryIds: string[] }) => {
+    if (!updatedOrder) return;
+    
+    setIsUpdatingStructure(true);
+    
+    try {
+      let newOrder: Record<string, string[]> | null = null;
+      
+      const normalizedCategoryIds = updatedOrder.categoryIds;
+      
       flushSync(() => {
         setPayload((prev) => {
           if (!prev?.scheduler) return prev;
           
           const currentOrder = prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined;
-          const newOrder = {
+          newOrder = {
             ...(currentOrder || {}),
-            [updatedOrder.stageKey]: updatedOrder.categoryIds,
+            [updatedOrder.stageKey]: normalizedCategoryIds,
           };
-          
           
           return {
             ...prev,
@@ -99,10 +106,19 @@ export default function EventSchedulerPage() {
         });
       });
       
-      // Incrementar timestamp DESPUÉS de que payload se haya aplicado síncronamente
       setTimestamp(Date.now());
+      
+      if (newOrder) {
+        await actualizarSchedulerStaging(studioSlug, eventId, {
+          catalogCategoryOrderByStage: newOrder,
+        });
+      }
+    } catch (error) {
+      console.error('[actualizarSchedulerStaging]', error);
+    } finally {
+      setIsUpdatingStructure(false);
     }
-  }, []);
+  }, [studioSlug, eventId]);
 
   const activeSectionIds = useMemo(() => {
     if (!payload?.secciones?.length) return new Set<string>();
@@ -148,8 +164,55 @@ export default function EventSchedulerPage() {
           name: data.name ?? data.promise?.name ?? 'Evento',
           event_date: data.event_date ?? data.promise?.event_date ?? null,
           promise: data.promise ?? null,
-          cotizaciones,
-          scheduler: data.scheduler ?? null,
+          cotizaciones: cotizaciones.map(cot => ({
+            id: cot.id,
+            name: cot.name,
+            status: cot.status,
+            cotizacion_items: (cot.cotizacion_items ?? []).map(item => ({
+              id: item.id,
+              item_id: item.item_id,
+              name: item.name,
+              name_snapshot: item.name_snapshot,
+              quantity: item.quantity,
+              order: item.order,
+              cost: item.cost,
+              cost_snapshot: item.cost_snapshot,
+              profit_type: item.profit_type,
+              profit_type_snapshot: item.profit_type_snapshot,
+              seccion_name: item.seccion_name,
+              category_name: item.category_name,
+              seccion_name_snapshot: item.seccion_name_snapshot,
+              category_name_snapshot: item.category_name_snapshot,
+              assigned_to_crew_member_id: item.assigned_to_crew_member_id,
+              assigned_to_crew_member: item.assigned_to_crew_member,
+              scheduler_task: item.scheduler_task,
+            }))
+          })),
+          scheduler: data.scheduler ? {
+            id: data.scheduler.id,
+            start_date: data.scheduler.start_date,
+            end_date: data.scheduler.end_date,
+            catalog_category_order_by_stage: data.scheduler.catalog_category_order_by_stage,
+            tasks: (data.scheduler.tasks ?? []).map(task => ({
+              id: task.id,
+              name: task.name,
+              start_date: task.start_date,
+              end_date: task.end_date,
+              duration_days: task.duration_days,
+              status: task.status,
+              progress_percent: task.progress_percent,
+              completed_at: task.completed_at,
+              cotizacion_item_id: task.cotizacion_item_id,
+              category: task.category,
+              catalog_category_id: task.catalog_category_id,
+              scheduler_custom_category_id: task.scheduler_custom_category_id,
+              order: task.order,
+              budget_amount: task.budget_amount ?? null,
+              assigned_to_crew_member_id: task.assigned_to_crew_member_id,
+              assigned_to_crew_member: task.assigned_to_crew_member,
+              notes_count: task.notes_count,
+            }))
+          } : null,
           secciones: data.secciones ?? [],
           schedulerDateReminders: data.schedulerDateReminders ?? [],
         };
@@ -634,6 +697,19 @@ export default function EventSchedulerPage() {
     [payload?.scheduler?.catalog_category_order_by_stage, timestamp]
   );
 
+  // ✅ NORMALIZACIÓN: Forzar order único (0,1,2,3...) para evitar colisiones de sort
+  const normalizedSecciones = useMemo(() => {
+    if (!payload?.secciones) return [];
+    return payload.secciones.map(sec => ({
+      ...sec,
+      categorias: [...(sec.categorias ?? [])].sort((a, b) => {
+        const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+        if (orderDiff !== 0) return orderDiff;
+        return a.id.localeCompare(b.id);
+      }).map((cat, idx) => ({ ...cat, order: idx })) // Forzar índices únicos
+    }));
+  }, [payload?.secciones]);
+
   const eventDataForWrapper: SchedulerData | null = useMemo(() => {
     if (!payload) return null;
     
@@ -938,7 +1014,7 @@ export default function EventSchedulerPage() {
             scrollToDate={searchParams.get('date') ?? undefined}
             columnWidth={columnWidth}
             isMaximized={isMaximized}
-            initialSecciones={payload.secciones}
+            initialSecciones={normalizedSecciones}
             timestamp={timestamp}
             onCategoriesReordered={onCategoriesReordered}
             catalogCategoryOrderByStage={catalogCategoryOrderByStage}
@@ -956,6 +1032,7 @@ export default function EventSchedulerPage() {
             onReminderMoveDateOptimistic={handleReminderMoveDateOptimistic}
             onReminderMoveDateRevert={handleReminderMoveDateRevert}
             onReminderDelete={handleReminderDelete}
+            isUpdatingStructure={isUpdatingStructure}
             onDataChange={(newData) => {
               if (newData && payload && newData.id === payload.id) {
                 setPayload(prev =>

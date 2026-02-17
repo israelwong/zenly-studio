@@ -521,6 +521,7 @@ export async function actualizarRangoScheduler(
 export interface ActualizarSchedulerStagingInput {
   customCategoriesBySectionStage?: Array<[string, Array<{ id: string; name: string }>]>;
   explicitlyActivatedStageIds?: string[];
+  catalogCategoryOrderByStage?: Record<string, string[]>;
 }
 
 /**
@@ -550,6 +551,7 @@ export async function actualizarSchedulerStaging(
     const updateData: {
       custom_categories_by_section_stage?: unknown;
       explicitly_activated_stage_ids?: unknown;
+      catalog_category_order_by_stage?: unknown;
     } = {};
     
     if (input.customCategoriesBySectionStage !== undefined) {
@@ -557,6 +559,9 @@ export async function actualizarSchedulerStaging(
     }
     if (input.explicitlyActivatedStageIds !== undefined) {
       updateData.explicitly_activated_stage_ids = input.explicitlyActivatedStageIds;
+    }
+    if (input.catalogCategoryOrderByStage !== undefined) {
+      updateData.catalog_category_order_by_stage = input.catalogCategoryOrderByStage;
     }
 
     await prisma.studio_scheduler_event_instances.update({

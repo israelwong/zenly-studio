@@ -249,7 +249,12 @@ export function MoveTaskModal({
                           const stageKey = `${seccion.id}-${stage}`;
                           
                           const categoriesWithData = categoriesWithDataByStage.get(stageKey) || new Set<string>();
-                          const sortedCatalogCats = [...(seccion.categorias || [])].sort((a, b) => (Number(a.order) ?? 0) - (Number(b.order) ?? 0));
+                          const sortedCatalogCats = [...(seccion.categorias || [])].sort((a, b) => {
+                            const orderDiff = (Number(a.order) ?? 0) - (Number(b.order) ?? 0);
+                            // ✅ DESEMPATE: Si order es igual, usar ID
+                            if (orderDiff !== 0) return orderDiff;
+                            return a.id.localeCompare(b.id);
+                          });
                           const catalogInStage = sortedCatalogCats
                             .filter((cat) => categoriesWithData.has(cat.id))
                             .map((cat) => ({ id: cat.id, name: cat.nombre, order: Number(cat.order) || 0 }));
@@ -259,7 +264,12 @@ export function MoveTaskModal({
                             name: cat.name,
                             order: maxCatalogOrder + 1 + i,
                           }));
-                          const allCategories = [...catalogInStage, ...customInStage].sort((a, b) => (Number(a.order) ?? 0) - (Number(b.order) ?? 0));
+                          const allCategories = [...catalogInStage, ...customInStage].sort((a, b) => {
+                            const orderDiff = (Number(a.order) ?? 0) - (Number(b.order) ?? 0);
+                            // ✅ DESEMPATE: Si order es igual, usar ID
+                            if (orderDiff !== 0) return orderDiff;
+                            return a.id.localeCompare(b.id);
+                          });
                           
                           const isStageOpen = openStageId === stage;
                           const isSelected = selection.stage === stage;

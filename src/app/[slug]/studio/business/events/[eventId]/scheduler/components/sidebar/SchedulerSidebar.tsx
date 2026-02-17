@@ -90,7 +90,7 @@ import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { SchedulerSectionStagesConfigPopover } from '../date-config/SchedulerSectionStagesConfigPopover';
 import { TaskNotesSheet } from '../task-actions/TaskNotesSheet';
 import { obtenerCrewMembers, asignarCrewAItem } from '@/lib/actions/studio/business/events';
-import { asignarCrewATareaScheduler, reorderCategoriesByStage } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { SchedulerBackdropProvider, useSchedulerBackdrop } from '../../context/SchedulerBackdropContext';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -174,6 +174,8 @@ interface SchedulerSidebarProps {
   onCategoriesReordered?: (updatedOrder?: { stageKey: string; categoryIds: string[] }) => void;
   /** Order de categorías (catalog + custom) por stage desde JSONB del scheduler instance. */
   catalogCategoryOrderByStage?: Record<string, string[]> | null;
+  /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
+  isUpdatingStructure?: boolean;
 }
 
 
@@ -408,14 +410,9 @@ function SchedulerRamaLine({ minHeight = ROW_HEIGHTS.TASK_ROW }: { minHeight?: n
   );
 }
 
-function areEqualCategory(
-  a: { stageKey: string; catalogCategoryId: string | null; sectionId: string; label?: string },
-  b: { stageKey: string; catalogCategoryId: string | null; sectionId: string; label?: string }
-): boolean {
-  return a.stageKey === b.stageKey && a.catalogCategoryId === b.catalogCategoryId && a.sectionId === b.sectionId && a.label === b.label;
-}
+// V4.1: Overlay eliminado - ahora usamos spinner local en categoría
 
-const CategoryDroppableHeader = React.memo(function CategoryDroppableHeader({
+function CategoryDroppableHeader({
   stageKey,
   catalogCategoryId,
   isValidDrop,
@@ -457,7 +454,7 @@ const CategoryDroppableHeader = React.memo(function CategoryDroppableHeader({
       )}
     </div>
   );
-}, areEqualCategory);
+}
 
 /** Quita el sufijo " (timestamp)" del nombre de categoría para mostrar solo lo que escribió el usuario. */
 /** Normaliza typo "peronalizada" → "personalizada" en UI (incl. si viene de BD). */
@@ -985,6 +982,31 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
                 )
               )}
             </>
+          )}
+          {((canMoveUp && onReorderUp) || (canMoveDown && onReorderDown)) && <DropdownMenuSeparator />}
+          {canMoveUp && onReorderUp && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                onReorderUp(localTask.id);
+              }}
+            >
+              <ChevronUp className="h-4 w-4 shrink-0" />
+              <span>Subir una posición</span>
+            </DropdownMenuItem>
+          )}
+          {canMoveDown && onReorderDown && (
+            <DropdownMenuItem
+              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+              onSelect={() => {
+                setActionsMenuOpen(false);
+                onReorderDown(localTask.id);
+              }}
+            >
+              <ChevronDown className="h-4 w-4 shrink-0" />
+              <span>Bajar una posición</span>
+            </DropdownMenuItem>
           )}
           {(onDuplicate || onMoveToStage || childTaskIds.length > 0 || onManualTaskDelete) && <DropdownMenuSeparator />}
           {onDuplicate && (
@@ -1730,7 +1752,8 @@ function SchedulerItem({
 
 const EMPTY_STAGE_SEGMENTS: import('../../utils/scheduler-section-stages').StageSegment[] = [];
 
-export const SchedulerSidebar = React.memo(({
+// TEMPORAL: Removido React.memo para debug
+export const SchedulerSidebar = ({
   secciones: seccionesProp,
   fullSecciones: fullSeccionesProp,
   itemsMap,
@@ -1782,18 +1805,26 @@ export const SchedulerSidebar = React.memo(({
   timestamp,
   onCategoriesReordered,
   catalogCategoryOrderByStage,
+  isUpdatingStructure = false,
 }: SchedulerSidebarProps) => {
   /** Ordena secciones por order de categorías (Visual Order = Logical Order desde el primer render). */
   const sortSeccionesByCategoryOrder = useCallback((secciones: typeof seccionesProp) => {
-    return (secciones ?? []).map((sec) => ({
+    return (secciones ?? []).map((sec, secIdx) => ({
       ...sec,
-      categorias: [...(sec.categorias ?? [])].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+      categorias: [...(sec.categorias ?? [])].sort((a, b) => {
+        const orderDiff = (a.order ?? 999) - (b.order ?? 999);
+        // ✅ DESEMPATE: Si order es igual, usar posición original (id o índice)
+        if (orderDiff !== 0) return orderDiff;
+        return a.id.localeCompare(b.id);
+      }),
     }));
   }, []);
 
   const [isMounted, setIsMounted] = useState(false);
   const [localSecciones, setLocalSecciones] = useState(() => sortSeccionesByCategoryOrder(seccionesProp));
-  const [isReordering, setIsReordering] = useState(false);
+  
+  // V4.1: Estado local para tracking de categoría siendo reordenada (stageKey::categoryId)
+  const [reorderingCategoryKey, setReorderingCategoryKey] = useState<string | null>(null);
   
   // Clave estable (string) para que el useEffect tenga siempre 1 dependencia y no cambie de tamaño
   const seccionesPropKey = useMemo(
@@ -1817,9 +1848,14 @@ export const SchedulerSidebar = React.memo(({
 
   // NOTE: handleLocalMoveCategory movido después de `rows` para poder usarlo en el callback
 
+  // V4.0: Mantener sensores constantes (no cambiar array size)
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { 
+      activationConstraint: { distance: 8 },
+    })
   );
+  
+  // V4.1: Logs de debug eliminados - ahora usamos spinner local en categoría
 
   /** Guía DnD: ítem de cotización solo misma categoría (no resaltar otras). Manual: destinos válidos en cualquier stage. */
   const isCategoryValidDrop = useCallback(
@@ -1869,7 +1905,12 @@ export const SchedulerSidebar = React.memo(({
         // Buscar la categoría en el catálogo de la sección por nombre (label). Sort por order para consistencia.
         const section = localSecciones.find(s => s.id === categoryRow.sectionId);
         if (section) {
-          const sortedCats = [...(section.categorias ?? [])].sort((a, b) => (Number(a.order) ?? 0) - (Number(b.order) ?? 0));
+          const sortedCats = [...(section.categorias ?? [])].sort((a, b) => {
+            const orderDiff = (Number(a.order) ?? 0) - (Number(b.order) ?? 0);
+            // ✅ DESEMPATE: Si order es igual, usar ID
+            if (orderDiff !== 0) return orderDiff;
+            return a.id.localeCompare(b.id);
+          });
           const category = sortedCats.find(cat => cat.nombre === categoryRow.label);
           if (category) {
             if (!map.has(stageId)) {
@@ -1897,78 +1938,78 @@ export const SchedulerSidebar = React.memo(({
   /** Callback para reordenar categorías por stage (up/down) */
   const handleLocalMoveCategory = useCallback(
     async (stageKey: string, categoryIdInput: string, direction: 'up' | 'down') => {
-      // Extraer sectionId y stage del stageKey (formato: "sectionId-STAGE")
-      const stageMatch = stageKey.match(/-(PLANNING|PRODUCTION|EDITING|DELIVERY)$/);
-      if (!stageMatch) {
-        toast.error('Error: formato de stage inválido');
-        return;
-      }
-      
-      const stage = stageMatch[1] as TaskCategoryStage;
-      const sectionId = stageKey.slice(0, -stageMatch[0].length);
-      
-      if (!sectionId || sectionId.length < 20) {
-        toast.error('Error: ID de sección inválido');
-        return;
-      }
-      
-      const searchIn = fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
-      
-      // Construir eventData con el orden actual del JSONB
-      const eventData = {
-        cotizaciones: [{
-          cotizacion_items: Array.from(itemsMap.values())
-        }],
-        scheduler: {
-          tasks: manualTasks ?? [],
-          catalog_category_order_by_stage: catalogCategoryOrderByStage
-        }
-      };
-      
-      const categoryIdsInStage = getCategoryIdsInStageFromEventData(
-        eventData,
-        searchIn,
-        stageKey,
-        customCategoriesBySectionStage
-      );
-      
-      if (categoryIdsInStage.length === 0) {
-        toast.error('No hay categorías en este stage');
-        return;
-      }
-      
-      // Encontrar índice de la categoría a mover
-      const currentIndex = categoryIdsInStage.findIndex(id => 
-        id === categoryIdInput || id.endsWith(categoryIdInput) || categoryIdInput.endsWith(id)
-      );
-      
-      if (currentIndex === -1) {
-        toast.error('Categoría no encontrada en este stage');
-        return;
-      }
-      
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-      
-      if (targetIndex < 0 || targetIndex >= categoryIdsInStage.length) {
-        return; // Ya está en el límite
-      }
-      
-      // Hacer swap en el array del stage
-      const newOrderedIds = [...categoryIdsInStage];
-      [newOrderedIds[currentIndex], newOrderedIds[targetIndex]] = [newOrderedIds[targetIndex], newOrderedIds[currentIndex]];
-      
-      // Actualización optimista local
-      onCategoriesReordered?.({ stageKey, categoryIds: newOrderedIds });
+      // V4.1: Marcar categoría como "reordenando" para mostrar spinner local
+      const categoryKey = `${stageKey}::${categoryIdInput}`;
+      setReorderingCategoryKey(categoryKey);
       
       try {
-        const response = await reorderCategoriesByStage(studioSlug, sectionId, stage, newOrderedIds, eventId);
-
-        if (!response.success) {
-          toast.error(response.error ?? 'Error al guardar el orden');
+        // Extraer sectionId y stage del stageKey (formato: "sectionId-STAGE")
+        const stageMatch = stageKey.match(/-(PLANNING|PRODUCTION|EDITING|DELIVERY)$/);
+        if (!stageMatch) {
+          toast.error('Error: formato de stage inválido');
+          return;
         }
-      } catch (error) {
-        console.error('[CATEGORY_REORDER] Error:', error);
-        toast.error('Error al guardar el orden');
+        
+        const stage = stageMatch[1] as TaskCategoryStage;
+        const sectionId = stageKey.slice(0, -stageMatch[0].length);
+        
+        if (!sectionId || sectionId.length < 20) {
+          toast.error('Error: ID de sección inválido');
+          return;
+        }
+        
+        const searchIn = fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
+        
+        // Construir eventData con el orden actual del JSONB
+        const eventData = {
+          cotizaciones: [{
+            cotizacion_items: Array.from(itemsMap.values())
+          }],
+          scheduler: {
+            tasks: manualTasks ?? [],
+            catalog_category_order_by_stage: catalogCategoryOrderByStage
+          }
+        };
+        
+        const categoryIdsInStage = getCategoryIdsInStageFromEventData(
+          eventData,
+          searchIn,
+          stageKey,
+          customCategoriesBySectionStage
+        );
+        
+        if (categoryIdsInStage.length === 0) {
+          toast.error('No hay categorías en este stage');
+          return;
+        }
+        
+        // Encontrar índice de la categoría a mover
+        const currentIndex = categoryIdsInStage.findIndex(id => 
+          id === categoryIdInput || id.endsWith(categoryIdInput) || categoryIdInput.endsWith(id)
+        );
+        
+        if (currentIndex === -1) {
+          toast.error('Categoría no encontrada en este stage');
+          return;
+        }
+        
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        
+        if (targetIndex < 0 || targetIndex >= categoryIdsInStage.length) {
+          return; // Ya está en el límite
+        }
+        
+        // Hacer swap en el array del stage
+        const newOrderedIds = [...categoryIdsInStage];
+        [newOrderedIds[currentIndex], newOrderedIds[targetIndex]] = [newOrderedIds[targetIndex], newOrderedIds[currentIndex]];
+        
+        // V4.0: Esperar barrera atómica del padre (incluye persistencia)
+        if (onCategoriesReordered) {
+          await onCategoriesReordered({ stageKey, categoryIds: newOrderedIds });
+        }
+      } finally {
+        // V4.1: Limpiar estado de reordenamiento SIEMPRE
+        setReorderingCategoryKey(null);
       }
     },
     [localSecciones, fullSeccionesProp, itemsMap, manualTasks, customCategoriesBySectionStage, catalogCategoryOrderByStage, studioSlug, eventId, onCategoriesReordered]
@@ -2251,6 +2292,7 @@ export const SchedulerSidebar = React.memo(({
 
                 {isExpanded ? (
                   <div className="relative">
+                    {/* V4.1: Overlay eliminado - spinner ahora está en categoría */}
                     <div
                       className="absolute top-0 bottom-0 w-[1px] bg-zinc-800 pointer-events-none z-0"
                       style={{ left: BRANCH_LEFT.STAGE, ...(isLastStageInSection ? { bottom: ROW_HEIGHTS.TASK_ROW / 2 } : {}) }}
@@ -2439,59 +2481,72 @@ export const SchedulerSidebar = React.memo(({
                                     {formatCategoryLabel(catRow.label)}
                                   </span>
                                 </button>
-                                {showCustomButtons && (
-                                  <span
-                                    className={`relative z-20 flex items-center gap-0.5 shrink-0 ml-0.5 transition-colors ${isCustomCategory || hasCustomNamePattern || hasTypoLegacy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                    style={{ pointerEvents: 'auto' }}
-                                  >
-                                    {(canMoveUp || canMoveDown) && (
-                                      <>
-                                        {isReordering ? (
-                                          <div className="p-2 min-w-[28px] min-h-[28px] flex items-center justify-center">
-                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
-                                          </div>
-                                        ) : (
-                                          <>
-                                            {canMoveUp && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  e.preventDefault();
-                                                  const categoryIdToMove = catalogCategoryId ?? categoryId;
-                                                  if (categoryIdToMove && stageRow?.id) {
-                                                    handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'up');
-                                                  }
-                                                }}
-                                                disabled={isReordering}
-                                                className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                                aria-label="Mover categoría arriba"
-                                              >
-                                                <ChevronUp className="h-3.5 w-3.5" />
-                                              </button>
-                                            )}
-                                            {canMoveDown && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  e.preventDefault();
-                                                  const categoryIdToMove = catalogCategoryId ?? categoryId;
-                                                  if (categoryIdToMove && stageRow?.id) {
-                                                    handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'down');
-                                                  }
-                                                }}
-                                                disabled={isReordering}
-                                                className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                                aria-label="Mover categoría abajo"
-                                              >
-                                                <ChevronDown className="h-3.5 w-3.5" />
-                                              </button>
-                                            )}
-                                          </>
-                                        )}
-                                      </>
-                                    )}
+                                {showCustomButtons && (() => {
+                                  // V4.1: Calcular si esta categoría se está reordenando (para opacity)
+                                  const categoryIdToCheck = catalogCategoryId ?? categoryId;
+                                  const currentCategoryKey = stageRow?.id && categoryIdToCheck ? `${stageRow.id}::${categoryIdToCheck}` : null;
+                                  const isThisCategoryReordering = currentCategoryKey === reorderingCategoryKey;
+                                  
+                                  return (
+                                    <span
+                                      className={`relative z-20 flex items-center gap-0.5 shrink-0 ml-0.5 transition-colors ${
+                                        isThisCategoryReordering 
+                                          ? 'opacity-100' 
+                                          : 'opacity-0 group-hover:opacity-100'
+                                      }`}
+                                      style={{ pointerEvents: 'auto' }}
+                                    >
+                                      {(canMoveUp || canMoveDown) && (() => {
+                                        // V4.1: Mostrar spinner si esta categoría específica se está reordenando
+                                        if (isThisCategoryReordering) {
+                                          return (
+                                            <div className="p-2 min-w-[28px] min-h-[28px] flex items-center justify-center">
+                                              <Loader2 className="h-3.5 w-3.5 text-amber-500 animate-spin" />
+                                            </div>
+                                          );
+                                        }
+                                      
+                                      return (
+                                        <>
+                                          {canMoveUp && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                const categoryIdToMove = catalogCategoryId ?? categoryId;
+                                                if (categoryIdToMove && stageRow?.id) {
+                                                  handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'up');
+                                                }
+                                              }}
+                                              disabled={reorderingCategoryKey !== null}
+                                              className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50 transition-opacity"
+                                              aria-label="Mover categoría arriba"
+                                            >
+                                              <ChevronUp className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                          {canMoveDown && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                const categoryIdToMove = catalogCategoryId ?? categoryId;
+                                                if (categoryIdToMove && stageRow?.id) {
+                                                  handleLocalMoveCategory(stageRow.id, categoryIdToMove, 'down');
+                                                }
+                                              }}
+                                              disabled={reorderingCategoryKey !== null}
+                                              className="p-2 rounded hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 min-w-[28px] min-h-[28px] flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50 transition-opacity"
+                                              aria-label="Mover categoría abajo"
+                                            >
+                                              <ChevronDown className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                     {isCustomCategory && onRenameCustomCategory && (
                                       <Popover
                                         open={isEditCatOpen}
@@ -2558,8 +2613,9 @@ export const SchedulerSidebar = React.memo(({
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </button>
                                     )}
-                                  </span>
-                                )}
+                                    </span>
+                                  );
+                                })()}
                               </CategoryDroppableHeader>
                               <SortableContext items={segmentTaskIds} strategy={verticalListSortingStrategy}>
                                 <div className="relative">
@@ -3007,6 +3063,6 @@ export const SchedulerSidebar = React.memo(({
     </div>
     </SchedulerBackdropProvider>
   );
-});
+};
 
 SchedulerSidebar.displayName = 'SchedulerSidebar';

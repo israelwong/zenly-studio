@@ -426,6 +426,7 @@ export interface EventoDetalle extends EventoBasico {
       item_id: string | null;
       quantity: number;
       name: string | null;
+      name_snapshot: string;
       description: string | null;
       unit_price: number;
       subtotal: number;
@@ -441,6 +442,7 @@ export interface EventoDetalle extends EventoBasico {
       internal_delivery_days: number | null;
       client_delivery_days: number | null;
       status: string;
+      order: number;
       seccion_name: string | null;
       category_name: string | null;
       seccion_name_snapshot: string | null;
@@ -469,8 +471,11 @@ export interface EventoDetalle extends EventoBasico {
         invitation_status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
         google_event_id: string | null;
         category: string;
+        catalog_category_id: string | null;
         order: number;
         notes_count?: number;
+        assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
+        catalog_category: { id: string; name: string } | null;
       } | null;
     }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
@@ -481,6 +486,7 @@ export interface EventoDetalle extends EventoBasico {
     end_date: Date;
     is_custom: boolean;
     catalog_category_order_by_stage?: Record<string, string[]> | null;
+    explicitly_activated_stage_ids?: string[] | null;
     tasks?: Array<{
       id: string;
       name: string;
@@ -494,9 +500,13 @@ export interface EventoDetalle extends EventoBasico {
       assigned_to_crew_member_id: string | null;
       status: string;
       progress_percent: number;
+      completed_at: Date | null;
       cotizacion_item_id: string | null;
+      catalog_category_id: string | null;
+      scheduler_custom_category_id: string | null;
       depends_on_task_id: string | null;
       checklist_items: unknown;
+      order: number;
       budget_amount: number | null;
       assigned_to: {
         id: string;
@@ -581,6 +591,7 @@ const COTIZACIONES_ITEMS_SELECT = {
   item_id: true,
   quantity: true,
   name: true,
+  name_snapshot: true,
   description: true,
   unit_price: true,
   subtotal: true,
@@ -729,6 +740,7 @@ export async function obtenerEventoDetalle(
       end_date: true,
       is_custom: true,
       catalog_category_order_by_stage: true,
+      explicitly_activated_stage_ids: true,
       custom_categories: {
         select: { id: true, name: true, section_id: true, stage: true, order: true },
         orderBy: [{ section_id: 'asc' }, { stage: 'asc' }, { order: 'asc' }],
@@ -737,6 +749,7 @@ export async function obtenerEventoDetalle(
         select: {
           id: true,
           name: true,
+          description: true,
           start_date: true,
           end_date: true,
           duration_days: true,
@@ -745,12 +758,16 @@ export async function obtenerEventoDetalle(
           completed_at: true,
           cotizacion_item_id: true,
           category: true,
+          priority: true,
+          assigned_to_user_id: true,
           catalog_category_id: true,
           catalog_category_name_snapshot: true,
           catalog_section_id_snapshot: true,
           catalog_section_name_snapshot: true,
           scheduler_custom_category_id: true,
           parent_id: true,
+          depends_on_task_id: true,
+          checklist_items: true,
           catalog_category: { select: { id: true, name: true } },
           scheduler_custom_category: { select: { id: true, name: true } },
           order: true,

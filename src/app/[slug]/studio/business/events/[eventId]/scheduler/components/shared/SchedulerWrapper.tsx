@@ -47,6 +47,8 @@ interface SchedulerWrapperProps {
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Fecha YYYY-MM-DD para scroll automático al cargar (ej. desde AlertsPopover). */
   scrollToDate?: string;
+  /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
+  isUpdatingStructure?: boolean;
 }
 
 /**
@@ -82,6 +84,7 @@ export function SchedulerWrapper({
   onReminderMoveDateRevert,
   onReminderDelete,
   scrollToDate,
+  isUpdatingStructure,
 }: SchedulerWrapperProps) {
   const filteredCotizaciones = useMemo(() => {
     if (!cotizacionId || !eventData.cotizaciones) return eventData.cotizaciones ?? [];
@@ -125,6 +128,7 @@ export function SchedulerWrapper({
         onReminderMoveDateRevert={onReminderMoveDateRevert}
         onReminderDelete={onReminderDelete}
         scrollToDate={scrollToDate}
+        isUpdatingStructure={isUpdatingStructure}
       />
       <PublicationBar
         studioSlug={studioSlug}
