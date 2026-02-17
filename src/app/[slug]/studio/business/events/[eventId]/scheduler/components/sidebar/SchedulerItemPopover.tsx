@@ -103,7 +103,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             setLoadingMembers(true);
             const result = await obtenerCrewMembers(studioSlug);
             if (result.success && result.data) {
-                setMembers(result.data);
+                setMembers(result.data as CrewMember[]);
             }
         } catch {
             // Error silencioso

@@ -632,12 +632,15 @@ export async function obtenerSchedulerTask(
 }
 
 /**
- * Eliminar tarea de Scheduler
+ * Eliminar tarea de Scheduler (soft-delete: DRAFT + cotizacion_item_id = null).
+ * Opción allowWhenPayrollPaid: si la UI confirmó "Mantener historial + Borrar tarea", permite el soft-delete
+ * aunque exista nómina pagada (evita RESTRICT y mantiene historial en finanzas).
  */
 export async function eliminarSchedulerTask(
   studioSlug: string,
   eventId: string,
-  taskId: string
+  taskId: string,
+  options?: { allowWhenPayrollPaid?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const studioResult = await validateStudio(studioSlug);
@@ -678,6 +681,29 @@ export async function eliminarSchedulerTask(
         },
       },
     });
+
+    // Bloqueo de eliminación: si la tarea tiene ítem y existen nóminas asociadas no pendientes, no permitir eliminar
+    // (salvo que la UI haya confirmado Caso B con allowWhenPayrollPaid)
+    const itemId = taskWithGoogle?.cotizacion_item_id;
+    if (itemId && !options?.allowWhenPayrollPaid) {
+      const nominaNoPendiente = await prisma.studio_nominas.findFirst({
+        where: {
+          evento_id: eventId,
+          status: { not: 'pendiente' },
+          payroll_services: {
+            some: { quote_service_id: itemId },
+          },
+        },
+        select: { id: true, status: true },
+      });
+      if (nominaNoPendiente) {
+        return {
+          success: false,
+          error:
+            'No se puede eliminar la tarea: tiene nóminas asociadas ya procesadas o pagadas. Revise el módulo de nóminas.',
+        };
+      }
+    }
 
     // PATRÓN STAGING: Siempre marcar como DRAFT en lugar de eliminar
     // Esto permite cancelar cambios y mantener historial completo
@@ -817,6 +843,17 @@ export async function limpiarEstructuraScheduler(
       });
 
       return { deletedTasks: deletedTasks.count, deletedCats: deletedCats.count };
+    });
+
+    // 7. Resetear JSONB de staging en la instancia (orden de categorías, stages activados, custom por stage).
+    // Así al "Volver a sincronizar" la UI parte de orden limpio desde catálogo, sin rebote por JSONB viejo.
+    await prisma.studio_scheduler_event_instances.update({
+      where: { id: instance.id },
+      data: {
+        catalog_category_order_by_stage: null,
+        explicitly_activated_stage_ids: null,
+        custom_categories_by_section_stage: null,
+      },
     });
 
     // Verificación post-commit

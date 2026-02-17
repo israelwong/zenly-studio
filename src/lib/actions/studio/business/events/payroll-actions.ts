@@ -281,6 +281,63 @@ export async function crearNominaDesdeTareaCompletada(
 }
 
 /**
+ * Obtiene el estado de la nómina asociada al ítem de una tarea (si existe).
+ * Usado por la UI para mostrar Caso A (pendiente) o Caso B (pagado) antes de eliminar la tarea.
+ */
+export async function obtenerEstadoNominaPorTarea(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{
+  success: boolean;
+  hasPayroll?: boolean;
+  status?: 'pendiente' | 'pagado';
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: { cotizacion_item_id: true },
+    });
+    if (!task?.cotizacion_item_id) {
+      return { success: true, hasPayroll: false };
+    }
+
+    const nomina = await prisma.studio_nominas.findFirst({
+      where: {
+        evento_id: eventId,
+        payroll_services: {
+          some: { quote_service_id: task.cotizacion_item_id },
+        },
+      },
+      select: { status: true },
+    });
+    if (!nomina) {
+      return { success: true, hasPayroll: false };
+    }
+    const status = nomina.status === 'pendiente' || nomina.status === 'pagado' ? nomina.status : 'pendiente';
+    return { success: true, hasPayroll: true, status };
+  } catch (error) {
+    console.error('[PAYROLL] Error obteniendo estado nómina por tarea:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al consultar nómina',
+    };
+  }
+}
+
+/**
  * Eliminar nómina automáticamente cuando se desmarca una tarea
  * Solo elimina si la nómina está en estado "pendiente"
  */

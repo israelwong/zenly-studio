@@ -66,7 +66,7 @@ export function DateRangeConflictModal({
         {/* Acciones */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
           <ZenButton
-            variant="default"
+            variant="primary"
             onClick={onClose}
           >
             Entendido

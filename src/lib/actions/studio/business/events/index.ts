@@ -21,6 +21,7 @@ export {
 export {
   crearNominaDesdeTareaCompletada,
   eliminarNominaDesdeTareaDesmarcada,
+  obtenerEstadoNominaPorTarea,
 } from './payroll-actions';
 
 export {

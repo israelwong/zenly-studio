@@ -244,9 +244,10 @@ export async function actualizarSchedulerTask(
 export async function eliminarSchedulerTask(
   studioSlug: string,
   eventId: string,
-  taskId: string
+  taskId: string,
+  options?: { allowWhenPayrollPaid?: boolean }
 ) {
-  return eliminarSchedulerTaskCore(studioSlug, eventId, taskId);
+  return eliminarSchedulerTaskCore(studioSlug, eventId, taskId, options);
 }
 
 /**

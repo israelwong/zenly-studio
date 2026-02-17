@@ -431,6 +431,18 @@ export async function sincronizarTareasEvento(
     const allItems = cotizacionesRows.flatMap((c) => c.cotizacion_items ?? []);
     const orderedItems = aplanarOrdenCanonico(allItems);
 
+    console.log('[SYNC] Sincronizando scheduler con cotización', {
+      eventId,
+      cotizaciones: cotizacionesRows.length,
+      itemsEnCotizacion: orderedItems.length,
+      migrando: orderedItems.slice(0, 10).map((it, idx) => ({
+        orden: idx,
+        nombre: it.name ?? it.name_snapshot ?? '?',
+        seccion: (it.service_categories?.section_categories ?? it.items?.service_categories?.section_categories)?.service_sections?.name ?? '?',
+        categoria: it.category_name_snapshot ?? it.category_name ?? it.service_categories?.name ?? '?',
+      })),
+    });
+
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
     let created = 0;
     let updated = 0;
@@ -576,6 +588,8 @@ export async function sincronizarTareasEvento(
       const { revalidateSchedulerPaths } = await import('./helpers/revalidation-utils');
       await revalidateSchedulerPaths(studioSlug, eventId);
     }
+
+    console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length });
 
     return { success: true, created, updated, skipped: 0 };
   } catch (error) {

@@ -41,7 +41,13 @@ const EDGE_SCROLL_THRESHOLD = 100;
 const EDGE_SCROLL_VELOCITY = 10;
 
 import type { DragEndEvent, DragStartEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core';
-import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
+import {
+  crearSchedulerTask,
+  eliminarSchedulerTask,
+  actualizarSchedulerTask,
+  obtenerEstadoNominaPorTarea,
+  eliminarNominaDesdeTareaDesmarcada,
+} from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { SchedulerAgrupacionCell } from '../sidebar/SchedulerAgrupacionCell';
@@ -160,6 +166,8 @@ export const EventScheduler = React.memo(function EventScheduler({
   } | null>(null);
   /** Confirmación de eliminar tarea con subtareas (cascada). Manual o catálogo. */
   const [cascadeDeletePending, setCascadeDeletePending] = useState<{ taskId: string; childIds: string[]; isCatalog?: boolean } | null>(null);
+  /** Confirmación de eliminación cuando la tarea tiene nómina: Caso A (pendiente) o Caso B (pagado). */
+  const [deletePayrollConfirm, setDeletePayrollConfirm] = useState<{ taskId: string; case: 'pendiente' | 'pagado' } | null>(null);
 
   const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
   const [pendingFixedSalaryTask, setPendingFixedSalaryTask] = useState<{
@@ -2524,7 +2532,38 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, router, notifyParentDataChange]
   );
 
-  // Manejar eliminación de tareas (vaciar slot). Si tiene hijos, mostrar confirmación en cascada.
+  // Aplicar actualización optimista tras eliminar tarea (vaciar slot en UI).
+  const applyTaskDeleteOptimisticUpdate = useCallback(
+    (taskId: string) => {
+      let updatedData: SchedulerViewData;
+      setLocalEventData(prev => {
+        const newData = { ...prev };
+        newData.cotizaciones = prev.cotizaciones?.map(cotizacion => ({
+          ...cotizacion,
+          cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+            if (item.scheduler_task?.id === taskId) {
+              return {
+                ...item,
+                scheduler_task_id: null,
+                scheduler_task: null,
+                assigned_to_crew_member_id: null,
+                assigned_to_crew_member: null,
+              };
+            }
+            return item;
+          }),
+        }));
+        updatedData = newData as SchedulerViewData;
+        return newData as SchedulerViewData;
+      });
+      if (updatedData!) notifyParentDataChange(updatedData);
+      window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      toast.success('Slot vaciado correctamente');
+    },
+    [notifyParentDataChange]
+  );
+
+  // Manejar eliminación de tareas (vaciar slot). Detecta nómina asociada y muestra Caso A o B.
   const handleTaskDelete = useCallback(
     async (taskId: string) => {
       const tasks = localEventData.scheduler?.tasks ?? [];
@@ -2536,55 +2575,30 @@ export const EventScheduler = React.memo(function EventScheduler({
         return;
       }
       try {
-        const result = await eliminarSchedulerTask(studioSlug, eventId, taskId);
-
-        // Disparar evento para actualizar PublicationBar
-        if (result.success) {
-          window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        const payrollState = await obtenerEstadoNominaPorTarea(studioSlug, eventId, taskId);
+        if (!payrollState.success) {
+          toast.error(payrollState.error || 'Error al verificar nómina');
+          return;
         }
-
+        if (payrollState.hasPayroll && payrollState.status === 'pendiente') {
+          setDeletePayrollConfirm({ taskId, case: 'pendiente' });
+          return;
+        }
+        if (payrollState.hasPayroll && payrollState.status === 'pagado') {
+          setDeletePayrollConfirm({ taskId, case: 'pagado' });
+          return;
+        }
+        const result = await eliminarSchedulerTask(studioSlug, eventId, taskId);
         if (!result.success) {
           toast.error(result.error || 'Error al eliminar la tarea');
           return;
         }
-
-        // Actualización optimista: remover la tarea del estado local y limpiar personal asignado
-        let updatedData: SchedulerViewData;
-        setLocalEventData(prev => {
-          const newData = { ...prev };
-
-          newData.cotizaciones = prev.cotizaciones?.map(cotizacion => ({
-            ...cotizacion,
-            cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-              if (item.scheduler_task?.id === taskId) {
-                return {
-                  ...item,
-                  scheduler_task_id: null,
-                  scheduler_task: null,
-                  // Limpiar personal asignado cuando se vacía el slot
-                  assigned_to_crew_member_id: null,
-                  assigned_to_crew_member: null,
-                };
-              }
-              return item;
-            }),
-          }));
-
-          updatedData = newData as SchedulerViewData;
-          return newData as SchedulerViewData;
-        });
-
-        // Notificar al padre del cambio
-        if (updatedData!) {
-          notifyParentDataChange(updatedData);
-        }
-
-        toast.success('Slot vaciado correctamente');
+        applyTaskDeleteOptimisticUpdate(taskId);
       } catch (error) {
         toast.error('Error al vaciar el slot');
       }
     },
-    [studioSlug, eventId, router, notifyParentDataChange, localEventData.scheduler?.tasks]
+    [studioSlug, eventId, notifyParentDataChange, localEventData.scheduler?.tasks, applyTaskDeleteOptimisticUpdate]
   );
 
   const handleDeleteStage = useCallback(
@@ -3422,6 +3436,49 @@ export const EventScheduler = React.memo(function EventScheduler({
         title="Eliminar grupo"
         description="Esta tarea tiene subtareas asociadas. ¿Deseas eliminar todo el grupo?"
         confirmText="Sí, eliminar todo"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
+
+      {/* Modal: eliminar tarea con nómina asociada — Caso A (pendiente) o Caso B (pagado) */}
+      <ZenConfirmModal
+        isOpen={deletePayrollConfirm != null}
+        onClose={() => setDeletePayrollConfirm(null)}
+        onConfirm={async () => {
+          if (!deletePayrollConfirm) return;
+          const { taskId, case: payrollCase } = deletePayrollConfirm;
+          setDeletePayrollConfirm(null);
+          try {
+            if (payrollCase === 'pendiente') {
+              const nominaResult = await eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId);
+              if (!nominaResult.success) {
+                toast.error(nominaResult.error || 'Error al cancelar el pago');
+                return;
+              }
+              const result = await eliminarSchedulerTask(studioSlug, eventId, taskId);
+              if (!result.success) {
+                toast.error(result.error || 'Error al eliminar la tarea');
+                return;
+              }
+            } else {
+              const result = await eliminarSchedulerTask(studioSlug, eventId, taskId, { allowWhenPayrollPaid: true });
+              if (!result.success) {
+                toast.error(result.error || 'Error al eliminar la tarea');
+                return;
+              }
+            }
+            applyTaskDeleteOptimisticUpdate(taskId);
+          } catch {
+            toast.error('Error al vaciar el slot');
+          }
+        }}
+        title={deletePayrollConfirm?.case === 'pendiente' ? 'Cancelar pago y vaciar slot' : 'Vaciar slot (mantener historial)'}
+        description={
+          deletePayrollConfirm?.case === 'pendiente'
+            ? 'Esta tarea tiene un pago de nómina pendiente. Se cancelará ese pago y se vaciará el slot. ¿Continuar?'
+            : 'Esta tarea tiene nómina ya pagada. Se vaciará el slot; el historial de pago se mantiene en Finanzas. ¿Continuar?'
+        }
+        confirmText="Sí, continuar"
         cancelText="Cancelar"
         variant="destructive"
       />

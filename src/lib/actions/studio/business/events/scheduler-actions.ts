@@ -327,6 +327,51 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
 }
 
 /**
+ * Limpia líneas de nómina huérfanas antes de borrar físicamente tareas del scheduler.
+ * Elimina studio_nomina_servicios cuyo quote_service_id ya no está vinculado a ninguna tarea
+ * del evento, solo si la nómina padre está en estado pendiente.
+ */
+async function limpiarPayrollHuérfanosAntesDePublicar(eventId: string): Promise<void> {
+  const tasks = await prisma.studio_scheduler_event_tasks.findMany({
+    where: { scheduler_instance: { event_id: eventId } },
+    select: { cotizacion_item_id: true },
+  });
+  const keptItemIds = new Set(
+    tasks.map((t) => t.cotizacion_item_id).filter((id): id is string => id != null)
+  );
+
+  const serviciosPendientes = await prisma.studio_nomina_servicios.findMany({
+    where: {
+      payroll: { evento_id: eventId, status: 'pendiente' },
+      quote_service_id: { not: null },
+    },
+    select: { id: true, quote_service_id: true },
+  });
+  const orphanIds = serviciosPendientes
+    .filter((s) => s.quote_service_id != null && !keptItemIds.has(s.quote_service_id))
+    .map((s) => s.id);
+
+  if (orphanIds.length > 0) {
+    await prisma.studio_nomina_servicios.deleteMany({
+      where: { id: { in: orphanIds } },
+    });
+    const nominasARevisar = await prisma.studio_nominas.findMany({
+      where: {
+        evento_id: eventId,
+        status: 'pendiente',
+        payroll_services: { none: {} },
+      },
+      select: { id: true },
+    });
+    if (nominasARevisar.length > 0) {
+      await prisma.studio_nominas.deleteMany({
+        where: { id: { in: nominasARevisar.map((n) => n.id) } },
+      });
+    }
+  }
+}
+
+/**
  * Publica el cronograma de un evento
  * Opción 1: Solo Publicar - Cambia estado DRAFT a PUBLISHED (visible en plataforma)
  * Opción 2: Publicar e Invitar - Cambia a INVITED y sincroniza con Google Calendar
@@ -377,6 +422,9 @@ export async function publicarCronograma(
         sincronizado: 0,
       };
     }
+
+    // Limpieza de huérfanos: eliminar líneas de nómina (solo pendientes) cuyo ítem ya no tiene tarea
+    await limpiarPayrollHuérfanosAntesDePublicar(eventId);
 
     let publicado = 0;
     let sincronizado = 0;
@@ -1625,8 +1673,7 @@ export async function moveSchedulerTask(
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
   eventId: string,
-  taskIdsInOrder: string[],
-  categoryVisualOrder?: number
+  taskIdsInOrder: string[]
 ): Promise<{ 
   success: boolean; 
   data?: Array<{ taskId: string; newOrder: number }>; 
@@ -1669,31 +1716,9 @@ export async function reorderSchedulerTasksToOrder(
       return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
     }
 
-    // REFACTOR V4.2: Usar orden visual del frontend (si se proporciona)
-    let categoryWeightBase = 0;
-    
-    if (categoryVisualOrder !== undefined) {
-      // PASO 1: Usar orden visual pasado desde frontend (evita consulta a BD desactualizada)
-      categoryWeightBase = categoryVisualOrder * 1000;
-    } else {
-      // PASO 1 (Fallback): Consultar el order de la categoría padre en studio_section_categories
-      let categoryOrder = 0;
-      
-      if (targetCatId) {
-        const sectionCategory = await prisma.studio_section_categories.findUnique({
-          where: { category_id: targetCatId },
-          select: { order: true },
-        });
-        
-        if (sectionCategory) {
-          categoryOrder = sectionCategory.order ?? 0;
-          categoryWeightBase = categoryOrder * 1000;
-        }
-      }
-    }
-
-    // PASO 2: Calcular order con peso de categoría
-    // order = (categoryVisualOrder * 1000) + indexInCategory
+    // V5.0: Re-indexado PLANO - Sin pesos, sin dependencias de categoría
+    // Cada tarea recibe su índice directo: 0, 1, 2, 3...
+    // Independiente del orden de la categoría padre
     const reorderedTasks: Array<{ taskId: string; newOrder: number }> = [];
 
     await prisma.$transaction(async (tx) => {
@@ -1702,8 +1727,8 @@ export async function reorderSchedulerTasksToOrder(
         const task = tasksInList.find((t) => t.id === taskId)!;
         const isManual = task.cotizacion_item_id == null;
         
-        // Calcular order con peso de categoría
-        const newOrder = categoryWeightBase + index;
+        // V5.0: Índice plano puro (0, 1, 2...)
+        const newOrder = index;
         
         await tx.studio_scheduler_event_tasks.update({
           where: { id: taskId },
@@ -1717,8 +1742,8 @@ export async function reorderSchedulerTasksToOrder(
       }
     }, { maxWait: 5_000 });
     
-    // REFACTOR: Sin revalidatePath amplio - el frontend gestiona la UI optimista
-    // Solo devolvemos el mapa de órdenes para sincronización atómica
+    // V5.0: Sin revalidatePath - Frontend gestiona UI optimista
+    // Separación total: mover tareas NO afecta estructura de categorías
     
     return { success: true, data: reorderedTasks };
   } catch (error) {

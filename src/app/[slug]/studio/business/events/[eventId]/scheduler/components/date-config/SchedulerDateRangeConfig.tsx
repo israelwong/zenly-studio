@@ -111,7 +111,7 @@ export function SchedulerDateRangeConfig({
               Cancelar
             </ZenButton>
             <ZenButton
-              variant="default"
+              variant="primary"
               size="sm"
               onClick={handleApply}
               disabled={!tempRange?.from || !tempRange?.to || saving}

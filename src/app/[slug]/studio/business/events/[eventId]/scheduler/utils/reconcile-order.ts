@@ -8,7 +8,8 @@
  * @architecture Flujo unidireccional: Servidor → Reconciliación → React
  */
 
-import type { SchedulerViewData, SchedulerCotizacionItem } from '@/lib/actions/studio/business/events/scheduler-actions';
+import type { SchedulerCotizacionItem, TareasSchedulerPayload } from '@/lib/actions/studio/business/events/scheduler-actions';
+import type { SchedulerViewData } from '../components/shared/EventSchedulerView';
 
 /**
  * Campos que vienen del servidor y SIEMPRE deben ganar (fuente de verdad).
@@ -73,12 +74,11 @@ function reconcileTask<T extends Record<string, any>>(
   return reconciled as T;
 }
 
+type PayloadCotizacion = TareasSchedulerPayload['cotizaciones'][number];
+type PayloadTask = NonNullable<TareasSchedulerPayload['scheduler']>['tasks'][number];
+
 /**
  * Reconcilia cotizaciones (ítems de cotización con scheduler_tasks).
- * 
- * @param localCotizaciones - Cotizaciones con actualizaciones optimistas
- * @param serverCotizaciones - Cotizaciones del servidor
- * @returns Cotizaciones reconciliadas con nuevas referencias
  */
 function reconcileCotizaciones(
   localCotizaciones: SchedulerViewData['cotizaciones'],
@@ -86,68 +86,55 @@ function reconcileCotizaciones(
 ): SchedulerViewData['cotizaciones'] {
   if (!serverCotizaciones) return localCotizaciones;
   if (!localCotizaciones) return serverCotizaciones;
-  
-  // Crear mapa de cotizaciones locales por ID para lookup O(1)
-  const localCotMap = new Map(localCotizaciones.map((cot) => [cot.id, cot]));
-  
-  return serverCotizaciones.map((serverCot) => {
+
+  const localCotMap = new Map(
+    (localCotizaciones as PayloadCotizacion[]).map((cot) => [cot.id, cot])
+  );
+
+  const result = (serverCotizaciones as PayloadCotizacion[]).map((serverCot) => {
     const localCot = localCotMap.get(serverCot.id);
-    
-    if (!localCot) return serverCot; // Nueva cotización del servidor
-    
-    // Reconciliar items
+
+    if (!localCot) return serverCot;
+
     const reconciledItems = serverCot.cotizacion_items?.map((serverItem) => {
       const localItem = localCot.cotizacion_items?.find((i) => i.id === serverItem.id);
-      
-      if (!localItem) return serverItem; // Nuevo item del servidor
-      
-      // Reconciliar scheduler_task
+      if (!localItem) return serverItem;
       const reconciledSchedulerTask = reconcileTask(
         localItem.scheduler_task,
         serverItem.scheduler_task
       );
-      
-      return {
-        ...serverItem, // Base del servidor
-        scheduler_task: reconciledSchedulerTask,
-      };
+      return { ...serverItem, scheduler_task: reconciledSchedulerTask };
     }) ?? [];
-    
-    return {
-      ...serverCot,
-      cotizacion_items: reconciledItems,
-    };
+
+    return { ...serverCot, cotizacion_items: reconciledItems };
   });
+
+  return result as SchedulerViewData['cotizaciones'];
 }
 
 /**
  * Reconcilia tareas manuales (scheduler.tasks).
- * 
- * @param localTasks - Tareas manuales con actualizaciones optimistas
- * @param serverTasks - Tareas manuales del servidor
- * @returns Tareas reconciliadas con nuevas referencias
  */
 function reconcileManualTasks(
-  localTasks: SchedulerViewData['scheduler']['tasks'],
-  serverTasks: SchedulerViewData['scheduler']['tasks']
-): SchedulerViewData['scheduler']['tasks'] {
-  if (!serverTasks) return localTasks ?? [];
+  localTasks: NonNullable<SchedulerViewData['scheduler']>['tasks'] | undefined,
+  serverTasks: NonNullable<SchedulerViewData['scheduler']>['tasks'] | undefined
+): NonNullable<SchedulerViewData['scheduler']>['tasks'] {
+  if (!serverTasks) return (localTasks ?? []) as NonNullable<SchedulerViewData['scheduler']>['tasks'];
   if (!localTasks) return serverTasks;
-  
-  // Crear mapa de tareas locales por ID
-  const localTaskMap = new Map(localTasks.map((task) => [task.id, task]));
-  
-  // Reconciliar cada tarea del servidor
-  const reconciled = serverTasks.map((serverTask) => {
+
+  const local = localTasks as PayloadTask[];
+  const server = serverTasks as PayloadTask[];
+  const localTaskMap = new Map(local.map((task) => [task.id, task]));
+
+  const reconciled = server.map((serverTask) => {
     const localTask = localTaskMap.get(serverTask.id);
     return reconcileTask(localTask, serverTask) ?? serverTask;
   });
-  
-  // Agregar tareas locales que aún no existen en el servidor (creadas optimistamente)
-  const serverTaskIds = new Set(serverTasks.map((t) => t.id));
-  const newLocalTasks = localTasks.filter((t) => !serverTaskIds.has(t.id));
-  
-  return [...reconciled, ...newLocalTasks];
+
+  const serverTaskIds = new Set(server.map((t) => t.id));
+  const newLocalTasks = local.filter((t) => !serverTaskIds.has(t.id));
+
+  return [...reconciled, ...newLocalTasks] as NonNullable<SchedulerViewData['scheduler']>['tasks'];
 }
 
 /**
@@ -181,15 +168,12 @@ export function reconcileWithServerOrder(
   
   // 3. Construir estado reconciliado con nuevas referencias
   return {
-    ...serverData,                        // Base del servidor (estructura completa)
-    cotizaciones: reconciledCotizaciones, // Reconciliadas con optimistic updates
+    ...serverData,
+    cotizaciones: reconciledCotizaciones,
     scheduler: serverData.scheduler
-      ? {
-          ...serverData.scheduler,
-          tasks: reconciledTasks,         // Reconciliadas con optimistic updates
-        }
+      ? { ...serverData.scheduler, tasks: reconciledTasks }
       : null,
-  };
+  } as SchedulerViewData;
 }
 
 /**
