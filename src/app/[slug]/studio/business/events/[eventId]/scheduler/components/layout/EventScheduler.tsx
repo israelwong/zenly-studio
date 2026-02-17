@@ -395,10 +395,14 @@ export const EventScheduler = React.memo(function EventScheduler({
   }, []);
 
   // 2) Tras reorden exitoso: limpiar refs y spinner (datos ya están en localEventData).
+  // SHADOW MAP V4.0: Mantener estado optimista hasta refresh natural (no forzar router.refresh)
   const handleReorderSuccess = useCallback(() => {
     reorderInFlightRef.current = false;
     setUpdatingTaskId(null);
-    // NO router.refresh() - la reconciliación ya actualizó los datos locales con el servidor
+    // NO router.refresh() inmediato - la actualización optimista con peso de categoría (V4.0)
+    // garantiza que localEventData está sincronizado. El revalidatePath en el server action
+    // marcará el path como stale, y el próximo navigation natural traerá datos frescos.
+    // Esto evita el "rebote" de categorías causado por índices obsoletos del servidor.
   }, []);
 
   // Scroll suave a la fecha indicada en URL (ej. desde AlertsPopover)
@@ -812,6 +816,8 @@ export const EventScheduler = React.memo(function EventScheduler({
             return;
           }
           if (result.data) {
+            // V4.0: result.data.newOrder incluye peso de categoría (categoryOrder * 1000 + taskIndex)
+            // Esta sincronización garantiza que el orden persiste la posición actual de la categoría
             const orderMap = new Map(result.data.map((t) => [t.taskId, t.newOrder]));
             setLocalEventData((prev) => {
               const next = { ...prev } as any;

@@ -1615,8 +1615,10 @@ export async function moveSchedulerTask(
 
 /**
  * Reordena tareas dentro del mismo stage (mismo instance, category).
- * Reorden a nivel categoría: ítems de catálogo y custom (manual) son indistinguibles.
- * Recibe la lista de taskId en orden final; asigna order = 0, 1, 2… a todos por igual.
+ * SINCRONIZACIÓN DE PESO DE CATEGORÍA V4.0:
+ * - Consulta el order actual de la categoría padre en studio_section_categories
+ * - Calcula order de tarea = (categoryOrder * 1000) + indexInCategory
+ * - Garantiza que el orden de tareas "selle" la posición actual de la categoría
  *
  * @returns success + data (taskId, newOrder) para reconciliación inmediata en el cliente
  */
@@ -1666,9 +1668,25 @@ export async function reorderSchedulerTasksToOrder(
       return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
     }
 
-    // ISRAEL ALGORITHM V3 - PASO 1: Persistencia
-    // Un solo bucle: índice secuencial (0, 1, 2...)
-    // Tareas manuales y de catálogo se mezclan en un solo array
+    // PASO 1: Consultar el order de la categoría padre en studio_section_categories
+    let categoryOrder = 0;
+    let categoryWeightBase = 0;
+    
+    if (targetCatId) {
+      const sectionCategory = await prisma.studio_section_categories.findUnique({
+        where: { category_id: targetCatId },
+        select: { order: true },
+      });
+      
+      if (sectionCategory) {
+        categoryOrder = sectionCategory.order ?? 0;
+        // Peso de categoría: multiplicar por 1000 para dar espacio a 999 tareas por categoría
+        categoryWeightBase = categoryOrder * 1000;
+      }
+    }
+
+    // PASO 2: Calcular order con peso de categoría
+    // order = (categoryOrder * 1000) + indexInCategory
     const reorderedTasks: Array<{ taskId: string; newOrder: number }> = [];
 
     await prisma.$transaction(async (tx) => {
@@ -1677,15 +1695,18 @@ export async function reorderSchedulerTasksToOrder(
         const task = tasksInList.find((t) => t.id === taskId)!;
         const isManual = task.cotizacion_item_id == null;
         
+        // Calcular order con peso de categoría
+        const newOrder = categoryWeightBase + index;
+        
         await tx.studio_scheduler_event_tasks.update({
           where: { id: taskId },
           data: {
-            order: index,
+            order: newOrder,
             ...(isManual ? { catalog_category_id: targetCatId } : {}),
           },
         });
         
-        reorderedTasks.push({ taskId, newOrder: index });
+        reorderedTasks.push({ taskId, newOrder });
       }
     }, { maxWait: 5_000 });
     

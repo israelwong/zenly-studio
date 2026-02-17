@@ -1055,7 +1055,7 @@ export async function obtenerEventoDetalle(
       })() : null,
       cotizaciones: todasLasCotizaciones.map((cotizacion) => {
         const cot = cotizacion as any;
-        // ISRAEL ALGORITHM V3.3 - Sort Blindado (maneja nulos y tipos robustamente)
+        // ISRAEL ALGORITHM V4.0 - Sort con Peso de Categoría (Sincronización Category-Task Order)
         const itemsOrdenados = [...cot.cotizacion_items].sort((a: any, b: any) => {
           // 1. Extracción Segura: Aseguramos que sea número o undefined
           const taskOrderA = a.scheduler_task?.order;
@@ -1064,8 +1064,9 @@ export async function obtenerEventoDetalle(
           const hasOrderA = typeof taskOrderA === 'number';
           const hasOrderB = typeof taskOrderB === 'number';
 
-          // 2. Lógica de "Verdad Absoluta" del Scheduler
-          // Si AMBOS tienen tarea de scheduler, obedecemos a la BD ciegamente
+          // 2. Lógica de "Verdad Absoluta" del Scheduler (V4.0: order incluye peso de categoría)
+          // scheduler_task.order = (categoryOrder * 1000) + taskIndexInCategory
+          // El sort respeta automáticamente: primero orden de categoría, luego orden dentro de categoría
           if (hasOrderA && hasOrderB) {
             return taskOrderA! - taskOrderB!;
           }
@@ -1076,6 +1077,7 @@ export async function obtenerEventoDetalle(
           if (!hasOrderA && hasOrderB) return 1;
 
           // 4. Fallback Legacy (Orden original de cotización)
+          // Solo aplica para items sin scheduler_task (nuevos en cotización)
           return (a.order ?? 0) - (b.order ?? 0);
         }).map(serializeCotizacionItemComplete);
 
