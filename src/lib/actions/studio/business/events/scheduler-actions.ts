@@ -1710,8 +1710,8 @@ export async function reorderSchedulerTasksToOrder(
       }
     }, { maxWait: 5_000 });
     
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    // REFACTOR: Sin revalidatePath amplio - el frontend gestiona la UI optimista
+    // Solo devolvemos el mapa de órdenes para sincronización atómica
     
     return { success: true, data: reorderedTasks };
   } catch (error) {
@@ -2031,7 +2031,25 @@ export async function reorderCategoriesByStage(
       return { success: false, error: 'Scheduler instance no encontrado' };
     }
     
-    // Construir stageKey y actualizar order
+    // REFACTOR: Actualizar campo físico `order` en studio_section_categories
+    // Esto es la fuente de verdad única para el ordenamiento
+    await prisma.$transaction(async (tx) => {
+      for (let index = 0; index < orderedCategoryIds.length; index++) {
+        const categoryId = orderedCategoryIds[index];
+        
+        await tx.studio_section_categories.updateMany({
+          where: { 
+            category_id: categoryId,
+            studio_id: studio.id 
+          },
+          data: { 
+            order: index 
+          },
+        });
+      }
+    });
+    
+    // Construir stageKey y actualizar JSONB (mantener por compatibilidad)
     const stageKey = `${sectionId}-${stage}`;
     const currentOrder = (schedulerInstance.catalog_category_order_by_stage as Record<string, string[]>) ?? {};
     const updatedOrder = {
@@ -2039,7 +2057,7 @@ export async function reorderCategoriesByStage(
       [stageKey]: orderedCategoryIds,
     };
     
-    // Persistir en DB
+    // Persistir JSONB en DB
     await prisma.studio_scheduler_event_instances.update({
       where: { id: schedulerInstance.id },
       data: { 
@@ -2047,7 +2065,7 @@ export async function reorderCategoriesByStage(
       },
     });
     
-    // Revalidar scheduler paths
+    // REFACTOR: Solo revalidar scheduler path (no event path amplio)
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     
     return { success: true };

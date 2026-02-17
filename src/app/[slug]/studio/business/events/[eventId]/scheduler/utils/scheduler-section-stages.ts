@@ -878,29 +878,34 @@ export function buildSchedulerRows(
 
       const stageId = `${sectionId}-${stage}`;
       
-      // V4.0: Motor Tonto - Confianza total en el índice físico del JSONB
+      // REFACTOR V4.1: Híbrido para updates optimistas
+      // 1. Base: campo físico `order` en studio_section_categories (fuente de verdad persistente)
+      // 2. Override: JSONB `catalogCategoryOrderByStage` (para updates optimistas en frontend)
       const ordenMapById = new Map<string, number>();
       
-      // Si existe order personalizado en el JSONB, usarlo (fuente de verdad única)
       const customOrderForStage = catalogCategoryOrderByStage?.[stageKey];
+      const hasOptimisticOrder = customOrderForStage && Array.isArray(customOrderForStage);
       
-      if (customOrderForStage && Array.isArray(customOrderForStage)) {
-        // El JSONB contiene el order definitivo (0, 1, 2...) normalizado por page.tsx
+      if (hasOptimisticOrder) {
+        // UI optimista: usar JSONB actualizado por frontend
         for (let i = 0; i < customOrderForStage.length; i++) {
           ordenMapById.set(customOrderForStage[i], i);
         }
       } else {
-        // Fallback: usar .order de cada categoría (ya normalizado)
+        // Persistente: usar campo `order` físico de BD
         const sec = secciones.find(s => s.id === sectionId);
         if (sec && sec.categorias) {
           for (const cat of sec.categorias) {
             ordenMapById.set(cat.id, cat.order ?? 999);
           }
         }
-        
-        // Custom categories: usar el índice en el array
-        for (let i = 0; i < customCatsForStage.length; i++) {
-          ordenMapById.set(customCatsForStage[i].id, (sec?.categorias?.length ?? 0) + i);
+      }
+      
+      // Custom categories: usar el índice en el array (después de las de catálogo)
+      const maxCatalogOrder = ordenMapById.size;
+      for (let i = 0; i < customCatsForStage.length; i++) {
+        if (!ordenMapById.has(customCatsForStage[i].id)) {
+          ordenMapById.set(customCatsForStage[i].id, maxCatalogOrder + i);
         }
       }
 
