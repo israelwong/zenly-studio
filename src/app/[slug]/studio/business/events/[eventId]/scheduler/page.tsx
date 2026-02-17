@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
@@ -76,26 +76,26 @@ export default function EventSchedulerPage() {
   const [explicitlyActivatedStageIds, setExplicitlyActivatedStageIds] = useState<string[]>([]);
   const [customCategoriesBySectionStage, setCustomCategoriesBySectionStage] = useState<Map<string, Array<{ id: string; name: string }>>>(new Map());
 
+  // V6: Estado atómico. Sin ref de secciones; el hijo no envía secciones y prev en onDataChange ya tiene el estado actual.
+
+  // Orden es a nivel estado (stage), no sección. Solo actualizamos catalog_category_order_by_stage[stageKey]; no tocamos sec.categorias.
   const onCategoriesReordered = useCallback(async (updatedOrder?: { stageKey: string; categoryIds: string[] }) => {
     if (!updatedOrder) return;
-    
+
     setIsUpdatingStructure(true);
-    
+
     try {
       let newOrder: Record<string, string[]> | null = null;
-      
-      const normalizedCategoryIds = updatedOrder.categoryIds;
-      
+      const stageKey = updatedOrder.stageKey;
+      const categoryIds = updatedOrder.categoryIds;
+
       flushSync(() => {
         setPayload((prev) => {
           if (!prev?.scheduler) return prev;
-          
-          const currentOrder = prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined;
-          newOrder = {
-            ...(currentOrder || {}),
-            [updatedOrder.stageKey]: normalizedCategoryIds,
-          };
-          
+
+          const currentOrder = (prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined) ?? {};
+          newOrder = { ...currentOrder, [stageKey]: categoryIds };
+
           return {
             ...prev,
             scheduler: {
@@ -105,9 +105,8 @@ export default function EventSchedulerPage() {
           };
         });
       });
-      
-      setTimestamp(Date.now());
-      
+      startTransition(() => setTimestamp(Date.now()));
+
       if (newOrder) {
         await actualizarSchedulerStaging(studioSlug, eventId, {
           catalogCategoryOrderByStage: newOrder,
@@ -345,13 +344,48 @@ export default function EventSchedulerPage() {
       try {
         const result = await crearCategoriaOperativa(studioSlug, eventId, { sectionId, stage, name: trimmed });
         if (result.success && result.data) {
+          const newCategoryId = result.data.id;
           setCustomCategoriesBySectionStage((prev) => {
             const next = new Map(prev);
             const list = next.get(key) ?? [];
-            next.set(key, [...list, { id: result.data!.id, name: result.data!.name }]);
+            next.set(key, [...list, { id: newCategoryId, name: result.data!.name }]);
             persistStagingCustomCats(next);
             return next;
           });
+          // V6.1: Inyección inmediata en payload: nueva categoría en catalog_category_order_by_stage y en secciones[].categorias para que el motor la vea sin refresh.
+          const newCat = {
+            id: newCategoryId,
+            nombre: result.data!.name,
+            order: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            servicios: [],
+          };
+          let orderToPersist: Record<string, string[]> | null = null;
+          setPayload((prev) => {
+            if (!prev?.scheduler) return prev;
+            const current = (prev.scheduler.catalog_category_order_by_stage as Record<string, string[]> | null | undefined) ?? {};
+            const arr = current[key] ?? [];
+            const newOrder = { ...current, [key]: [...arr, newCategoryId] };
+            orderToPersist = newOrder;
+            const updatedSecciones = prev.secciones?.map((sec) => {
+              if (sec.id !== sectionId) return sec;
+              const cats = sec.categorias ?? [];
+              const order = cats.length;
+              return { ...sec, categorias: [...cats, { ...newCat, order }] };
+            });
+            return {
+              ...prev,
+              secciones: updatedSecciones ?? prev.secciones,
+              scheduler: {
+                ...prev.scheduler,
+                catalog_category_order_by_stage: newOrder,
+              },
+            };
+          });
+          if (orderToPersist) {
+            await actualizarSchedulerStaging(studioSlug, eventId, { catalogCategoryOrderByStage: orderToPersist });
+          }
           window.dispatchEvent(new CustomEvent('scheduler-structure-changed'));
         } else {
           toast.error(result.error ?? 'Error al crear la categoría');
@@ -697,17 +731,21 @@ export default function EventSchedulerPage() {
     [payload?.scheduler?.catalog_category_order_by_stage, timestamp]
   );
 
-  // ✅ NORMALIZACIÓN: Forzar order único (0,1,2,3...) para evitar colisiones de sort
+  // V6.2 FLAT-ONLY: Sort por order y reasignar índices 0,1,2... (evita 7, 8, 13 en log).
   const normalizedSecciones = useMemo(() => {
     if (!payload?.secciones) return [];
-    return payload.secciones.map(sec => ({
-      ...sec,
-      categorias: [...(sec.categorias ?? [])].sort((a, b) => {
-        const orderDiff = (a.order ?? 0) - (b.order ?? 0);
-        if (orderDiff !== 0) return orderDiff;
+
+    const result = payload.secciones.map((sec) => {
+      const sorted = [...(sec.categorias ?? [])].sort((a, b) => {
+        const diff = (a.order ?? 0) - (b.order ?? 0);
+        if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
-      }).map((cat, idx) => ({ ...cat, order: idx })) // Forzar índices únicos
-    }));
+      });
+      const categoriasFlat = sorted.map((c, i) => ({ ...c, order: i }));
+      return { ...sec, categorias: categoriasFlat };
+    });
+
+    return result;
   }, [payload?.secciones]);
 
   const eventDataForWrapper: SchedulerData | null = useMemo(() => {
@@ -1034,17 +1072,25 @@ export default function EventSchedulerPage() {
             onReminderDelete={handleReminderDelete}
             isUpdatingStructure={isUpdatingStructure}
             onDataChange={(newData) => {
-              if (newData && payload && newData.id === payload.id) {
-                setPayload(prev =>
-                  prev
-                    ? {
-                        ...prev,
-                        cotizaciones: (newData as TareasSchedulerPayload).cotizaciones ?? prev.cotizaciones,
-                        scheduler: (newData as TareasSchedulerPayload).scheduler ?? prev.scheduler,
-                      }
-                    : prev
-                );
-              }
+              if (!newData || !payload || newData.id !== payload.id) return;
+              // V6.2: Blindaje. Secciones y orden de categorías (por estado) son fuente de verdad en el padre.
+              // Al reordenar ítems el hijo puede enviar scheduler con catalog_category_order_by_stage obsoleto → no sobrescribir.
+              setPayload(prev => {
+                if (!prev) return prev;
+                const incoming = newData as TareasSchedulerPayload;
+                const nextScheduler = incoming.scheduler && prev.scheduler
+                  ? {
+                      ...incoming.scheduler,
+                      catalog_category_order_by_stage: prev.scheduler.catalog_category_order_by_stage ?? incoming.scheduler.catalog_category_order_by_stage,
+                    }
+                  : (incoming.scheduler ?? prev.scheduler);
+                return {
+                  ...prev,
+                  cotizaciones: incoming.cotizaciones ?? prev.cotizaciones,
+                  scheduler: nextScheduler,
+                  secciones: prev.secciones,
+                };
+              });
             }}
             onRefetchEvent={loadScheduler}
             onPublished={handlePublished}

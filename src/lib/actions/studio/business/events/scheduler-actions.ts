@@ -1625,7 +1625,8 @@ export async function moveSchedulerTask(
 export async function reorderSchedulerTasksToOrder(
   studioSlug: string,
   eventId: string,
-  taskIdsInOrder: string[]
+  taskIdsInOrder: string[],
+  categoryVisualOrder?: number
 ): Promise<{ 
   success: boolean; 
   data?: Array<{ taskId: string; newOrder: number }>; 
@@ -1668,25 +1669,31 @@ export async function reorderSchedulerTasksToOrder(
       return { success: false, error: 'Algunas tareas no pertenecen al mismo ámbito (stage)' };
     }
 
-    // PASO 1: Consultar el order de la categoría padre en studio_section_categories
-    let categoryOrder = 0;
+    // REFACTOR V4.2: Usar orden visual del frontend (si se proporciona)
     let categoryWeightBase = 0;
     
-    if (targetCatId) {
-      const sectionCategory = await prisma.studio_section_categories.findUnique({
-        where: { category_id: targetCatId },
-        select: { order: true },
-      });
+    if (categoryVisualOrder !== undefined) {
+      // PASO 1: Usar orden visual pasado desde frontend (evita consulta a BD desactualizada)
+      categoryWeightBase = categoryVisualOrder * 1000;
+    } else {
+      // PASO 1 (Fallback): Consultar el order de la categoría padre en studio_section_categories
+      let categoryOrder = 0;
       
-      if (sectionCategory) {
-        categoryOrder = sectionCategory.order ?? 0;
-        // Peso de categoría: multiplicar por 1000 para dar espacio a 999 tareas por categoría
-        categoryWeightBase = categoryOrder * 1000;
+      if (targetCatId) {
+        const sectionCategory = await prisma.studio_section_categories.findUnique({
+          where: { category_id: targetCatId },
+          select: { order: true },
+        });
+        
+        if (sectionCategory) {
+          categoryOrder = sectionCategory.order ?? 0;
+          categoryWeightBase = categoryOrder * 1000;
+        }
       }
     }
 
     // PASO 2: Calcular order con peso de categoría
-    // order = (categoryOrder * 1000) + indexInCategory
+    // order = (categoryVisualOrder * 1000) + indexInCategory
     const reorderedTasks: Array<{ taskId: string; newOrder: number }> = [];
 
     await prisma.$transaction(async (tx) => {

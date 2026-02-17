@@ -278,20 +278,18 @@ export const EventScheduler = React.memo(function EventScheduler({
    */
 
   /**
-   * Helper: Notifica al padre SOLO con cotizaciones y scheduler (sin secciones).
-   * El padre hará shallow merge manteniendo sus secciones actuales.
-   * CRÍTICO: Evita propagar secciones obsoletas tras reordenar categorías.
+   * V5.0 BLINDAJE: Notifica al padre SOLO con cotizaciones y scheduler (NUNCA secciones).
+   * El padre mantiene sus secciones inmutables.
    */
   const notifyParentDataChange = useCallback((fullData: SchedulerViewData) => {
     if (!onDataChangeRef.current) return;
     
-    // ✅ CRÍTICO: SOLO estas 3 propiedades, sin referencias adicionales
+    // ✅ CRÍTICO: SOLO estas 3 propiedades - Sin secciones
     const partialUpdate = {
       id: fullData.id,
       cotizaciones: fullData.cotizaciones,
       scheduler: fullData.scheduler,
     };
-    
     onDataChangeRef.current(partialUpdate as SchedulerViewData);
   }, []);
 
@@ -1594,6 +1592,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           });
         });
 
+        // V5.0: Sin cálculo de pesos - Índices planos puros por categoría
         const payload = {
           studioSlug,
           eventId,
@@ -1651,11 +1650,11 @@ export const EventScheduler = React.memo(function EventScheduler({
               return;
             }
 
-            // PASO 3: RECONCILIACIÓN INMEDIATA con orden del servidor
+            // V5.0: RECONCILIACIÓN con orden del servidor
             if (result.data) {
               const orderMap = new Map(result.data.map((t) => [String(t.taskId), t.newOrder]));
               
-              // Calcular cotizaciones y scheduler actualizados
+              // Actualizar solo cotizaciones y scheduler (tareas)
               const updatedCotizaciones = localEventDataRef.current.cotizaciones?.map((cot) => ({
                 ...cot,
                 cotizacion_items: cot.cotizacion_items?.map((item) => {
@@ -1676,20 +1675,19 @@ export const EventScheduler = React.memo(function EventScheduler({
                     }),
                   }
                 : localEventDataRef.current.scheduler;
-              
-              // Actualizar estado local completo
-              // CRÍTICO: Usar secciones de la prop (no de localEventDataRef) para evitar obsolescencia
+
+              // V5.0: Usar secciones de la prop (inmutables)
               const fullUpdatedData: SchedulerViewData = {
                 ...localEventDataRef.current,
-                secciones, // ✅ Usar prop directamente (source of truth)
+                secciones, // ✅ Prop inmutable del padre
                 cotizaciones: updatedCotizaciones,
                 scheduler: updatedScheduler,
               };
+              
               setLocalEventData(fullUpdatedData);
               localEventDataRef.current = fullUpdatedData;
               
-              // CRÍTICO: Notificar al padre SOLO con lo que cambió (sin secciones)
-              // El padre hará shallow merge manteniendo sus secciones actuales
+              // V5.0: Notificar al padre SIN secciones
               notifyParentDataChange(fullUpdatedData);
             }
 

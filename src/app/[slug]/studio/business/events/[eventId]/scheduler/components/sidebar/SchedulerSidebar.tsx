@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback, useEffect, startTransition } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -41,7 +41,6 @@ import {
   POWER_BAR_STAGE_CLASSES,
   INDENT,
   BRANCH_LEFT,
-  getCategoryIdsInStageFromEventData,
   type SchedulerRowDescriptor,
   type StageBlock,
   type TaskCategoryStage,
@@ -1826,6 +1825,10 @@ export const SchedulerSidebar = ({
   // V4.1: Estado local para tracking de categoría siendo reordenada (stageKey::categoryId)
   const [reorderingCategoryKey, setReorderingCategoryKey] = useState<string | null>(null);
   
+  // V5.5: Tras reordenar categorías, no pisar localSecciones desde prop durante un breve periodo (evitar rebote)
+  const lastCategoriesReorderAtRef = useRef(0);
+  const CATEGORIES_REORDER_IMMUNITY_MS = 400;
+  
   // Clave estable (string) para que el useEffect tenga siempre 1 dependencia y no cambie de tamaño
   const seccionesPropKey = useMemo(
     () =>
@@ -1841,6 +1844,7 @@ export const SchedulerSidebar = ({
   
   // Sincronizar con props cuando cambien externamente (clonar y ordenar profundamente)
   useEffect(() => {
+    if (Date.now() - lastCategoriesReorderAtRef.current < CATEGORIES_REORDER_IMMUNITY_MS) return;
     setLocalSecciones(sortSeccionesByCategoryOrder(seccionesProp ?? []));
   }, [seccionesPropKey, sortSeccionesByCategoryOrder]);
 
@@ -1944,7 +1948,7 @@ export const SchedulerSidebar = ({
       
       try {
         // Extraer sectionId y stage del stageKey (formato: "sectionId-STAGE")
-        const stageMatch = stageKey.match(/-(PLANNING|PRODUCTION|EDITING|DELIVERY)$/);
+        const stageMatch = stageKey.match(/-(PLANNING|PRODUCTION|POST_PRODUCTION|DELIVERY)$/);
         if (!stageMatch) {
           toast.error('Error: formato de stage inválido');
           return;
@@ -1960,23 +1964,30 @@ export const SchedulerSidebar = ({
         
         const searchIn = fullSeccionesProp && fullSeccionesProp.length > 0 ? fullSeccionesProp : localSecciones;
         
-        // Construir eventData con el orden actual del JSONB
-        const eventData = {
-          cotizaciones: [{
-            cotizacion_items: Array.from(itemsMap.values())
-          }],
-          scheduler: {
-            tasks: manualTasks ?? [],
-            catalog_category_order_by_stage: catalogCategoryOrderByStage
-          }
-        };
+        // V5.4: Fuente de verdad = sección del stageKey. NUNCA usar JSONB para la lista de IDs (evita contaminación).
+        const section = searchIn.find(s => s.id === sectionId);
+        if (!section) {
+          toast.error('Sección no encontrada');
+          return;
+        }
         
-        const categoryIdsInStage = getCategoryIdsInStageFromEventData(
-          eventData,
-          searchIn,
-          stageKey,
-          customCategoriesBySectionStage
-        );
+        const catalogIds = [...(section.categorias ?? [])]
+          .sort((a, b) => {
+            const d = (a.order ?? 0) - (b.order ?? 0);
+            return d !== 0 ? d : a.id.localeCompare(b.id);
+          })
+          .map(c => c.id);
+        const customCats = customCategoriesBySectionStage.get(stageKey) ?? [];
+        const customIds = customCats.map(c => c.id);
+        const validIdsSet = new Set([...catalogIds, ...customIds]);
+        
+        const jsonbOrder = catalogCategoryOrderByStage && Array.isArray(catalogCategoryOrderByStage[stageKey])
+          ? catalogCategoryOrderByStage[stageKey].filter((id: string) => validIdsSet.has(id))
+          : [];
+        const idsNotInJsonb = [...catalogIds, ...customIds].filter(id => !jsonbOrder.includes(id));
+        const categoryIdsInStage = jsonbOrder.length > 0
+          ? [...jsonbOrder, ...idsNotInJsonb]
+          : [...catalogIds, ...customIds];
         
         if (categoryIdsInStage.length === 0) {
           toast.error('No hay categorías en este stage');
@@ -2002,10 +2013,24 @@ export const SchedulerSidebar = ({
         // Hacer swap en el array del stage
         const newOrderedIds = [...categoryIdsInStage];
         [newOrderedIds[currentIndex], newOrderedIds[targetIndex]] = [newOrderedIds[targetIndex], newOrderedIds[currentIndex]];
-        
+
+        // Actualización optimista: mover la lista en UI de inmediato (evita que la ventana de inmunidad oculte el cambio).
+        setLocalSecciones((prev) => {
+          const sec = prev.find((s) => s.id === sectionId);
+          if (!sec?.categorias) return prev;
+          const orderById = new Map(newOrderedIds.map((id, i) => [id, i]));
+          const categoriasReordered = [...sec.categorias]
+            .sort((a, b) => (orderById.get(a.id) ?? 999) - (orderById.get(b.id) ?? 999))
+            .map((c, i) => ({ ...c, order: i }));
+          return prev.map((s) =>
+            s.id === sectionId ? { ...s, categorias: categoriasReordered } : s
+          );
+        });
+
         // V4.0: Esperar barrera atómica del padre (incluye persistencia)
         if (onCategoriesReordered) {
           await onCategoriesReordered({ stageKey, categoryIds: newOrderedIds });
+          lastCategoriesReorderAtRef.current = Date.now();
         }
       } finally {
         // V4.1: Limpiar estado de reordenamiento SIEMPRE

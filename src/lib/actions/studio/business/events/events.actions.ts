@@ -22,6 +22,61 @@ import {
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+
+/** Filtra secciones/categorías al catálogo que realmente existe en la cotización migrada al scheduler (no traer estructura que no usa el evento). */
+function filterSeccionesBySchedulerStructure(
+  secciones: SeccionData[],
+  categoryIdsInScheduler: Set<string>
+): SeccionData[] {
+  if (categoryIdsInScheduler.size === 0) return secciones;
+  return secciones
+    .map((sec) => ({
+      ...sec,
+      categorias: (sec.categorias ?? []).filter((cat) => categoryIdsInScheduler.has(cat.id)),
+    }))
+    .filter((sec) => sec.categorias.length > 0);
+}
+
+const STAGE_ORDER_FOR_APPLY = ['PRODUCTION', 'PLANNING', 'POST_PRODUCTION', 'DELIVERY'] as const;
+
+/** V6.2 FLAT-ONLY: Aplica orden del JSONB y SIEMPRE devuelve índices secuenciales 0,1,2... (tabula rasa; sin 7, 8, 13). */
+function applySchedulerCategoryOrderToSecciones(
+  secciones: SeccionData[],
+  catalogOrderByStage: Record<string, string[]> | null | undefined
+): SeccionData[] {
+  const withOrder = !catalogOrderByStage || typeof catalogOrderByStage !== 'object'
+    ? secciones
+    : secciones.map((sec) => {
+        const categorias = sec.categorias ?? [];
+        if (categorias.length === 0) return sec;
+        let orderedIds: string[] | null = null;
+        for (const stage of STAGE_ORDER_FOR_APPLY) {
+          const key = `${sec.id}-${stage}`;
+          const arr = catalogOrderByStage[key];
+          if (Array.isArray(arr) && arr.length > 0) {
+            orderedIds = arr.filter((id) => categorias.some((c) => c.id === id));
+            if (orderedIds.length > 0) break;
+          }
+        }
+        if (!orderedIds || orderedIds.length === 0) {
+          // Sin JSONB: orden del catálogo pero convertido a índice plano
+          const sorted = [...categorias].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return { ...sec, categorias: sorted.map((c, i) => ({ ...c, order: i })) };
+        }
+        const orderById = new Map(orderedIds.map((id, i) => [id, i]));
+        const categoriasReordered = [...categorias]
+          .sort((a, b) => (orderById.get(a.id) ?? 999) - (orderById.get(b.id) ?? 999))
+          .map((c, i) => ({ ...c, order: i }));
+        return { ...sec, categorias: categoriasReordered };
+      });
+  // Sanitize global: todas las secciones terminan con order 0,1,2...
+  return withOrder.map((sec) => ({
+    ...sec,
+    categorias: [...(sec.categorias ?? [])]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((c, i) => ({ ...c, order: i })),
+  }));
+}
 import {
   EVENT_BASE_SELECT,
   EVENT_BASE_SELECT_LAYOUT,
@@ -931,6 +986,32 @@ export async function obtenerEventoDetalle(
     const cotizacionesPorEvento = cotizacionesRows.filter((c) => c.evento_id === eventoId);
     const cotizacionesPorPromise = cotizacionesRows.filter((c) => c.promise_id === promiseId && c.evento_id !== eventoId);
     const rawCotizaciones = cotizacionesPorEvento.length > 0 ? cotizacionesPorEvento : cotizacionesPorPromise;
+
+    // Solo secciones/categorías que representan la estructura de la cotización migrada al scheduler (no catálogo completo).
+    const categoryIdsInScheduler = new Set<string>();
+    for (const cot of rawCotizaciones) {
+      for (const item of cot.cotizacion_items ?? []) {
+        const cid = getCategoryId(item);
+        if (cid) categoryIdsInScheduler.add(cid);
+      }
+    }
+    const tasksRaw = schedulerInstanceRaw as { tasks?: Array<{ catalog_category_id?: string | null }> } | null;
+    if (tasksRaw?.tasks) {
+      for (const t of tasksRaw.tasks) {
+        if (t.catalog_category_id) categoryIdsInScheduler.add(t.catalog_category_id);
+      }
+    }
+    let seccionesParaScheduler =
+      secciones.length > 0 && categoryIdsInScheduler.size > 0
+        ? filterSeccionesBySchedulerStructure(secciones, categoryIdsInScheduler)
+        : secciones;
+
+    // V6: Única fuente de verdad para .order de categorías en carga (y tras refresh).
+    const catalogOrderByStage = (schedulerInstanceRaw as { catalog_category_order_by_stage?: Record<string, string[]> | null } | null)?.catalog_category_order_by_stage ?? null;
+    if (catalogOrderByStage && seccionesParaScheduler.length > 0) {
+      seccionesParaScheduler = applySchedulerCategoryOrderToSecciones(seccionesParaScheduler, catalogOrderByStage);
+    }
+
     const todasLasCotizaciones =
       secciones.length > 0
         ? rawCotizaciones.map((cot) => ({
@@ -1007,7 +1088,7 @@ export async function obtenerEventoDetalle(
       cotizaciones: todasLasCotizaciones,
       scheduler: scheduler ?? undefined,
       agenda,
-      secciones: secciones.length > 0 ? secciones : undefined,
+      secciones: seccionesParaScheduler.length > 0 ? seccionesParaScheduler : undefined,
       schedulerDateReminders:
         remindersRows.length > 0
           ? remindersRows.map((r) => ({
