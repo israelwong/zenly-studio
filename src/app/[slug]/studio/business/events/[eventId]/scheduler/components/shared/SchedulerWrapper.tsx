@@ -93,6 +93,11 @@ export function SchedulerWrapper({
 
   const cotizacionesIds = useMemo(() => filteredCotizaciones?.map(c => c.id).join(',') || '', [filteredCotizaciones]);
 
+  const sectionOrder = useMemo(() => {
+    if (!initialSecciones?.length) return undefined;
+    return [...initialSecciones].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((s) => s.id);
+  }, [initialSecciones]);
+
   const filteredEventData = useMemo((): SchedulerViewData => {
     return { ...eventData, cotizaciones: filteredCotizaciones } as SchedulerViewData;
   }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, cotizacionesIds]);
@@ -134,6 +139,8 @@ export function SchedulerWrapper({
         studioSlug={studioSlug}
         eventId={eventId}
         onPublished={onPublished ?? (() => onDataChange?.(eventData))}
+        sectionOrder={sectionOrder}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
       />
     </>
   );

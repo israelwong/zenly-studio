@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Calendar, User, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -11,12 +10,25 @@ import {
   SheetFooter,
 } from '@/components/ui/shadcn/sheet';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
-import { ZenButton, ZenBadge, ZenCheckbox } from '@/components/ui/zen';
-import { obtenerResumenCambiosPendientes, publicarCronograma } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { ZenButton } from '@/components/ui/zen';
+import {
+  obtenerEstructuraCompletaLogistica,
+  asignarCrewATareaScheduler,
+  invitarPendientesEvento,
+  invitarTareaEvento,
+} from '@/lib/actions/studio/business/events/scheduler-actions';
+import { asignarCrewAItem } from '@/lib/actions/studio/business/events';
 import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { LogisticsTaskCard } from './LogisticsTaskCard';
+
+const STAGE_BORDER: Record<string, string> = {
+  PLANNING: 'border-l-blue-500',
+  PRODUCTION: 'border-l-purple-500',
+  POST_PRODUCTION: 'border-l-amber-500',
+  DELIVERY: 'border-l-emerald-500',
+};
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 
 interface PublicationSummarySheetProps {
   open: boolean;
@@ -24,6 +36,10 @@ interface PublicationSummarySheetProps {
   studioSlug: string;
   eventId: string;
   onPublished?: () => void;
+  /** Orden canónico de IDs de sección (mismo que Scheduler). */
+  sectionOrder?: string[];
+  /** Orden de categorías por stage (JSONB). */
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
 }
 
 function PublicationSheetSkeleton() {
@@ -74,69 +90,70 @@ export function PublicationSummarySheet({
   studioSlug,
   eventId,
   onPublished,
+  sectionOrder,
+  catalogCategoryOrderByStage,
 }: PublicationSummarySheetProps) {
   const [loading, setLoading] = useState(false);
-  const [loadingResumen, setLoadingResumen] = useState(true);
+  const [loadingEstructura, setLoadingEstructura] = useState(true);
   const [googleCalendarConectado, setGoogleCalendarConectado] = useState(false);
-  const [enviarInvitaciones, setEnviarInvitaciones] = useState(true);
-  const [resumen, setResumen] = useState<{
-    total: number;
-    conPersonal: number;
-    sinPersonal: number;
-    yaInvitadas: number;
-    eliminadas: number;
-    tareas: Array<{
-      id: string;
-      name: string;
-      startDate: Date;
-      endDate: Date;
-      status: string;
-      category: string;
-      tienePersonal: boolean;
-      personalNombre?: string;
-      personalEmail?: string;
-      tipoCambio: 'nueva' | 'modificada' | 'eliminada';
-      cambioAnterior?: {
-        sync_status: string;
-        invitation_status?: string | null;
-        google_event_id?: string | null;
-        personalNombre?: string | null;
-      };
-      itemId?: string;
-      itemName?: string;
+  const [assignCrewForTask, setAssignCrewForTask] = useState<{ taskId: string; itemId?: string; startDate: Date; endDate: Date } | null>(null);
+  const [estructura, setEstructura] = useState<{
+    secciones: Array<{
+      sectionId: string;
+      sectionName: string;
+      order: number;
+      categorias: Array<{
+        categoryId: string;
+        stageKey: string;
+        categoryLabel: string;
+        tareas: Array<{
+          id: string;
+          name: string;
+          startDate: Date;
+          endDate: Date;
+          syncStatus: string;
+          invitationStatus: string | null;
+          tienePersonal: boolean;
+          personalNombre?: string | null;
+          personalEmail?: string | null;
+          itemId?: string | null;
+          itemName?: string | null;
+          budgetAmount?: number | null;
+          payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+          isDraft: boolean;
+        }>;
+      }>;
     }>;
   } | null>(null);
 
   useEffect(() => {
     if (open) {
-      cargarResumen();
+      cargarEstructura();
       verificarGoogleCalendar();
     }
   }, [open, studioSlug, eventId]);
 
-  // Resetear checkbox cuando se abre el sheet y hay condiciones para mostrar
-  useEffect(() => {
-    if (open && googleCalendarConectado && resumen && resumen.conPersonal > 0) {
-      setEnviarInvitaciones(true);
-    }
-  }, [open, googleCalendarConectado, resumen]);
-
-  const cargarResumen = async () => {
-    setLoadingResumen(true);
+  const cargarEstructura = async () => {
+    setLoadingEstructura(true);
     try {
-      const result = await obtenerResumenCambiosPendientes(studioSlug, eventId);
+      const result = await obtenerEstructuraCompletaLogistica(
+        studioSlug,
+        eventId,
+        sectionOrder ?? undefined,
+        catalogCategoryOrderByStage ?? null
+      );
       if (result.success && result.data) {
-        setResumen(result.data);
+        setEstructura(result.data);
       } else {
-        toast.error(result.error || 'Error al cargar resumen');
+        toast.error(result.error || 'Error al cargar estructura');
         onOpenChange(false);
       }
     } catch (error) {
-      console.error('Error cargando resumen:', error);
-      toast.error('Error al cargar resumen de cambios');
+      console.error('Error cargando estructura:', error);
+      toast.error('Error al cargar panel');
       onOpenChange(false);
     } finally {
-      setLoadingResumen(false);
+      setLoadingEstructura(false);
     }
   };
 
@@ -150,48 +167,86 @@ export function PublicationSummarySheet({
     }
   };
 
-  const handlePublicar = async () => {
+  const handleInvitarPendientes = async () => {
     setLoading(true);
     try {
-      const result = await publicarCronograma(studioSlug, eventId, enviarInvitaciones);
-
+      const result = await invitarPendientesEvento(studioSlug, eventId);
       if (result.success) {
-        if (result.failedTasks && result.failedTasks.length > 0) {
-          toast.warning(
-            `${result.publicado ?? 0} publicada(s). ${result.failedTasks.length} tarea(s) fallaron (ej. red). Siguen en borrador; puedes volver a publicar para reintentar.`
-          );
-        } else if (result.sincronizado && result.sincronizado > 0) {
-          toast.success(
-            `${result.sincronizado} tarea(s) sincronizada(s) con Google Calendar. ${result.publicado || 0} publicada(s) sin sincronizar.`
-          );
+        const { invitadas = 0, failedTasks = [] } = result;
+        if (failedTasks.length > 0) {
+          toast.warning(`${invitadas} invitación(es) enviada(s). ${failedTasks.length} fallaron.`);
+        } else if (invitadas > 0) {
+          toast.success(`${invitadas} invitación(es) enviada(s) a Google Calendar.`);
         } else {
-          toast.success(`${result.publicado || 0} tarea(s) publicada(s) correctamente`);
+          toast.info('No hay tareas pendientes de invitar (todas tienen personal asignado e invitación enviada o no aplican).');
         }
+        await cargarEstructura();
         onPublished?.();
-        onOpenChange(false);
       } else {
-        toast.error(result.error || 'Error al publicar cronograma');
+        toast.error(result.error ?? 'Error al invitar pendientes');
       }
     } catch (error) {
-      console.error('Error publicando cronograma:', error);
-      toast.error('Error al publicar cronograma');
+      console.error('Error invitando pendientes:', error);
+      toast.error('Error al enviar invitaciones');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInvitarTarea = async (taskId: string) => {
+    setLoading(true);
+    try {
+      const result = await invitarTareaEvento(studioSlug, eventId, taskId);
+      if (result.success) {
+        toast.success('Invitación enviada');
+        await cargarEstructura();
+        onPublished?.();
+      } else {
+        toast.error(result.error ?? 'Error al invitar');
+      }
+    } catch (error) {
+      console.error('Error invitando:', error);
+      toast.error('Error al enviar invitación');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelarInvitacion = (_taskId: string) => {
+    toast.info('Cancelar invitación próximamente');
+  };
+
+  const handleAssignCrewSelect = async (crewMemberId: string | null) => {
+    if (!assignCrewForTask) return;
+    setLoading(true);
+    try {
+      const result = assignCrewForTask.itemId
+        ? await asignarCrewAItem(studioSlug, assignCrewForTask.itemId, crewMemberId)
+        : await asignarCrewATareaScheduler(studioSlug, eventId, assignCrewForTask.taskId, crewMemberId);
+      setAssignCrewForTask(null);
+      if (result.success) {
+        if (result.googleSyncFailed) toast.warning('Personal asignado; revisa sincronización con Google.');
+        else toast.success('Personal asignado');
+        await cargarEstructura();
+        onPublished?.();
+      } else {
+        toast.error(result.error ?? 'Error al asignar');
+      }
+    } catch (error) {
+      console.error('Error asignando personal:', error);
+      toast.error('Error al asignar personal');
+      setAssignCrewForTask(null);
     } finally {
       setLoading(false);
     }
   };
 
 
-  const mostrarCheckbox = googleCalendarConectado && resumen && resumen.conPersonal > 0;
-  const tareasASincronizar = resumen ? resumen.conPersonal : 0;
-
-  // Agrupar tareas por tipo de cambio (solo 3 grupos)
-  const tareasAgrupadas = resumen
-    ? {
-      nuevas: resumen.tareas.filter((t) => t.tipoCambio === 'nueva'),
-      modificadas: resumen.tareas.filter((t) => t.tipoCambio === 'modificada'),
-      eliminadas: resumen.tareas.filter((t) => t.tipoCambio === 'eliminada'),
-    }
-    : { nuevas: [], modificadas: [], eliminadas: [] };
+  const hayPendientesInvitar = estructura?.secciones?.some((s) =>
+    s.categorias.some((c) =>
+      c.tareas.some((t) => t.tienePersonal && t.invitationStatus === null)
+    )
+  ) ?? false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -202,247 +257,102 @@ export function PublicationSummarySheet({
         style={{ zIndex: 51 }}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <SheetHeader className="px-6 pt-6 pb-4">
-            <SheetTitle>Resumen de Cambios Pendientes</SheetTitle>
-            <SheetDescription>
-              Revisa los cambios antes de publicar el cronograma
+          <SheetHeader className="px-4 pt-4 pb-2 border-b border-zinc-800/80">
+            <SheetTitle className="text-base">Panel de Gestión Logística</SheetTitle>
+            <SheetDescription className="text-xs">
+              Invitaciones y revisión
             </SheetDescription>
           </SheetHeader>
 
-          {/* Contenido scrollable */}
-          {loadingResumen ? (
+          {loadingEstructura ? (
             <PublicationSheetSkeleton />
-          ) : resumen ? (
+          ) : estructura ? (
             <div className="flex-1 flex flex-col min-h-0 px-6 py-4 gap-4">
-              {/* Stats - Grid de 4 columnas */}
-              <div className="grid grid-cols-4 gap-2 flex-shrink-0">
-                <div className="bg-zinc-800/50 rounded-lg p-2 border border-zinc-700">
-                  <div className="text-xs text-zinc-400 mb-0.5">Total</div>
-                  <div className="text-lg font-bold text-white">{resumen.total}</div>
-                </div>
-                <div className="bg-emerald-950/20 rounded-lg p-2 border border-emerald-800/30">
-                  <div className="text-xs text-emerald-400 mb-0.5">Con personal</div>
-                  <div className="text-lg font-bold text-emerald-400">{resumen.conPersonal}</div>
-                </div>
-                <div className="bg-zinc-800/50 rounded-lg p-2 border border-zinc-700">
-                  <div className="text-xs text-zinc-400 mb-0.5">Sin personal</div>
-                  <div className="text-lg font-bold text-white">{resumen.sinPersonal}</div>
-                </div>
-                <div className="bg-blue-950/20 rounded-lg p-2 border border-blue-800/30">
-                  <div className="text-xs text-blue-400 mb-0.5">Ya invitadas</div>
-                  <div className="text-lg font-bold text-blue-400">{resumen.yaInvitadas}</div>
-                </div>
-              </div>
-
-              {/* Lista de tareas agrupadas: ocupa el alto disponible y hace scroll */}
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-                {/* Nuevas */}
-                {tareasAgrupadas.nuevas.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      <h3 className="text-sm font-semibold text-zinc-300">Nuevas</h3>
-                      <ZenBadge variant="outline" size="sm">
-                        {tareasAgrupadas.nuevas.length}
-                      </ZenBadge>
-                    </div>
-                    <div className="space-y-2">
-                      {tareasAgrupadas.nuevas.map((tarea) => (
-                        <div
-                          key={tarea.id}
-                          className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700 hover:border-zinc-600 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <h4 className="font-medium text-white text-sm">{tarea.name}</h4>
-                            <ZenBadge variant="outline" size="sm">
-                              {tarea.category}
-                            </ZenBadge>
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
+                {estructura.secciones.map((seccion) => (
+                  <div key={seccion.sectionId} className="space-y-3">
+                    <h2 className="text-[10px] font-medium text-zinc-500 uppercase tracking-[0.2em] border-b border-zinc-800 pb-1">
+                      {seccion.sectionName}
+                    </h2>
+                    {seccion.categorias.map((cat) => {
+                      const stageBorder = STAGE_BORDER[cat.stageKey] ?? 'border-l-zinc-600';
+                      return (
+                        <div key={cat.categoryId} className="space-y-2">
+                          <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider pl-0.5">
+                            {cat.categoryLabel}
+                          </h3>
+                          <div className={`border-l-4 pl-2.5 ${stageBorder} space-y-2`}>
+                            {cat.tareas.map((tarea) => (
+                              <LogisticsTaskCard
+                                key={tarea.id}
+                                tarea={tarea}
+                                googleCalendarConectado={googleCalendarConectado}
+                                onAssignPersonal={() =>
+                                  setAssignCrewForTask({
+                                    taskId: tarea.id,
+                                    itemId: tarea.itemId ?? undefined,
+                                    startDate: tarea.startDate,
+                                    endDate: tarea.endDate,
+                                  })
+                                }
+                                onInvitar={googleCalendarConectado ? handleInvitarTarea : undefined}
+                                onCancelarInvitacion={googleCalendarConectado ? handleCancelarInvitacion : undefined}
+                              />
+                            ))}
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-zinc-400">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="h-3 w-3" />
-                              {format(tarea.startDate, 'dd MMM', { locale: es })} -{' '}
-                              {format(tarea.endDate, 'dd MMM yyyy', { locale: es })}
-                            </div>
-                            {tarea.tienePersonal && (
-                              <div className="flex items-center gap-1.5">
-                                <User className="h-3 w-3" />
-                                {tarea.personalNombre || 'Personal asignado'}
-                              </div>
-                            )}
-                          </div>
-                          {tarea.tienePersonal && googleCalendarConectado && (
-                            <p className="text-xs text-emerald-400 mt-2 font-medium">
-                              Se enviará invitación
-                            </p>
-                          )}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
-
-                {/* Modificadas */}
-                {tareasAgrupadas.modificadas.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <XCircle className="h-4 w-4 text-amber-400" />
-                      <h3 className="text-sm font-semibold text-zinc-300">Modificadas</h3>
-                      <ZenBadge variant="outline" size="sm">
-                        {tareasAgrupadas.modificadas.length}
-                      </ZenBadge>
-                    </div>
-                    <div className="space-y-2">
-                      {tareasAgrupadas.modificadas.map((tarea) => (
-                        <div
-                          key={tarea.id}
-                          className={`rounded-lg p-3 border transition-colors ${tarea.cambioAnterior?.personalNombre || tarea.cambioAnterior?.google_event_id
-                            ? 'bg-red-950/20 border-red-800/30 hover:border-red-700/50'
-                            : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
-                            }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-white text-sm">{tarea.name}</h4>
-                              {tarea.cambioAnterior?.personalNombre && (
-                                <p className="text-xs text-red-400 mt-1">
-                                  Personal anterior: {tarea.cambioAnterior.personalNombre}
-                                </p>
-                              )}
-                            </div>
-                            <ZenBadge variant="outline" size="sm">
-                              {tarea.category}
-                            </ZenBadge>
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-zinc-400">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="h-3 w-3" />
-                              {format(tarea.startDate, 'dd MMM', { locale: es })} -{' '}
-                              {format(tarea.endDate, 'dd MMM yyyy', { locale: es })}
-                            </div>
-                            {tarea.tienePersonal && (
-                              <div className="flex items-center gap-1.5">
-                                <User className="h-3 w-3" />
-                                {tarea.personalNombre || 'Personal asignado'}
-                              </div>
-                            )}
-                            {tarea.cambioAnterior?.google_event_id && (
-                              <span className="text-amber-400 text-xs">Requiere cancelación en Google Calendar</span>
-                            )}
-                          </div>
-                          {tarea.cambioAnterior?.google_event_id && tarea.cambioAnterior?.personalNombre && (
-                            <p className="text-xs text-red-400 mt-2 font-medium">
-                              Cancelará la invitación para {tarea.cambioAnterior.personalNombre}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Eliminadas */}
-                {tareasAgrupadas.eliminadas.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                      <h3 className="text-sm font-semibold text-zinc-300">Tareas eliminadas</h3>
-                      <ZenBadge variant="outline" size="sm">
-                        {tareasAgrupadas.eliminadas.length}
-                      </ZenBadge>
-                    </div>
-                    <div className="space-y-2">
-                      {tareasAgrupadas.eliminadas.map((tarea) => (
-                        <div
-                          key={tarea.id}
-                          className="bg-red-950/20 rounded-lg p-3 border border-red-800/30 hover:border-red-700/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-white text-sm line-through">{tarea.name || tarea.itemName}</h4>
-                              {tarea.cambioAnterior?.personalNombre && (
-                                <p className="text-xs text-red-400 mt-1">
-                                  Personal anterior: {tarea.cambioAnterior.personalNombre}
-                                </p>
-                              )}
-                            </div>
-                            <ZenBadge variant="destructive" size="sm">
-                              Eliminada
-                            </ZenBadge>
-                          </div>
-                          {tarea.cambioAnterior?.google_event_id && (
-                            <p className="text-xs text-amber-400 mt-1">
-                              Requiere cancelación en Google Calendar
-                            </p>
-                          )}
-                          {tarea.cambioAnterior?.google_event_id && tarea.cambioAnterior?.personalNombre && (
-                            <p className="text-xs text-red-400 mt-2 font-medium">
-                              Cancelará la invitación para {tarea.cambioAnterior.personalNombre}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-zinc-400">
-              No hay cambios pendientes
+              No hay tareas en este evento
             </div>
           )}
 
-          {/* Footer */}
-          <SheetFooter className="border-t border-zinc-800 px-6 pt-4 pb-6 gap-3 flex-col">
-            {mostrarCheckbox && (
-              <div className="w-full space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/50">
-                  <ZenCheckbox
-                    checked={enviarInvitaciones}
-                    onCheckedChange={(checked) => setEnviarInvitaciones(checked === true)}
-                    label="Enviar invitaciones a personal"
-                    disabled={loading}
-                    className="mt-0.5"
-                  />
-                </div>
-                {enviarInvitaciones && (
-                  <div className="space-y-2 p-3 rounded-lg bg-emerald-950/10 border border-emerald-800/20">
-                    <div className="flex items-center gap-2">
-                      <ZenBadge variant="outline" className="bg-emerald-950/20 border-emerald-800/30 text-emerald-400">
-                        {tareasASincronizar} {tareasASincronizar === 1 ? 'tarea se sincronizará' : 'tareas se sincronizarán'} en Google Calendar
-                      </ZenBadge>
-                    </div>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      Solo se invitará a personas que no hayan sido invitadas previamente.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-2 w-full">
+          <SheetFooter className="border-t border-zinc-800 px-4 py-3 gap-2 flex-col">
+            <div className="flex flex-wrap items-center gap-2 w-full">
               <ZenButton
-                variant="outline"
+                variant="ghost"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
-                className="shrink-0"
+                className="min-w-0"
               >
                 Cerrar
               </ZenButton>
-              <ZenButton
-                variant="primary"
-                onClick={handlePublicar}
-                disabled={loading}
-                loading={loading}
-                className="gap-2 flex-1"
-              >
-                <Upload className="h-4 w-4" />
-                Publicar cambios
-              </ZenButton>
+              {googleCalendarConectado && (
+                <ZenButton
+                  variant="primary"
+                  onClick={handleInvitarPendientes}
+                  disabled={loading || !hayPendientesInvitar}
+                  loading={loading}
+                  className="min-w-0"
+                >
+                  Invitar a todos
+                </ZenButton>
+              )}
             </div>
           </SheetFooter>
         </div>
+
+        {assignCrewForTask && (
+          <SelectCrewModal
+            isOpen={!!assignCrewForTask}
+            onClose={() => setAssignCrewForTask(null)}
+            onSelect={handleAssignCrewSelect}
+            studioSlug={studioSlug}
+            currentMemberId={null}
+            title="Asignar personal"
+            description="Selecciona un miembro del equipo para asignar a esta tarea."
+            eventId={eventId}
+            taskStartDate={assignCrewForTask.startDate}
+            taskEndDate={assignCrewForTask.endDate}
+            taskId={assignCrewForTask.taskId}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );

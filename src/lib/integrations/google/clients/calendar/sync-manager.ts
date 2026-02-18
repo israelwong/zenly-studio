@@ -429,6 +429,34 @@ export async function eliminarEventoGoogle(
 }
 
 /**
+ * Obtiene un evento de Google Calendar para revertir la tarea en Zen al estado en Google.
+ * @returns { start: Date, end: Date } o null si no existe o error
+ */
+export async function obtenerEventoGoogle(
+  studioSlug: string,
+  calendarId: string,
+  eventId: string
+): Promise<{ start: Date; end: Date } | null> {
+  try {
+    const { calendar } = await getGoogleCalendarClient(studioSlug);
+    const res = await calendar.events.get({
+      calendarId,
+      eventId,
+    });
+    const start = res.data.start?.dateTime ? new Date(res.data.start.dateTime) : res.data.start?.date ? new Date(res.data.start.date) : null;
+    const end = res.data.end?.dateTime ? new Date(res.data.end.dateTime) : res.data.end?.date ? new Date(res.data.end.date) : null;
+    if (start && end) return { start, end };
+    return null;
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: number }).code === 404) {
+      return null;
+    }
+    console.error('[Google Calendar] Error obteniendo evento:', error);
+    throw error;
+  }
+}
+
+/**
  * Elimina un evento de Google Calendar usando el taskId
  * Versión más conveniente que busca el calendarId y eventId desde la tarea
  *

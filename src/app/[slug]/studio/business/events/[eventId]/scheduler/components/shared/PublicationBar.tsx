@@ -1,155 +1,111 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, RotateCcw } from 'lucide-react';
-import { ZenButton, ZenBadge, ZenConfirmModal } from '@/components/ui/zen';
-import { obtenerConteoTareasDraft, cancelarCambiosPendientes } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { LayoutDashboard } from 'lucide-react';
+import { ZenButton } from '@/components/ui/zen';
+import { obtenerMetricasLogisticasEvento } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { PublicationSummarySheet } from './PublicationSummarySheet';
-import { toast } from 'sonner';
 
 interface PublicationBarProps {
   studioSlug: string;
   eventId: string;
   onPublished?: () => void;
+  sectionOrder?: string[];
+  catalogCategoryOrderByStage?: Record<string, string[]> | null;
 }
 
-export function PublicationBar({ studioSlug, eventId, onPublished }: PublicationBarProps) {
-  const [draftCount, setDraftCount] = useState(0);
+export function PublicationBar({
+  studioSlug,
+  eventId,
+  onPublished,
+  sectionOrder,
+  catalogCategoryOrderByStage,
+}: PublicationBarProps) {
+  const [metrics, setMetrics] = useState<{
+    totalTareas: number;
+    personalAsignado: number;
+    personalPendiente: number;
+    invitacionesAceptadas: number;
+    invitacionesPendientes: number;
+    invitacionesRechazadas: number;
+    draftCount: number;
+  } | null>(null);
   const [checking, setChecking] = useState(true);
   const [showSummarySheet, setShowSummarySheet] = useState(false);
-  const [mostrarConfirmRevertir, setMostrarConfirmRevertir] = useState(false);
-  const [loading, setLoading] = useState(false);
   const isMountedRef = useRef(true);
 
-  const checkDraftCount = useCallback(async () => {
+  const checkMetrics = useCallback(async () => {
     if (!isMountedRef.current) return;
-
     try {
-      const result = await obtenerConteoTareasDraft(studioSlug, eventId);
-      if (result.success && result.count !== undefined && isMountedRef.current) {
-        setDraftCount(result.count);
+      const result = await obtenerMetricasLogisticasEvento(studioSlug, eventId);
+      if (result.success && result.data && isMountedRef.current) {
+        setMetrics(result.data);
       } else if (result.error) {
-        console.error('[PublicationBar] Error obteniendo conteo:', result.error);
+        console.error('[PublicationBar] Error métricas:', result.error);
       }
     } catch (error) {
-      console.error('[PublicationBar] Error obteniendo conteo de tareas DRAFT:', error);
+      console.error('[PublicationBar] Error obteniendo métricas:', error);
     } finally {
-      if (isMountedRef.current) {
-        setChecking(false);
-      }
+      if (isMountedRef.current) setChecking(false);
     }
   }, [studioSlug, eventId]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    checkDraftCount();
-
-    // Escuchar eventos personalizados para actualizar el conteo
-    const handleTaskUpdate = () => {
-      if (isMountedRef.current) {
-        checkDraftCount();
-      }
-    };
-
-    window.addEventListener('scheduler-task-updated', handleTaskUpdate);
-    window.addEventListener('scheduler-task-created', handleTaskUpdate);
-    window.addEventListener('scheduler-structure-changed', handleTaskUpdate);
-
+    checkMetrics();
+    const handleUpdate = () => { if (isMountedRef.current) checkMetrics(); };
+    window.addEventListener('scheduler-task-updated', handleUpdate);
+    window.addEventListener('scheduler-task-created', handleUpdate);
+    window.addEventListener('scheduler-structure-changed', handleUpdate);
     return () => {
       isMountedRef.current = false;
-      window.removeEventListener('scheduler-task-updated', handleTaskUpdate);
-      window.removeEventListener('scheduler-task-created', handleTaskUpdate);
-      window.removeEventListener('scheduler-structure-changed', handleTaskUpdate);
+      window.removeEventListener('scheduler-task-updated', handleUpdate);
+      window.removeEventListener('scheduler-task-created', handleUpdate);
+      window.removeEventListener('scheduler-structure-changed', handleUpdate);
     };
-  }, [checkDraftCount]);
+  }, [checkMetrics]);
 
-  const handleOpenSummary = () => {
-    setShowSummarySheet(true);
-  };
-
+  const handleOpenSummary = () => setShowSummarySheet(true);
   const handlePublished = () => {
     setShowSummarySheet(false);
-    setDraftCount(0);
     onPublished?.();
-    checkDraftCount();
+    checkMetrics();
   };
 
-  const handleConfirmarRevertir = async () => {
-    setMostrarConfirmRevertir(false);
-    setLoading(true);
-    try {
-      const result = await cancelarCambiosPendientes(studioSlug, eventId);
-
-      if (result.success) {
-        toast.success(`${result.revertidas || 0} cambio(s) revertido(s)`);
-        setDraftCount(0);
-        onPublished?.();
-        checkDraftCount();
-      } else {
-        toast.error(result.error || 'Error al revertir cambios');
-      }
-    } catch (error) {
-      console.error('Error revirtiendo cambios:', error);
-      toast.error('Error al revertir cambios');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Mostrar solo si ya terminó de verificar Y hay tareas DRAFT
-  // Durante la carga inicial (checking === true), no mostrar nada
-  if (checking) {
-    return null;
-  }
-
-  // Si no hay tareas DRAFT después de verificar, no mostrar
-  if (draftCount === 0) {
-    return null;
-  }
+  if (checking || !metrics) return null;
+  if (metrics.totalTareas === 0) return null;
 
   return (
     <>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50" role="status" aria-label="Cambios sin publicar">
-        <div className="bg-zinc-900/95 backdrop-blur-sm border border-amber-800/40 rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4 min-w-[500px]">
-          <div className="flex items-center gap-3 flex-1">
+      <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50" role="status" aria-label="Panel de gestión logística">
+        <div className="bg-zinc-900/90 backdrop-blur-md border border-white/15 rounded-xl shadow-2xl shadow-black/40 ring-1 ring-white/10 px-5 py-4 flex items-center gap-4 min-w-[520px]">
+          <div className="flex items-center gap-4 flex-1 flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="relative" aria-hidden>
-                <div className="h-2 w-2 bg-amber-400 rounded-full animate-pulse" />
-                <div className="absolute inset-0 h-2 w-2 bg-amber-400 rounded-full animate-ping opacity-75" />
-              </div>
-              <span className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">
-                Modo Edición
-              </span>
-              <span className="text-zinc-500">·</span>
-              <span className="text-sm text-white font-medium">
-                {draftCount} {draftCount === 1 ? 'cambio sin publicar' : 'cambios sin publicar'}
-              </span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Tareas</span>
+              <span className="text-sm font-semibold text-white">{metrics.totalTareas}</span>
             </div>
-            <div className="h-6 w-px bg-zinc-700/50" />
+            <div className="h-5 w-px bg-zinc-700/50" />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Invitaciones</span>
+              <span className="text-sm text-emerald-400 font-medium">{metrics.invitacionesAceptadas} ok</span>
+              <span className="text-sm text-amber-400">{metrics.invitacionesPendientes} pend.</span>
+              {metrics.invitacionesRechazadas > 0 && (
+                <span className="text-sm text-red-400">{metrics.invitacionesRechazadas} rech.</span>
+              )}
+            </div>
+            <div className="h-5 w-px bg-zinc-700/50" />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Personal</span>
+              <span className="text-sm text-emerald-400 font-medium">{metrics.personalAsignado}</span>
+              <span className="text-zinc-500">/</span>
+              <span className="text-sm text-zinc-400">{metrics.personalPendiente} pend.</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ZenButton
-              variant="outline"
-              size="sm"
-              onClick={() => setMostrarConfirmRevertir(true)}
-              disabled={loading}
-              className="gap-2 bg-amber-950/20 border-amber-800/30 text-amber-400 hover:bg-amber-950/30 hover:border-amber-700/50 transition-colors"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Revertir cambios
-            </ZenButton>
-
-            <ZenButton
-              variant="primary"
-              size="sm"
-              onClick={handleOpenSummary}
-              className="gap-2"
-            >
-              <Upload className="h-4 w-4" />
-              Ver resumen
-            </ZenButton>
-          </div>
+          <ZenButton variant="primary" size="sm" onClick={handleOpenSummary} className="gap-2 shrink-0">
+            <LayoutDashboard className="h-4 w-4" />
+            Panel logístico
+          </ZenButton>
         </div>
       </div>
 
@@ -159,20 +115,9 @@ export function PublicationBar({ studioSlug, eventId, onPublished }: Publication
         studioSlug={studioSlug}
         eventId={eventId}
         onPublished={handlePublished}
-      />
-
-      <ZenConfirmModal
-        isOpen={mostrarConfirmRevertir}
-        onClose={() => setMostrarConfirmRevertir(false)}
-        onConfirm={handleConfirmarRevertir}
-        title="Revertir cambios"
-        description="Se cancelarán todos los cambios pendientes y se restaurarán las tareas como estaban antes de ser modificadas. Esta acción no se puede deshacer."
-        confirmText="Sí, revertir cambios"
-        cancelText="Cancelar"
-        variant="destructive"
-        loading={loading}
+        sectionOrder={sectionOrder}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
       />
     </>
   );
 }
-

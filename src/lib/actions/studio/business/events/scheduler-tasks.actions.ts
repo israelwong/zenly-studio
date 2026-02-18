@@ -335,15 +335,18 @@ export async function actualizarSchedulerTask(
         (finalEndDate.getTime() - finalStartDate.getTime()) / (1000 * 60 * 60 * 24)
       ) + 1;
 
-      // Si las fechas cambiaron y la tarea estaba sincronizada/publicada, marcar como DRAFT
+      // DRAFT solo cuando cambian campos que afectan a otros (fechas)
       if (datesChanged && (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
         updateData.sync_status = 'DRAFT';
       }
     }
 
-    // Si cambió el nombre, descripción o notas, también marcar como DRAFT si estaba sincronizada
-    if ((data.name !== undefined || data.description !== undefined || data.notes !== undefined) &&
-      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')) {
+    // DRAFT solo cuando cambia personal (assigned_to_crew_member_id)
+    if (
+      data.assignedToCrewMemberId !== undefined &&
+      task.assigned_to_crew_member_id !== data.assignedToCrewMemberId &&
+      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')
+    ) {
       updateData.sync_status = 'DRAFT';
     }
 
@@ -415,19 +418,7 @@ export async function actualizarSchedulerTask(
       }
     }
 
-    // Si cambió el personal y la tarea está publicada, actualizar attendees en Google Calendar
-    if (
-      data.assignedToCrewMemberId !== undefined &&
-      (task.sync_status === 'INVITED' || task.sync_status === 'PUBLISHED')
-    ) {
-      try {
-        const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
-        await sincronizarTareaConGoogle(taskId, studioSlug);
-      } catch (err) {
-        console.error('[actualizarSchedulerTask] Sync Google falló (personal ya guardado en BD):', err);
-        googleSyncFailed = true;
-      }
-    }
+    // El personal se sincroniza con Google desde el resumen de publicación (Aprobar); no sync inmediato para respetar DRAFT.
 
     await revalidateSchedulerPaths(studioSlug, eventId);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);

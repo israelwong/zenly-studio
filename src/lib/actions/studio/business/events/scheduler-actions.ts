@@ -379,15 +379,15 @@ export interface PublicarCronogramaFailedTask {
 }
 
 /**
- * Publica el cronograma de un evento.
- * Opción 1: Solo Publicar - Cambia estado DRAFT a PUBLISHED (visible en plataforma).
- * Opción 2: Publicar e Invitar - Sincroniza con Google Calendar y solo entonces actualiza sync_status a INVITED/PUBLISHED.
+ * Publica el cronograma de un evento (total o parcial).
+ * - selectedTaskIds: si se envía y no está vacío, solo se procesan esas tareas DRAFT; si es null/undefined/vacío, se procesan todas.
  * Atomicidad: si la sync con Google falla para una tarea, su sync_status no cambia; se reporta en failedTasks para reintento.
  */
 export async function publicarCronograma(
   studioSlug: string,
   eventId: string,
-  enviarInvitaciones: boolean = true
+  enviarInvitaciones: boolean = true,
+  selectedTaskIds: string[] | null = null
 ): Promise<{
   success: boolean;
   publicado?: number;
@@ -409,6 +409,7 @@ export async function publicarCronograma(
       where: {
         scheduler_instance: { event_id: eventId },
         sync_status: 'DRAFT',
+        ...(selectedTaskIds && selectedTaskIds.length > 0 ? { id: { in: selectedTaskIds } } : {}),
       },
       include: {
         cotizacion_item: {
@@ -621,6 +622,68 @@ export async function cancelarCambiosPendientes(
 }
 
 /**
+ * Descarta una sola tarea DRAFT: revierte los cambios operativos para que Zen coincida con Google Calendar.
+ * No elimina tareas. Si tiene google_event_id, obtiene fechas de Google y actualiza la tarea; si no, solo pasa a PUBLISHED.
+ */
+export async function descartarTarea(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+        sync_status: 'DRAFT',
+      },
+      select: { id: true, google_event_id: true, google_calendar_id: true },
+    });
+    if (!task) {
+      return { success: false, error: 'Tarea no encontrada o no está en borrador' };
+    }
+    if (task.google_event_id && task.google_calendar_id) {
+      const { obtenerEventoGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+      const googleEvent = await obtenerEventoGoogle(studioSlug, task.google_calendar_id, task.google_event_id);
+      if (googleEvent) {
+        const durationDays = Math.max(
+          1,
+          Math.ceil((googleEvent.end.getTime() - googleEvent.start.getTime()) / (24 * 60 * 60 * 1000))
+        );
+        await prisma.studio_scheduler_event_tasks.update({
+          where: { id: taskId },
+          data: {
+            start_date: googleEvent.start,
+            end_date: googleEvent.end,
+            duration_days: durationDays,
+            sync_status: 'INVITED',
+          },
+        });
+      } else {
+        await prisma.studio_scheduler_event_tasks.update({
+          where: { id: taskId },
+          data: { sync_status: 'PUBLISHED' },
+        });
+      }
+    } else {
+      await prisma.studio_scheduler_event_tasks.update({
+        where: { id: taskId },
+        data: { sync_status: 'PUBLISHED' },
+      });
+    }
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Descartar Tarea] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al descartar tarea',
+    };
+  }
+}
+
+/**
  * Obtiene el conteo de tareas DRAFT para mostrar en la barra de publicación
  */
 export async function obtenerConteoTareasDraft(
@@ -684,6 +747,9 @@ export async function obtenerResumenCambiosPendientes(
       endDate: Date;
       status: string;
       category: string;
+      sectionName: string;
+      sectionId: string | null;
+      categoryId: string | null;
       tienePersonal: boolean;
       personalNombre?: string;
       personalEmail?: string;
@@ -694,6 +760,8 @@ export async function obtenerResumenCambiosPendientes(
         google_event_id?: string | null;
         personalNombre?: string | null;
       };
+      invitationStatus?: string | null;
+      payrollState?: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
       itemId?: string;
       itemName?: string;
     }>;
@@ -926,14 +994,41 @@ export async function obtenerResumenCambiosPendientes(
         endDate: tarea.end_date,
         status: tarea.status,
         category: tarea.category,
+        sectionName: tarea.catalog_section_name_snapshot ?? 'Sin sección',
+        sectionId: tarea.catalog_section_id_snapshot ?? null,
+        categoryId: tarea.catalog_category_id ?? null,
         tienePersonal: !!tarea.cotizacion_item?.assigned_to_crew_member_id,
         personalNombre: tarea.cotizacion_item?.assigned_to_crew_member?.name || undefined,
         personalEmail: tarea.cotizacion_item?.assigned_to_crew_member?.email || undefined,
         tipoCambio,
         cambioAnterior,
+        invitationStatus: tarea.invitation_status ?? undefined,
         itemId: tarea.cotizacion_item?.id,
         itemName: tarea.cotizacion_item?.name_snapshot,
       };
+    });
+
+    // Estado de nómina por ítem (una consulta por evento)
+    const itemIds = tareas.map((t) => t.itemId).filter((id): id is string => Boolean(id));
+    const payrollByItem = new Map<string, { hasPayroll: true; status: 'pendiente' | 'pagado' }>();
+    if (itemIds.length > 0) {
+      const servicios = await prisma.studio_nomina_servicios.findMany({
+        where: {
+          quote_service_id: { in: itemIds },
+          payroll: { evento_id: eventId },
+        },
+        select: { quote_service_id: true, payroll: { select: { status: true } } },
+      });
+      for (const s of servicios) {
+        if (s.quote_service_id) {
+          const status = s.payroll.status === 'pagado' || s.payroll.status === 'pendiente' ? s.payroll.status : 'pendiente';
+          payrollByItem.set(s.quote_service_id, { hasPayroll: true, status });
+        }
+      }
+    }
+    tareas.forEach((t) => {
+      (t as { payrollState?: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' } }).payrollState =
+        t.itemId ? (payrollByItem.get(t.itemId) ?? { hasPayroll: false }) : { hasPayroll: false };
     });
 
     // Las tareas eliminadas ya no existen en la BD, pero podemos detectar
@@ -963,6 +1058,387 @@ export async function obtenerResumenCambiosPendientes(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener resumen',
+    };
+  }
+}
+
+/**
+ * Métricas logísticas del evento (todas las tareas): totales, personal asignado/pendiente, estatus invitaciones.
+ */
+export async function obtenerMetricasLogisticasEvento(
+  studioSlug: string,
+  eventId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    totalTareas: number;
+    personalAsignado: number;
+    personalPendiente: number;
+    invitacionesAceptadas: number;
+    invitacionesPendientes: number;
+    invitacionesRechazadas: number;
+    draftCount: number;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const [tasks, draftCount] = await Promise.all([
+      prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance: { event_id: eventId } },
+        select: {
+          id: true,
+          cotizacion_item_id: true,
+          assigned_to_crew_member_id: true,
+          invitation_status: true,
+        },
+      }),
+      prisma.studio_scheduler_event_tasks.count({
+        where: {
+          scheduler_instance: { event_id: eventId },
+          sync_status: 'DRAFT',
+        },
+      }),
+    ]);
+
+    const totalTareas = tasks.length;
+    const personalAsignado = tasks.filter((t) => t.assigned_to_crew_member_id != null).length;
+    const personalPendiente = totalTareas - personalAsignado;
+    const invitacionesAceptadas = tasks.filter((t) => t.invitation_status === 'ACCEPTED' || t.invitation_status === 'PAID').length;
+    const invitacionesPendientes = tasks.filter((t) => t.invitation_status === 'PENDING' || t.invitation_status == null).length;
+    const invitacionesRechazadas = tasks.filter((t) => t.invitation_status === 'DECLINED').length;
+
+    return {
+      success: true,
+      data: {
+        totalTareas,
+        personalAsignado,
+        personalPendiente,
+        invitacionesAceptadas,
+        invitacionesPendientes,
+        invitacionesRechazadas,
+        draftCount,
+      },
+    };
+  } catch (error) {
+    console.error('[Métricas Logísticas] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener métricas',
+    };
+  }
+}
+
+/**
+ * Estructura completa del evento para el Panel de Gestión Logística: todas las tareas por SECCIÓN > Categoría.
+ */
+export async function obtenerEstructuraCompletaLogistica(
+  studioSlug: string,
+  eventId: string,
+  sectionOrder?: string[],
+  catalogCategoryOrderByStage?: Record<string, string[]> | null
+): Promise<{
+  success: boolean;
+  data?: {
+    secciones: Array<{
+      sectionId: string;
+      sectionName: string;
+      order: number;
+      categorias: Array<{
+        categoryId: string;
+        stageKey: string;
+        categoryLabel: string;
+        tareas: Array<{
+          id: string;
+          name: string;
+          startDate: Date;
+          endDate: Date;
+          syncStatus: string;
+          invitationStatus: string | null;
+          tienePersonal: boolean;
+          personalNombre?: string | null;
+          personalEmail?: string | null;
+          itemId?: string | null;
+          itemName?: string | null;
+          budgetAmount?: number | null;
+          payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+          isDraft: boolean;
+        }>;
+      }>;
+    }>;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const tareas = await prisma.studio_scheduler_event_tasks.findMany({
+      where: { scheduler_instance: { event_id: eventId } },
+      orderBy: [{ start_date: 'asc' }],
+      include: {
+        cotizacion_item: {
+          select: {
+            id: true,
+            name_snapshot: true,
+            assigned_to_crew_member_id: true,
+            assigned_to_crew_member: { select: { id: true, name: true, email: true } },
+          },
+        },
+        assigned_to_crew_member: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    const itemIds = tareas.map((t) => t.cotizacion_item_id).filter((id): id is string => id != null);
+    const payrollByItem = new Map<string, { hasPayroll: true; status: 'pendiente' | 'pagado' }>();
+    if (itemIds.length > 0) {
+      const servicios = await prisma.studio_nomina_servicios.findMany({
+        where: {
+          quote_service_id: { in: itemIds },
+          payroll: { evento_id: eventId },
+        },
+        select: { quote_service_id: true, payroll: { select: { status: true } } },
+      });
+      for (const s of servicios) {
+        if (s.quote_service_id) {
+          const status = s.payroll.status === 'pagado' || s.payroll.status === 'pendiente' ? s.payroll.status : 'pendiente';
+          payrollByItem.set(s.quote_service_id, { hasPayroll: true, status });
+        }
+      }
+    }
+
+    const STAGE_LABELS: Record<string, string> = {
+      PLANNING: 'Planeación',
+      PRODUCTION: 'Producción',
+      POST_PRODUCTION: 'Edición',
+      DELIVERY: 'Entrega',
+    };
+    const bySection = new Map<string, { sectionName: string; order: number; byCategory: Map<string, { stageKey: string; categoryLabel: string; tareas: Array<{
+      id: string;
+      name: string;
+      startDate: Date;
+      endDate: Date;
+      syncStatus: string;
+      invitationStatus: string | null;
+      tienePersonal: boolean;
+      personalNombre?: string | null;
+      personalEmail?: string | null;
+      itemId?: string | null;
+      itemName?: string | null;
+      budgetAmount?: number | null;
+      payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+      isDraft: boolean;
+    }> }> }>();
+    tareas.forEach((t) => {
+      const sectionId = t.catalog_section_id_snapshot ?? 'sin-seccion';
+      const sectionName = t.catalog_section_name_snapshot ?? 'Sin sección';
+      const stageKey = t.category ?? 'PLANNING';
+      const categoryId = t.catalog_category_id ?? `l:${stageKey}`;
+      const categoryLabel = STAGE_LABELS[stageKey] ?? stageKey;
+      const budgetAmount = t.budget_amount != null ? Number(t.budget_amount) : null;
+      const crewFromItem = t.cotizacion_item?.assigned_to_crew_member_id ?? null;
+      const crewFromTask = t.assigned_to_crew_member_id ?? null;
+      const tienePersonal = crewFromItem != null || crewFromTask != null;
+      const personalNombre =
+        t.assigned_to_crew_member?.name ?? t.cotizacion_item?.assigned_to_crew_member?.name ?? null;
+      const personalEmail =
+        t.assigned_to_crew_member?.email ?? t.cotizacion_item?.assigned_to_crew_member?.email ?? null;
+      const payrollState = t.cotizacion_item_id
+        ? (payrollByItem.get(t.cotizacion_item_id) ?? { hasPayroll: false })
+        : { hasPayroll: false };
+
+      if (!bySection.has(sectionId)) {
+        bySection.set(sectionId, { sectionName, order: 0, byCategory: new Map() });
+      }
+      const sec = bySection.get(sectionId)!;
+      if (!sec.byCategory.has(categoryId)) {
+        sec.byCategory.set(categoryId, { stageKey, categoryLabel, tareas: [] });
+      }
+      const cat = sec.byCategory.get(categoryId)!;
+      cat.tareas.push({
+        id: t.id,
+        name: t.name ?? t.cotizacion_item?.name_snapshot ?? '',
+        startDate: t.start_date,
+        endDate: t.end_date,
+        syncStatus: t.sync_status,
+        invitationStatus: t.invitation_status,
+        tienePersonal,
+        personalNombre,
+        personalEmail,
+        itemId: t.cotizacion_item_id,
+        itemName: t.cotizacion_item?.name_snapshot ?? null,
+        budgetAmount,
+        payrollState,
+        isDraft: t.sync_status === 'DRAFT',
+      });
+    });
+
+    const sectionOrderMap = new Map((sectionOrder ?? []).map((id, i) => [id, i]));
+    const STAGE_ORDER = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'];
+    const secciones = Array.from(bySection.entries()).map(([sectionId, { sectionName, order: _o, byCategory }]) => ({
+      sectionId,
+      sectionName,
+      order: sectionOrderMap.get(sectionId) ?? 9999,
+      categorias: Array.from(byCategory.entries())
+        .map(([categoryId, { stageKey, categoryLabel, tareas: ts }]) => ({ categoryId, stageKey, categoryLabel, tareas: ts }))
+        .sort((a, b) => {
+          const ia = STAGE_ORDER.indexOf(a.stageKey);
+          const ib = STAGE_ORDER.indexOf(b.stageKey);
+          if (ia !== ib) return ia - ib;
+          const orderA = catalogCategoryOrderByStage?.[`${sectionId}-${a.stageKey}`];
+          const orderB = catalogCategoryOrderByStage?.[`${sectionId}-${b.stageKey}`];
+          if (orderA && orderB) {
+            const pa = orderA.indexOf(a.categoryId);
+            const pb = orderB.indexOf(b.categoryId);
+            if (pa !== -1 && pb !== -1) return pa - pb;
+          }
+          return a.categoryId.localeCompare(b.categoryId);
+        }),
+    }));
+    secciones.sort((a, b) => a.order - b.order);
+
+    return { success: true, data: { secciones } };
+  } catch (error) {
+    console.error('[Estructura Logística] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener estructura',
+    };
+  }
+}
+
+/**
+ * Invitar a todos los pendientes: sincroniza con Google solo las tareas que tienen personal asignado pero no tienen invitación enviada.
+ */
+export async function invitarPendientesEvento(
+  studioSlug: string,
+  eventId: string
+): Promise<{ success: boolean; invitadas?: number; failedTasks?: { taskId: string; taskName: string; error: string }[]; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const { tieneGoogleCalendarHabilitado } = await import('@/lib/integrations/google/clients/calendar/helpers');
+    const tieneGoogle = await tieneGoogleCalendarHabilitado(studioSlug);
+    if (!tieneGoogle) {
+      return { success: false, error: 'Google Calendar no conectado' };
+    }
+
+    const tareasConPersonalSinInvitacion = await prisma.studio_scheduler_event_tasks.findMany({
+      where: {
+        scheduler_instance: { event_id: eventId },
+        AND: [
+          {
+            OR: [
+              { assigned_to_crew_member_id: { not: null } },
+              { cotizacion_item: { assigned_to_crew_member_id: { not: null } } },
+            ],
+          },
+          { invitation_status: null },
+        ],
+      },
+      include: {
+        cotizacion_item: {
+          select: { assigned_to_crew_member_id: true, name_snapshot: true },
+        },
+      },
+    });
+
+    let invitadas = 0;
+    const failedTasks: { taskId: string; taskName: string; error: string }[] = [];
+    const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+
+    for (const t of tareasConPersonalSinInvitacion) {
+      const taskName = t.name ?? t.cotizacion_item?.name_snapshot ?? t.id;
+      try {
+        await sincronizarTareaConGoogle(t.id, studioSlug);
+        await prisma.studio_scheduler_event_tasks.update({
+          where: { id: t.id },
+          data: { sync_status: 'INVITED', invitation_status: 'PENDING' },
+        });
+        invitadas++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Error desconocido';
+        failedTasks.push({ taskId: t.id, taskName, error: message });
+      }
+    }
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return {
+      success: true,
+      invitadas,
+      ...(failedTasks.length > 0 ? { failedTasks } : {}),
+    };
+  } catch (error) {
+    console.error('[Invitar Pendientes] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al invitar pendientes',
+    };
+  }
+}
+
+/**
+ * Invitar una sola tarea: sincroniza con Google si tiene personal y no tiene invitación enviada.
+ */
+export async function invitarTareaEvento(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const { tieneGoogleCalendarHabilitado } = await import('@/lib/integrations/google/clients/calendar/helpers');
+    const tieneGoogle = await tieneGoogleCalendarHabilitado(studioSlug);
+    if (!tieneGoogle) return { success: false, error: 'Google Calendar no conectado' };
+
+    const tarea = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+        OR: [
+          { assigned_to_crew_member_id: { not: null } },
+          { cotizacion_item: { assigned_to_crew_member_id: { not: null } } },
+        ],
+      },
+    });
+    if (!tarea) return { success: false, error: 'Tarea no encontrada o sin personal asignado' };
+    if (tarea.invitation_status != null) {
+      return { success: false, error: 'La tarea ya tiene invitación enviada' };
+    }
+
+    const { sincronizarTareaConGoogle } = await import('@/lib/integrations/google/clients/calendar/sync-manager');
+    await sincronizarTareaConGoogle(tarea.id, studioSlug);
+    await prisma.studio_scheduler_event_tasks.update({
+      where: { id: tarea.id },
+      data: { sync_status: 'INVITED', invitation_status: 'PENDING' },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Invitar Tarea] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al invitar',
     };
   }
 }
