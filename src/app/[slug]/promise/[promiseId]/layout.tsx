@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicPageFooterServer } from '@/components/shared/PublicPageFooterServer';
 import { PromiseProfileLink } from '@/components/promise/PromiseProfileLink';
+import { PromiseSessionRegistration } from '@/components/promise/PromiseSessionRegistration';
 import { PromiseRouteGuard } from '@/components/promise/PromiseRouteGuard';
 import { PromiseNotFoundView } from '@/components/promise/PromiseNotFoundView';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
@@ -47,14 +48,26 @@ async function getServerSideRouteState(
     throw new Error('Studio no encontrado');
   }
 
-  // Verificar que la promesa exista (no eliminada)
-  const promiseExists = await prisma.studio_promises.findFirst({
+  // Verificar que la promesa exista y obtener estado (pipeline_stage) para archivada → no-disponible
+  const promise = await prisma.studio_promises.findFirst({
     where: { id: promiseId, studio_id: studio.id },
-    select: { id: true },
+    select: {
+      id: true,
+      pipeline_stage: { select: { slug: true } },
+    },
   });
 
-  if (!promiseExists) {
+  if (!promise) {
     return { promiseNotFound: true, targetRoute: '', quotes: [] };
+  }
+
+  const stageSlug = (promise.pipeline_stage?.slug ?? '').toLowerCase().trim();
+  const isArchived = ['archived', 'archivado', 'archivada'].includes(stageSlug);
+  if (isArchived) {
+    return {
+      targetRoute: `/${studioSlug}/promise/${promiseId}/no-disponible`,
+      quotes: [],
+    };
   }
 
   // Consulta en dos fases para reducir latencia
@@ -137,8 +150,10 @@ async function getServerSideRouteState(
     evento_id: cot.evento_id ?? null,
   }));
 
-  // Calcular ruta objetivo usando determinePromiseRoute
-  const targetRoute = determinePromiseRoute(cotizacionesFormatted, studioSlug, promiseId);
+  // Calcular ruta objetivo usando determinePromiseRoute (incluye estado archivado → no-disponible)
+  const targetRoute = determinePromiseRoute(cotizacionesFormatted, studioSlug, promiseId, {
+    promisePipelineStageSlug: promise.pipeline_stage?.slug ?? null,
+  });
 
   // Preparar quotes para el cliente (formato mínimo)
   const quotes = cotizacionesFormatted.map(cot => ({
@@ -231,7 +246,10 @@ export default async function PromiseLayout({
         {studioInfo && (
           <header className="fixed top-0 left-0 right-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
             <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <PromiseProfileLink
+                href={`/${slug}`}
+                className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+              >
                 {studioInfo.logo_url && (
                   <img
                     src={studioInfo.logo_url}
@@ -245,7 +263,7 @@ export default async function PromiseLayout({
                     <p className="text-[10px] text-zinc-400">{studioInfo.slogan}</p>
                   )}
                 </div>
-              </div>
+              </PromiseProfileLink>
               <PromiseProfileLink
                 href={`/${slug}`}
                 className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
@@ -292,7 +310,10 @@ export default async function PromiseLayout({
       {studioInfo && (
         <header className="fixed top-0 left-0 right-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <PromiseProfileLink
+              href={`/${slug}`}
+              className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+            >
               {studioInfo.logo_url && (
                 <img
                   src={studioInfo.logo_url}
@@ -310,7 +331,7 @@ export default async function PromiseLayout({
                   </p>
                 )}
               </div>
-            </div>
+            </PromiseProfileLink>
             <PromiseProfileLink
                 href={`/${slug}`}
                 className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
@@ -321,8 +342,9 @@ export default async function PromiseLayout({
         </header>
       )}
 
+      {/* Sesión de navegación: solo localStorage para botón "Regresar a la cotización" en perfil. Sin telemetría. */}
+      <PromiseSessionRegistration studioSlug={slug} promiseId={promiseId} />
       {/* ⚠️ ARCHITECTURE FIX: PromisePageProvider moved to layout level */}
-      {/* This ensures authorization state persists across page revalidations */}
       <PromisePageProvider>
         {/* Guardián de ruta: Verifica que el usuario esté en la ruta correcta según el estado de las cotizaciones */}
         {/* Layout Ultraligero: Solo pasa la información, no toma decisiones */}

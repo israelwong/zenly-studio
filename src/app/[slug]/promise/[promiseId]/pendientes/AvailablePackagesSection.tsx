@@ -26,7 +26,6 @@ interface AvailablePackagesSectionProps {
   studioId: string;
   promiseId: string;
   studioSlug: string;
-  sessionId?: string;
   showAsAlternative: boolean;
   condicionesComerciales?: Array<{
     id: string;
@@ -68,7 +67,6 @@ export function AvailablePackagesSection({
   studioId,
   promiseId,
   studioSlug,
-  sessionId,
   showAsAlternative,
   condicionesComerciales,
   terminosCondiciones,
@@ -98,7 +96,6 @@ export function AvailablePackagesSection({
     <PaquetesSection
       paquetes={paquetes}
       studioId={studioId}
-      sessionId={sessionId}
       promiseId={promiseId}
       studioSlug={studioSlug}
       showAsAlternative={showAsAlternative}

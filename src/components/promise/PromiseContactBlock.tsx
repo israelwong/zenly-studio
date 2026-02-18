@@ -18,6 +18,7 @@ interface PromiseContactBlockProps {
 /**
  * Bloque completo: divisor opcional arriba + botón Contáctanos + divisor opcional abajo.
  * Reutilizable en Pendientes, Negociación, Cierre.
+ * No renderiza el contenedor si no hay datos de estudio (evita padding vacío).
  */
 export function PromiseContactBlock({
   studio,
@@ -25,6 +26,9 @@ export function PromiseContactBlock({
   showDividerBottom = true,
   className = '',
 }: PromiseContactBlockProps) {
+  const hasContent = studio && (studio.studio_name || studio.phone || (studio.contact_phones?.length ?? 0) > 0);
+  if (!hasContent) return null;
+
   return (
     <section
       className={`max-w-4xl mx-auto px-4 py-6 flex justify-center relative ${className}`.trim()}

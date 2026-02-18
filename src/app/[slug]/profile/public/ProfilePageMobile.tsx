@@ -158,6 +158,7 @@ export function ProfilePageMobile({ profileData, studioSlug, offers = [], logic 
                     onSearchClick={() => setIsSearchOpen(true)}
                     hasActiveFAQs={hasActiveFAQs}
                     isOwner={isOwner}
+                    studioSlug={studioSlug}
                     onCreatePost={() => {
                         setEditingPostId(undefined);
                         setIsPostEditorOpen(true);

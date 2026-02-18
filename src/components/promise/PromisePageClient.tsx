@@ -129,18 +129,6 @@ function PromisePageContent({
   const [hideCotizacionesPaquetes, setHideCotizacionesPaquetes] = useState(false);
   // Estado para rastrear si estamos en proceso de autorización (para evitar restauración prematura)
   const [isAuthorizing, setIsAuthorizing] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  // Generar o recuperar sessionId para tracking
-  useEffect(() => {
-    const storageKey = `promise_session_${promiseId}`;
-    let storedSessionId = localStorage.getItem(storageKey);
-    if (!storedSessionId) {
-      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem(storageKey, storedSessionId);
-    }
-    setSessionId(storedSessionId);
-  }, [promiseId]);
 
   // Restaurar estado cuando hay un error en el proceso
   useEffect(() => {
@@ -513,7 +501,6 @@ function PromisePageContent({
                 promiseId={promiseId}
                 studioSlug={studioSlug}
                 studioId={studio.id}
-                sessionId={sessionId || undefined}
                 condicionesComerciales={condicionesFiltradas}
                 terminosCondiciones={terminos_condiciones}
                 showCategoriesSubtotals={shareSettings.show_categories_subtotals}
@@ -543,7 +530,6 @@ function PromisePageContent({
               <PaquetesSection
                 paquetes={paquetes}
                 studioId={studio.id}
-                sessionId={sessionId || undefined}
                 promiseId={promiseId}
                 studioSlug={studioSlug}
                 showAsAlternative={initialCotizaciones.length > 0}

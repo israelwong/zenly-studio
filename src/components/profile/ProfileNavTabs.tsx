@@ -8,9 +8,11 @@ interface ProfileNavTabsProps {
     activeTab: string;
     onTabChange: (tab: string) => void;
     onSearchClick?: () => void;
-    hasActiveFAQs?: boolean; // Si hay FAQs activas para mostrar
-    isOwner?: boolean; // Si el usuario es el dueño del estudio
-    onCreatePost?: () => void; // Callback para crear post (solo en inicio)
+    hasActiveFAQs?: boolean;
+    isOwner?: boolean;
+    onCreatePost?: () => void;
+    /** Slug del estudio: solo mostrar "Mi promesa" si la URL guardada es de este estudio */
+    studioSlug?: string;
 }
 
 /**
@@ -26,7 +28,7 @@ const STORAGE_KEY = 'promise_return_url';
 const DISMISSED_KEY = 'promise_return_dismissed';
 const EXPIRY_HOURS = 24;
 
-export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false, onCreatePost }: ProfileNavTabsProps) {
+export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false, onCreatePost, studioSlug }: ProfileNavTabsProps) {
     const router = useRouter();
     const pathname = usePathname();
     const tabsContainerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +81,11 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                 }
 
                 if (data.url && data.url.includes('/promise/')) {
+                    // Solo mostrar si es la misma studio (mismo slug) o no se filtró por slug
+                    if (studioSlug && !data.url.startsWith(`/${studioSlug}/`)) {
+                        setHasPromiseReturn(false);
+                        return;
+                    }
                     setReturnUrl(data.url);
                     setHasPromiseReturn(true);
                 }
@@ -89,7 +96,7 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
         };
 
         checkPromiseReturn();
-    }, [pathname]);
+    }, [pathname, studioSlug]);
 
     // Construir tabs de manera determinística (sin mutaciones)
     const isInicioSection = activeTab === 'inicio' || activeTab === 'inicio-fotos' || activeTab === 'inicio-videos';

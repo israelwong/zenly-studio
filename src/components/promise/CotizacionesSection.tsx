@@ -31,7 +31,6 @@ interface CotizacionesSectionProps {
   promiseId: string;
   studioSlug: string;
   studioId?: string;
-  sessionId?: string;
   condicionesComerciales?: CondicionComercial[];
   terminosCondiciones?: TerminoCondicion[];
   showCategoriesSubtotals?: boolean;
@@ -62,7 +61,6 @@ export function CotizacionesSection({
   promiseId,
   studioSlug,
   studioId,
-  sessionId,
   condicionesComerciales,
   terminosCondiciones,
   showCategoriesSubtotals = false,

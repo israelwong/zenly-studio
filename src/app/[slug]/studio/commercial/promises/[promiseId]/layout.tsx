@@ -27,11 +27,19 @@ async function PromiseLayoutContent({
   promiseId: string;
   children: React.ReactNode;
 }) {
-  const [stateResult, stagesResult, cotizacionesResult] = await Promise.all([
-    determinePromiseState(promiseId),
-    getPipelineStages(studioSlug),
-    getCotizacionesByPromiseId(promiseId),
-  ]);
+  let stateResult;
+  let stagesResult;
+  let cotizacionesResult;
+  try {
+    [stateResult, stagesResult, cotizacionesResult] = await Promise.all([
+      determinePromiseState(promiseId),
+      getPipelineStages(studioSlug),
+      getCotizacionesByPromiseId(promiseId),
+    ]);
+  } catch (error) {
+    console.error('[PromiseLayout] determinePromiseState or parallel fetch failed:', error);
+    redirect(`/${studioSlug}/studio/commercial/promises`);
+  }
 
   if (!stateResult.success || !stateResult.data) {
     redirect(`/${studioSlug}/studio/commercial/promises`);

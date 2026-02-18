@@ -1,6 +1,8 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use } from 'react';
+import { Clock } from 'lucide-react';
+import { ZenCard } from '@/components/ui/zen';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
 import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
@@ -113,18 +115,6 @@ export function ActiveQuoteSection({
   dateSoldOut = false,
 }: ActiveQuoteSectionProps) {
   const result = use(activeQuotePromise);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  // Generar o recuperar sessionId
-  useEffect(() => {
-    const storageKey = `promise_session_${promiseId}`;
-    let storedSessionId = localStorage.getItem(storageKey);
-    if (!storedSessionId) {
-      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem(storageKey, storedSessionId);
-    }
-    setSessionId(storedSessionId);
-  }, [promiseId]);
 
   if (!result.success || !result.data) {
     return null;
@@ -150,18 +140,22 @@ export function ActiveQuoteSection({
     return false;
   });
 
+  // Cotizaciones visibles al cliente (API puede enviar solo visibles o todas)
+  const visibleQuotes = cotizaciones.filter(
+    (c) => (c as { visible_to_client?: boolean }).visible_to_client !== false
+  );
+  const hasVisibleQuotes = visibleQuotes.length > 0;
+
   // ⚠️ TAREA 3: Renderizar solo la sección de cotizaciones (sin paquetes aún)
   // Los paquetes se cargan después en un Suspense separado
   return (
     <>
-      {/* Cotizaciones personalizadas - se muestra inmediatamente */}
-      {cotizaciones.length > 0 && (
+      {hasVisibleQuotes ? (
         <CotizacionesSectionRealtime
-          initialCotizaciones={cotizaciones}
+          initialCotizaciones={visibleQuotes}
           promiseId={promiseId}
           studioSlug={studioSlug}
           studioId={studio.id}
-          sessionId={sessionId || undefined}
           condicionesComerciales={condicionesFiltradas}
           terminosCondiciones={terminos_condiciones}
           showCategoriesSubtotals={share_settings.show_categories_subtotals}
@@ -169,7 +163,7 @@ export function ActiveQuoteSection({
           showStandardConditions={share_settings.show_standard_conditions}
           showOfferConditions={share_settings.show_offer_conditions}
           showPackages={share_settings.show_packages}
-          paquetes={[]} // Paquetes se cargan después
+          paquetes={[]}
           autoGenerateContract={share_settings.auto_generate_contract}
           durationHours={promise.duration_hours ?? null}
           dateSoldOut={dateSoldOut}
@@ -184,6 +178,26 @@ export function ActiveQuoteSection({
             event_type_name: promise.event_type_name,
           }}
         />
+      ) : (
+        <section className="max-w-4xl mx-auto px-4 pt-0 pb-6 my-0" aria-label="Propuesta en preparación">
+          <ZenCard className="border-zinc-700/60 bg-zinc-900/50 shadow-sm overflow-hidden" padding="lg">
+            <div className="flex flex-col items-center text-center px-2 py-2">
+              <div className="flex flex-col items-center gap-5 max-w-md">
+                <div className="p-4 rounded-2xl bg-zinc-800/40 border border-zinc-700/50 ring-1 ring-zinc-600/20">
+                  <Clock className="h-10 w-10 text-zinc-400/90" aria-hidden strokeWidth={1.5} />
+                </div>
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold text-zinc-100 tracking-tight">
+                    Estamos preparando tu propuesta
+                  </h2>
+                  <p className="text-sm text-zinc-400 leading-relaxed">
+                    Estamos preparando la información para que puedas revisarla. Estamos trabajando en los últimos detalles de tu propuesta para que sea perfecta. ¡Vuelve pronto!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </ZenCard>
+        </section>
       )}
     </>
   );

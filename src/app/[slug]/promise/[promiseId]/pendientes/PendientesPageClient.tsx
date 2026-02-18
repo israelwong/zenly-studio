@@ -110,11 +110,10 @@ export function PendientesPageClient({
 
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  
+
   // ⚠️ TAREA 3: Comparación de datos en el cliente (versiones de cotizaciones)
   const cotizacionesVersionsRef = useRef<Map<string, string>>(new Map());
-  
+
   useEffect(() => {
     // Inicializar versiones de cotizaciones
     initialCotizaciones.forEach((cot) => {
@@ -123,17 +122,6 @@ export function PendientesPageClient({
       cotizacionesVersionsRef.current.set(cot.id, version);
     });
   }, [initialCotizaciones]);
-
-  // Generar o recuperar sessionId para tracking
-  useEffect(() => {
-    const storageKey = `promise_session_${promiseId}`;
-    let storedSessionId = localStorage.getItem(storageKey);
-    if (!storedSessionId) {
-      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem(storageKey, storedSessionId);
-    }
-    setSessionId(storedSessionId);
-  }, [promiseId, studio.id]);
 
   const handleSettingsUpdated = useCallback((settings: PromiseShareSettings) => {
     setShareSettings(settings);
@@ -261,7 +249,6 @@ export function PendientesPageClient({
           promiseId={promiseId}
           studioSlug={studioSlug}
           studioId={studio.id}
-          sessionId={sessionId || undefined}
           condicionesComerciales={condicionesFiltradas}
           terminosCondiciones={terminos_condiciones}
           showCategoriesSubtotals={shareSettings.show_categories_subtotals}
@@ -290,7 +277,6 @@ export function PendientesPageClient({
         <PaquetesSection
           paquetes={paquetes}
           studioId={studio.id}
-          sessionId={sessionId || undefined}
           promiseId={promiseId}
           studioSlug={studioSlug}
           showAsAlternative={initialCotizaciones.length > 0}

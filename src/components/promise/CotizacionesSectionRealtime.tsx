@@ -13,7 +13,6 @@ interface CotizacionesSectionRealtimeProps {
   promiseId: string;
   studioSlug: string;
   studioId?: string;
-  sessionId?: string;
   condicionesComerciales?: Array<{
     id: string;
     name: string;
@@ -63,7 +62,6 @@ export function CotizacionesSectionRealtime({
   promiseId,
   studioSlug,
   studioId,
-  sessionId,
   condicionesComerciales,
   terminosCondiciones,
   showCategoriesSubtotals = false,
@@ -229,7 +227,6 @@ export function CotizacionesSectionRealtime({
         promiseId={promiseId}
         studioSlug={studioSlug}
         studioId={studioId}
-        sessionId={sessionId}
         condicionesComerciales={localCondiciones ?? condicionesComerciales}
         terminosCondiciones={terminosCondiciones}
         showCategoriesSubtotals={showCategoriesSubtotals}

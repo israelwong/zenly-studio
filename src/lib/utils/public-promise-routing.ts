@@ -21,23 +21,37 @@ type CotizacionConStatus =
   | (PublicCotizacion & { status: string; selected_by_prospect?: boolean; visible_to_client?: boolean; evento_id?: string | null })
   | { id: string; status: string; selected_by_prospect?: boolean | null; visible_to_client?: boolean | null; evento_id?: string | null };
 
+/** Slugs de pipeline que indican promesa no disponible (archivada). En la UI pública se muestra "No disponible". */
+const ARCHIVED_STAGE_SLUGS = new Set(['archived', 'archivado', 'archivada']);
+
+export interface DeterminePromiseRouteOptions {
+  /** Slug del pipeline_stage de la promesa. Si es archived/archivado, retorna /no-disponible */
+  promisePipelineStageSlug?: string | null;
+}
+
 /**
- * Determina la ruta de redirección basada en el estado de las cotizaciones.
- * 
- * Prioridad: Aprobada > Cierre > Negociación > Pendientes
- * ✅ CORRECCIÓN: Cierre tiene prioridad sobre Negociación
- * Acepta tanto formato completo (PublicCotizacion) como simplificado (solo estado)
- * 
+ * Determina la ruta de redirección basada en el estado de la promesa y las cotizaciones.
+ *
+ * Prioridad: No disponible (archivada) > Aprobada > Cierre > Negociación > Pendientes
+ * ✅ Si la promesa está archivada, retorna /no-disponible (en UI pública nunca "Archivada").
+ *
  * @param cotizaciones - Array de cotizaciones con estado
  * @param slug - Slug del estudio
  * @param promiseId - ID de la promesa
+ * @param options - Opciones (estado de la promesa, ej. pipeline_stage.slug)
  * @returns Ruta de redirección según la prioridad
  */
 export function determinePromiseRoute(
   cotizaciones: Array<CotizacionConStatus>,
   slug: string,
-  promiseId: string
+  promiseId: string,
+  options?: DeterminePromiseRouteOptions
 ): string {
+  const stageSlug = (options?.promisePipelineStageSlug ?? '').toLowerCase().trim();
+  if (stageSlug && ARCHIVED_STAGE_SLUGS.has(stageSlug)) {
+    return `/${slug}/promise/${promiseId}/no-disponible`;
+  }
+
   // FILTRO INICIAL: Solo considerar cotizaciones visibles al cliente
   const visibleQuotes = cotizaciones.filter(q => q.visible_to_client === true);
 

@@ -13,7 +13,22 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
   });
 
   if (!studio) {
-    return { success: false, data: [] };
+    return { success: false, data: [], promiseStageSlug: null };
+  }
+
+  const promise = await prisma.studio_promises.findFirst({
+    where: { id: promiseId, studio_id: studio.id },
+    select: { pipeline_stage: { select: { slug: true } } },
+  });
+
+  const stageSlug = (promise?.pipeline_stage?.slug ?? '').toLowerCase().trim();
+  if (['archived', 'archivado', 'archivada'].includes(stageSlug)) {
+    return {
+      success: true,
+      data: [],
+      promiseStageSlug: promise!.pipeline_stage!.slug,
+      redirectNoDisponible: `/${studioSlug}/promise/${promiseId}/no-disponible`,
+    };
   }
 
   // Consulta directa sin caché - Traer TODAS las cotizaciones asociadas al promiseId
@@ -44,6 +59,7 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
       visible_to_client: cot.visible_to_client,
       evento_id: cot.evento_id,
     })),
+    promiseStageSlug: promise?.pipeline_stage?.slug ?? null,
   };
 }
 
@@ -57,19 +73,27 @@ export async function GET(
     // Bypass cache: Consulta directa a la BD sin usar getPublicPromiseRouteState (que usa cache)
     const routeStateResult = await getRouteStateDirect(slug, promiseId);
 
+    if (!routeStateResult.success) {
+      return NextResponse.json({ redirect: `/${slug}/promise/${promiseId}/pendientes` });
+    }
+
+    // Promesa archivada → ruta física no disponible (en UI pública: "No disponible")
+    if ('redirectNoDisponible' in routeStateResult && routeStateResult.redirectNoDisponible) {
+      return NextResponse.json({ redirect: routeStateResult.redirectNoDisponible });
+    }
+
     // Si no hay cotizaciones, redirigir a /pendientes para ver paquetes disponibles
-    if (!routeStateResult.success || !routeStateResult.data || routeStateResult.data.length === 0) {
+    if (!routeStateResult.data || routeStateResult.data.length === 0) {
       return NextResponse.json({ redirect: `/${slug}/promise/${promiseId}/pendientes` });
     }
 
     const cotizaciones = routeStateResult.data;
+    const promiseStageSlug = 'promiseStageSlug' in routeStateResult ? routeStateResult.promiseStageSlug : null;
 
-    // Determinar ruta usando la función maestra (evalúa todas las cotizaciones y filtra por visibilidad)
-    // ✅ CORRECCIÓN: La función maestra decide la prioridad: Aprobada > Cierre > Negociación > Pendientes
-    // y aplica el filtro de visibilidad obligatorio
-    const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId);
+    const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId, {
+      promisePipelineStageSlug: promiseStageSlug,
+    });
 
-    // determinePromiseRoute siempre devuelve una ruta válida
     return NextResponse.json({ redirect: targetRoute });
   } catch (error) {
     console.error('[PromiseRedirectAPI] Error:', error);

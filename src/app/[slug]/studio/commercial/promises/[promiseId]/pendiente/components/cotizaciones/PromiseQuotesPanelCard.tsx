@@ -35,7 +35,6 @@ import {
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
-// ✅ OPTIMIZACIÓN: click_count ahora viene en la prop cotizacion
 import { getReminderByPromise, deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 
 interface PromiseQuotesPanelCardProps {
@@ -96,8 +95,6 @@ export function PromiseQuotesPanelCard({
   const [editingName, setEditingName] = useState(cotizacion.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const isProcessingRef = useRef(false);
-  // ✅ OPTIMIZACIÓN: click_count viene en la prop cotizacion desde el servidor
-  const clickCount = cotizacion.click_count ?? 0;
   const [reminder, setReminder] = useState<{
     id: string;
     subject_text: string;
@@ -122,9 +119,6 @@ export function PromiseQuotesPanelCard({
       }, 100);
     }
   }, [showEditNameModal]);
-
-  // ❌ ELIMINADO: useEffect que cargaba click_count individual
-  // ✅ OPTIMIZACIÓN: click_count viene en la prop cotizacion desde el servidor
 
   const {
     attributes,

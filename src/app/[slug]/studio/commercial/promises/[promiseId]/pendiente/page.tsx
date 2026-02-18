@@ -20,33 +20,53 @@ interface PromisePendientePageProps {
 export default async function PromisePendientePage({ params }: PromisePendientePageProps) {
   const { slug: studioSlug, promiseId } = await params;
 
-  // Cadenero: si la promesa no pertenece a esta página, redirect a la correcta
-  const stateResult = await determinePromiseState(promiseId);
+  let stateResult;
+  try {
+    stateResult = await determinePromiseState(promiseId);
+  } catch (error) {
+    console.error('[PromisePendientePage] determinePromiseState failed:', error);
+    redirect(`/${studioSlug}/studio/commercial/promises`);
+  }
+
   if (stateResult.success && stateResult.data) {
     const state = stateResult.data.state;
     if (state !== 'pendiente') {
       redirect(getPromisePathFromState(studioSlug, promiseId, state));
     }
+  } else if (!stateResult.success) {
+    redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 
-  // ✅ Protocolo Zenly: select atómico + paralelismo (Promise.all)
-  const [
-    condicionesResult,
-    paymentMethodsResult,
-    cotizacionesResult,
-    shareSettingsResult,
-    lastLogsResult,
-    agendamientoResult,
-    reminderResult,
-  ] = await Promise.all([
-    obtenerCondicionesComerciales(studioSlug),
-    getPaymentMethodsForAuthorization(studioSlug),
-    getCotizacionesByPromiseId(promiseId),
-    getPromiseShareSettings(studioSlug, promiseId),
-    getLastPromiseLogs(promiseId, 3),
-    obtenerAgendamientoPorPromise(studioSlug, promiseId),
-    getReminderByPromise(studioSlug, promiseId),
-  ]);
+  // ✅ Protocolo Zenly: select atómico + paralelismo (Promise.all); fallo → redirect
+  let condicionesResult;
+  let paymentMethodsResult;
+  let cotizacionesResult;
+  let shareSettingsResult;
+  let lastLogsResult;
+  let agendamientoResult;
+  let reminderResult;
+  try {
+    [
+      condicionesResult,
+      paymentMethodsResult,
+      cotizacionesResult,
+      shareSettingsResult,
+      lastLogsResult,
+      agendamientoResult,
+      reminderResult,
+    ] = await Promise.all([
+      obtenerCondicionesComerciales(studioSlug),
+      getPaymentMethodsForAuthorization(studioSlug),
+      getCotizacionesByPromiseId(promiseId),
+      getPromiseShareSettings(studioSlug, promiseId),
+      getLastPromiseLogs(promiseId, 3),
+      obtenerAgendamientoPorPromise(studioSlug, promiseId),
+      getReminderByPromise(studioSlug, promiseId),
+    ]);
+  } catch (error) {
+    console.error('[PromisePendientePage] Error cargando datos (cotizaciones/condiciones/etc.):', error);
+    redirect(`/${studioSlug}/studio/commercial/promises`);
+  }
 
   const condicionesComerciales = condicionesResult.success && condicionesResult.data
     ? condicionesResult.data.map(cc => ({

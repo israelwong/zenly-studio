@@ -179,19 +179,6 @@ export function PendientesPageDeferred({
         />
       </Suspense>
 
-      {/* Contáctanos: bloque con divisor arriba y abajo */}
-      <PromiseContactBlock
-        studio={{
-          studio_name: basicPromise.studio.studio_name,
-          logo_url: basicPromise.studio.logo_url,
-          phone: basicPromise.studio.phone,
-          business_hours_text: basicPromise.studio.business_hours_text ?? undefined,
-          contact_phones: basicPromise.studio.contact_phones,
-        }}
-        showDividerTop
-        showDividerBottom
-      />
-
       {/* ⚠️ TAREA 3: Paquetes disponibles - carga diferida (~35 items) */}
       <Suspense fallback={<PackagesSectionSkeleton />}>
         <AvailablePackagesSectionWrapper
@@ -203,7 +190,7 @@ export function PendientesPageDeferred({
         />
       </Suspense>
 
-      {/* Contáctanos: debajo de PaquetesSection / Portafolios; sin divisor inferior */}
+      {/* Única instancia de contacto al final (Cotización, Paquetes, Portafolios ya renderizados) */}
       <PromiseContactBlock
         studio={{
           studio_name: basicPromise.studio.studio_name,
@@ -213,7 +200,7 @@ export function PendientesPageDeferred({
           contact_phones: basicPromise.studio.contact_phones,
         }}
         showDividerTop
-        showDividerBottom={false}
+        showDividerBottom
       />
     </>
   );

@@ -61,8 +61,11 @@ export async function withRetry<T>(
         }
     }
     
-    // Log final de error
-    console.error(`❌ Operación falló después de ${maxRetries} intentos`);
+    // Log final de error (incluir causa para diagnóstico)
+    console.error(
+      `❌ Operación falló después de ${maxRetries} intentos`,
+      lastError instanceof Error ? lastError.message : lastError
+    );
     throw lastError;
 }
 

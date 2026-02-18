@@ -16,7 +16,13 @@ interface PromisePageProps {
 export default async function PromiseRootPage({ params }: PromisePageProps) {
   const { slug: studioSlug, promiseId } = await params;
 
-  const stateResult = await determinePromiseState(promiseId);
+  let stateResult;
+  try {
+    stateResult = await determinePromiseState(promiseId);
+  } catch (error) {
+    console.error('[PromiseRootPage] determinePromiseState failed:', error);
+    redirect(`/${studioSlug}/studio/commercial/promises`);
+  }
 
   if (!stateResult.success || !stateResult.data) {
     redirect(`/${studioSlug}/studio/commercial/promises`);

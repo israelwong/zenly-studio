@@ -5419,48 +5419,57 @@ export async function getPublicPromiseBasicData(
     }
 
     const fetchPromiseStart = Date.now();
-    const promise = await prisma.studio_promises.findFirst({
-      where: {
-        id: promiseId,
-        studio_id: studio.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        event_type_id: true,
-        event_date: true,
-        event_location: true,
-        duration_hours: true,
-        share_show_packages: true,
-        share_show_categories_subtotals: true,
-        share_show_items_prices: true,
-        share_min_days_to_hire: true,
-        share_show_standard_conditions: true,
-        share_show_offer_conditions: true,
-        share_portafolios: true,
-        share_auto_generate_contract: true,
-        share_allow_recalc: true,
-        share_rounding_mode: true,
-        contact: {
-          select: {
-            name: true,
-            phone: true,
-            email: true,
-            address: true,
+    let promise: Awaited<ReturnType<typeof prisma.studio_promises.findFirst>>;
+    try {
+      promise = await prisma.studio_promises.findFirst({
+        where: {
+          id: promiseId,
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          name: true,
+          event_type_id: true,
+          event_date: true,
+          event_location: true,
+          duration_hours: true,
+          share_show_packages: true,
+          share_show_categories_subtotals: true,
+          share_show_items_prices: true,
+          share_min_days_to_hire: true,
+          share_show_standard_conditions: true,
+          share_show_offer_conditions: true,
+          share_portafolios: true,
+          share_auto_generate_contract: true,
+          share_allow_recalc: true,
+          share_rounding_mode: true,
+          contact: {
+            select: {
+              name: true,
+              phone: true,
+              email: true,
+              address: true,
+            },
+          },
+          event_type: {
+            select: {
+              id: true,
+              name: true,
+              cover_image_url: true,
+              cover_video_url: true,
+              cover_media_type: true,
+              cover_design_variant: true,
+            },
           },
         },
-        event_type: {
-          select: {
-            id: true,
-            name: true,
-            cover_image_url: true,
-            cover_video_url: true,
-            cover_media_type: true,
-            cover_design_variant: true,
-          },
-        },
-      },
-    });
+      });
+    } catch (dbError) {
+      console.error("[getPublicPromiseBasicData] Error de conexión/consulta:", dbError);
+      return {
+        success: false,
+        error: "Error al conectar. Intenta de nuevo en unos momentos.",
+      };
+    }
 
     if (!promise) {
       return {

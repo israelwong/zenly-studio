@@ -201,6 +201,32 @@ export function PromiseRouteGuard({
     }
   }, [initialQuotes]);
 
+  // Cuando el prospecto está en /no-disponible, sondear la API para detectar desarchivado.
+  // El cambio de pipeline_stage (archived → pendiente) no dispara Realtime de cotizaciones.
+  useEffect(() => {
+    if (!pathname.includes('/no-disponible')) return;
+
+    const pollInterval = setInterval(async () => {
+      if (hasRedirectedRef.current || isGlobalLockActive()) return;
+      try {
+        const res = await fetch(
+          `/api/promise/${studioSlug}/${promiseId}/redirect?t=${Date.now()}`,
+          { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } }
+        );
+        if (!res.ok) return;
+        const { redirect: targetRoute } = await res.json();
+        if (targetRoute && !targetRoute.includes('no-disponible')) {
+          hasRedirectedRef.current = true;
+          router.replace(targetRoute);
+        }
+      } catch {
+        // silenciar
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [pathname, studioSlug, promiseId, router]);
+
   // Realtime: Solo para actualizaciones posteriores (no fetch inicial si tenemos initialQuotes)
   useCotizacionesRealtime({
     studioSlug,

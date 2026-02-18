@@ -143,7 +143,6 @@ export function PaquetesSection({
     promiseId,
     studioSlug,
     studioId,
-    sessionId,
     showAsAlternative = false,
     condicionesComerciales,
     terminosCondiciones,
@@ -156,7 +155,7 @@ export function PaquetesSection({
     cotizaciones = [],
     cotizacionesCompletas = [],
     durationHours,
-}: PaquetesSectionProps & { studioId?: string; sessionId?: string }) {
+}: PaquetesSectionProps & { studioId?: string }) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
 
     const handlePaqueteClick = (paquete: PublicPaquete) => {

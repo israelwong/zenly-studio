@@ -39,18 +39,16 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
   }
 
   // ⚠️ STREAMING: Cargar datos básicos inmediatamente (instantáneo)
-  // ⚠️ MANEJO ROBUSTO: Evitar que errores aborten boundaries
-  const basicData = await getPublicPromiseBasicData(slug, promiseId).catch((error) => {
+  // ⚠️ MANEJO ROBUSTO: timeout/conexión y cualquier error → redirigir sin romper
+  let basicData;
+  try {
+    basicData = await getPublicPromiseBasicData(slug, promiseId);
+  } catch (error) {
     console.error('[PendientesPage] Error obteniendo basicData:', error);
-    return { success: false as const };
-  });
-
-  if (!basicData.success) {
-    // Solo redirigir si es un error crítico, no por discrepancias de estado
     redirect(`/${slug}/promise/${promiseId}`);
   }
 
-  if (!basicData.data) {
+  if (!basicData.success || !basicData.data) {
     redirect(`/${slug}/promise/${promiseId}`);
   }
 
