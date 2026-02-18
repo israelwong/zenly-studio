@@ -2,13 +2,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Loader2, Check } from 'lucide-react';
-import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ArrowLeft, MoreVertical, Loader2, Check, Calendar } from 'lucide-react';
+import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
+import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
 
 interface EventDetailHeaderProps {
   studioSlug: string;
@@ -37,8 +39,14 @@ export const EventDetailHeader = function EventDetailHeader({
   const [editNameValue, setEditNameValue] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const [savedNameFeedback, setSavedNameFeedback] = useState(false);
+  const [googleCalendarConectado, setGoogleCalendarConectado] = useState(false);
+  const [showGoogleBundleModal, setShowGoogleBundleModal] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+
+  useEffect(() => {
+    tieneGoogleCalendarHabilitado(studioSlug).then(setGoogleCalendarConectado).catch(() => setGoogleCalendarConectado(false));
+  }, [studioSlug]);
   const isArchived = currentStage?.slug === 'archivado';
 
   const displayName = eventData.promise?.name || eventData.name || 'Evento sin nombre';
@@ -138,6 +146,7 @@ export const EventDetailHeader = function EventDetailHeader({
   };
 
   return (
+    <>
     <ZenCardHeader className="border-b border-zinc-800">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -194,6 +203,22 @@ export const EventDetailHeader = function EventDetailHeader({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {googleCalendarConectado ? (
+            <ZenBadge variant="outline" className="gap-1 px-2 py-0.5 bg-emerald-950/30 text-emerald-400 border-emerald-800/50 text-[10px] sm:text-xs shrink-0">
+              <Calendar className="h-3 w-3 shrink-0" aria-hidden />
+              Google Calendar conectado
+            </ZenBadge>
+          ) : (
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              className="inline-flex items-center rounded-md border font-medium gap-1 px-2 py-0.5 bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-700/50 hover:text-zinc-300 text-[10px] sm:text-xs shrink-0"
+              onClick={() => setShowGoogleBundleModal(true)}
+            >
+              <Calendar className="h-3 w-3 shrink-0" aria-hidden />
+              Conectar Google Calendar
+            </ZenButton>
+          )}
           {pipelineStages.length > 0 && currentPipelineStageId && (
             <>
               <div className="relative flex items-center">
@@ -242,20 +267,26 @@ export const EventDetailHeader = function EventDetailHeader({
             </ZenDropdownMenuTrigger>
             <ZenDropdownMenuContent align="end">
               {eventData.status !== 'CANCELLED' && (
-                <>
-                  <ZenDropdownMenuItem
-                    onClick={onCancelClick}
-                    className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                  >
-                    Cancelar evento
-                  </ZenDropdownMenuItem>
-                  <ZenDropdownMenuSeparator />
-                </>
+                <ZenDropdownMenuItem
+                  onClick={onCancelClick}
+                  className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                >
+                  Cancelar evento
+                </ZenDropdownMenuItem>
               )}
             </ZenDropdownMenuContent>
           </ZenDropdownMenu>
         </div>
       </div>
     </ZenCardHeader>
+    <GoogleBundleModal
+      isOpen={showGoogleBundleModal}
+      onClose={() => {
+        setShowGoogleBundleModal(false);
+        tieneGoogleCalendarHabilitado(studioSlug).then(setGoogleCalendarConectado).catch(() => setGoogleCalendarConectado(false));
+      }}
+      studioSlug={studioSlug}
+    />
+    </>
   );
 };

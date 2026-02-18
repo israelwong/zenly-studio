@@ -983,19 +983,17 @@ export default function EventSchedulerPage() {
         }
       >
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-4 flex items-center justify-between gap-2 flex-wrap shrink-0">
-          {/* Izquierda: volver + label */}
-          <div className="flex items-center gap-2 min-w-0 shrink-0">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventId}`)}
-              className="p-2 shrink-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
-              aria-label="Volver al evento"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </ZenButton>
-            <span className="text-sm font-medium text-emerald-400 truncate">{cronogramaLabel}</span>
-          </div>
+          {/* Izquierda: botón Regresar (icono + texto) */}
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventId}`)}
+            className="gap-2 shrink-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
+            aria-label="Volver al evento"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span className="truncate">{cronogramaLabel}</span>
+          </ZenButton>
 
           {/* Derecha: Stats (desktop) + Fecha. Etiquetas con text-[10px] sm:text-xs; en móvil texto opcional (hidden sm:inline) */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">

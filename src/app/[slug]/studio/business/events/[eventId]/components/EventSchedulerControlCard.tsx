@@ -47,6 +47,9 @@ import {
 const PHASE_ORDER = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'] as const;
 type PhaseKey = (typeof PHASE_ORDER)[number];
 
+/** Oculto por ahora; activar cuando se necesite de nuevo el botón "Limpiar estructura". */
+const SHOW_LIMPIAR_ESTRUCTURA = false;
+
 const PHASE_OPTIONS = [
   { value: 'PLANNING', label: 'Planeación' },
   { value: 'PRODUCTION', label: 'Producción' },
@@ -954,7 +957,7 @@ export function EventSchedulerControlCard({
                 )}
               </ZenButton>
             </div>
-            {process.env.NODE_ENV === 'development' && (
+            {process.env.NODE_ENV === 'development' && SHOW_LIMPIAR_ESTRUCTURA && (
               <div>
                 <ZenButton
                   variant="ghost"

@@ -365,21 +365,6 @@ export function PublicationSummarySheet({
                 <span className="text-zinc-600 mx-1">·</span>
                 Pendiente <span className="text-amber-400 font-medium">{fmt(totalPendiente)}</span>
               </span>
-              {googleCalendarConectado && hayPendientesInvitar && (
-                <>
-                  <span className="text-zinc-600 shrink-0">|</span>
-                  <ZenButton
-                    variant="primary"
-                    size="sm"
-                    onClick={handleInvitarPendientes}
-                    disabled={loading}
-                    loading={loading}
-                    className="shrink-0"
-                  >
-                    Invitar a todos
-                  </ZenButton>
-                </>
-              )}
               <span className="text-zinc-600 shrink-0 ml-auto">|</span>
               <ZenButton
                 variant="ghost"
