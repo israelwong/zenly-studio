@@ -30,6 +30,23 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
+### 2. Panel de Gestión Logística (Scheduler)
+**Archivo:** `panel-gestion-logistica.md`  
+**Estado:** ✅ Producción
+
+**Contenido (fuente única):**
+- Resumen ejecutivo, arquitectura de componentes (PublicationBar, PublicationSummarySheet, LogisticsTaskCard)
+- Obtención de datos (obtenerMetricasLogisticasEvento, obtenerEstructuraCompletaLogistica)
+- Cálculo de presupuesto por tarea (esquema, función maestra, duración evento, sync cotización→scheduler)
+- Nómina (entidades, estados pendiente/pagado, montos, integridad)
+- Flujo de usuario, archivos del sistema, otros docs del ecosistema Scheduler, mantenimiento
+
+**Cuándo consultar:**
+- Iterar sobre el panel logístico, barra del scheduler, presupuestos o nómina
+- Onboarding en Scheduler / gestión logística
+
+---
+
 ## 🏗️ Estructura de Carpetas
 
 ```
@@ -118,5 +135,5 @@ Cada documento en `architecture/` debe seguir esta estructura:
 
 ---
 
-**Última actualización:** 2026-02-05  
+**Última actualización:** 2026-02-17  
 **Mantenedor:** Equipo de Desarrollo ZENPro

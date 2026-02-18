@@ -21,6 +21,7 @@ import { asignarCrewAItem } from '@/lib/actions/studio/business/events';
 import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 import { toast } from 'sonner';
 import { LogisticsTaskCard } from './LogisticsTaskCard';
+import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
 
 const STAGE_BORDER: Record<string, string> = {
   PLANNING: 'border-l-blue-500',
@@ -44,39 +45,37 @@ interface PublicationSummarySheetProps {
 
 function PublicationSheetSkeleton() {
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-      {/* Stats Skeleton */}
-      <div className="grid grid-cols-4 gap-2">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-zinc-800/50 rounded-lg p-2 border border-zinc-700">
-            <Skeleton className="h-3 w-3/4 mb-0.5" />
-            <Skeleton className="h-5 w-1/2" />
-          </div>
-        ))}
-      </div>
-
-      {/* Task List Skeleton */}
-      <div className="space-y-4">
-        {[...Array(2)].map((_, sectionIndex) => (
-          <div key={sectionIndex}>
-            <div className="flex items-center gap-2 mb-2">
-              <Skeleton className="h-4 w-4" />
-              <Skeleton className="h-4 w-1/2" />
+    <div className="flex-1 flex flex-col min-h-0 px-6 py-4 gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
+        {[1, 2].map((sectionIdx) => (
+          <div key={sectionIdx} className="space-y-3">
+            <div className="border-b border-zinc-800 pb-1">
+              <Skeleton className="h-3 w-32 rounded" />
             </div>
-            <div className="space-y-2">
-              {[...Array(3)].map((_, itemIndex) => (
-                <div key={itemIndex} className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/50">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <Skeleton className="h-4 w-3/4 flex-1" />
-                    <Skeleton className="h-5 w-16" />
-                  </div>
-                  <div className="flex flex-col gap-1 text-xs">
-                    <Skeleton className="h-3 w-2/3" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
+            {[1, 2].map((catIdx) => (
+              <div key={catIdx} className="space-y-2">
+                <div className="pl-0.5">
+                  <Skeleton className="h-3 w-24 rounded" />
                 </div>
-              ))}
-            </div>
+                <div className="border-l-4 border-l-zinc-600 pl-2.5 space-y-2">
+                  {[1, 2, 3].map((cardIdx) => (
+                    <div
+                      key={cardIdx}
+                      className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-800/30"
+                    >
+                      <Skeleton className="h-4 w-[85%] rounded mb-1.5" />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Skeleton className="h-3 w-20 rounded" />
+                        <Skeleton className="h-3 w-3 rounded shrink-0" />
+                        <Skeleton className="h-3 w-24 rounded" />
+                        <Skeleton className="h-3 w-3 rounded shrink-0" />
+                        <Skeleton className="h-5 w-14 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -96,6 +95,7 @@ export function PublicationSummarySheet({
   const [loading, setLoading] = useState(false);
   const [loadingEstructura, setLoadingEstructura] = useState(true);
   const [googleCalendarConectado, setGoogleCalendarConectado] = useState(false);
+  const [showGoogleBundleModal, setShowGoogleBundleModal] = useState(false);
   const [assignCrewForTask, setAssignCrewForTask] = useState<{ taskId: string; itemId?: string; startDate: Date; endDate: Date } | null>(null);
   const [estructura, setEstructura] = useState<{
     secciones: Array<{
@@ -121,8 +121,11 @@ export function PublicationSummarySheet({
           budgetAmount?: number | null;
           costoUnitario?: number | null;
           quantity?: number | null;
+          billingType?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
+          durationHours?: number | null;
           payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
           isDraft: boolean;
+          taskStatus: string;
         }>;
       }>;
     }>;
@@ -287,6 +290,20 @@ export function PublicationSummarySheet({
             </SheetDescription>
           </SheetHeader>
 
+          {!googleCalendarConectado && (
+            <div className="px-4 py-2 flex items-center justify-between gap-2 bg-amber-500/10 border-b border-amber-500/20">
+              <span className="text-xs text-amber-200">Google Calendar está desconectado.</span>
+              <ZenButton
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowGoogleBundleModal(true)}
+                className="shrink-0 text-xs"
+              >
+                Conectar ahora
+              </ZenButton>
+            </div>
+          )}
+
           {loadingEstructura ? (
             <PublicationSheetSkeleton />
           ) : estructura ? (
@@ -294,14 +311,14 @@ export function PublicationSummarySheet({
               <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
                 {estructura.secciones.map((seccion) => (
                   <div key={seccion.sectionId} className="space-y-3">
-                    <h2 className="text-[10px] font-medium text-zinc-500 uppercase tracking-[0.2em] border-b border-zinc-800 pb-1">
+                    <h2 className="text-sm font-semibold text-white uppercase tracking-[0.15em] border-b border-zinc-800 pb-1">
                       {seccion.sectionName}
                     </h2>
                     {seccion.categorias.map((cat) => {
                       const stageBorder = STAGE_BORDER[cat.stageKey] ?? 'border-l-zinc-600';
                       return (
                         <div key={cat.categoryId} className="space-y-2">
-                          <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider pl-0.5">
+                          <h3 className="text-xs font-medium text-zinc-300 uppercase tracking-wider pl-0.5">
                             {cat.categoryLabel}
                           </h3>
                           <div className={`border-l-4 pl-2.5 ${stageBorder} space-y-2`}>
@@ -320,6 +337,7 @@ export function PublicationSummarySheet({
                                 }
                                 onInvitar={googleCalendarConectado ? handleInvitarTarea : undefined}
                                 onCancelarInvitacion={googleCalendarConectado ? handleCancelarInvitacion : undefined}
+                                onConectarGoogle={() => setShowGoogleBundleModal(true)}
                               />
                             ))}
                           </div>
@@ -391,6 +409,15 @@ export function PublicationSummarySheet({
             taskId={assignCrewForTask.taskId}
           />
         )}
+
+        <GoogleBundleModal
+          isOpen={showGoogleBundleModal}
+          onClose={() => {
+            setShowGoogleBundleModal(false);
+            verificarGoogleCalendar();
+          }}
+          studioSlug={studioSlug}
+        />
       </SheetContent>
     </Sheet>
   );

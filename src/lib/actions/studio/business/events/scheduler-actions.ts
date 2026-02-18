@@ -1,12 +1,13 @@
 'use server';
 
-import { addDays, differenceInCalendarDays } from 'date-fns';
+import { addDays, differenceInCalendarDays, differenceInHours } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
 import { obtenerCatalogo, actualizarOrdenCategorias } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
 interface UpdateSchedulerTaskInput {
   start_date: Date;
@@ -1165,12 +1166,15 @@ export async function obtenerEstructuraCompletaLogistica(
           personalEmail?: string | null;
           itemId?: string | null;
           itemName?: string | null;
-          budgetAmount?: number | null;
-          costoUnitario?: number | null;
-          quantity?: number | null;
-          payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
-          isDraft: boolean;
-        }>;
+      budgetAmount?: number | null;
+      costoUnitario?: number | null;
+      quantity?: number | null;
+      billingType?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
+      durationHours?: number | null;
+      payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+      isDraft: boolean;
+      taskStatus: string;
+    }>;
       }>;
     }>;
   };
@@ -1183,24 +1187,42 @@ export async function obtenerEstructuraCompletaLogistica(
     });
     if (!studio) return { success: false, error: 'Studio no encontrado' };
 
-    const tareas = await prisma.studio_scheduler_event_tasks.findMany({
-      where: { scheduler_instance: { event_id: eventId } },
-      orderBy: [{ start_date: 'asc' }],
-      include: {
-        cotizacion_item: {
-          select: {
-            id: true,
-            name_snapshot: true,
-            assigned_to_crew_member_id: true,
-            assigned_to_crew_member: { select: { id: true, name: true, email: true } },
-            quantity: true,
-            cost: true,
-            cost_snapshot: true,
+    const [tareas, eventMeta] = await Promise.all([
+      prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance: { event_id: eventId } },
+        orderBy: [{ start_date: 'asc' }],
+        include: {
+          cotizacion_item: {
+            select: {
+              id: true,
+              name_snapshot: true,
+              assigned_to_crew_member_id: true,
+              assigned_to_crew_member: { select: { id: true, name: true, email: true } },
+              quantity: true,
+              cost: true,
+              cost_snapshot: true,
+              billing_type: true,
+            },
           },
+          assigned_to_crew_member: { select: { id: true, name: true, email: true } },
         },
-        assigned_to_crew_member: { select: { id: true, name: true, email: true } },
-      },
-    });
+      }),
+      prisma.studio_events.findFirst({
+        where: { id: eventId, studio_id: studio.id },
+        select: {
+          promise: { select: { duration_hours: true } },
+        },
+      }).then(async (ev) => {
+        const durationFromPromise = ev?.promise?.duration_hours ?? null;
+        const cot = await prisma.studio_cotizaciones.findFirst({
+          where: { OR: [{ evento_id: eventId }], status: { in: ['autorizada', 'aprobada', 'approved'] } },
+          select: { event_duration: true },
+        });
+        return cot?.event_duration ?? durationFromPromise;
+      }),
+    ]);
+
+    const eventDurationHours = eventMeta ?? null;
 
     const itemIds = tareas.map((t) => t.cotizacion_item_id).filter((id): id is string => id != null);
     const payrollByItem = new Map<string, { hasPayroll: true; status: 'pendiente' | 'pagado' }>();
@@ -1241,8 +1263,11 @@ export async function obtenerEstructuraCompletaLogistica(
       budgetAmount?: number | null;
       costoUnitario?: number | null;
       quantity?: number | null;
+      billingType?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
+      durationHours?: number | null;
       payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
       isDraft: boolean;
+      taskStatus: string;
     }> }> }>();
     tareas.forEach((t) => {
       const sectionId = t.catalog_section_id_snapshot ?? 'sin-seccion';
@@ -1253,13 +1278,20 @@ export async function obtenerEstructuraCompletaLogistica(
       let budgetAmount: number | null = t.budget_amount != null ? Number(t.budget_amount) : null;
       let costoUnitario: number | null = null;
       let quantity: number | null = null;
+      let billingType: 'HOUR' | 'SERVICE' | 'UNIT' | null = null;
+      let durationHours: number | null = null;
       if (t.cotizacion_item != null) {
         const c = t.cotizacion_item.cost ?? t.cotizacion_item.cost_snapshot ?? 0;
         const q = t.cotizacion_item.quantity ?? 1;
         costoUnitario = Number(c);
         quantity = q;
+        const bt = (t.cotizacion_item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+        billingType = bt;
+        // HOUR: duración del evento (alineado con cotización: event_duration ?? promise.duration_hours)
+        if (bt === 'HOUR') durationHours = eventDurationHours;
         if (budgetAmount == null) {
-          const costoTotal = costoUnitario * quantity;
+          const cantidadEfectiva = calcularCantidadEfectiva(bt, q, bt === 'HOUR' ? eventDurationHours : null);
+          const costoTotal = Number(c) * cantidadEfectiva;
           if (costoTotal > 0) budgetAmount = costoTotal;
         }
       }
@@ -1297,8 +1329,11 @@ export async function obtenerEstructuraCompletaLogistica(
         budgetAmount,
         costoUnitario,
         quantity,
+        billingType,
+        durationHours,
         payrollState,
         isDraft: t.sync_status === 'DRAFT',
+        taskStatus: t.status,
       });
     });
 
