@@ -119,6 +119,8 @@ export function PublicationSummarySheet({
           itemId?: string | null;
           itemName?: string | null;
           budgetAmount?: number | null;
+          costoUnitario?: number | null;
+          quantity?: number | null;
           payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
           isDraft: boolean;
         }>;
@@ -248,6 +250,27 @@ export function PublicationSummarySheet({
     )
   ) ?? false;
 
+  const { costoTotal, totalPagado, totalPendiente } = (() => {
+    let costo = 0;
+    let pagado = 0;
+    let pendiente = 0;
+    estructura?.secciones?.forEach((s) =>
+      s.categorias.forEach((c) =>
+        c.tareas.forEach((t) => {
+          const monto = t.budgetAmount ?? 0;
+          costo += monto;
+          if (t.payrollState?.hasPayroll) {
+            if (t.payrollState.status === 'pagado') pagado += monto;
+            else pendiente += monto;
+          }
+        })
+      )
+    );
+    return { costoTotal: costo, totalPagado: pagado, totalPendiente: pendiente };
+  })();
+
+  const fmt = (n: number) => `$${Number(n).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -313,27 +336,42 @@ export function PublicationSummarySheet({
             </div>
           )}
 
-          <SheetFooter className="border-t border-zinc-800 px-4 py-3 gap-2 flex-col">
-            <div className="flex flex-wrap items-center gap-2 w-full">
+          <SheetFooter className="border-t border-zinc-800 px-4 py-3 flex-col">
+            <div className="flex flex-nowrap items-center gap-2 w-full text-xs min-w-0">
+              <span className="text-zinc-400 shrink-0">
+                Costo total <span className="font-medium text-zinc-200">{fmt(costoTotal)}</span>
+              </span>
+              <span className="text-zinc-600 shrink-0">|</span>
+              <span className="text-zinc-400 shrink-0">
+                Pagado <span className="text-emerald-400 font-medium">{fmt(totalPagado)}</span>
+                <span className="text-zinc-600 mx-1">·</span>
+                Pendiente <span className="text-amber-400 font-medium">{fmt(totalPendiente)}</span>
+              </span>
+              {googleCalendarConectado && hayPendientesInvitar && (
+                <>
+                  <span className="text-zinc-600 shrink-0">|</span>
+                  <ZenButton
+                    variant="primary"
+                    size="sm"
+                    onClick={handleInvitarPendientes}
+                    disabled={loading}
+                    loading={loading}
+                    className="shrink-0"
+                  >
+                    Invitar a todos
+                  </ZenButton>
+                </>
+              )}
+              <span className="text-zinc-600 shrink-0 ml-auto">|</span>
               <ZenButton
                 variant="ghost"
+                size="sm"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
-                className="min-w-0"
+                className="shrink-0"
               >
                 Cerrar
               </ZenButton>
-              {googleCalendarConectado && (
-                <ZenButton
-                  variant="primary"
-                  onClick={handleInvitarPendientes}
-                  disabled={loading || !hayPendientesInvitar}
-                  loading={loading}
-                  className="min-w-0"
-                >
-                  Invitar a todos
-                </ZenButton>
-              )}
             </div>
           </SheetFooter>
         </div>

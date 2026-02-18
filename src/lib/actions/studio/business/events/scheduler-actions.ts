@@ -1166,6 +1166,8 @@ export async function obtenerEstructuraCompletaLogistica(
           itemId?: string | null;
           itemName?: string | null;
           budgetAmount?: number | null;
+          costoUnitario?: number | null;
+          quantity?: number | null;
           payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
           isDraft: boolean;
         }>;
@@ -1191,6 +1193,9 @@ export async function obtenerEstructuraCompletaLogistica(
             name_snapshot: true,
             assigned_to_crew_member_id: true,
             assigned_to_crew_member: { select: { id: true, name: true, email: true } },
+            quantity: true,
+            cost: true,
+            cost_snapshot: true,
           },
         },
         assigned_to_crew_member: { select: { id: true, name: true, email: true } },
@@ -1234,6 +1239,8 @@ export async function obtenerEstructuraCompletaLogistica(
       itemId?: string | null;
       itemName?: string | null;
       budgetAmount?: number | null;
+      costoUnitario?: number | null;
+      quantity?: number | null;
       payrollState: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
       isDraft: boolean;
     }> }> }>();
@@ -1243,7 +1250,19 @@ export async function obtenerEstructuraCompletaLogistica(
       const stageKey = t.category ?? 'PLANNING';
       const categoryId = t.catalog_category_id ?? `l:${stageKey}`;
       const categoryLabel = STAGE_LABELS[stageKey] ?? stageKey;
-      const budgetAmount = t.budget_amount != null ? Number(t.budget_amount) : null;
+      let budgetAmount: number | null = t.budget_amount != null ? Number(t.budget_amount) : null;
+      let costoUnitario: number | null = null;
+      let quantity: number | null = null;
+      if (t.cotizacion_item != null) {
+        const c = t.cotizacion_item.cost ?? t.cotizacion_item.cost_snapshot ?? 0;
+        const q = t.cotizacion_item.quantity ?? 1;
+        costoUnitario = Number(c);
+        quantity = q;
+        if (budgetAmount == null) {
+          const costoTotal = costoUnitario * quantity;
+          if (costoTotal > 0) budgetAmount = costoTotal;
+        }
+      }
       const crewFromItem = t.cotizacion_item?.assigned_to_crew_member_id ?? null;
       const crewFromTask = t.assigned_to_crew_member_id ?? null;
       const tienePersonal = crewFromItem != null || crewFromTask != null;
@@ -1276,6 +1295,8 @@ export async function obtenerEstructuraCompletaLogistica(
         itemId: t.cotizacion_item_id,
         itemName: t.cotizacion_item?.name_snapshot ?? null,
         budgetAmount,
+        costoUnitario,
+        quantity,
         payrollState,
         isDraft: t.sync_status === 'DRAFT',
       });
