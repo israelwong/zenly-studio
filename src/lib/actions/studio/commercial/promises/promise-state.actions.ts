@@ -18,6 +18,7 @@ export interface PromiseStateData {
     event_type_id: string | null;
     event_type_name: string | null;
     event_location: string | null;
+    event_location_id: string | null;
     event_name: string | null;
     duration_hours: number | null;
     event_date: Date | null;
@@ -61,6 +62,7 @@ export async function determinePromiseState(
         referrer_type: true,
         event_type_id: true,
         event_location: true,
+        event_location_id: true,
         name: true, // event_name
         duration_hours: true,
         tentative_dates: true, // interested_dates
@@ -253,6 +255,7 @@ export async function determinePromiseState(
           event_type_id: promise.event_type_id,
           event_type_name: promise.event_type?.name || null,
           event_location: promise.event_location || null,
+          event_location_id: promise.event_location_id ?? null,
           event_name: promise.name || null,
           duration_hours: promise.duration_hours || null,
           interested_dates: promise.tentative_dates

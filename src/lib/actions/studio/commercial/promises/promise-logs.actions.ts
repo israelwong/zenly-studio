@@ -263,6 +263,7 @@ export async function getPromiseById(
   event_type_id: string | null;
   event_type_name: string | null;
   event_location: string | null;
+  event_location_id: string | null;
   event_name: string | null; // Nombre del evento
   duration_hours: number | null; // Duración del evento en horas
   interested_dates: string[] | null;
@@ -389,6 +390,7 @@ export async function getPromiseById(
         event_type_id: promise.event_type_id,
         event_type_name: promise.event_type?.name || null,
         event_location: promise.event_location || null,
+        event_location_id: promise.event_location_id ?? null,
         event_name: promise.name || null,
         duration_hours: promise.duration_hours || null,
         interested_dates: promise.tentative_dates

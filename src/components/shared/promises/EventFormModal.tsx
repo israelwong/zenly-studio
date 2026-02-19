@@ -38,6 +38,7 @@ interface EventFormModalProps {
         address?: string;
         event_type_id?: string;
         event_location?: string;
+        event_location_id?: string | null;
         event_name?: string; // Nombre del evento (opcional)
         duration_hours?: number | null;
         event_date?: Date | string | null; // Fecha única del evento (puede venir como Date o string YYYY-MM-DD desde server)
@@ -64,6 +65,7 @@ interface EventFormModalProps {
         event_type_id?: string | null;
         event_name?: string | null;
         event_location?: string | null;
+        event_location_id?: string | null;
         duration_hours?: number | null;
         event_type?: string | null;
         interested_dates?: string[] | null;
@@ -151,6 +153,7 @@ export function EventFormModal({
         address: initialData?.address || '',
         event_type_id: initialData?.event_type_id || '',
         event_location: initialData?.event_location || '',
+        event_location_id: initialData?.event_location_id ?? undefined,
         event_name: initialData?.event_name || '',
         duration_hours: initialData?.duration_hours ?? undefined,
         acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
@@ -217,6 +220,7 @@ export function EventFormModal({
     const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
     const referrerInputContainerRef = useRef<HTMLDivElement>(null);
     const [referrerDropdownRect, setReferrerDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+    const prevIsOpenRef = useRef(false);
 
     useLayoutEffect(() => {
         if (!showReferrerSuggestions || !referrerInputContainerRef.current) {
@@ -424,8 +428,14 @@ export function EventFormModal({
     };
 
     useEffect(() => {
+        const justOpened = isOpen && !prevIsOpenRef.current;
         if (isOpen) {
-            // Sincronizar datos iniciales inmediatamente si existen
+            prevIsOpenRef.current = true;
+        } else {
+            prevIsOpenRef.current = false;
+        }
+        if (isOpen && justOpened) {
+            // Sincronizar desde initialData solo al abrir el modal; no sobrescribir mientras está abierto (ej. tras crear locación)
             if (initialData) {
                 setFormData({
                     name: initialData.name || '',
@@ -434,6 +444,7 @@ export function EventFormModal({
                     address: initialData.address || '',
                     event_type_id: initialData.event_type_id || '',
                     event_location: initialData.event_location || '',
+                    event_location_id: initialData.event_location_id ?? undefined,
                     event_name: initialData.event_name || '',
                     duration_hours: initialData.duration_hours ?? undefined,
                     acquisition_channel_id: initialData.acquisition_channel_id ?? '',
@@ -468,6 +479,20 @@ export function EventFormModal({
                     setSelectedDates([]);
                     setMonth(undefined);
                 }
+                // Sincronizar locación seleccionada cuando hay event_location_id (persistencia de edición)
+                if (initialData.event_location_id && initialData.event_location) {
+                    setSelectedEventLocation({
+                        id: initialData.event_location_id,
+                        name: initialData.event_location,
+                        address: null,
+                        maps_link: null,
+                        phone: null,
+                        permit_cost: null,
+                        tags: [],
+                    });
+                } else {
+                    setSelectedEventLocation(null);
+                }
                 // Inicializar referrerInputValue: si hay referrer_name, usarlo; si no, se sincronizará cuando se carguen los contactos
                 if (initialData.referrer_name) {
                     // Si hay referrer_name, usarlo directamente
@@ -490,7 +515,7 @@ export function EventFormModal({
 
             // referrer_type se detectará automáticamente basado en el contacto seleccionado
 
-            // Cargar catálogos en segundo plano
+            // Cargar catálogos en segundo plano (solo al abrir)
             setIsInitialLoading(true);
             Promise.all([
                 loadEventTypes(),
@@ -501,7 +526,8 @@ export function EventFormModal({
             ]).finally(() => {
                 setIsInitialLoading(false);
             });
-        } else {
+        }
+        if (!isOpen) {
             // Resetear formulario al cerrar solo si no es modo edición
             if (!isEditMode) {
                 setFormData({
@@ -510,6 +536,7 @@ export function EventFormModal({
                     email: '',
                     event_type_id: '',
                     event_location: '',
+                    event_location_id: undefined,
                     event_name: '',
                     acquisition_channel_id: '',
                     social_network_id: undefined,
@@ -521,11 +548,11 @@ export function EventFormModal({
                 });
                 setNameInput('');
                 setSelectedContactId(null);
+                setSelectedEventLocation(null);
                 setSelectedDates([]);
                 setEventDate(undefined);
                 setReferrerInputValue('');
                 setAssignReferralCommission(true);
-                setSelectedEventLocation(null);
             }
             setErrors({});
             setIsInitialLoading(false);
@@ -867,10 +894,10 @@ export function EventFormModal({
         setLoading(true);
 
         try {
-            // Lugar del evento es opcional, puede ser undefined si está vacío
+            // Enviar null (no undefined) cuando esté vacío para que update limpie el campo
             const eventLocation = formData.event_type_id && formData.event_type_id !== 'none'
-                ? (formData.event_location || '').trim() || undefined
-                : undefined;
+                ? ((formData.event_location || '').trim() || null)
+                : null;
 
             // duration_hours solo se guarda si hay event_type_id (igual que event_location)
             const durationHours = formData.event_type_id && formData.event_type_id !== 'none' && formData.duration_hours
@@ -883,6 +910,7 @@ export function EventFormModal({
                 ...formData,
                 phone: normalizedPhone,
                 event_location: eventLocation,
+                event_location_id: formData.event_location_id ?? null,
                 duration_hours: durationHours,
                 interested_dates: eventDate ? [eventDate] : undefined,
             };
@@ -910,6 +938,7 @@ export function EventFormModal({
                     formData.email !== (initialData.email || '') ||
                     formData.event_type_id !== (initialData.event_type_id || '') ||
                     formData.event_location !== (initialData.event_location || '') ||
+                    formData.event_location_id !== (initialData.event_location_id ?? undefined) ||
                     formData.event_name !== (initialData.event_name || '') ||
                     formData.duration_hours !== (initialData.duration_hours ?? undefined) ||
                     formData.acquisition_channel_id !== (initialData.acquisition_channel_id || '') ||
@@ -978,6 +1007,7 @@ export function EventFormModal({
                         event_type_id: result.data.event_type_id,
                         event_name: result.data.event_name,
                         event_location: result.data.event_location,
+                        event_location_id: result.data.event_location_id ?? undefined,
                         duration_hours: result.data.duration_hours,
                         event_type: typeof result.data.event_type === 'string' 
                           ? result.data.event_type 
@@ -1381,17 +1411,23 @@ export function EventFormModal({
                                 studioSlug={studioSlug}
                                 value={formData.event_location || ''}
                                 onValueChange={(name) => {
-                                    setFormData((prev) => ({ ...prev, event_location: name }));
+                                    setFormData((prev) => ({ ...prev, event_location: name, event_location_id: undefined }));
                                     setSelectedEventLocation(null);
                                 }}
                                 selectedLocation={selectedEventLocation}
                                 onSelect={(loc) => {
-                                    setFormData((prev) => ({ ...prev, event_location: loc.name }));
+                                    setFormData((prev) => ({ ...prev, event_location: loc.name, event_location_id: loc.id }));
                                     setSelectedEventLocation(loc);
                                 }}
                                 onClear={() => {
-                                    setFormData((prev) => ({ ...prev, event_location: '' }));
+                                    setFormData((prev) => ({ ...prev, event_location: '', event_location_id: undefined }));
                                     setSelectedEventLocation(null);
+                                }}
+                                onLocationUpdated={(loc) => {
+                                    if (selectedEventLocation?.id === loc.id || formData.event_location_id === loc.id) {
+                                        setFormData((prev) => ({ ...prev, event_location: loc.name, event_location_id: loc.id }));
+                                        setSelectedEventLocation(loc);
+                                    }
                                 }}
                                 placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
                                 disabled={!formData.event_type_id || formData.event_type_id === 'none'}

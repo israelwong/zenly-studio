@@ -23,6 +23,7 @@ interface EventCardInfoProps {
       id: string;
       event_type_id: string | null;
       event_location: string | null;
+      event_location_id?: string | null;
       interested_dates: string[] | null;
       acquisition_channel_id: string | null;
       social_network_id: string | null;
@@ -150,6 +151,7 @@ export function EventCardInfo({
             address: initialData.promise_data.contact.address ?? undefined,
             event_type_id: initialData.promise_data.event_type_id || undefined,
             event_location: initialData.promise_data.event_location || undefined,
+            event_location_id: initialData.promise_data.event_location_id ?? undefined,
             interested_dates: initialData.promise_data.interested_dates || undefined,
             acquisition_channel_id: initialData.promise_data.acquisition_channel_id || undefined,
             social_network_id: initialData.promise_data.social_network_id || undefined,

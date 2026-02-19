@@ -79,6 +79,7 @@ export async function getPromises(
         duration_hours: true,
         pipeline_stage_id: true,
         event_type_id: true,
+        event_location_id: true,
         is_test: true,
         updated_at: true,
         // ✅ Contact: Solo campos usados en la card
@@ -273,6 +274,7 @@ export async function getPromises(
         event_type_id: promise.event_type_id,
         event_name: promise.name || null,
         event_location: promise.event_location || null,
+        event_location_id: promise.event_location_id ?? null,
         duration_hours: promise.duration_hours || null,
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
@@ -545,6 +547,7 @@ export async function getPromiseByIdAsPromiseWithContact(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      event_location_id: promise.event_location_id ?? null,
       duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -741,6 +744,7 @@ export async function createPromise(
         contact_id: contact.id,
         event_type_id: validatedData.event_type_id || null,
         event_location: eventLocation,
+        event_location_id: validatedData.event_location_id ?? null,
         name: validatedData.event_name?.trim() || null,
         duration_hours: durationHours,
         pipeline_stage_id: stageId,
@@ -786,6 +790,7 @@ export async function createPromise(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      event_location_id: promise.event_location_id ?? null,
       duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -1024,6 +1029,27 @@ export async function updatePromise(
         updateData.event_location = eventLocationUpdate;
       }
 
+      if (validatedData.event_location_id !== undefined) {
+        updateData.event_location_ref = validatedData.event_location_id
+          ? { connect: { id: validatedData.event_location_id } }
+          : { disconnect: true };
+      }
+
+      // Sincronizar event_location con el nombre actual de la locación si hay event_location_id (evitar desfase tras editar locación)
+      const effectiveLocationId = validatedData.event_location_id ?? latestPromise.event_location_id;
+      if (effectiveLocationId) {
+        const locationRecord = await prisma.studio_locations.findUnique({
+          where: { id: effectiveLocationId },
+          select: { name: true },
+        });
+        if (locationRecord) {
+          const currentName = (validatedData.event_location?.trim() ?? latestPromise.event_location ?? '') || '';
+          if (locationRecord.name !== currentName) {
+            updateData.event_location = locationRecord.name;
+          }
+        }
+      }
+
       // Usar set para campos opcionales que pueden ser null
       if (validatedData.event_name !== undefined) {
         const eventNameValue = validatedData.event_name?.trim() || null;
@@ -1144,6 +1170,7 @@ export async function updatePromise(
           contact_id: contact.id,
           event_type_id: validatedData.event_type_id || null,
           event_location: eventLocationCreate,
+          event_location_id: validatedData.event_location_id ?? null,
           name: validatedData.event_name?.trim() || null,
           duration_hours: durationHoursCreate,
           pipeline_stage_id: stageId,
@@ -1303,6 +1330,7 @@ export async function updatePromise(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      event_location_id: promise.event_location_id ?? null,
       duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -1596,6 +1624,7 @@ export async function movePromise(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      event_location_id: promise.event_location_id ?? null,
       duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -1792,6 +1821,7 @@ export async function archivePromise(
       event_type_id: updatedPromise.event_type_id,
       event_name: updatedPromise.name || null,
       event_location: updatedPromise.event_location || null,
+      event_location_id: updatedPromise.event_location_id ?? null,
       duration_hours: updatedPromise.duration_hours || null,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])
@@ -1939,6 +1969,7 @@ export async function unarchivePromise(
       event_type_id: updatedPromise.event_type_id,
       event_name: updatedPromise.name || null,
       event_location: updatedPromise.event_location || null,
+      event_location_id: updatedPromise.event_location_id ?? null,
       duration_hours: updatedPromise.duration_hours || null,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])

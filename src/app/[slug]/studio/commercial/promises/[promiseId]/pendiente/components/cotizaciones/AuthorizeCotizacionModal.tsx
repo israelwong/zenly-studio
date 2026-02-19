@@ -1212,6 +1212,7 @@ export function AuthorizeCotizacionModal({
             address: promiseData.address || undefined,
             event_type_id: promiseData.event_type_id || undefined,
             event_location: promiseData.event_location || undefined,
+            event_location_id: promiseData.event_location_id ?? undefined,
             event_name: promiseData.event_name || undefined,
             interested_dates: promiseData.interested_dates || undefined,
             acquisition_channel_id: promiseData.acquisition_channel_id || undefined,

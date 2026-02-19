@@ -10,7 +10,8 @@ export const createPromiseSchema = z.object({
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   address: z.string().max(500, 'La dirección es demasiado larga').optional().or(z.literal('')),
   event_type_id: z.string().min(1, 'El tipo de evento es requerido'),
-  event_location: z.string().max(200, 'El lugar del evento es demasiado largo').optional().or(z.literal('')),
+  event_location: z.string().max(200, 'El lugar del evento es demasiado largo').optional().nullable().or(z.literal('')),
+  event_location_id: z.string().cuid().nullable().optional(),
   event_name: z.string().max(200, 'El nombre del evento es demasiado largo').optional().or(z.literal('')), // Nombre del evento (opcional)
   duration_hours: z.number().int().positive('La duración debe ser un número positivo').optional().or(z.null()),
   interested_dates: z.preprocess(
@@ -124,7 +125,8 @@ export interface PromiseWithContact {
   status: string; // "prospecto" | "cliente" - estado del contacto
   event_type_id: string | null;
   event_name: string | null; // Nombre del evento (opcional)
-  event_location: string | null; // Locación del evento
+  event_location: string | null; // Locación del evento (nombre o texto libre)
+  event_location_id: string | null; // FK opcional a studio_locations (modelo híbrido)
   duration_hours: number | null; // Duración del evento en horas
   interested_dates: string[] | null;
   event_date: Date | string | null; // Fecha del evento (consolidado) - puede venir como Date o string YYYY-MM-DD desde server

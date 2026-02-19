@@ -93,6 +93,7 @@ export function PromisePendienteClient({
     event_type_id: string | null;
     event_type_name: string | null;
     event_location: string | null;
+    event_location_id?: string | null;
     event_name: string | null;
     duration_hours: number | null;
     event_date: Date | null;
@@ -123,6 +124,7 @@ export function PromisePendienteClient({
         event_type_id: contextPromiseData.event_type_id,
         event_type_name: contextPromiseData.event_type_name,
         event_location: contextPromiseData.event_location,
+        event_location_id: contextPromiseData.event_location_id ?? null,
         event_name: contextPromiseData.event_name,
         duration_hours: contextPromiseData.duration_hours,
         event_date: contextPromiseData.event_date,
@@ -154,6 +156,7 @@ export function PromisePendienteClient({
     event_type_id?: string | null;
     event_name?: string | null;
     event_location?: string | null;
+    event_location_id?: string | null;
     duration_hours?: number | null;
     event_type?: string | null;
     interested_dates?: string[] | null;
@@ -169,6 +172,7 @@ export function PromisePendienteClient({
         event_type_id: updatedData.event_type_id || null,
         event_type_name: updatedData.event_type || null,
         event_location: updatedData.event_location || null,
+        event_location_id: updatedData.event_location_id ?? null,
         event_name: updatedData.event_name || null,
         duration_hours: updatedData.duration_hours ?? null,
         event_date: updatedData.event_date ? (typeof updatedData.event_date === 'string' ? new Date(updatedData.event_date) : updatedData.event_date) : null,
@@ -312,6 +316,7 @@ export function PromisePendienteClient({
             address: promiseData.address || undefined,
             event_type_id: promiseData.event_type_id || undefined,
             event_location: promiseData.event_location || undefined,
+            event_location_id: promiseData.event_location_id ?? undefined,
             event_name: promiseData.event_name || undefined,
             duration_hours: promiseData.duration_hours ?? undefined,
             event_date: promiseData.event_date || undefined,

@@ -12,6 +12,7 @@ export interface PromiseContextData {
   event_type_id: string | null;
   event_type_name: string | null;
   event_location: string | null;
+  event_location_id?: string | null;
   event_name: string | null;
   duration_hours: number | null;
   event_date: Date | null;

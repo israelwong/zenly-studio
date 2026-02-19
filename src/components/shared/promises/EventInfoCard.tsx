@@ -83,6 +83,7 @@ interface EventInfoCardProps {
     address: string | null;
     event_type_id: string | null;
     event_location: string | null;
+    event_location_id?: string | null;
     event_name?: string | null; // Nombre del evento (opcional)
     duration_hours?: number | null; // Duración del evento en horas
     interested_dates: string | null;
@@ -932,6 +933,7 @@ export function EventInfoCard({
               address: addressValue,
               event_type_id: promiseData.event_type_id || undefined,
               event_location: promiseData.event_location || undefined,
+              event_location_id: promiseData.event_location_id ?? undefined,
               event_name: promiseData.event_name || undefined,
               duration_hours: eventData.duration_hours ?? promiseData.duration_hours ?? undefined,
               // Si hay event_date (evento o promesa), convertir a formato YYYY-MM-DD usando métodos UTC

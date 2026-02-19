@@ -1367,6 +1367,7 @@ model studio_promises {
   contact_id                      String
   event_type_id                   String?
   event_location                  String?
+  event_location_id               String?                        // FK opcional a studio_locations (modelo híbrido)
   name                            String?
   address                         String?
   event_date                      DateTime? @db.Date
@@ -1408,6 +1409,7 @@ model studio_promises {
   contact                         studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
   sales_agent                     studio_users?                  @relation("PromiseSalesAgent", fields: [sales_agent_id], references: [id])
   event_type                      studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  event_location_ref              studio_locations?               @relation(fields: [event_location_id], references: [id], onDelete: SetNull)
   offer                           studio_offers?                  @relation(fields: [offer_id], references: [id])
   pipeline_stage                  studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
   studio                          studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
@@ -1425,6 +1427,7 @@ model studio_promises {
   @@index([event_date])
   @@index([sales_agent_id])
   @@index([referrer_id, referrer_type])
+  @@index([event_location_id])
   // ✅ PASO 1: Índice maestro para optimizar count() y queries del Kanban
   @@index([studio_id, pipeline_stage_id, is_test])
 }
@@ -3002,6 +3005,7 @@ model studio_locations {
   updated_at   DateTime @updatedAt
   studio       studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   location_media studio_location_media[]
+  promises     studio_promises[]
 
   @@index([studio_id])
   @@index([studio_id, tags])

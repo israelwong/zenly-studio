@@ -1517,6 +1517,13 @@ export async function autorizarYCrearEvento(
                 name: true,
               },
             },
+            event_location_ref: {
+              select: {
+                name: true,
+                address: true,
+                maps_link: true,
+              },
+            },
           },
         },
       },
@@ -1958,7 +1965,11 @@ export async function autorizarYCrearEvento(
           is_main_event: true,
         };
 
-        // Crear entrada inicial en agenda: nombre de lugar heredado; dirección y Maps pendientes de completar en Event Detail
+        // Crear entrada en agenda: si la promesa tiene locación vinculada (event_location_id), heredar nombre, dirección y mapa
+        const loc = cotizacion.promise.event_location_ref;
+        const locationName = loc?.name ?? cotizacion.promise.event_location ?? null;
+        const locationAddress = loc?.address ?? null;
+        const locationUrl = loc?.maps_link ?? null;
         await tx.studio_agenda.create({
           data: {
             studio_id: studio.id,
@@ -1966,9 +1977,9 @@ export async function autorizarYCrearEvento(
             promise_id: promiseId,
             date: eventDateNormalized,
             concept: 'Evento Principal',
-            location_name: cotizacion.promise.event_location || null,
-            location_address: null,
-            location_url: null,
+            location_name: locationName,
+            location_address: locationAddress,
+            location_url: locationUrl,
             type_scheduling: 'presencial',
             contexto: 'evento',
             status: 'pendiente',

@@ -7,6 +7,7 @@ import { ZenDialog, ZenButton, ZenInput } from '@/components/ui/zen';
 import {
   createQuickLocationByStudioSlug,
   updateLocationByStudioSlug,
+  getLocationById,
 } from '@/lib/actions/studio/locations/locations.actions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -84,33 +85,47 @@ export function LocationCreateModal({
   const [eventSelected, setEventSelected] = useState(false);
   const [phones, setPhones] = useState<string[]>(['']);
   const [mapsLinkError, setMapsLinkError] = useState<string | null>(null);
+  const [tipoError, setTipoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const hydrateFromInitial = (data: { name: string; address?: string | null; maps_link?: string | null; permit_cost?: string | null; phone?: string | null; tags?: string[] }) => {
+    setName(data.name);
+    setAddress(data.address ?? '');
+    setMapsLink(data.maps_link ?? '');
+    setPermitCost(data.permit_cost ?? '');
+    const t = tagsToToggles(data.tags ?? []);
+    setSessionSelected(t.session);
+    setEventSelected(t.event);
+    setPhones(parsePhonesFromDb(data.phone ?? null));
+  };
+
   useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        setName(initialData.name);
-        setAddress(initialData.address ?? '');
-        setMapsLink(initialData.maps_link ?? '');
-        setPermitCost(initialData.permit_cost ?? '');
-        const t = tagsToToggles(initialData.tags ?? []);
-        setSessionSelected(t.session);
-        setEventSelected(t.event);
-        setPhones(parsePhonesFromDb(initialData.phone));
+    if (!isOpen) return;
+    if (initialData) {
+      const needsHydrate = initialData.id && (!initialData.tags || initialData.tags.length === 0);
+      if (needsHydrate) {
+        getLocationById(initialData.id).then((res) => {
+          if (res.success && res.data) hydrateFromInitial(res.data);
+          else hydrateFromInitial(initialData);
+        });
       } else {
-        setName(initialName);
-        setAddress('');
-        setMapsLink('');
-        setPermitCost('');
-        setSessionSelected(false);
-        setEventSelected(false);
-        setPhones(['']);
+        hydrateFromInitial(initialData);
       }
-      setMapsLinkError(null);
+    } else {
+      setName(initialName);
+      setAddress('');
+      setMapsLink('');
+      setPermitCost('');
+      setSessionSelected(false);
+      setEventSelected(false);
+      setPhones(['']);
     }
+    setMapsLinkError(null);
+    setTipoError(null);
   }, [isOpen, initialName, initialData]);
 
   const PHONE_MAX_DIGITS = 10;
+  const hasTipoSelected = sessionSelected || eventSelected;
 
   const updatePhone = (index: number, value: string) => {
     const next = [...phones];
@@ -129,7 +144,9 @@ export function LocationCreateModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setMapsLinkError(null);
+    setTipoError(null);
 
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -139,6 +156,7 @@ export function LocationCreateModal({
 
     const locationTags = togglesToTags(sessionSelected, eventSelected);
     if (locationTags.length === 0) {
+      setTipoError('Selecciona al menos un tipo (Evento o Sesión)');
       toast.error('Selecciona al menos un tipo de locación (Sesión o Evento)');
       return;
     }
@@ -168,7 +186,7 @@ export function LocationCreateModal({
         address: address.trim() || undefined,
         maps_link: mapsLink.trim() || undefined,
         phone: phoneSerialized,
-        permit_cost: permitCost.trim() || undefined,
+        permit_cost: sessionSelected ? (permitCost.trim() || undefined) : undefined,
         tags: locationTags,
       };
       if (isEdit && initialData?.id) {
@@ -228,8 +246,9 @@ export function LocationCreateModal({
           : 'Completa los datos de la locación para usarla en agendamientos.'
       }
       maxWidth="md"
+      closeOnClickOutside={false}
     >
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className={fieldGroup}>
           <label className="block text-sm font-medium text-zinc-300">
             Nombre <span className="text-red-500">*</span>
@@ -273,7 +292,10 @@ export function LocationCreateModal({
           <div className="flex w-full gap-2">
             <button
               type="button"
-              onClick={() => setEventSelected((s) => !s)}
+              onClick={() => {
+                setEventSelected((s) => !s);
+                setTipoError(null);
+              }}
               className={cn(
                 'flex-1 inline-flex items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-medium transition-colors min-w-0',
                 eventSelected
@@ -286,7 +308,10 @@ export function LocationCreateModal({
             </button>
             <button
               type="button"
-              onClick={() => setSessionSelected((s) => !s)}
+              onClick={() => {
+                setSessionSelected((s) => !s);
+                setTipoError(null);
+              }}
               className={cn(
                 'flex-1 inline-flex items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-medium transition-colors min-w-0',
                 sessionSelected
@@ -299,17 +324,24 @@ export function LocationCreateModal({
             </button>
           </div>
           <p className="text-xs text-zinc-500 mt-1">Elige al menos uno. Puedes marcar ambos.</p>
+          {tipoError && (
+            <p className="text-xs text-red-500 mt-1" role="alert">
+              {tipoError}
+            </p>
+          )}
         </div>
-        <div className={fieldGroup}>
-          <label className="block text-sm font-medium text-zinc-300">Costo de permiso (Opcional)</label>
-          <ZenInput
-            type="text"
-            value={permitCost}
-            onChange={(e) => setPermitCost(e.target.value)}
-            placeholder="Ej: $1,500 o $1,000 - $3,000"
-            className="w-full"
-          />
-        </div>
+        {sessionSelected && (
+          <div className={fieldGroup}>
+            <label className="block text-sm font-medium text-zinc-300">Costo de permiso (Opcional)</label>
+            <ZenInput
+              type="text"
+              value={permitCost}
+              onChange={(e) => setPermitCost(e.target.value)}
+              placeholder="Ej: $1,500 o $1,000 - $3,000"
+              className="w-full"
+            />
+          </div>
+        )}
         <div className={fieldGroup}>
           <label className="block text-sm font-medium text-zinc-300">Teléfono</label>
           <p className="text-xs text-zinc-500">Solo números, máximo 10 dígitos por número.</p>
@@ -353,7 +385,12 @@ export function LocationCreateModal({
           <ZenButton type="button" variant="outline" onClick={onClose} className="flex-1 min-w-0">
             Cancelar
           </ZenButton>
-          <ZenButton type="submit" loading={loading} disabled={!name.trim()} className="flex-1 min-w-0">
+          <ZenButton
+            type="submit"
+            loading={loading}
+            disabled={!name.trim() || !hasTipoSelected}
+            className="flex-1 min-w-0"
+          >
             {isEdit ? 'Guardar cambios' : 'Guardar locación'}
           </ZenButton>
         </div>

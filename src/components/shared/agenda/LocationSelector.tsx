@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Plus, Settings2, X, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ZenInput } from '@/components/ui/zen';
@@ -46,6 +47,8 @@ export function LocationSelector({
   disabled,
 }: LocationSelectorProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -73,21 +76,68 @@ export function LocationSelector({
       .finally(() => setLoading(false));
   }, [showSuggestions, studioSlug]);
 
+  const updateRect = useCallback(() => {
+    if (containerRef.current) setDropdownRect(containerRef.current.getBoundingClientRect());
+    else setDropdownRect(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showSuggestions) {
+      setDropdownRect(null);
+      return;
+    }
+    updateRect();
+    const rafId = requestAnimationFrame(updateRect);
+
+    const scrollParent = (() => {
+      let el = containerRef.current?.parentElement ?? null;
+      while (el) {
+        const style = getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && el.scrollHeight > el.clientHeight) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    })();
+
+    const onScroll = () => updateRect();
+    scrollParent?.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      scrollParent?.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+    };
+  }, [showSuggestions, updateRect]);
+
+  // Lista única por nombre (primer id gana) para evitar duplicados visuales
   const filtered = useMemo(() => {
-    if (!value.trim()) return locations;
+    const seen = new Set<string>();
+    const byName = locations.filter((loc) => {
+      const key = loc.name.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (!value.trim()) return byName;
     const q = value.trim().toLowerCase();
-    return locations.filter(
+    return byName.filter(
       (loc) =>
         loc.name.toLowerCase().includes(q) ||
         (loc.address?.toLowerCase().includes(q) ?? false)
     );
   }, [locations, value]);
 
+  // No mostrar "Registrar como nueva" si el nombre ya existe (unicidad: sugerir vincular la existente)
   const canAddAsNew = useMemo(() => {
     const trimmed = value.trim();
     if (!trimmed) return false;
+    const normalized = trimmed.toLowerCase();
     return !locations.some(
-      (loc) => loc.name.trim().toLowerCase() === trimmed.toLowerCase()
+      (loc) => loc.name.trim().toLowerCase() === normalized
     );
   }, [locations, value]);
 
@@ -126,6 +176,7 @@ export function LocationSelector({
     setCreateModalOpen(false);
     setCreateModalInitialData(null);
     setCreateModalInitialName('');
+    refetchLocations();
     onLocationUpdated?.(loc);
   };
 
@@ -134,54 +185,12 @@ export function LocationSelector({
     refetchLocations();
   };
 
-  return (
-    <div className="relative">
-      <div className="relative">
-        <ZenInput
-          value={value}
-          onChange={(e) => onValueChange(e.target.value)}
-          onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={cn(
-            className,
-            (selectedLocation && onClear) || selectedLocation ? 'pr-16' : ''
-          )}
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-          {selectedLocation && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                openEditSelected();
-              }}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
-              aria-label="Editar locación"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
-          {selectedLocation && onClear && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                onClear();
-                setShowSuggestions(false);
-              }}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
-              aria-label="Desvincular locación"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </div>
-      {showSuggestions && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-60 overflow-y-auto">
-          {canAddAsNew && (
+  const popoverContent = showSuggestions && (
+    <div
+      className="rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-60 overflow-y-auto"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {canAddAsNew && (
             <button
               type="button"
               onClick={openCreateWithName}
@@ -230,8 +239,74 @@ export function LocationSelector({
             <Settings2 className="h-4 w-4 shrink-0" />
             Gestionar locaciones
           </button>
+    </div>
+  );
+
+  const usePortal = typeof document !== 'undefined' && !!dropdownRect;
+  const popoverEl =
+    showSuggestions &&
+    (usePortal && dropdownRect
+      ? createPortal(
+          <div
+            className="fixed z-[99999]"
+            style={{
+              width: dropdownRect.width,
+              left: dropdownRect.left,
+              top: dropdownRect.bottom + 4,
+            }}
+          >
+            {popoverContent}
+          </div>,
+          document.body
+        )
+      : <div className="absolute z-[99999] mt-1 left-0 right-0">{popoverContent}</div>);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="relative">
+        <ZenInput
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={cn(
+            className,
+            (selectedLocation && onClear) || selectedLocation ? 'pr-16' : ''
+          )}
+        />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+          {selectedLocation && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                openEditSelected();
+              }}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
+              aria-label="Editar locación"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {selectedLocation && onClear && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onClear();
+                setShowSuggestions(false);
+              }}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
+              aria-label="Desvincular locación"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-      )}
+      </div>
+      {popoverEl}
       <LocationCreateModal
         isOpen={createModalOpen}
         onClose={() => {
