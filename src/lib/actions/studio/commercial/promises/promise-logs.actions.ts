@@ -645,7 +645,7 @@ export async function createPromiseLog(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`logs-${validatedData.promise_id}`);
+    revalidateTag(`logs-${validatedData.promise_id}`, 'max');
     revalidatePath('/', 'layout');
 
     return {

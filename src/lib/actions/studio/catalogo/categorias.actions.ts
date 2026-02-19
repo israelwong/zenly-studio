@@ -193,7 +193,7 @@ export async function crearCategoria(
         if (itemWithStudio?.studio?.slug) {
             const studioSlug = itemWithStudio.studio.slug;
             revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-            revalidateTag(`catalog-shell-${studioSlug}`);
+            revalidateTag(`catalog-shell-${studioSlug}`, 'max');
         }
 
         console.log(`[CATEGORÍAS] Categoría creada: ${categoria.id} - ${categoria.name}`);
@@ -293,7 +293,7 @@ export async function actualizarCategoria(
         if (itemWithStudio?.studio?.slug) {
             const studioSlug = itemWithStudio.studio.slug;
             revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-            revalidateTag(`catalog-shell-${studioSlug}`);
+            revalidateTag(`catalog-shell-${studioSlug}`, 'max');
         }
 
         console.log(`[CATEGORÍAS] Categoría actualizada: ${categoria.id} - ${categoria.name}`);
@@ -394,7 +394,7 @@ export async function eliminarCategoria(
 
         if (studioSlug) {
             revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-            revalidateTag(`catalog-shell-${studioSlug}`);
+            revalidateTag(`catalog-shell-${studioSlug}`, 'max');
         }
 
         console.log(`[CATEGORÍAS] Categoría eliminada: ${categoriaId} - ${categoria.name}`);
@@ -454,7 +454,7 @@ export async function reordenarCategorias(
         if (itemWithStudio?.studio?.slug) {
             const studioSlug = itemWithStudio.studio.slug;
             revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-            revalidateTag(`catalog-shell-${studioSlug}`);
+            revalidateTag(`catalog-shell-${studioSlug}`, 'max');
         }
 
         console.log(`[CATEGORÍAS] Reordenadas ${categoriaIds.length} categorías`);

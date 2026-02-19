@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Revalidar caché del catálogo
-    revalidateTag(`catalog-shell-${studioSlug}`);
+    revalidateTag(`catalog-shell-${studioSlug}`, 'max');
     
     return NextResponse.json({ 
       success: true, 

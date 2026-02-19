@@ -300,7 +300,7 @@ export async function crearPaquete(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -580,7 +580,7 @@ export async function actualizarPaquete(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -639,7 +639,7 @@ export async function eliminarPaquete(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return { success: true };
     } catch (error) {
@@ -908,7 +908,7 @@ export async function duplicarPaquete(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -980,7 +980,7 @@ export async function reorderPaquetes(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,

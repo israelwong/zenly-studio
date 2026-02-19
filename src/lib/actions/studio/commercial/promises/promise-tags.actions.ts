@@ -422,7 +422,7 @@ export async function removeTagFromPromise(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    revalidateTag(`promises-list-${studioSlug}`);
+    revalidateTag(`promises-list-${studioSlug}`, 'max');
     return { success: true };
   } catch (error) {
     console.error('Error removiendo tag de promesa:', error);

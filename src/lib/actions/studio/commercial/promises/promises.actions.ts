@@ -635,7 +635,7 @@ export async function createPromise(
           return { success: false, error: 'Debes seleccionar una red social cuando el canal es "Redes Sociales"' };
         }
 
-        if (isReferido && !validatedData.referrer_contact_id && !validatedData.referrer_name) {
+        if (isReferido && !validatedData.referrer_id && !validatedData.referrer_contact_id && !validatedData.referrer_name) {
           return { success: false, error: 'Debes especificar el referido cuando el canal es "Referidos"' };
         }
       }
@@ -813,7 +813,7 @@ export async function createPromise(
     // Revalidar tanto la lista como la página individual de la promesa
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promise.id}`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     // Crear log automático de creación de promesa
     try {
@@ -923,11 +923,12 @@ export async function updatePromise(
           }
         }
 
-        // Para referido: validar solo si se está cambiando el canal o si no hay referido guardado
+        // Para referido: considerar referrer_id (nuevo) o referrer_contact_id / referrer_name (contacto)
         if (isReferido) {
+          const referrerId = validatedData.referrer_id;
           const referrerContactId = validatedData.referrer_contact_id ?? oldContact.referrer_contact_id;
           const referrerName = validatedData.referrer_name ?? oldContact.referrer_name;
-          if (!referrerContactId && !referrerName) {
+          if (!referrerId && !referrerContactId && !referrerName) {
             return { success: false, error: 'Debes especificar el referido cuando el canal es "Referidos"' };
           }
         }
@@ -1329,7 +1330,7 @@ export async function updatePromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,
@@ -1621,7 +1622,7 @@ export async function movePromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,
@@ -1816,7 +1817,7 @@ export async function archivePromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     return {
       success: true,
       data: promiseWithContact,
@@ -2122,7 +2123,7 @@ export async function deletePromise(
     });
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     return { success: true };
   } catch (error) {
     console.error('[PROMISES] Error eliminando promise:', error);
@@ -2252,7 +2253,7 @@ export async function deleteTestPromises(
     // Revalidar rutas
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/crm`);
-    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     // Agenda ahora es un sheet, no necesita revalidación de ruta
 
     return {

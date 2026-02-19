@@ -30,6 +30,8 @@ export interface PromiseStateData {
     referrer_name: string | null;
     referrer_contact_name: string | null;
     referrer_contact_email: string | null;
+    referrer_id: string | null;
+    referrer_type: string | null;
     pipeline_stage_slug: string | null;
     pipeline_stage_id: string | null;
     // ⚠️ DEPRECATED: status removido - usar pipeline_stage_slug en su lugar
@@ -53,7 +55,10 @@ export async function determinePromiseState(
       where: { id: promiseId },
       select: {
         id: true,
+        studio_id: true,
         contact_id: true,
+        referrer_id: true,
+        referrer_type: true,
         event_type_id: true,
         event_location: true,
         name: true, // event_name
@@ -209,6 +214,31 @@ export async function determinePromiseState(
     // Obtener evento_id de la cotización autorizada (no de promise.event directamente)
     const eventoIdFinal = cotizacionAutorizada?.evento_id || null;
 
+    // Resolver nombre del referido cuando solo está en la promesa (referrer_id) y no en el contacto
+    let referrerContactName = promise.contact.referrer_contact?.name || null;
+    let referrerName = promise.contact.referrer_name || promise.contact.referrer_contact?.name || null;
+    if (promise.referrer_id && !referrerContactName) {
+      if (promise.referrer_type === 'CONTACT') {
+        const refContact = await prisma.studio_contacts.findUnique({
+          where: { id: promise.referrer_id, studio_id: promise.studio_id },
+          select: { name: true, email: true },
+        });
+        if (refContact) {
+          referrerContactName = refContact.name;
+          referrerName = referrerName || refContact.name;
+        }
+      } else if (promise.referrer_type === 'STAFF') {
+        const refCrew = await prisma.studio_crew_members.findUnique({
+          where: { id: promise.referrer_id, studio_id: promise.studio_id },
+          select: { name: true },
+        });
+        if (refCrew) {
+          referrerContactName = refCrew.name;
+          referrerName = referrerName || refCrew.name;
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -234,9 +264,11 @@ export async function determinePromiseState(
           social_network_id: promise.contact.social_network_id,
           social_network_name: promise.contact.social_network?.name || null,
           referrer_contact_id: promise.contact.referrer_contact_id,
-          referrer_name: promise.contact.referrer_name,
-          referrer_contact_name: promise.contact.referrer_contact?.name || null,
+          referrer_name: referrerName,
+          referrer_contact_name: referrerContactName,
           referrer_contact_email: promise.contact.referrer_contact?.email || null,
+          referrer_id: promise.referrer_id || null,
+          referrer_type: promise.referrer_type || null,
           pipeline_stage_slug: promise.pipeline_stage?.slug || null,
           pipeline_stage_id: promise.pipeline_stage_id || null,
           // ⚠️ DEPRECATED: status removido - usar pipeline_stage_slug en su lugar

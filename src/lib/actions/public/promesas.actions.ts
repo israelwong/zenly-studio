@@ -5639,9 +5639,9 @@ export async function invalidatePublicPromiseRouteState(
 ): Promise<{ success: boolean }> {
   try {
     const { revalidateTag } = await import('next/cache');
-    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`);
-    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
-    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, 'max');
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
     return { success: true };
   } catch (error) {
     console.error("[invalidatePublicPromiseRouteState] Error:", error);

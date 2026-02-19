@@ -230,7 +230,7 @@ export async function crearSeccion(
 
         // 5. Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-        revalidateTag(`catalog-shell-${studioSlug}`);
+        revalidateTag(`catalog-shell-${studioSlug}`, 'max');
 
         // 6. Log éxito
         console.log(`[SECCIONES] Sección creada: ${seccion.id} - ${seccion.name}`);
@@ -360,7 +360,7 @@ export async function actualizarSeccion(
 
         // 6. Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-        revalidateTag(`catalog-shell-${studioSlug}`);
+        revalidateTag(`catalog-shell-${studioSlug}`, 'max');
 
         // 7. Log éxito
         console.log(`[SECCIONES] Sección actualizada: ${seccion.id} - ${seccion.name}`);
@@ -448,7 +448,7 @@ export async function eliminarSeccion(
 
         // 5. Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-        revalidateTag(`catalog-shell-${studioSlug}`);
+        revalidateTag(`catalog-shell-${studioSlug}`, 'max');
 
         // 6. Log éxito
         console.log(
@@ -587,7 +587,7 @@ export async function reordenarSecciones(
 
         // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
-        revalidateTag(`catalog-shell-${studioSlug}`);
+        revalidateTag(`catalog-shell-${studioSlug}`, 'max');
 
         console.log(`[SECCIONES] Reordenadas ${seccionIds.length} secciones`);
 

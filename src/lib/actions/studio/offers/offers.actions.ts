@@ -255,8 +255,8 @@ export async function createOffer(
 
       // Invalidar caché de ofertas
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
 
       return { success: true, data: mappedOffer };
     });
@@ -572,9 +572,9 @@ export async function updateOffer(
 
       // Invalidar caché de ofertas
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
-      revalidateTag(`offer-${offerId}`); // Invalidar caché de la oferta individual
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
+      revalidateTag(`offer-${offerId}`, 'max'); // Invalidar caché de la oferta individual
 
       // Revalidar perfil público y página de oferta cuando se actualiza is_active
       if (validatedData.is_active !== undefined) {
@@ -1703,8 +1703,8 @@ export async function archiveOffer(
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
       revalidatePath(`/${studioSlug}`);
       revalidatePath(`/${studioSlug}/offer/${offer.slug}`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
 
       return { success: true };
     });
@@ -1827,9 +1827,9 @@ export async function deleteOffer(
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
       revalidatePath(`/${studioSlug}`);
       revalidatePath(`/${studioSlug}/offer/${offer.slug}`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
-      revalidateTag(`offer-${offerId}`); // Invalidar caché de la oferta individual
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
+      revalidateTag(`offer-${offerId}`, 'max'); // Invalidar caché de la oferta individual
 
       return { success: true };
     });
@@ -2010,8 +2010,8 @@ export async function duplicateOffer(
 
       // Invalidar caché de ofertas
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
 
       return { success: true, data: mappedOffer };
     });
@@ -2088,8 +2088,8 @@ export async function reorderOffers(
 
       // Invalidar caché de ofertas
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
-      revalidateTag(`offers-shell-${studioSlug}`);
-      revalidateTag(`offers-stats-${studioSlug}`);
+      revalidateTag(`offers-shell-${studioSlug}`, 'max');
+      revalidateTag(`offers-stats-${studioSlug}`, 'max');
 
       return { success: true };
     });

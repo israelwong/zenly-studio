@@ -24,6 +24,8 @@ export interface PromiseContextData {
   referrer_name?: string | null;
   referrer_contact_name?: string | null;
   referrer_contact_email?: string | null;
+  referrer_id?: string | null;
+  referrer_type?: string | null;
   contact_id: string;
   evento_id: string | null;
   promise_id: string;

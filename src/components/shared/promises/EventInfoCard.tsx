@@ -69,6 +69,8 @@ interface EventInfoCardProps {
     referrer_name?: string | null;
     referrer_contact_name?: string | null;
     referrer_contact_email?: string | null;
+    referrer_id?: string | null;
+    referrer_type?: string | null;
   } | null;
   // Para edición
   promiseId?: string | null;
@@ -88,6 +90,8 @@ interface EventInfoCardProps {
     social_network_id: string | null;
     referrer_contact_id: string | null;
     referrer_name: string | null;
+    referrer_id?: string | null;
+    referrer_type?: string | null;
   } | null;
   onEdit?: () => void;
   onUpdated?: () => void;
@@ -874,7 +878,7 @@ export function EventInfoCard({
                     <p className="text-sm text-zinc-200">{acquisitionData.social_network_name}</p>
                   </div>
                 )}
-                {(acquisitionData.referrer_name || acquisitionData.referrer_contact_id) && (
+                {(acquisitionData.referrer_id || acquisitionData.referrer_name || acquisitionData.referrer_contact_id || acquisitionData.referrer_contact_name) && (
                   <div>
                     <label className="text-xs font-medium text-zinc-400 block mb-1">
                       Referido por
@@ -882,7 +886,7 @@ export function EventInfoCard({
                     <div>
                       <ContactHoverCard
                         studioSlug={studioSlug}
-                        contactId={acquisitionData.referrer_contact_id}
+                        contactId={acquisitionData.referrer_contact_id ?? (acquisitionData.referrer_type === 'CONTACT' ? acquisitionData.referrer_id ?? undefined : undefined)}
                         displayName={acquisitionData.referrer_name || acquisitionData.referrer_contact_name || 'Contacto referido'}
                         fallbackName={acquisitionData.referrer_name || acquisitionData.referrer_contact_name}
                         fallbackEmail={acquisitionData.referrer_contact_email}
@@ -956,6 +960,8 @@ export function EventInfoCard({
               social_network_id: acquisitionDataLocal?.social_network_id || promiseData.social_network_id || undefined,
               referrer_contact_id: acquisitionDataLocal?.referrer_contact_id || promiseData.referrer_contact_id || undefined,
               referrer_name: acquisitionDataLocal?.referrer_name || promiseData.referrer_name || undefined,
+              referrer_id: promiseData.referrer_id ?? undefined,
+              referrer_type: promiseData.referrer_type ?? undefined,
             };
           })()}
           onSuccess={handlePromiseSuccess}

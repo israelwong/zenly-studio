@@ -262,7 +262,7 @@ export async function crearItem(
 
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         revalidatePath(`/${validated.studioSlug}/studio/commercial/catalogo`, 'page');
-        revalidateTag(`catalog-shell-${validated.studioSlug}`);
+        revalidateTag(`catalog-shell-${validated.studioSlug}`, 'max');
 
         console.log(`[ITEMS] Item creado: ${item.id} - ${item.name} - Gastos: ${JSON.stringify(item.item_expenses)}`);
 
@@ -411,7 +411,7 @@ export async function actualizarItem(
 
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         revalidatePath(`/${existente.studio.slug}/studio/commercial/catalogo`, 'page');
-        revalidateTag(`catalog-shell-${existente.studio.slug}`);
+        revalidateTag(`catalog-shell-${existente.studio.slug}`, 'max');
 
         return {
             success: true,
@@ -513,7 +513,7 @@ export async function eliminarItem(
 
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`, 'page');
-        revalidateTag(`catalog-shell-${studioSlug}`);
+        revalidateTag(`catalog-shell-${studioSlug}`, 'max');
 
         console.log(`[ITEMS] Item eliminado: ${itemId} - ${item.name}`);
 
@@ -612,7 +612,7 @@ export async function reordenarItems(
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         if (firstItem?.studio?.slug) {
             revalidatePath(`/${firstItem.studio.slug}/studio/commercial/catalogo`, 'page');
-            revalidateTag(`catalog-shell-${firstItem.studio.slug}`);
+            revalidateTag(`catalog-shell-${firstItem.studio.slug}`, 'max');
         }
 
         console.log(`[ITEMS] Reordenados ${itemIds.length} items`);
@@ -709,7 +709,7 @@ export async function moverItemACategoria(
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         if (item?.studio?.slug) {
             revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`, 'page');
-            revalidateTag(`catalog-shell-${item.studio.slug}`);
+            revalidateTag(`catalog-shell-${item.studio.slug}`, 'max');
         }
 
         console.log(`[ITEMS] Item ${itemId} movido a categoría ${nuevaCategoriaId}`);
@@ -806,7 +806,7 @@ export async function toggleItemPublish(
 
         // Invalidar caché del catálogo (page + tag usado por unstable_cache en la página)
         revalidatePath(`/${item.studio.slug}/studio/commercial/catalogo`, 'page');
-        revalidateTag(`catalog-shell-${item.studio.slug}`);
+        revalidateTag(`catalog-shell-${item.studio.slug}`, 'max');
 
         return {
             success: true,

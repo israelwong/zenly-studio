@@ -280,8 +280,8 @@ export async function signContract(
     const eventId = contract.event.id;
     const promiseId = contract.event.promise_id;
     if (promiseId) {
-      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`);
-      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
+      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`, 'max');
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`, 'max');
     }
 
     return { 

@@ -945,11 +945,7 @@ function PromisesKanban({
         isOpen={isPromiseFormModalOpen}
         onClose={() => setIsPromiseFormModalOpen(false)}
         studioSlug={studioSlug}
-        onSuccess={() => {
-          // Solo refrescar si no se redirigió (modo edición)
-          // En modo creación, EventFormModal ya maneja la redirección
-          onPromiseCreated();
-        }}
+        onSuccess={() => onPromiseCreated()}
       />
     </div>
   );

@@ -105,6 +105,8 @@ export function PromisePendienteClient({
     referrer_name?: string | null;
     referrer_contact_name?: string | null;
     referrer_contact_email?: string | null;
+    referrer_id?: string | null;
+    referrer_type?: string | null;
   } | null>(null);
   const [condicionesComerciales] = useState(initialCondicionesComerciales);
   const [paymentMethods] = useState(initialPaymentMethods);
@@ -133,6 +135,8 @@ export function PromisePendienteClient({
         referrer_name: contextPromiseData.referrer_name,
         referrer_contact_name: contextPromiseData.referrer_contact_name,
         referrer_contact_email: contextPromiseData.referrer_contact_email,
+        referrer_id: contextPromiseData.referrer_id ?? null,
+        referrer_type: contextPromiseData.referrer_type ?? null,
       });
     }
   }, [contextPromiseData]);
@@ -218,10 +222,12 @@ export function PromisePendienteClient({
                 referrer_name: promiseData.referrer_name,
                 referrer_contact_name: promiseData.referrer_contact_name,
                 referrer_contact_email: promiseData.referrer_contact_email,
+                referrer_id: promiseData.referrer_id ?? null,
+                referrer_type: promiseData.referrer_type ?? null,
               }}
               promiseId={promiseId}
-              promiseData={promiseId ? {
-                id: promiseId,
+              promiseData={promiseId && contactId ? {
+                id: contactId,
                 name: promiseData.name,
                 phone: promiseData.phone,
                 email: promiseData.email || null,
@@ -234,6 +240,8 @@ export function PromisePendienteClient({
                 social_network_id: promiseData.social_network_id || null,
                 referrer_contact_id: promiseData.referrer_contact_id || null,
                 referrer_name: promiseData.referrer_name || null,
+                referrer_id: promiseData.referrer_id ?? null,
+                referrer_type: promiseData.referrer_type ?? null,
               } : null}
               onEdit={() => setShowEditModal(true)}
               context="promise"

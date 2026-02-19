@@ -192,8 +192,8 @@ export async function crearTipoEvento(
         // Invalidar caché de tipos de evento y paquetes
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
         revalidatePath(`/${studioSlug}/studio/commercial/tipo-eventos`);
-        revalidateTag(`tipos-evento-${studioSlug}`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`tipos-evento-${studioSlug}`, 'max');
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -296,8 +296,8 @@ export async function actualizarTipoEvento(
             // Invalidar caché de tipos de evento y paquetes
             revalidatePath(`/${studio.slug}/studio/commercial/paquetes`);
             revalidatePath(`/${studio.slug}/studio/commercial/tipo-eventos`);
-            revalidateTag(`tipos-evento-${studio.slug}`);
-            revalidateTag(`paquetes-shell-${studio.slug}`);
+            revalidateTag(`tipos-evento-${studio.slug}`, 'max');
+            revalidateTag(`paquetes-shell-${studio.slug}`, 'max');
         }
 
         return {
@@ -428,8 +428,8 @@ export async function actualizarOrdenTiposEvento(
         revalidateTiposEvento(studioSlug);
         // Invalidar caché de tipos de evento y paquetes
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`tipos-evento-${studioSlug}`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`tipos-evento-${studioSlug}`, 'max');
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,

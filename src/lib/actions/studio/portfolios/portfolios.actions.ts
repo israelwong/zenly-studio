@@ -335,7 +335,7 @@ export async function createStudioPortfolio(studioId: string, data: PortfolioFor
         const studioSlug = portfolio.studio.slug;
         revalidatePath(`/${studioSlug}/profile/edit/content/portfolios`);
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
         if (portfolio.is_published) {
             revalidatePath(`/${studioSlug}/portfolios/${portfolio.slug}`);
         }
@@ -856,8 +856,8 @@ export async function updateStudioPortfolio(
         const studioSlug = portfolio.studio.slug;
         revalidatePath(`/${studioSlug}/profile/edit/content/portfolios`);
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
-        revalidateTag(`portfolio-${portfolioId}`); // Invalidar caché del portfolio individual
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
+        revalidateTag(`portfolio-${portfolioId}`, 'max'); // Invalidar caché del portfolio individual
         if (portfolio.is_published) {
             revalidatePath(`/${studioSlug}/portfolios/${portfolio.slug}`);
         }
@@ -908,8 +908,8 @@ export async function deleteStudioPortfolio(portfolioId: string) {
 
         // Invalidar caché de portfolios
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
-        revalidateTag(`portfolio-${portfolioId}`); // Invalidar caché del portfolio individual
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
+        revalidateTag(`portfolio-${portfolioId}`, 'max'); // Invalidar caché del portfolio individual
 
         return { success: true };
     } catch (error) {
@@ -946,7 +946,7 @@ export async function toggleStudioPortfolioPublish(portfolioId: string) {
         revalidatePath(`/${studioSlug}/profile/edit/content/portfolios`);
         revalidatePath(`/${studioSlug}/portfolios/${portfolio.slug}`);
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
 
         return { success: true, data: updatedPortfolio };
     } catch (error) {
@@ -1003,7 +1003,7 @@ export async function reorderPortfolios(studioSlug: string, portfolioIds: string
         console.log('[reorderPortfolios] Reorden exitoso');
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
         revalidatePath(`/${studioSlug}?section=portafolio`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
 
         return { success: true };
     } catch (error) {
@@ -1200,7 +1200,7 @@ export async function duplicatePortfolio(portfolioId: string, studioSlug: string
         console.log('[duplicatePortfolio] Duplicación exitosa:', duplicate.id);
         revalidatePath(`/${studioSlug}?section=portafolio`);
         revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
-        revalidateTag(`portfolios-shell-${studioSlug}`);
+        revalidateTag(`portfolios-shell-${studioSlug}`, 'max');
 
         return { success: true, data: duplicate };
     } catch (error) {

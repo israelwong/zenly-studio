@@ -174,6 +174,43 @@ export async function getContacts(
 }
 
 /**
+ * Comprueba si ya existe un contacto con ese teléfono en el estudio.
+ * Útil para validación en tiempo real (ej. formulario nueva promesa).
+ * @param excludeContactId - Si se indica, no se considera duplicado si el teléfono es de este contacto (ej. contacto seleccionado con @).
+ */
+export async function checkPhoneExists(
+  studioSlug: string,
+  phone: string,
+  excludeContactId?: string
+): Promise<{ success: boolean; exists?: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true }
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+    const normalized = phone.replace(/\D/g, '').slice(-10);
+    if (normalized.length !== 10) {
+      return { success: true, exists: false };
+    }
+    const where: { studio_id: string; phone: string; id?: { not: string } } = {
+      studio_id: studio.id,
+      phone: normalized
+    };
+    if (excludeContactId) {
+      where.id = { not: excludeContactId };
+    }
+    const existing = await prisma.studio_contacts.findFirst({ where });
+    return { success: true, exists: !!existing };
+  } catch (e) {
+    console.error('checkPhoneExists:', e);
+    return { success: false, error: 'Error al verificar teléfono' };
+  }
+}
+
+/**
  * Obtener un contacto por ID
  */
 export async function getContactById(
@@ -546,9 +583,9 @@ export async function updateContact(
     const eventId = validatedData.event_id;
     if (eventId) {
       revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
-      revalidateTag(`evento-${eventId}`);
+      revalidateTag(`evento-${eventId}`, 'max');
     }
-    revalidateTag('evento-detalle');
+    revalidateTag('evento-detalle', 'max');
 
     // Sincronizar con Google Contacts (si está conectado)
     try {

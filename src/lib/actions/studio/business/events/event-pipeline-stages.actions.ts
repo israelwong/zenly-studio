@@ -144,8 +144,8 @@ export async function updateEventPipelineStage(
     revalidatePath(`/${studioSlug}/studio/business/events`);
     
     // Invalidar caché de pipeline stages y lista de eventos
-    revalidateTag(`event-pipeline-stages-${studioSlug}`);
-    revalidateTag(`events-list-${studioSlug}`);
+    revalidateTag(`event-pipeline-stages-${studioSlug}`, 'max');
+    revalidateTag(`events-list-${studioSlug}`, 'max');
 
     return {
       success: true,
@@ -192,8 +192,8 @@ export async function reorderEventPipelineStages(
     revalidatePath(`/${studioSlug}/studio/business/events`);
     
     // Invalidar caché de pipeline stages y lista de eventos
-    revalidateTag(`event-pipeline-stages-${studioSlug}`);
-    revalidateTag(`events-list-${studioSlug}`);
+    revalidateTag(`event-pipeline-stages-${studioSlug}`, 'max');
+    revalidateTag(`events-list-${studioSlug}`, 'max');
 
     return {
       success: true,

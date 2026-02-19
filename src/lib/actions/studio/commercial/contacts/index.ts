@@ -1,6 +1,7 @@
 export {
   getContacts,
   getContactById,
+  checkPhoneExists,
   createContact,
   updateContact,
   deleteContact,

@@ -16,7 +16,8 @@ import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/Tar
 import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideSheet';
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap } from 'lucide-react';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin } from 'lucide-react';
+import { LocationManagerModal } from '@/components/shared/agenda/LocationManagerModal';
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import { TerminosCondicionesEditor } from '@/components/shared/terminos-condiciones';
@@ -94,6 +95,7 @@ function StudioLayoutContent({
   const [showStudioDataModal, setShowStudioDataModal] = useState(false);
   const [showEventTypesModal, setShowEventTypesModal] = useState(false);
   const [showAutomationModal, setShowAutomationModal] = useState(false);
+  const [showLocationsManagerModal, setShowLocationsManagerModal] = useState(false);
 
   // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
   const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
@@ -277,6 +279,17 @@ function StudioLayoutContent({
           },
           category: 'comercial',
           keywords: ['tipos', 'evento', 'boda', 'quinceañera', 'paquetes'],
+        },
+        {
+          id: 'locaciones',
+          title: 'Locaciones',
+          description: 'Gestiona las locaciones del estudio para agendamientos y eventos (lugar, dirección, enlaces a mapas)',
+          icon: MapPin,
+          onClick: () => {
+            setTimeout(() => setShowLocationsManagerModal(true), 100);
+          },
+          category: 'comercial',
+          keywords: ['locaciones', 'lugar', 'dirección', 'agenda', 'evento', 'mapa', 'sede'],
         },
       ],
     },
@@ -482,6 +495,12 @@ function StudioLayoutContent({
       <TipoEventoManagementModal
         isOpen={showEventTypesModal}
         onClose={() => setShowEventTypesModal(false)}
+        studioSlug={studioSlug}
+      />
+
+      <LocationManagerModal
+        isOpen={showLocationsManagerModal}
+        onClose={() => setShowLocationsManagerModal(false)}
         studioSlug={studioSlug}
       />
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ContactRound, Plus, Search, Users, ExternalLink, RefreshCw } from 'lucide-react';
+import { ContactRound, Plus, Search, Users, ExternalLink, Loader2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -37,13 +37,17 @@ export function ContactsSheet({
 }: ContactsSheetProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'prospecto' | 'cliente'>('all');
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const isModalOpenRef = useRef(false);
+  const isDeleteModalOpenRef = useRef(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -52,11 +56,12 @@ export function ContactsSheet({
   const [showGoogleContactsModal, setShowGoogleContactsModal] = useState(false);
   const { triggerContactUpdate } = useContactRefresh();
 
-  const loadContacts = useCallback(async () => {
+  const loadInitial = useCallback(async () => {
     try {
       setLoading(true);
+      setPage(1);
       const result = await getContacts(studioSlug, {
-        page,
+        page: 1,
         limit: 20,
         search: search || undefined,
         status: statusFilter,
@@ -75,17 +80,44 @@ export function ContactsSheet({
     } finally {
       setLoading(false);
     }
-  }, [studioSlug, page, search, statusFilter]);
+  }, [studioSlug, search, statusFilter]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || loadingMore || page >= totalPages) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      const result = await getContacts(studioSlug, {
+        page: nextPage,
+        limit: 20,
+        search: search || undefined,
+        status: statusFilter,
+      });
+
+      if (result.success && result.data) {
+        setContacts((prev) => [...prev, ...result.data.contacts]);
+        setTotalPages(result.data.totalPages);
+        setTotal(result.data.total);
+        setPage(nextPage);
+      }
+    } catch (error) {
+      console.error('Error al cargar más contactos:', error);
+      toast.error('Error al cargar más contactos');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [studioSlug, page, totalPages, search, statusFilter, loading, loadingMore]);
 
   useEffect(() => {
     if (open) {
-      setLoading(true);
-      loadContacts();
+      loadInitial();
       verificarEstadoGoogleContacts();
     } else {
-      // Resetear estados del modal cuando se cierra el sheet
       setIsModalOpen(false);
       setEditingContactId(null);
+      isDeleteModalOpenRef.current = false;
+      setIsDeleteModalOpen(false);
+      setDeletingContactId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -127,25 +159,40 @@ export function ContactsSheet({
     }
   };
 
-  // Recargar cuando cambian los filtros o la búsqueda
+  // Recargar desde el inicio cuando cambian filtros o búsqueda
   useEffect(() => {
     if (open) {
-      loadContacts();
+      loadInitial();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, page]);
+  }, [search, statusFilter]);
+
+  // Scroll infinito: cargar más cuando el sentinel es visible
+  const hasMore = page < totalPages;
+  useEffect(() => {
+    if (!open || !hasMore || loading || loadingMore) return;
+    const el = loadMoreRef.current;
+    const scrollParent = scrollContainerRef.current?.closest('[data-slot="sheet-content"]') ?? scrollContainerRef.current?.parentElement ?? null;
+    if (!el || !scrollParent) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { root: scrollParent, rootMargin: '200px', threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open, hasMore, loading, loadingMore, loadMore]);
 
   // Escuchar cambios en tiempo real de contactos
   useContactsRealtime({
     studioSlug,
-    enabled: open, // Solo escuchar cuando el sheet está abierto
-    onContactUpdated: (contactId) => {
-      // Recargar contactos cuando se actualiza uno
-      loadContacts();
+    enabled: open,
+    onContactUpdated: () => {
+      loadInitial();
     },
-    onContactInserted: (contactId) => {
-      // Recargar contactos cuando se inserta uno nuevo
-      loadContacts();
+    onContactInserted: () => {
+      loadInitial();
     },
     onContactDeleted: (contactId) => {
       // Remover contacto del estado local
@@ -194,6 +241,7 @@ export function ContactsSheet({
 
   const handleDelete = (contactId: string) => {
     setDeletingContactId(contactId);
+    isDeleteModalOpenRef.current = true;
     setIsDeleteModalOpen(true);
   };
 
@@ -213,16 +261,16 @@ export function ContactsSheet({
       console.error('Error al eliminar contacto:', error);
       toast.error('Error al eliminar contacto');
     } finally {
+      isDeleteModalOpenRef.current = false;
       setIsDeleteModalOpen(false);
       setDeletingContactId(null);
     }
   };
 
-  // Usar ref para loadContacts para evitar que handleModalSuccess se recree
-  const loadContactsRef = useRef(loadContacts);
+  const loadInitialRef = useRef(loadInitial);
   useEffect(() => {
-    loadContactsRef.current = loadContacts;
-  }, [loadContacts]);
+    loadInitialRef.current = loadInitial;
+  }, [loadInitial]);
 
   // Usar ref para editingContactId para evitar problemas de timing
   const editingContactIdRef = useRef(editingContactId);
@@ -255,19 +303,16 @@ export function ContactsSheet({
         // pero mantener el contacto actualizado si no está en la respuesta
         setTimeout(async () => {
           const result = await getContacts(studioSlug, {
-            page,
+            page: 1,
             limit: 20,
             search: search || undefined,
             status: statusFilter,
           });
           if (result.success && result.data) {
-            // Buscar si el contacto actualizado está en la respuesta
             const updatedContactInResponse = result.data.contacts.find((c: Contact) => c.id === contact.id);
             if (updatedContactInResponse) {
-              // Si está, usar la respuesta completa
               setContacts(result.data.contacts);
             } else {
-              // Si no está (por filtros), mantener el contacto actualizado en el estado
               setContacts((prev) => {
                 const withoutUpdated = prev.filter((c) => c.id !== contact.id);
                 return [contact, ...withoutUpdated];
@@ -278,12 +323,10 @@ export function ContactsSheet({
           }
         }, 200);
       } else {
-        // Agregar nuevo contacto
         setContacts((prev) => [contact, ...prev]);
         setTotal((prev) => prev + 1);
-        // Recargar para obtener datos completos
         setTimeout(() => {
-          loadContactsRef.current();
+          loadInitialRef.current();
         }, 200);
       }
     }
@@ -294,7 +337,7 @@ export function ContactsSheet({
       isModalOpenRef.current = false;
       setEditingContactId(null);
     }, 100);
-  }, [studioSlug, page, search, statusFilter]);
+  }, [studioSlug, search, statusFilter]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -345,32 +388,23 @@ export function ContactsSheet({
     };
   }, [open, handleContactUpdateFromEvent]);
 
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    // Scroll to top when page changes
-    const sheetContent = document.querySelector('[data-slot="sheet-content"]');
-    if (sheetContent) {
-      sheetContent.scrollTop = 0;
-    }
-  };
-
   // Prevenir que el Sheet se cierre cuando el modal está abierto
   const handleSheetOpenChange = useCallback((newOpen: boolean) => {
-    // Si el modal está abierto (usando ref para evitar problemas de timing), no permitir que el Sheet se cierre
-    if (!newOpen && (isModalOpen || isModalOpenRef.current)) {
+    // No cerrar el sheet si el modal de edición o el de confirmación de eliminar están abiertos
+    if (!newOpen && (isModalOpen || isModalOpenRef.current || isDeleteModalOpen || isDeleteModalOpenRef.current)) {
       return;
     }
     onOpenChange(newOpen);
-  }, [isModalOpen, onOpenChange]);
+  }, [isModalOpen, isDeleteModalOpen, onOpenChange]);
 
   return (
     <>
-      {/* Overlay custom del Sheet - solo visible cuando el modal NO está abierto */}
-      {open && !isModalOpen && (
+      {/* Overlay custom del Sheet - solo visible cuando ningún modal está abierto */}
+      {open && !isModalOpen && !isDeleteModalOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-[49] animate-in fade-in-0"
           onClick={() => {
-            if (!isModalOpenRef.current) {
+            if (!isModalOpenRef.current && !isDeleteModalOpenRef.current) {
               onOpenChange(false);
             }
           }}
@@ -387,14 +421,12 @@ export function ContactsSheet({
           className="w-full sm:max-w-lg bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
           showOverlay={false}
           onInteractOutside={(e) => {
-            // Cuando el modal está abierto, no prevenir eventos para que los inputs funcionen
-            if (isModalOpen || isModalOpenRef.current) {
+            if (isModalOpen || isModalOpenRef.current || isDeleteModalOpen || isDeleteModalOpenRef.current) {
               return;
             }
           }}
           onEscapeKeyDown={(e) => {
-            // Prevenir que el Sheet se cierre con Escape cuando el modal está abierto
-            if (isModalOpen || isModalOpenRef.current) {
+            if (isModalOpen || isModalOpenRef.current || isDeleteModalOpen || isDeleteModalOpenRef.current) {
               e.preventDefault();
             }
           }}
@@ -416,7 +448,7 @@ export function ContactsSheet({
               </div>
             </SheetHeader>
 
-            <div className="p-6 space-y-4">
+            <div ref={scrollContainerRef} className="p-6 space-y-4">
               {/* Header con búsqueda y filtros */}
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                 <div className="flex-1 w-full">
@@ -516,28 +548,12 @@ export function ContactsSheet({
                 studioSlug={studioSlug}
               />
 
-              {/* Paginación */}
-              {!loading && totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-4">
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1}
-                  >
-                    Anterior
-                  </ZenButton>
-                  <span className="text-sm text-zinc-400">
-                    Página {page} de {totalPages}
-                  </span>
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page === totalPages}
-                  >
-                    Siguiente
-                  </ZenButton>
+              {/* Sentinel para scroll infinito */}
+              {hasMore && !loading && (
+                <div ref={loadMoreRef} className="min-h-[40px] flex items-center justify-center py-4">
+                  {loadingMore && (
+                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                  )}
                 </div>
               )}
             </div>
@@ -558,6 +574,7 @@ export function ContactsSheet({
       <ZenConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
+          isDeleteModalOpenRef.current = false;
           setIsDeleteModalOpen(false);
           setDeletingContactId(null);
         }}

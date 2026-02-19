@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, startTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { ZenDialog, ZenInput, ZenTextarea, ZenCard, ZenCardContent, ZenButton } from '@/components/ui/zen';
+import { ZenDialog, ZenInput, ZenTextarea, ZenCard, ZenCardContent, ZenButton, ZenSwitch } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { toast } from 'sonner';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, AlertCircle, X, Plus } from 'lucide-react';
+import { CalendarIcon, AlertCircle, X, Plus, Loader2 } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
 import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
-import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact } from '@/lib/actions/studio/commercial/contacts';
+import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact, checkPhoneExists } from '@/lib/actions/studio/commercial/contacts';
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
@@ -20,6 +21,8 @@ import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEv
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 import { getStudioUsersForAttribution, getCrewMembersForAttribution } from '@/lib/actions/studio/commercial/promises/promise-attribution.actions';
 import { ZenSelect } from '@/components/ui/zen/forms/ZenSelect';
+import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/config/configuracion-precios.actions';
+import { LocationSelector, type LocationOption } from '@/components/shared/agenda/LocationSelector';
 
 interface EventFormModalProps {
     isOpen: boolean;
@@ -195,6 +198,13 @@ export function EventFormModal({
     const [selectedContactIndex, setSelectedContactIndex] = useState(-1);
     const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
     const [selectedReferrerStatus, setSelectedReferrerStatus] = useState<string | undefined>(undefined);
+    const [assignReferralCommission, setAssignReferralCommission] = useState(true);
+    const [referralCommissionLoading, setReferralCommissionLoading] = useState(false);
+    const [referralCommissionConfig, setReferralCommissionConfig] = useState<{
+        referral_reward_type: 'PERCENTAGE' | 'FIXED';
+        referral_reward_value: string;
+        comision_venta: string;
+    } | null>(null);
     const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
     const referrerSyncedRef = useRef(false);
     const [showCreateReferrerModal, setShowCreateReferrerModal] = useState(false);
@@ -203,6 +213,20 @@ export function EventFormModal({
     const [isCreatingReferrer, setIsCreatingReferrer] = useState(false);
     const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
     const [showTipoEventoModal, setShowTipoEventoModal] = useState(false);
+    const [selectedEventLocation, setSelectedEventLocation] = useState<LocationOption | null>(null);
+    const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+    const referrerInputContainerRef = useRef<HTMLDivElement>(null);
+    const [referrerDropdownRect, setReferrerDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+    useLayoutEffect(() => {
+        if (!showReferrerSuggestions || !referrerInputContainerRef.current) {
+            setReferrerDropdownRect(null);
+            return;
+        }
+        const el = referrerInputContainerRef.current;
+        const rect = el.getBoundingClientRect();
+        setReferrerDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }, [showReferrerSuggestions]);
 
     const handleTipoEventoCreated = useCallback((newTipoEvento: TipoEventoData) => {
         // Agregar el nuevo tipo de evento a la lista
@@ -496,9 +520,12 @@ export function EventFormModal({
                     referrer_type: undefined,
                 });
                 setNameInput('');
+                setSelectedContactId(null);
                 setSelectedDates([]);
                 setEventDate(undefined);
                 setReferrerInputValue('');
+                setAssignReferralCommission(true);
+                setSelectedEventLocation(null);
             }
             setErrors({});
             setIsInitialLoading(false);
@@ -632,6 +659,48 @@ export function EventFormModal({
         allContacts.length,
     ]);
 
+    useEffect(() => {
+        if (selectedReferrerStatus !== 'personal' || !isOpen) {
+            setReferralCommissionConfig(null);
+            setReferralCommissionLoading(false);
+            return;
+        }
+        setReferralCommissionLoading(true);
+        obtenerConfiguracionPrecios(studioSlug)
+            .then((result) => {
+                if (!result) {
+                    setReferralCommissionConfig(null);
+                    return;
+                }
+                const type = (result.referral_reward_type as 'PERCENTAGE' | 'FIXED') || 'PERCENTAGE';
+                const value = result.referral_reward_value ?? '';
+                const comisionVenta = result.comision_venta ?? '';
+                if (value && value.trim() !== '') {
+                    setReferralCommissionConfig({
+                        referral_reward_type: type,
+                        referral_reward_value: value,
+                        comision_venta: comisionVenta,
+                    });
+                } else {
+                    setReferralCommissionConfig(null);
+                }
+            })
+            .catch(() => setReferralCommissionConfig(null))
+            .finally(() => setReferralCommissionLoading(false));
+    }, [selectedReferrerStatus, isOpen, studioSlug]);
+
+    const revalidatePhoneError = useCallback((slug: string, phone: string, excludeId: string | null) => {
+        const normalized = normalizePhone(phone || '');
+        if (normalized.length !== 10) return;
+        checkPhoneExists(slug, normalized, excludeId ?? undefined).then((r) => {
+            if (r.success && r.exists) {
+                setErrors((prev) => ({ ...prev, phone: 'Ya existe un contacto con este teléfono' }));
+            } else if (r.success) {
+                setErrors((prev) => ({ ...prev, phone: '' }));
+            }
+        });
+    }, []);
+
     const handleNameChange = (value: string) => {
         setNameInput(value);
         setSelectedContactIndex(-1);
@@ -649,17 +718,22 @@ export function EventFormModal({
                 setShowContactSuggestions(true);
             }
             setFormData((prev) => ({ ...prev, name: '' }));
+            setSelectedContactId(null);
+            revalidatePhoneError(studioSlug, formData.phone, null);
         } else {
             setShowContactSuggestions(false);
+            setSelectedContactId(null);
             setFormData((prev) => ({
                 ...prev,
                 name: value,
             }));
+            revalidatePhoneError(studioSlug, formData.phone, null);
         }
     };
 
     const handleSelectContact = (contact: { id: string; name: string; phone: string; email: string | null }) => {
         setNameInput(`@${contact.name}`);
+        setSelectedContactId(contact.id);
         setFormData((prev) => ({
             ...prev,
             name: contact.name,
@@ -668,6 +742,7 @@ export function EventFormModal({
         }));
         setShowContactSuggestions(false);
         setSelectedContactIndex(-1);
+        setErrors((prev) => ({ ...prev, phone: '' }));
     };
 
     const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -991,6 +1066,125 @@ export function EventFormModal({
                 </div>
             ) : (
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} onKeyDown={handleFormKeyDown} className="space-y-4">
+                    {/* Fecha de Interés / Fecha del Evento */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-300 block mb-2">
+                            {context === 'event' ? 'Fecha del Evento' : 'Fecha de Interés'}
+                        </label>
+                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setCalendarOpen(!calendarOpen);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors"
+                                >
+                                    <span className={selectedDates.length === 0 ? 'text-zinc-500' : ''}>
+                                        {formatDatesDisplay()}
+                                    </span>
+                                    <CalendarIcon className="h-4 w-4 text-zinc-400" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-9999 overflow-visible"
+                                align="start"
+                                sideOffset={4}
+                                onOpenAutoFocus={(e) => e.preventDefault()}
+                            >
+                                <div className="p-3">
+                                    <Calendar
+                                        mode="single"
+                                        required
+                                        selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
+                                        onSelect={(date: Date | undefined) => {
+                                            if (!date) return;
+                                            const normalizedDate = new Date(Date.UTC(
+                                                date.getUTCFullYear(),
+                                                date.getUTCMonth(),
+                                                date.getUTCDate(),
+                                                12, 0, 0
+                                            ));
+                                            setSelectedDates([normalizedDate]);
+                                            setEventDate(formatDateForServer(normalizedDate));
+                                            setMonth(normalizedDate);
+                                        }}
+                                        month={month}
+                                        onMonthChange={setMonth}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        buttonVariant="ghost"
+                                        captionLayout="dropdown"
+                                        className="border border-zinc-700 rounded-lg"
+                                    />
+                                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-700 mt-3 shrink-0">
+                                        <button type="button" onClick={() => setCalendarOpen(false)} className="px-3 py-1.5 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-md transition-colors">Cancelar</button>
+                                        <button type="button" onClick={() => setCalendarOpen(false)} className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors">Confirmar</button>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        <p className="text-xs text-zinc-400 mt-1">
+                            {context === 'event' ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible' : 'Selecciona una fecha de interés para la promesa'}
+                        </p>
+                        {selectedDates.length > 0 && (() => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const selectedDate = new Date(selectedDates[0]);
+                            selectedDate.setHours(0, 0, 0, 0);
+                            return selectedDate < today;
+                        })() && (
+                            <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
+                                <ZenCardContent className="p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
+                                        <div className="space-y-1.5 flex-1">
+                                            <p className="text-xs font-medium text-orange-300">Has seleccionado una fecha que ya ha pasado:</p>
+                                            <p className="text-xs text-orange-200/80">• {formatDisplayDate(selectedDates[0])}</p>
+                                        </div>
+                                    </div>
+                                </ZenCardContent>
+                            </ZenCard>
+                        )}
+                        {selectedDates.length > 0 && (() => {
+                            const fecha = selectedDates[0];
+                            const dateKey = fecha.toISOString().split('T')[0];
+                            const conflictos = conflictosPorFecha.get(dateKey);
+                            if (!conflictos || conflictos.length === 0) return null;
+                            return (
+                                <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
+                                    <ZenCardContent className="p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                                            <div className="space-y-1.5 flex-1">
+                                                <p className="text-xs font-medium text-amber-300">{formatDisplayDate(fecha)} ya está programada:</p>
+                                                {conflictos.map((conflicto) => (
+                                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
+                                                        {conflicto.contexto === 'promise' ? (
+                                                            <>
+                                                                <p className="font-medium">Promesa: {conflicto.contact_name || 'Sin nombre'}</p>
+                                                                {conflicto.time && <p className="text-amber-300/70">Hora: {conflicto.time}</p>}
+                                                                {conflicto.concept && <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <p className="font-medium">Evento: {conflicto.event_name || 'Sin nombre'}</p>
+                                                                {conflicto.time && <p className="text-amber-300/70">Hora: {conflicto.time}</p>}
+                                                                {conflicto.concept && <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
+                            );
+                        })()}
+                    </div>
+
                     {/* Nombre con búsqueda @ */}
                     <div className="relative">
                         <ZenInput
@@ -1040,7 +1234,15 @@ export function EventFormModal({
                             onChange={(e) => {
                                 const normalized = normalizePhone(e.target.value);
                                 setFormData((prev) => ({ ...prev, phone: normalized }));
-                                if (errors.phone) {
+                                if (normalized.length === 10) {
+                                    checkPhoneExists(studioSlug, normalized, selectedContactId ?? undefined).then((r) => {
+                                        if (r.success && r.exists) {
+                                            setErrors((prev) => ({ ...prev, phone: 'Ya existe un contacto con este teléfono' }));
+                                        } else if (r.success) {
+                                            setErrors((prev) => ({ ...prev, phone: '' }));
+                                        }
+                                    });
+                                } else {
                                     setErrors((prev) => ({ ...prev, phone: '' }));
                                 }
                             }}
@@ -1062,21 +1264,23 @@ export function EventFormModal({
                         />
                     </div>
 
-                    {/* Dirección */}
-                    <div>
-                        <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            Dirección
-                        </label>
-                        <textarea
-                            value={formData.address || ''}
-                            onChange={(e) => {
-                                setFormData((prev) => ({ ...prev, address: e.target.value || undefined }));
-                            }}
-                            placeholder="Dirección del cliente (opcional)"
-                            rows={2}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
-                        />
-                    </div>
+                    {/* Dirección: solo en modo edición */}
+                    {isEditMode && (
+                        <div>
+                            <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                Dirección
+                            </label>
+                            <textarea
+                                value={formData.address || ''}
+                                onChange={(e) => {
+                                    setFormData((prev) => ({ ...prev, address: e.target.value || undefined }));
+                                }}
+                                placeholder="Dirección del cliente (opcional)"
+                                rows={2}
+                                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
+                            />
+                        </div>
+                    )}
 
                     {/* Notas o comentarios */}
                     <div className="space-y-2">
@@ -1114,6 +1318,7 @@ export function EventFormModal({
                                     }
 
                                     const newEventTypeId = selectedValue === 'none' ? '' : selectedValue;
+                                    if (newEventTypeId === '') setSelectedEventLocation(null);
                                     setFormData((prev) => ({
                                         ...prev,
                                         event_type_id: newEventTypeId,
@@ -1172,20 +1377,29 @@ export function EventFormModal({
                             <label className="text-sm font-medium text-zinc-300 block mb-2">
                                 Lugar del Evento
                             </label>
-                            <ZenInput
-                                type="text"
-                                placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
+                            <LocationSelector
+                                studioSlug={studioSlug}
                                 value={formData.event_location || ''}
-                                onChange={(e) => {
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        event_location: e.target.value,
-                                    }));
+                                onValueChange={(name) => {
+                                    setFormData((prev) => ({ ...prev, event_location: name }));
+                                    setSelectedEventLocation(null);
                                 }}
+                                selectedLocation={selectedEventLocation}
+                                onSelect={(loc) => {
+                                    setFormData((prev) => ({ ...prev, event_location: loc.name }));
+                                    setSelectedEventLocation(loc);
+                                }}
+                                onClear={() => {
+                                    setFormData((prev) => ({ ...prev, event_location: '' }));
+                                    setSelectedEventLocation(null);
+                                }}
+                                placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
                                 disabled={!formData.event_type_id || formData.event_type_id === 'none'}
-                                className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                                error={errors.event_location}
+                                className="disabled:opacity-50 disabled:pointer-events-none"
                             />
+                            {errors.event_location && (
+                                <p className="text-xs text-red-500 mt-1.5">{errors.event_location}</p>
+                            )}
                         </div>
 
                         {/* Duración del Evento */}
@@ -1313,7 +1527,7 @@ export function EventFormModal({
                             <label className="text-sm font-medium text-zinc-300 block mb-1">
                                 Referido por
                             </label>
-                            <div className="relative">
+                            <div ref={referrerInputContainerRef} className="relative">
                                 <ZenInput
                                     id="referrer_input"
                                     placeholder="Escribe nombre o @nombre del contacto..."
@@ -1436,8 +1650,17 @@ export function EventFormModal({
                                     disabled={loading}
                                 />
 
-                                {showReferrerSuggestions && (
-                                    <div className="absolute z-[9999] mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
+                                {typeof document !== 'undefined' && showReferrerSuggestions && referrerDropdownRect && createPortal(
+                                    <div
+                                        className="rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto"
+                                        style={{
+                                            position: 'fixed',
+                                            top: referrerDropdownRect.top,
+                                            left: referrerDropdownRect.left,
+                                            width: referrerDropdownRect.width,
+                                            zIndex: (zIndex ?? 10050) + 50,
+                                        }}
+                                    >
                                         {filteredReferrerContacts.length > 0 ? (
                                             <>
                                                 {filteredReferrerContacts.map((contact, index) => (
@@ -1538,196 +1761,61 @@ export function EventFormModal({
                                                 <span>Crear contacto "{referrerSearchQuery}"</span>
                                             </button>
                                         ) : null}
-                                    </div>
+                                    </div>,
+                                    document.body
                                 )}
                             </div>
                         </div>
                     )}
 
-                    {/* Ficha informativa cuando el referido es Personal (Staff) */}
+                    {/* Referido es Personal (Staff): switch opcional + ficha informativa */}
                     {selectedReferrerStatus === 'personal' && (
-                        <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                            <div className="flex items-start gap-2">
-                                <div className="flex-shrink-0 mt-0.5">
-                                    <AlertCircle className="w-4 h-4 text-purple-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-medium text-purple-300 mb-1">
+                        <>
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-700/50 bg-zinc-800/30 px-3 py-2.5">
+                                <span className="text-sm text-zinc-300">Asignar comisión por referencia</span>
+                                <ZenSwitch
+                                    checked={assignReferralCommission}
+                                    onCheckedChange={setAssignReferralCommission}
+                                />
+                            </div>
+                            {assignReferralCommission && (
+                                <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                                    <div className="flex items-start gap-2">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <AlertCircle className="w-4 h-4 text-purple-400" />
+                                        </div>
+                                <div className="flex-1 space-y-1">
+                                    <p className="text-xs font-medium text-purple-300">
                                         Atribución de Comisión
                                     </p>
                                     <p className="text-xs text-purple-200/80 leading-relaxed">
-                                        Este referido es un miembro del equipo. La comisión por referido se asignará automáticamente según la configuración de comisiones del estudio.
+                                        Este referido es un miembro del equipo. La comisión se asignará según la configuración de rentabilidad del estudio.
                                     </p>
+                                    {referralCommissionLoading ? (
+                                        <div className="flex items-center gap-2 mt-1.5 text-purple-300">
+                                            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                                            <span className="text-xs">Cargando configuración...</span>
+                                        </div>
+                                    ) : referralCommissionConfig ? (
+                                        <ul className="text-xs text-purple-200/80 leading-relaxed list-disc list-inside space-y-0.5 mt-1.5">
+                                            {referralCommissionConfig.comision_venta && (
+                                                <li>
+                                                    Comisión de venta (agente): {referralCommissionConfig.comision_venta}%
+                                                </li>
+                                            )}
+                                            <li>
+                                                Referente staff: {referralCommissionConfig.referral_reward_type === 'PERCENTAGE'
+                                                    ? `${referralCommissionConfig.referral_reward_value}%`
+                                                    : `$${Number(referralCommissionConfig.referral_reward_value).toLocaleString('es-MX')} MXN fijo`}
+                                            </li>
+                                        </ul>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>
-                    )}
-
-                    {/* Fecha de Interés / Fecha del Evento */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            {context === 'event' ? 'Fecha del Evento' : 'Fecha de Interés'}
-                        </label>
-                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                            <PopoverTrigger asChild>
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setCalendarOpen(!calendarOpen);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors"
-                                >
-                                    <span className={selectedDates.length === 0 ? 'text-zinc-500' : ''}>
-                                        {formatDatesDisplay()}
-                                    </span>
-                                    <CalendarIcon className="h-4 w-4 text-zinc-400" />
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-9999 overflow-visible"
-                                align="start"
-                                sideOffset={4}
-                                onOpenAutoFocus={(e) => e.preventDefault()}
-                            >
-                                <div className="p-3">
-                                    <Calendar
-                                        mode="single"
-                                        required
-                                        selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
-                                        onSelect={(date: Date | undefined) => {
-                                            // VALIDACIÓN ESTRICTA: Solo permitir UNA fecha única
-                                            // Si date es undefined (usuario intenta deseleccionar), ignorar
-                                            if (!date) {
-                                                return;
-                                            }
-
-                                            // Normalizar fecha a mediodía UTC para evitar problemas de zona horaria
-                                            const normalizedDate = new Date(Date.UTC(
-                                                date.getUTCFullYear(),
-                                                date.getUTCMonth(),
-                                                date.getUTCDate(),
-                                                12, 0, 0
-                                            ));
-
-                                            // SIEMPRE reemplazar con un array de un solo elemento (nunca agregar)
-                                            setSelectedDates([normalizedDate]);
-                                            setEventDate(formatDateForServer(normalizedDate));
-                                            setMonth(normalizedDate);
-                                        }}
-                                        month={month}
-                                        onMonthChange={setMonth}
-                                        numberOfMonths={1}
-                                        locale={es}
-                                        buttonVariant="ghost"
-                                        captionLayout="dropdown"
-                                        className="border border-zinc-700 rounded-lg"
-                                    />
-                                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-700 mt-3 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCalendarOpen(false);
-                                            }}
-                                            className="px-3 py-1.5 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCalendarOpen(false);
-                                            }}
-                                            className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors"
-                                        >
-                                            Confirmar
-                                        </button>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-                        <p className="text-xs text-zinc-400 mt-1">
-                            {context === 'event'
-                                ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible'
-                                : 'Selecciona una fecha de interés para la promesa'
-                            }
-                        </p>
-                        {selectedDates.length > 0 && (() => {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const selectedDate = new Date(selectedDates[0]);
-                            selectedDate.setHours(0, 0, 0, 0);
-                            return selectedDate < today;
-                        })() && (
-                                <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
-                                    <ZenCardContent className="p-3">
-                                        <div className="flex items-start gap-2">
-                                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
-                                            <div className="space-y-1.5 flex-1">
-                                                <p className="text-xs font-medium text-orange-300">
-                                                    Has seleccionado una fecha que ya ha pasado:
-                                                </p>
-                                                <p className="text-xs text-orange-200/80">
-                                                    • {formatDisplayDate(selectedDates[0])}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </ZenCardContent>
-                                </ZenCard>
                             )}
-                        {/* Removed: Multiple dates display - now only single date allowed */}
-                        {selectedDates.length > 0 && (() => {
-                            const fecha = selectedDates[0];
-                            const dateKey = fecha.toISOString().split('T')[0];
-                            const conflictos = conflictosPorFecha.get(dateKey);
-                            if (!conflictos || conflictos.length === 0) return null;
-
-                            return (
-                                <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
-                                    <ZenCardContent className="p-3">
-                                        <div className="flex items-start gap-2">
-                                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-                                            <div className="space-y-1.5 flex-1">
-                                                <p className="text-xs font-medium text-amber-300">
-                                                    {formatDisplayDate(fecha)} ya está programada:
-                                                </p>
-                                                {conflictos.map((conflicto) => (
-                                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
-                                                        {conflicto.contexto === 'promise' ? (
-                                                            <>
-                                                                <p className="font-medium">
-                                                                    Promesa: {conflicto.contact_name || 'Sin nombre'}
-                                                                </p>
-                                                                {conflicto.time && (
-                                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
-                                                                )}
-                                                                {conflicto.concept && (
-                                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <p className="font-medium">
-                                                                    Evento: {conflicto.event_name || 'Sin nombre'}
-                                                                </p>
-                                                                {conflicto.time && (
-                                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
-                                                                )}
-                                                                {conflicto.concept && (
-                                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </ZenCardContent>
-                                </ZenCard>
-                            );
-                        })()}
-                    </div>
+                        </>
+                    )}
                 </form>
             )}
 

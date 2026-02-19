@@ -434,7 +434,7 @@ export async function autorizarCotizacionPublica(
     // El frontend hará la revalidación DESPUÉS de la transición manual
     
     // Solo mantener tags para invalidación futura (cuando el usuario navegue manualmente)
-    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
 
     return {
       success: true,
@@ -631,7 +631,7 @@ export async function regeneratePublicContract(
     // Revalidar paths y caché
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, 'max');
 
     return {
       success: true,

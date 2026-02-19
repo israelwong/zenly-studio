@@ -1017,7 +1017,7 @@ export async function obtenerEventoDetalle(
       secciones.length > 0
         ? rawCotizaciones.map((cot) => ({
             ...cot,
-            cotizacion_items: ordenarPorEstructuraCanonica(cot.cotizacion_items, secciones, getCategoryId, getName),
+            cotizacion_items: ordenarPorEstructuraCanonica(cot.cotizacion_items ?? [], secciones, getCategoryId, getName),
           }))
         : rawCotizaciones;
 
@@ -1040,7 +1040,7 @@ export async function obtenerEventoDetalle(
             is_custom: raw.is_custom,
             catalog_category_order_by_stage: catalogOrderByStage,
             custom_categories: customCategories,
-            tasks: raw.tasks.map((t: InstanceTask) => ({
+            tasks: (raw.tasks ?? []).map((t: InstanceTask) => ({
               id: t.id,
               name: t.name,
               description: (t as { description?: string | null }).description ?? null,
@@ -1149,13 +1149,13 @@ export async function obtenerEventoDetalle(
         return {
           ...(cot as any),
           price: cot.price ? Number(cot.price) : 0,
-          cotizacion_items: cot.cotizacion_items.map(serializeCotizacionItemBasic),
+          cotizacion_items: (cot.cotizacion_items ?? []).map(serializeCotizacionItemBasic),
         };
       })() : null,
       cotizaciones: todasLasCotizaciones.map((cotizacion) => {
         const cot = cotizacion as any;
         // ISRAEL ALGORITHM V4.0 - Sort con Peso de Categoría (Sincronización Category-Task Order)
-        const itemsOrdenados = [...cot.cotizacion_items].sort((a: any, b: any) => {
+        const itemsOrdenados = [...(cot.cotizacion_items ?? [])].sort((a: any, b: any) => {
           // 1. Extracción Segura: Aseguramos que sea número o undefined
           const taskOrderA = a.scheduler_task?.order;
           const taskOrderB = b.scheduler_task?.order;
@@ -1213,7 +1213,7 @@ export async function obtenerEventoDetalle(
         const scheduler = evento.scheduler!;
         return {
           ...(scheduler as any),
-          tasks: scheduler.tasks?.map((t) => {
+          tasks: (scheduler.tasks ?? []).map((t) => {
             const resolvedCatalogCategoryId =
               t.catalog_category_id ??
               (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
@@ -1247,10 +1247,12 @@ export async function obtenerEventoDetalle(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Error al obtener detalle del evento';
+    const errName = error instanceof Error ? error.name : 'Unknown';
     console.error('[obtenerEventoDetalle] success: false — Excepción en try', {
       studioSlug,
       eventoId,
       error: msg,
+      name: errName,
       stack: error instanceof Error ? error.stack : 'No stack',
     });
     return {

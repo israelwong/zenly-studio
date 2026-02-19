@@ -129,19 +129,22 @@ export function ContactsCardView({
                   </h3>
                   {getStatusBadge(contact.status)}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
                   {contact.phone && (
-                    <span className="truncate">{contact.phone}</span>
+                    <span className="truncate shrink-0">{contact.phone}</span>
                   )}
                   {contact.email && (
                     <>
-                      <span>•</span>
-                      <span className="truncate">{contact.email}</span>
+                      {contact.phone && <span className="text-zinc-500 shrink-0">·</span>}
+                      <span className="truncate min-w-0">{contact.email}</span>
                     </>
                   )}
-                </div>
-                <div className="text-xs text-zinc-500 mt-1 truncate">
-                  Canal: {getCanalDisplay(contact)}
+                  {(contact.phone || contact.email) && (
+                    <span className="text-zinc-500 shrink-0">·</span>
+                  )}
+                  <span className="text-zinc-500 truncate min-w-0">
+                    Canal: {getCanalDisplay(contact)}
+                  </span>
                 </div>
               </div>
               <div className="flex-shrink-0">
