@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, Unlink, ExternalLink } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
@@ -10,6 +10,9 @@ import {
   crearCondicionComercial,
   actualizarCondicionComercial,
   obtenerConfiguracionPrecios,
+  desvincularOfertaCondicionComercial,
+  obtenerOfertasParaVincular,
+  type OfertaParaVincular,
 } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import type { CondicionComercialForm } from '@/lib/actions/schemas/condiciones-comerciales-schemas';
 import { useConfiguracionPreciosUpdateListener, type ConfiguracionPreciosUpdateEventDetail } from '@/hooks/useConfiguracionPreciosRefresh';
@@ -46,6 +49,8 @@ export function CondicionComercialFormModal({
     advance_type: 'percentage' as 'percentage' | 'fixed_amount',
     advance_percentage: '',
     advance_amount: '',
+    is_public: true,
+    offer_id: null as string | null,
   });
   const [formErrors, setFormErrors] = useState<{
     nombre?: string[];
@@ -60,12 +65,30 @@ export function CondicionComercialFormModal({
     advance_type: 'percentage' as 'percentage' | 'fixed_amount',
     advance_percentage: '',
     advance_amount: '',
+    is_public: true,
+    offer_id: null as string | null,
   });
+  const [ofertasParaVincular, setOfertasParaVincular] = useState<OfertaParaVincular[]>([]);
+  const [cargandoOfertas, setCargandoOfertas] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [maxDescuento, setMaxDescuento] = useState<number | null>(null);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [showUtilidadModal, setShowUtilidadModal] = useState(false);
+  const [showDesvincularConfirm, setShowDesvincularConfirm] = useState(false);
+  const [loadedCondicion, setLoadedCondicion] = useState<{
+    type?: string | null;
+    offer_id?: string | null;
+    exclusive_offer?: {
+      id: string;
+      name: string;
+      is_active: boolean;
+      is_permanent: boolean | null;
+      has_date_range: boolean | null;
+      start_date: Date | null;
+      end_date: Date | null;
+    } | null;
+  } | null>(null);
 
   // Cargar condición cuando se abre el modal en modo edición
   useEffect(() => {
@@ -79,6 +102,12 @@ export function CondicionComercialFormModal({
       }
     }
   }, [isOpen, condicionId, isEditMode, studioSlug]);
+
+  const isOfferType = context?.type === 'offer' || (isEditMode && loadedCondicion && (loadedCondicion.type === 'offer' || !!loadedCondicion.offer_id));
+  useEffect(() => {
+    if (!isOpen || !isOfferType) return;
+    loadOfertasParaVincular();
+  }, [isOpen, isOfferType, isEditMode, condicionId, studioSlug]);
 
   // Escuchar actualizaciones de configuración de precios
   useConfiguracionPreciosUpdateListener(studioSlug, (config?: ConfiguracionPreciosUpdateEventDetail) => {
@@ -109,6 +138,7 @@ export function CondicionComercialFormModal({
       if (result.success && result.data) {
         const condicion = result.data;
         const advanceType = condicion.advance_type || 'percentage';
+        const condicionWithPublic = condicion as { is_public?: boolean; offer_id?: string | null };
         const editForm = {
           name: condicion.name,
           description: condicion.description || '',
@@ -116,9 +146,12 @@ export function CondicionComercialFormModal({
           advance_type: advanceType as 'percentage' | 'fixed_amount',
           advance_percentage: condicion.advance_percentage?.toString() || '',
           advance_amount: condicion.advance_amount?.toString() || '',
+          is_public: condicionWithPublic.is_public ?? true,
+          offer_id: condicionWithPublic.offer_id ?? null,
         };
         setFormData(editForm);
         setInitialFormData(editForm);
+        setLoadedCondicion(result.data as typeof loadedCondicion);
       } else {
         toast.error('Error al cargar la condición comercial');
         onClose();
@@ -140,10 +173,30 @@ export function CondicionComercialFormModal({
       advance_type: 'percentage' as 'percentage' | 'fixed_amount',
       advance_percentage: '',
       advance_amount: '',
+      is_public: true,
+      offer_id: null as string | null,
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
     setFormErrors({});
+    setLoadedCondicion(null);
+    setOfertasParaVincular([]);
+  }
+
+  async function loadOfertasParaVincular() {
+    setCargandoOfertas(true);
+    try {
+      const result = await obtenerOfertasParaVincular(studioSlug, isEditMode ? condicionId ?? undefined : undefined);
+      if (result.success && result.data) {
+        setOfertasParaVincular(result.data);
+      } else {
+        setOfertasParaVincular([]);
+      }
+    } catch {
+      setOfertasParaVincular([]);
+    } finally {
+      setCargandoOfertas(false);
+    }
   }
 
   const hasUnsavedChanges = () => {
@@ -153,7 +206,9 @@ export function CondicionComercialFormModal({
       formData.discount_percentage !== initialFormData.discount_percentage ||
       formData.advance_type !== initialFormData.advance_type ||
       formData.advance_percentage !== initialFormData.advance_percentage ||
-      formData.advance_amount !== initialFormData.advance_amount
+      formData.advance_amount !== initialFormData.advance_amount ||
+      formData.is_public !== initialFormData.is_public ||
+      formData.offer_id !== initialFormData.offer_id
     );
   };
 
@@ -256,6 +311,7 @@ export function CondicionComercialFormModal({
         ? (formData.advance_amount && formData.advance_amount.trim() !== '' ? formData.advance_amount.trim() : null)
         : null;
 
+      const isOffer = !!(formData.offer_id || context?.type === 'offer' || (isEditMode && loadedCondicion?.type === 'offer'));
       const data: CondicionComercialForm = {
         nombre: formData.name,
         descripcion: formData.description || null,
@@ -265,8 +321,10 @@ export function CondicionComercialFormModal({
         monto_anticipo: montoAnticipo,
         status: 'active',
         orden: 0,
-        type: context?.type === 'offer' ? 'offer' : 'standard',
+        type: isOffer ? 'offer' : 'standard',
+        offer_id: formData.offer_id ?? null,
         override_standard: false,
+        is_public: context?.type === 'offer' || isOffer ? true : formData.is_public,
       };
 
       const actionContext = context ? { offerId: context.offerId, type: context.type } : undefined;
@@ -405,6 +463,29 @@ export function CondicionComercialFormModal({
               placeholder="Descripción opcional de la condición"
             />
 
+            <div className="space-y-2 p-4 border border-zinc-800 rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-1">
+                  <label className="text-sm font-medium text-zinc-300">
+                    Condición Pública
+                  </label>
+                  <p className="text-xs text-zinc-500">
+                    {context?.type === 'offer'
+                      ? 'Las condiciones de oferta son siempre públicas'
+                      : 'Si se desactiva, solo será visible para el estudio y en negociaciones directas'}
+                  </p>
+                </div>
+                <div className="pt-1">
+                  <ZenSwitch
+                    checked={context?.type === 'offer' ? true : formData.is_public}
+                    onCheckedChange={(checked) => setFormData({ ...formData, is_public: checked })}
+                    disabled={context?.type === 'offer'}
+                    label={formData.is_public ? 'Pública' : 'Privada'}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-4 p-4 border border-zinc-800 rounded-lg">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 space-y-1">
@@ -426,62 +507,70 @@ export function CondicionComercialFormModal({
                         advance_amount: checked ? formData.advance_amount : '',
                       });
                     }}
-                    label={formData.advance_type === 'fixed_amount' ? 'Monto fijo' : 'Porcentaje'}
+                    label={formData.advance_type === 'fixed_amount' ? 'Monto fijo ($)' : 'Porcentaje (%)'}
                   />
                 </div>
               </div>
 
-              {formData.advance_type === 'percentage' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {formData.advance_type === 'percentage' ? (
+                  <ZenInput
+                    label="Porcentaje de anticipo"
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.advance_percentage}
+                    onChange={handleAdvancePercentageChange}
+                    placeholder="10"
+                    hint="Porcentaje que se solicita como anticipo (0-100%)"
+                    error={formErrors.porcentaje_anticipo?.[0]}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-300">Monto fijo de anticipo</label>
+                    <div className="flex items-center rounded-lg border border-zinc-700 bg-zinc-900/50 focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:border-emerald-500/50">
+                      <span className="pl-3 text-zinc-400 font-medium">$</span>
+                      <ZenInput
+                        type="text"
+                        inputMode="decimal"
+                        value={formData.advance_amount}
+                        onChange={handleAdvanceAmountChange}
+                        placeholder="1,000"
+                        className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 pl-1"
+                        error={formErrors.porcentaje_anticipo?.[0]}
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-500">Monto fijo que se solicita como anticipo (mayor a 0)</p>
+                  </div>
+                )}
                 <ZenInput
-                  label="Porcentaje de anticipo"
+                  label="Porcentaje de descuento"
                   type="text"
                   inputMode="decimal"
-                  value={formData.advance_percentage}
-                  onChange={handleAdvancePercentageChange}
+                  value={formData.discount_percentage}
+                  onChange={handleDiscountChange}
                   placeholder="10"
-                  hint="Porcentaje que se solicita como anticipo (0-100%)"
-                  error={formErrors.porcentaje_anticipo?.[0]}
+                  error={
+                    formData.discount_percentage
+                      ? (() => {
+                          const numValue = parseFloat(formData.discount_percentage);
+                          if (isNaN(numValue)) {
+                            return undefined;
+                          }
+                          if (numValue > 100) {
+                            return 'El porcentaje no puede ser mayor a 100%';
+                          }
+                          if (maxDescuento !== null && numValue > maxDescuento) {
+                            return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
+                          }
+                          return undefined;
+                        })()
+                      : formErrors.porcentaje_descuento?.[0]
+                  }
                 />
-              ) : (
-                <ZenInput
-                  label="Monto fijo de anticipo"
-                  type="text"
-                  inputMode="decimal"
-                  value={formData.advance_amount}
-                  onChange={handleAdvanceAmountChange}
-                  placeholder="1000"
-                  hint="Monto fijo que se solicita como anticipo (ej: $1,000)"
-                  error={formErrors.porcentaje_anticipo?.[0]}
-                />
-              )}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <ZenInput
-                label="Porcentaje de descuento"
-                type="text"
-                inputMode="decimal"
-                value={formData.discount_percentage}
-                onChange={handleDiscountChange}
-                placeholder="10"
-                error={
-                  formData.discount_percentage
-                    ? (() => {
-                        const numValue = parseFloat(formData.discount_percentage);
-                        if (isNaN(numValue)) {
-                          return undefined;
-                        }
-                        if (numValue > 100) {
-                          return 'El porcentaje no puede ser mayor a 100%';
-                        }
-                        if (maxDescuento !== null && numValue > maxDescuento) {
-                          return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
-                        }
-                        return undefined;
-                      })()
-                    : formErrors.porcentaje_descuento?.[0]
-                }
-              />
+            <div className="mt-2">
               {maxDescuento !== null ? (
                 <div className="flex items-center gap-2 text-xs text-zinc-500">
                   <span>
@@ -509,6 +598,91 @@ export function CondicionComercialFormModal({
                 </div>
               )}
             </div>
+
+            {/* Sección de Vínculos: lista de ofertas (vigentes y vencidas) con toggle Vincular / Desvincular */}
+            {(() => {
+              const isOfferType = context?.type === 'offer' || (isEditMode && loadedCondicion && (loadedCondicion.type === 'offer' || !!loadedCondicion.offer_id));
+              if (!isOfferType) return null;
+
+              const currentOfferId = formData.offer_id ?? loadedCondicion?.offer_id ?? null;
+              const isLinked = (offerId: string) => currentOfferId === offerId;
+
+              return (
+                <div className="space-y-3 pt-4 border-t border-zinc-800">
+                  <h4 className="text-sm font-medium text-zinc-300">Ofertas</h4>
+                  <p className="text-xs text-zinc-500">Vincula o desvincula una oferta. Solo puede haber una oferta vinculada por condición.</p>
+                  {cargandoOfertas ? (
+                    <div className="text-sm text-zinc-400">Cargando ofertas…</div>
+                  ) : ofertasParaVincular.length === 0 ? (
+                    <div className="text-sm text-zinc-400">No hay ofertas en este estudio.</div>
+                  ) : (
+                    <ul className="space-y-2 max-h-48 overflow-y-auto">
+                      {ofertasParaVincular.map((o) => (
+                        <li
+                          key={o.id}
+                          className="p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="font-medium text-white truncate">{o.name}</span>
+                            <span
+                              className={`inline-flex items-center shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                o.isVigente ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {o.isVigente ? 'Vigente' : 'Vencida'}
+                            </span>
+                            <span className="text-xs text-zinc-400 shrink-0">{o.vigenciaLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isLinked(o.id) ? (
+                              <>
+                                <ZenButton
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="min-w-[8rem] h-7 justify-center gap-1 text-xs text-zinc-300 hover:text-amber-400 border-zinc-600"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setShowDesvincularConfirm(true);
+                                  }}
+                                >
+                                  <Unlink className="h-3.5 w-3.5 shrink-0" />
+                                  Desvincular oferta
+                                </ZenButton>
+                                <a
+                                  href={`/${studioSlug}/studio/commercial/ofertas/${o.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center gap-1 min-w-[8rem] h-7 px-2.5 text-xs rounded border border-zinc-600 text-zinc-400 hover:text-white hover:bg-zinc-700/50 transition-colors"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                  Gestionar oferta
+                                </a>
+                              </>
+                            ) : (
+                              <ZenButton
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-60"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setFormData({ ...formData, offer_id: o.id });
+                                }}
+                                disabled={o.linkedToOtraCondicion}
+                                title={o.linkedToOtraCondicion ? 'Vinculada a otra condición' : undefined}
+                              >
+                                Vincular oferta
+                              </ZenButton>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
               <ZenButton
@@ -552,6 +726,29 @@ export function CondicionComercialFormModal({
         title="¿Descartar cambios?"
         description="Tienes cambios sin guardar. Si cierras ahora, los cambios no se guardarán."
         confirmText="Descartar cambios"
+        cancelText="Cancelar"
+        variant="destructive"
+        zIndex={10300}
+      />
+
+      <ZenConfirmModal
+        isOpen={showDesvincularConfirm}
+        onClose={() => setShowDesvincularConfirm(false)}
+        onConfirm={async () => {
+          if (!condicionId) return;
+          const result = await desvincularOfertaCondicionComercial(studioSlug, condicionId);
+          setShowDesvincularConfirm(false);
+          if (result.success) {
+            toast.success('Oferta desvinculada. La condición pasó a tipo estándar.');
+            await loadCondicion();
+            onSuccess?.();
+          } else {
+            toast.error(result.error ?? 'Error al desvincular');
+          }
+        }}
+        title="¿Desvincular oferta?"
+        description="La condición pasará a ser de tipo estándar y el switch Pública/Privada volverá a ser editable."
+        confirmText="Desvincular"
         cancelText="Cancelar"
         variant="destructive"
         zIndex={10300}

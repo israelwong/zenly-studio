@@ -1,26 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical, X, MoreVertical, Edit2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical, X, Lock, Globe, Info, AlertCircle, Unlink, ExternalLink } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
-import {
-  ZenDropdownMenu,
-  ZenDropdownMenuTrigger,
-  ZenDropdownMenuContent,
-  ZenDropdownMenuItem,
-  ZenDropdownMenuSeparator,
-} from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import {
   obtenerTodasCondicionesComerciales,
   crearCondicionComercial,
   actualizarCondicionComercial,
   eliminarCondicionComercial,
+  eliminarCondicionComercialDesvinculando,
   actualizarOrdenCondicionesComerciales,
   checkCondicionComercialAssociations,
+  obtenerConfiguracionPrecios,
+  obtenerOfertasParaVincular,
+  desvincularOfertaCondicionComercial,
+  type OfertaParaVincular,
 } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
-import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import type { CondicionComercialForm } from '@/lib/actions/schemas/condiciones-comerciales-schemas';
 import { useConfiguracionPreciosUpdateListener, type ConfiguracionPreciosUpdateEventDetail } from '@/hooks/useConfiguracionPreciosRefresh';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
@@ -43,6 +41,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+interface ExclusiveOfferInfo {
+  id: string;
+  name: string;
+  is_active: boolean;
+  is_permanent: boolean;
+  has_date_range: boolean;
+  start_date: Date | null;
+  end_date: Date | null;
+}
+
 interface CondicionComercial {
   id: string;
   name: string;
@@ -56,6 +64,8 @@ interface CondicionComercial {
   type?: string;
   offer_id?: string | null;
   override_standard?: boolean;
+  is_public?: boolean;
+  exclusive_offer?: ExclusiveOfferInfo | null;
 }
 
 interface CondicionesComercialesManagerProps {
@@ -77,16 +87,27 @@ interface SortableCondicionItemProps {
   index: number;
   totalItems: number;
   onEdit: (condicion: CondicionComercial) => void;
-  onDelete: (id: string) => void;
   onToggleStatus: (id: string, newStatus: boolean) => void;
+  onSelect?: (condicionId: string) => void;
 }
+
+/** Solo true cuando la oferta existe pero está inactiva o fuera de rango de fechas. No aplica si no hay oferta vinculada. */
+function isOfertaVencida(offer: ExclusiveOfferInfo | null | undefined): boolean {
+  if (!offer) return false;
+  if (!offer.is_active) return true;
+  if (offer.is_permanent) return false;
+  if (!offer.has_date_range || !offer.start_date || !offer.end_date) return false;
+  const now = new Date();
+  return now < offer.start_date || now > offer.end_date;
+}
+
+const BADGE_BASE = 'inline-flex items-center gap-1 min-h-[20px] px-2 py-1 text-[10px] font-medium rounded-full';
 
 function SortableCondicionItem({
   condicion,
   index,
   totalItems,
   onEdit,
-  onDelete,
   onToggleStatus,
   onSelect,
 }: SortableCondicionItemProps) {
@@ -99,22 +120,37 @@ function SortableCondicionItem({
     isDragging,
   } = useSortable({ id: condicion.id });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? undefined : transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 1 : undefined,
+    zIndex: isDragging ? 1 : undefined,
+    boxShadow: isDragging ? '0 10px 40px -10px rgba(0,0,0,0.5)' : undefined,
   };
 
   const isActive = condicion.status === 'active';
+  const isPrivada = condicion.is_public === false;
+  const offer = condicion.exclusive_offer;
+  const hasOffer = !!offer;
+  const offerVencida = condicion.type === 'offer' && hasOffer && isOfertaVencida(offer);
+  const offerSinVinculada = condicion.type === 'offer' && !hasOffer;
+  const switchActivaDisabled = offerVencida || offerSinVinculada;
+  const tooltipReason = isPrivada
+    ? 'No aparece en el portal del cliente porque está marcada como privada.'
+    : offerVencida
+      ? 'No aparece en el portal porque la oferta vinculada está inactiva o fuera de fechas.'
+      : offerSinVinculada
+        ? 'No aparece en el portal porque no tiene una oferta vinculada activa.'
+        : null;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 border rounded-lg w-full cursor-pointer transition-all ${isActive
+      className={`p-4 border rounded-lg w-full cursor-pointer transition-shadow duration-200 ${isActive
         ? 'border-zinc-600 bg-zinc-800/50 hover:bg-zinc-800/70'
         : 'border-zinc-700 bg-zinc-800/30 opacity-75'
-        }`}
+        } ${isDragging ? 'ring-2 ring-emerald-500/40' : ''}`}
       onClick={() => {
         // Si hay onSelect, seleccionar en lugar de editar
         if (onSelect) {
@@ -124,33 +160,132 @@ function SortableCondicionItem({
         }
       }}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3 flex-1">
+      <div className="flex flex-col gap-2">
+        {/* Fila 1: título + badges + switch + menú */}
+        <div className="flex items-center gap-3 w-full">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing mt-1 text-zinc-500 hover:text-zinc-400"
+            className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-400 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="h-5 w-5" />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h4 className={`font-semibold ${isActive ? 'text-white' : 'text-zinc-400'}`}>
-                {condicion.name}
-              </h4>
-              {condicion.type === 'offer' && (
-                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">
-                  OFERTA
-                </span>
-              )}
-            </div>
+          <h4
+            className={`font-semibold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${isActive ? 'text-white' : 'text-zinc-400'}`}
+            title={condicion.name}
+          >
+            {condicion.name}
+          </h4>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {condicion.type === 'offer' ? (
+              <span className={`${BADGE_BASE} bg-emerald-500/20 text-emerald-300 border border-emerald-500/30`}>Oferta</span>
+            ) : (
+              <span className={`${BADGE_BASE} bg-slate-500/20 text-slate-300 border border-slate-500/40`}>Normal</span>
+            )}
+            {isPrivada ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`${BADGE_BASE} bg-zinc-600 text-zinc-300 border border-zinc-500`}>
+                    <Lock className="h-2.5 w-2.5 shrink-0" />
+                    Privada
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>{tooltipReason}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`${BADGE_BASE} bg-sky-500/20 text-sky-300 border border-sky-500/30`}>
+                    <Globe className="h-2.5 w-2.5 shrink-0" />
+                    Pública
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>Visible en el portal del cliente.</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {condicion.type === 'offer' && hasOffer && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`${BADGE_BASE} bg-emerald-500/15 text-emerald-300 border border-emerald-500/40`}>
+                    Vinculada: {offer!.name}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>Oferta vinculada: {offer!.name}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {condicion.type === 'offer' && offerSinVinculada && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`${BADGE_BASE} bg-zinc-500/20 text-zinc-300 border border-zinc-500/40`}>
+                    <Info className="h-2.5 w-2.5 shrink-0" />
+                    Sin oferta vinculada
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>{tooltipReason}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {condicion.type === 'offer' && offerVencida && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`${BADGE_BASE} bg-amber-500/20 text-amber-300 border border-amber-500/30`}>
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0" />
+                    Oferta vencida
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>{tooltipReason}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          <div className="h-6 w-px bg-zinc-600 shrink-0" aria-hidden />
+          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {switchActivaDisabled ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <ZenSwitch
+                      checked={false}
+                      onCheckedChange={(checked) => onToggleStatus(condicion.id, checked)}
+                      className="scale-90 origin-center"
+                      disabled
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>
+                    {offerSinVinculada
+                      ? 'No se puede activar: vincula una oferta activa para habilitar el switch.'
+                      : 'No se puede activar: la oferta vinculada está vencida o inactiva.'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <ZenSwitch
+                checked={isActive}
+                onCheckedChange={(checked) => onToggleStatus(condicion.id, checked)}
+                className="scale-90 origin-center"
+              />
+            )}
+          </div>
+        </div>
+        {/* Contenido: descripción + anticipo/descuento */}
+        <div className="pl-8 space-y-1">
             {condicion.description && (
-              <p className={`text-sm mt-1 ${isActive ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <p className={`text-sm ${isActive ? 'text-zinc-400' : 'text-zinc-500'}`}>
                 {condicion.description}
               </p>
             )}
-            <div className={`flex items-center gap-4 mt-2 text-sm ${isActive ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <div className={`flex items-center gap-4 text-sm ${isActive ? 'text-zinc-300' : 'text-zinc-500'}`}>
               {(() => {
                 const advanceType = condicion.advance_type || 'percentage';
                 if (advanceType === 'fixed_amount' && condicion.advance_amount) {
@@ -162,42 +297,6 @@ function SortableCondicionItem({
               })()}
               <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
             </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-          <ZenSwitch
-            checked={isActive}
-            onCheckedChange={(checked) => onToggleStatus(condicion.id, checked)}
-            label={isActive ? 'Activa' : 'Inactiva'}
-          />
-          <ZenDropdownMenu>
-            <ZenDropdownMenuTrigger asChild>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </ZenButton>
-            </ZenDropdownMenuTrigger>
-            <ZenDropdownMenuContent align="end">
-              <ZenDropdownMenuItem
-                onClick={() => onEdit(condicion)}
-                className="gap-2"
-              >
-                <Edit2 className="h-4 w-4" />
-                Editar
-              </ZenDropdownMenuItem>
-              <ZenDropdownMenuSeparator />
-              <ZenDropdownMenuItem
-                onClick={() => onDelete(condicion.id)}
-                className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
-              >
-                <Trash2 className="h-4 w-4" />
-                Eliminar
-              </ZenDropdownMenuItem>
-            </ZenDropdownMenuContent>
-          </ZenDropdownMenu>
         </div>
       </div>
     </div>
@@ -253,7 +352,9 @@ export function CondicionesComercialesManager({
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [pendingClose, setPendingClose] = useState<(() => void) | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showConfirmDesvincularEliminar, setShowConfirmDesvincularEliminar] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingDeleteCotizacionesCount, setPendingDeleteCotizacionesCount] = useState(0);
   const [showUtilidadModal, setShowUtilidadModal] = useState(false);
   const [viewingOfferCondition, setViewingOfferCondition] = useState<CondicionComercial | null>(null);
   const [formData, setFormData] = useState({
@@ -265,7 +366,12 @@ export function CondicionesComercialesManager({
     advance_amount: '',
     status: true,
     is_offer: false,
+    is_public: true,
+    offer_id: null as string | null,
   });
+  const [ofertasParaVincular, setOfertasParaVincular] = useState<OfertaParaVincular[]>([]);
+  const [cargandoOfertas, setCargandoOfertas] = useState(false);
+  const [showDesvincularConfirm, setShowDesvincularConfirm] = useState(false);
   const [formErrors, setFormErrors] = useState<{
     nombre?: string[];
     descripcion?: string[];
@@ -281,6 +387,8 @@ export function CondicionesComercialesManager({
     advance_amount: '',
     status: true,
     is_offer: false,
+    is_public: true,
+    offer_id: null as string | null,
   });
 
   // Verificar si hay cambios sin guardar
@@ -295,7 +403,9 @@ export function CondicionesComercialesManager({
       formData.advance_percentage !== initialFormData.advance_percentage ||
       formData.advance_amount !== initialFormData.advance_amount ||
       formData.status !== initialFormData.status ||
-      formData.is_offer !== initialFormData.is_offer
+      formData.is_offer !== initialFormData.is_offer ||
+      formData.is_public !== initialFormData.is_public ||
+      formData.offer_id !== initialFormData.offer_id
     );
   };
 
@@ -312,6 +422,8 @@ export function CondicionesComercialesManager({
     setShowForm(false);
     setEditingId(null);
     setViewingOfferCondition(null);
+    setOfertasParaVincular([]);
+    setShowDesvincularConfirm(false);
     const emptyForm = {
       name: '',
       description: '',
@@ -321,6 +433,8 @@ export function CondicionesComercialesManager({
       advance_amount: '',
       status: true,
       is_offer: false,
+      is_public: true,
+      offer_id: null as string | null,
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
@@ -350,13 +464,20 @@ export function CondicionesComercialesManager({
   }, [isOpen]);
 
   // Recargar configuración cuando se muestra el formulario
-  // Para asegurar que siempre tenga el valor más reciente
   useEffect(() => {
     if (showForm && isOpen) {
       loadConfiguracion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showForm, isOpen]);
+
+  // Cargar ofertas para vincular cuando el formulario es tipo oferta
+  useEffect(() => {
+    if (isOpen && showForm && formData.is_offer) {
+      loadOfertasParaVincular();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, showForm, formData.is_offer, editingId, studioSlug]);
 
   // Resetear el estado del formulario cuando el modal se cierra
   useEffect(() => {
@@ -477,6 +598,8 @@ export function CondicionesComercialesManager({
       advance_amount: '',
       status: true,
       is_offer: false,
+      is_public: true,
+      offer_id: null as string | null,
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
@@ -497,11 +620,26 @@ export function CondicionesComercialesManager({
       advance_amount: condicion.advance_amount?.toString() || '',
       status: condicion.status === 'active',
       is_offer: condicion.type === 'offer',
+      is_public: condicion.is_public !== false,
+      offer_id: condicion.offer_id ?? null,
     };
     setFormData(editForm);
     setInitialFormData(editForm);
     setFormErrors({});
     setShowForm(true);
+  };
+
+  const loadOfertasParaVincular = async () => {
+    setCargandoOfertas(true);
+    try {
+      const result = await obtenerOfertasParaVincular(studioSlug, editingId ?? undefined);
+      if (result.success && result.data) setOfertasParaVincular(result.data);
+      else setOfertasParaVincular([]);
+    } catch {
+      setOfertasParaVincular([]);
+    } finally {
+      setCargandoOfertas(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -515,14 +653,12 @@ export function CondicionesComercialesManager({
       }
 
       if (checkResult.hasCotizaciones) {
-        // Mostrar mensaje específico sin abrir el modal
-        toast.error(
-          `No puedes eliminar esta condición comercial porque tiene ${checkResult.cotizacionesCount} cotización${checkResult.cotizacionesCount > 1 ? 'es' : ''} asociada${checkResult.cotizacionesCount > 1 ? 's' : ''}`
-        );
+        setPendingDeleteId(id);
+        setPendingDeleteCotizacionesCount(checkResult.cotizacionesCount);
+        setShowConfirmDesvincularEliminar(true);
         return;
       }
 
-      // Si no tiene asociaciones, mostrar modal de confirmación
       setPendingDeleteId(id);
       setShowConfirmDelete(true);
     } catch (error) {
@@ -533,29 +669,72 @@ export function CondicionesComercialesManager({
 
   const handleConfirmDelete = async () => {
     if (!pendingDeleteId) return;
+    const idToDelete = pendingDeleteId;
+    const wasEditingDeleted = idToDelete === editingId;
 
     try {
-      const result = await eliminarCondicionComercial(studioSlug, pendingDeleteId);
+      const result = await eliminarCondicionComercial(studioSlug, idToDelete);
       if (result.success) {
-        // Actualizar estado local en lugar de recargar todo
-        setCondiciones(prev => sortCondiciones(prev.filter(c => c.id !== pendingDeleteId)));
+        setCondiciones(prev => sortCondiciones(prev.filter(c => c.id !== idToDelete)));
         toast.success('Condición eliminada exitosamente');
         onRefresh?.();
+        if (wasEditingDeleted) resetFormState();
+        setPendingDeleteId(null);
       } else {
-        toast.error(result.error || 'Error al eliminar condición');
+        const err = result.error ?? '';
+        const cotizacionMatch = err.match(/tiene (\d+) cotización/);
+        if (cotizacionMatch) {
+          setPendingDeleteCotizacionesCount(parseInt(cotizacionMatch[1], 10));
+          setShowConfirmDelete(false);
+          setShowConfirmDesvincularEliminar(true);
+          return;
+        }
+        toast.error(err || 'Error al eliminar condición');
+        setPendingDeleteId(null);
       }
     } catch (error) {
       console.error('Error deleting condicion:', error);
       toast.error('Error al eliminar condición');
+      setPendingDeleteId(null);
     } finally {
       setShowConfirmDelete(false);
+    }
+  };
+
+  const handleConfirmDesvincularEliminar = async () => {
+    if (!pendingDeleteId) return;
+    const idToDelete = pendingDeleteId;
+    const wasEditingDeleted = idToDelete === editingId;
+
+    try {
+      const result = await eliminarCondicionComercialDesvinculando(studioSlug, idToDelete);
+      if (result.success) {
+        setCondiciones(prev => sortCondiciones(prev.filter(c => c.id !== idToDelete)));
+        toast.success(result.message ?? 'Condición eliminada');
+        onRefresh?.();
+        if (wasEditingDeleted) resetFormState();
+      } else {
+        toast.error(result.error ?? 'Error al eliminar condición');
+      }
+    } catch (error) {
+      console.error('Error eliminando condición (desvinculando):', error);
+      toast.error('Error al eliminar condición');
+    } finally {
+      setShowConfirmDesvincularEliminar(false);
       setPendingDeleteId(null);
+      setPendingDeleteCotizacionesCount(0);
     }
   };
 
   const handleCancelDelete = () => {
     setShowConfirmDelete(false);
     setPendingDeleteId(null);
+  };
+
+  const handleCancelDesvincularEliminar = () => {
+    setShowConfirmDesvincularEliminar(false);
+    setPendingDeleteId(null);
+    setPendingDeleteCotizacionesCount(0);
   };
 
   const handleConvertToStandard = async () => {
@@ -584,6 +763,7 @@ export function CondicionesComercialesManager({
       const result = await actualizarCondicionComercial(studioSlug, viewingOfferCondition.id, data);
 
       if (result.success && result.data) {
+        const resultData = result.data as { exclusive_offer?: ExclusiveOfferInfo | null; is_public?: boolean };
         const condicionMapeada: CondicionComercial = {
           id: result.data.id,
           name: result.data.name,
@@ -597,6 +777,8 @@ export function CondicionesComercialesManager({
           type: result.data.type,
           offer_id: result.data.offer_id,
           override_standard: result.data.override_standard,
+          is_public: resultData.is_public ?? true,
+          exclusive_offer: resultData.exclusive_offer ?? null,
         };
 
         setCondiciones(prev =>
@@ -650,6 +832,7 @@ export function CondicionesComercialesManager({
       const result = await actualizarCondicionComercial(studioSlug, id, data);
 
       if (result.success && result.data) {
+        const resultData = result.data as { exclusive_offer?: ExclusiveOfferInfo | null; is_public?: boolean };
         const condicionMapeada: CondicionComercial = {
           id: result.data.id,
           name: result.data.name,
@@ -663,6 +846,8 @@ export function CondicionesComercialesManager({
           type: result.data.type,
           offer_id: result.data.offer_id,
           override_standard: result.data.override_standard,
+          is_public: resultData.is_public ?? true,
+          exclusive_offer: resultData.exclusive_offer ?? null,
         };
 
         setCondiciones(prev =>
@@ -698,33 +883,29 @@ export function CondicionesComercialesManager({
     }
 
     const newCondiciones = arrayMove(condiciones, oldIndex, newIndex);
+    const condicionesConOrden = newCondiciones.map((condicion, index) => ({
+      id: condicion.id,
+      orden: index,
+    }));
+
+    // Actualización optimista: reordenar la lista al soltar para que la animación no revierta (evita el "rebote")
+    const previousCondiciones = condiciones;
+    setCondiciones(newCondiciones.map((c, i) => ({ ...c, order: i })));
 
     try {
       setIsReordering(true);
-
-      // Actualizar estado local primero
-      setCondiciones(sortCondiciones(newCondiciones));
-
-      // Actualizar orden en el servidor
-      const condicionesConOrden = newCondiciones.map((condicion, index) => ({
-        id: condicion.id,
-        orden: index,
-      }));
-
       const result = await actualizarOrdenCondicionesComerciales(studioSlug, condicionesConOrden);
 
       if (!result.success) {
-        // Revertir si falla
-        setCondiciones(condiciones);
+        setCondiciones(previousCondiciones);
         toast.error(result.error || 'Error al actualizar el orden');
       } else {
-        toast.success('Orden actualizado exitosamente');
+        toast.success('Orden actualizado');
         onRefresh?.();
       }
     } catch (error) {
       console.error('Error reordering condiciones:', error);
-      // Revertir si falla
-      setCondiciones(condiciones);
+      setCondiciones(previousCondiciones);
       toast.error('Error al actualizar el orden');
     } finally {
       setIsReordering(false);
@@ -864,8 +1045,9 @@ export function CondicionesComercialesManager({
         status: (formData.status ? 'active' : 'inactive') as 'active' | 'inactive',
         orden: editingId ? (condicionExistente?.order || 0) : condiciones.length,
         type: (formData.is_offer ? 'offer' : 'standard') as 'standard' | 'offer',
-        offer_id: formData.is_offer && context?.offerId ? context.offerId : (editingId && !formData.is_offer ? null : condicionExistente?.offer_id || null),
+        offer_id: formData.is_offer ? (formData.offer_id ?? (context?.offerId ?? (condicionExistente?.offer_id ?? null))) : null,
         override_standard: editingId ? (condicionExistente?.override_standard || false) : false,
+        is_public: formData.is_offer ? true : formData.is_public,
       } satisfies CondicionComercialForm;
 
       let result;
@@ -879,6 +1061,7 @@ export function CondicionesComercialesManager({
 
       if (result.success && result.data) {
         // Mapear datos de Prisma al formato del componente
+        const resultData = result.data as { exclusive_offer?: ExclusiveOfferInfo | null; is_public?: boolean };
         const condicionMapeada: CondicionComercial = {
           id: result.data.id,
           name: result.data.name,
@@ -892,6 +1075,8 @@ export function CondicionesComercialesManager({
           type: result.data.type,
           offer_id: result.data.offer_id,
           override_standard: result.data.override_standard,
+          is_public: resultData.is_public ?? true,
+          exclusive_offer: resultData.exclusive_offer ?? null,
         };
 
         if (editingId) {
@@ -1073,7 +1258,7 @@ export function CondicionesComercialesManager({
               rows={3}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-3 !mt-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <label className="text-sm font-medium text-zinc-300">
@@ -1097,70 +1282,70 @@ export function CondicionesComercialesManager({
                 />
               </div>
 
-              {formData.advance_type === 'percentage' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {formData.advance_type === 'percentage' ? (
+                  <ZenInput
+                    label="Porcentaje de anticipo"
+                    type="text"
+                    inputMode="decimal"
+                    min="0"
+                    max="100"
+                    value={formData.advance_percentage}
+                    onChange={handleAdvancePercentageChange}
+                    placeholder="10"
+                  />
+                ) : (
+                  <ZenInput
+                    label="Monto fijo de anticipo"
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.advance_amount}
+                    onChange={handleAdvanceAmountChange}
+                    placeholder="1000"
+                  />
+                )}
                 <ZenInput
-                  label="Porcentaje de anticipo"
+                  label="Porcentaje de descuento"
                   type="text"
                   inputMode="decimal"
                   min="0"
-                  max="100"
-                  value={formData.advance_percentage}
-                  onChange={handleAdvancePercentageChange}
+                  max={maxDescuento !== null ? maxDescuento.toString() : '100'}
+                  value={formData.discount_percentage}
+                  onChange={handleDiscountChange}
                   placeholder="10"
+                  error={
+                    formData.discount_percentage
+                      ? (() => {
+                        const numValue = parseFloat(formData.discount_percentage);
+                        if (isNaN(numValue)) {
+                          return undefined;
+                        }
+                        if (numValue > 100) {
+                          return 'El porcentaje no puede ser mayor a 100%';
+                        }
+                        if (maxDescuento !== null && numValue > maxDescuento) {
+                          return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
+                        }
+                        return undefined;
+                      })()
+                      : undefined
+                  }
                 />
-              ) : (
-                <ZenInput
-                  label="Monto fijo de anticipo"
-                  type="text"
-                  inputMode="decimal"
-                  value={formData.advance_amount}
-                  onChange={handleAdvanceAmountChange}
-                  placeholder="1000"
-                />
-              )}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <ZenInput
-                label="Porcentaje de descuento"
-                type="text"
-                inputMode="decimal"
-                min="0"
-                max={maxDescuento !== null ? maxDescuento.toString() : '100'}
-                value={formData.discount_percentage}
-                onChange={handleDiscountChange}
-                placeholder="10"
-                error={
-                  formData.discount_percentage
-                    ? (() => {
-                      const numValue = parseFloat(formData.discount_percentage);
-                      if (isNaN(numValue)) {
-                        return undefined;
-                      }
-                      if (numValue > 100) {
-                        return 'El porcentaje no puede ser mayor a 100%';
-                      }
-                      if (maxDescuento !== null && numValue > maxDescuento) {
-                        return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
-                      }
-                      return undefined;
-                    })()
-                    : undefined
-                }
-              />
-              {maxDescuento !== null && (
-                <p className="text-xs text-zinc-400">
-                  Porcentaje de descuento máximo del {maxDescuento}% definido en la{' '}
-                  <button
-                    type="button"
-                    onClick={() => setShowUtilidadModal(true)}
-                    className="text-blue-400 hover:text-blue-300 underline-offset-4 hover:underline"
-                  >
-                    configuración
-                  </button>
-                </p>
-              )}
-            </div>
+            {maxDescuento !== null && (
+              <p className="text-xs text-zinc-400 mt-2">
+                Porcentaje de descuento máximo del {maxDescuento}% definido en la{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowUtilidadModal(true)}
+                  className="text-blue-400 hover:text-blue-300 underline-offset-4 hover:underline"
+                >
+                  configuración
+                </button>
+              </p>
+            )}
 
             <ZenSwitch
               checked={formData.status}
@@ -1171,31 +1356,138 @@ export function CondicionesComercialesManager({
 
             <ZenSwitch
               checked={formData.is_offer}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_offer: checked })}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_offer: checked, is_public: checked ? true : formData.is_public })}
               label="Es oferta"
               description={formData.is_offer ? 'Esta condición está vinculada a una oferta específica' : 'Esta condición es estándar y está disponible para todas las ofertas'}
             />
 
-            <div className="flex items-center justify-end gap-3 pt-4">
-              <ZenButton
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  if (hasUnsavedChanges()) {
-                    setPendingClose(() => () => {
+            <ZenSwitch
+              checked={formData.is_offer ? true : formData.is_public}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_public: checked })}
+              disabled={formData.is_offer}
+              label="Es pública"
+              description={formData.is_offer ? 'Las condiciones de oferta son siempre públicas' : formData.is_public ? 'Visible en el portal del cliente' : 'Solo visible para el estudio y en negociaciones directas'}
+            />
+
+            {formData.is_offer && (
+              <div className="space-y-3 pt-4 border-t border-zinc-800">
+                <h4 className="text-sm font-medium text-zinc-300">Ofertas</h4>
+                <p className="text-xs text-zinc-500">Vincula o desvincula una oferta. Solo puede haber una oferta vinculada por condición.</p>
+                {cargandoOfertas ? (
+                  <p className="text-sm text-zinc-400">Cargando ofertas…</p>
+                ) : ofertasParaVincular.length === 0 ? (
+                  <p className="text-sm text-zinc-400">No hay ofertas en este estudio.</p>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-y-auto">
+                    {ofertasParaVincular.map((o) => {
+                      const isLinked = (formData.offer_id ?? null) === o.id;
+                      return (
+                        <li
+                          key={o.id}
+                          className="p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="font-medium text-white truncate">{o.name}</span>
+                            <span
+                              className={`inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                o.isVigente ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {o.isVigente ? 'Vigente' : 'Vencida'}
+                            </span>
+                            <span className="text-xs text-zinc-400 shrink-0">{o.vigenciaLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isLinked ? (
+                              <>
+                                <ZenButton
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="min-w-[8rem] h-7 justify-center gap-1 text-xs text-zinc-300 hover:text-amber-400 border-zinc-600"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setShowDesvincularConfirm(true);
+                                  }}
+                                >
+                                  <Unlink className="h-3.5 w-3.5 shrink-0" />
+                                  Desvincular oferta
+                                </ZenButton>
+                                <a
+                                  href={`/${studioSlug}/studio/commercial/ofertas/${o.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center gap-1 min-w-[8rem] h-7 px-2.5 text-xs rounded border border-zinc-600 text-zinc-400 hover:text-white hover:bg-zinc-700/50 transition-colors"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                  Gestionar oferta
+                                </a>
+                              </>
+                            ) : (
+                              <ZenButton
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-60"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setFormData({ ...formData, offer_id: o.id });
+                                }}
+                                disabled={o.linkedToOtraCondicion}
+                                title={o.linkedToOtraCondicion ? 'Vinculada a otra condición' : undefined}
+                              >
+                                Vincular oferta
+                              </ZenButton>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-800">
+              <div className="flex items-center min-h-8">
+                {editingId && (
+                  <ZenButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-400 hover:text-red-300 gap-1.5"
+                    onClick={() => {
+                      setPendingDeleteId(editingId);
+                      setShowConfirmDelete(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </ZenButton>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <ZenButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (hasUnsavedChanges()) {
+                      setPendingClose(() => () => {
+                        resetFormState();
+                      });
+                      setShowConfirmClose(true);
+                    } else {
                       resetFormState();
-                    });
-                    setShowConfirmClose(true);
-                  } else {
-                    resetFormState();
-                  }
-                }}
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton type="submit" variant="primary">
-                {editingId ? 'Actualizar' : 'Crear'} Condición
-              </ZenButton>
+                    }
+                  }}
+                >
+                  Cancelar
+                </ZenButton>
+                <ZenButton type="submit" variant="primary" size="sm">
+                  {editingId ? 'Actualizar' : 'Crear'} Condición
+                </ZenButton>
+              </div>
             </div>
           </form>
         ) : (
@@ -1267,7 +1559,6 @@ export function CondicionesComercialesManager({
                         index={index}
                         totalItems={condiciones.length}
                         onEdit={handleEdit}
-                        onDelete={handleDelete}
                         onToggleStatus={handleToggleStatus}
                         onSelect={onSelect}
                       />
@@ -1299,6 +1590,49 @@ export function CondicionesComercialesManager({
         title="¿Eliminar condición comercial?"
         description="Esta acción no se puede deshacer. La condición comercial se eliminará permanentemente."
         confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        zIndex={10300}
+      />
+
+      <ZenConfirmModal
+        isOpen={showConfirmDesvincularEliminar}
+        onClose={handleCancelDesvincularEliminar}
+        onConfirm={handleConfirmDesvincularEliminar}
+        title="Condición usada en cotizaciones"
+        description={
+          pendingDeleteCotizacionesCount > 0
+            ? `Hay ${pendingDeleteCotizacionesCount} cotización${pendingDeleteCotizacionesCount > 1 ? 'es' : ''} que usan esta condición. ¿Desvincular esta condición de esas cotizaciones y eliminarla? Las cotizaciones quedarán sin condición comercial asignada.`
+            : 'Hay cotizaciones que usan esta condición. ¿Desvincular y eliminar?'
+        }
+        confirmText="Desvincular y eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        zIndex={10300}
+      />
+
+      <ZenConfirmModal
+        isOpen={showDesvincularConfirm}
+        onClose={() => setShowDesvincularConfirm(false)}
+        onConfirm={async () => {
+          if (!editingId) return;
+          const result = await desvincularOfertaCondicionComercial(studioSlug, editingId);
+          setShowDesvincularConfirm(false);
+          if (result.success) {
+            toast.success('Oferta desvinculada. La condición pasó a tipo estándar.');
+            setCondiciones(prev =>
+              prev.map(c => (c.id === editingId ? { ...c, type: 'standard', offer_id: null, exclusive_offer: null } : c))
+            );
+            setFormData(prev => ({ ...prev, offer_id: null, is_offer: false }));
+            setInitialFormData(prev => ({ ...prev, offer_id: null, is_offer: false }));
+            loadOfertasParaVincular();
+          } else {
+            toast.error(result.error ?? 'Error al desvincular');
+          }
+        }}
+        title="¿Desvincular oferta?"
+        description="La condición pasará a ser de tipo estándar y el switch Pública/Privada volverá a ser editable."
+        confirmText="Desvincular"
         cancelText="Cancelar"
         variant="destructive"
         zIndex={10300}

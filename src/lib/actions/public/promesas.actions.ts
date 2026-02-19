@@ -141,11 +141,31 @@ async function _obtenerCondicionesComercialesPublicasInternal(
       };
     }
 
-    // Optimizar consulta: usar select en lugar de include para reducir datos transferidos
+    const now = new Date();
+
+    // Públicas y activas; si type 'offer', solo si la oferta vinculada está viva (activa y en fecha)
     const condiciones = await prisma.studio_condiciones_comerciales.findMany({
       where: {
         studio_id: studio.id,
         status: 'active',
+        is_public: true,
+        OR: [
+          { type: 'standard' },
+          {
+            type: 'offer',
+            exclusive_offer: {
+              is_active: true,
+              OR: [
+                { is_permanent: true },
+                {
+                  has_date_range: true,
+                  start_date: { lte: now },
+                  end_date: { gte: now },
+                },
+              ],
+            },
+          },
+        ],
       },
       select: {
         id: true,

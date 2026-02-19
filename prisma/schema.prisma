@@ -2260,6 +2260,7 @@ model studio_condiciones_comerciales {
   offer_id                            String?                                      @unique
   override_standard                   Boolean                                      @default(false)
   type                                String                                       @default("standard")
+  is_public                           Boolean                                      @default(true)
   advance_amount                      Float?
   advance_type                        String?                                      @default("percentage")
   exclusive_offer                     studio_offers?                               @relation("offer_exclusive_terms", fields: [offer_id], references: [id])

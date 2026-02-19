@@ -73,25 +73,30 @@ export async function obtenerTodasCondicionesComerciales(studioSlug: string) {
             where: {
                 studio_id: studio.id,
             },
+            include: {
+                exclusive_offer: {
+                    select: {
+                        id: true,
+                        name: true,
+                        is_active: true,
+                        is_permanent: true,
+                        has_date_range: true,
+                        start_date: true,
+                        end_date: true,
+                    },
+                },
+            },
             orderBy: { order: 'asc' },
         });
 
-        // Ordenar: condiciones de tipo "offer" al final
-        // Primero ordenar por tipo (standard/null primero, luego offer), luego por order
+        // Standard primero, luego offer; dentro de cada tipo por order
         const condiciones = [...condicionesRaw].sort((a, b) => {
-          const aType = a.type || 'standard';
-          const bType = b.type || 'standard';
-          
-          // Si ambos son del mismo tipo, ordenar por order
-          if (aType === bType) {
-            return (a.order || 0) - (b.order || 0);
-          }
-          
-          // Standard primero, luego offer
-          if (aType === 'standard' && bType === 'offer') return -1;
-          if (aType === 'offer' && bType === 'standard') return 1;
-          
-          return 0;
+            const aType = a.type || 'standard';
+            const bType = b.type || 'standard';
+            if (aType === bType) return (a.order || 0) - (b.order || 0);
+            if (aType === 'standard' && bType === 'offer') return -1;
+            if (aType === 'offer' && bType === 'standard') return 1;
+            return 0;
         });
 
         return {
@@ -124,6 +129,19 @@ export async function obtenerCondicionComercial(studioSlug: string, condicionId:
                 id: condicionId,
                 studio_id: studio.id,
             },
+            include: {
+                exclusive_offer: {
+                    select: {
+                        id: true,
+                        name: true,
+                        is_active: true,
+                        is_permanent: true,
+                        has_date_range: true,
+                        start_date: true,
+                        end_date: true,
+                    },
+                },
+            },
         });
 
         if (!condicion) {
@@ -140,6 +158,218 @@ export async function obtenerCondicionComercial(studioSlug: string, condicionId:
             success: false,
             error: "Error al obtener condición comercial",
         };
+    }
+}
+
+// Desvincular oferta de una condición comercial (offer_id → null, type → standard)
+export async function desvincularOfertaCondicionComercial(studioSlug: string, condicionId: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        const condicion = await prisma.studio_condiciones_comerciales.findFirst({
+            where: { id: condicionId, studio_id: studio.id },
+            select: { id: true, offer_id: true, type: true },
+        });
+        if (!condicion) {
+            return { success: false, error: "Condición comercial no encontrada" };
+        }
+        if (!condicion.offer_id || condicion.type !== 'offer') {
+            return { success: false, error: "La condición no tiene una oferta vinculada" };
+        }
+
+        const actualizada = await prisma.studio_condiciones_comerciales.update({
+            where: { id: condicionId },
+            data: {
+                offer_id: null,
+                type: 'standard',
+                updated_at: new Date(),
+            },
+            include: {
+                exclusive_offer: {
+                    select: {
+                        id: true,
+                        name: true,
+                        is_active: true,
+                        is_permanent: true,
+                        has_date_range: true,
+                        start_date: true,
+                        end_date: true,
+                    },
+                },
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/comercial/condiciones-comerciales`);
+        return { success: true, data: actualizada };
+    } catch (error) {
+        console.error("Error al desvincular oferta:", error);
+        return { success: false, error: "Error al desvincular la oferta" };
+    }
+}
+
+export type OfertaDisponibleParaVincular = {
+    id: string;
+    name: string;
+    vigenciaLabel: string;
+};
+
+export type OfertaParaVincular = {
+    id: string;
+    name: string;
+    vigenciaLabel: string;
+    isVigente: boolean;
+    linkedToOtraCondicion: boolean;
+};
+
+/** Todas las ofertas del studio (vigentes y vencidas) para mostrar en lista con toggle Vincular/Desvincular. Incluye la oferta actualmente vinculada a la condición en edición aunque esté inactiva/vencida. */
+export async function obtenerOfertasParaVincular(
+    studioSlug: string,
+    condicionIdExcluida?: string | null
+): Promise<{ success: boolean; data?: OfertaParaVincular[]; error?: string }> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        let offerIdVinculadaActual: string | null = null;
+        if (condicionIdExcluida) {
+            const condicion = await prisma.studio_condiciones_comerciales.findFirst({
+                where: { id: condicionIdExcluida, studio_id: studio.id },
+                select: { offer_id: true },
+            });
+            offerIdVinculadaActual = condicion?.offer_id ?? null;
+        }
+
+        const ofertas = await prisma.studio_offers.findMany({
+            where: {
+                studio_id: studio.id,
+                OR: [
+                    { is_active: true },
+                    ...(offerIdVinculadaActual ? [{ id: offerIdVinculadaActual }] : []),
+                ],
+            },
+            select: {
+                id: true,
+                name: true,
+                is_active: true,
+                is_permanent: true,
+                has_date_range: true,
+                start_date: true,
+                end_date: true,
+            },
+            orderBy: { name: "asc" },
+        });
+
+        const usedByOtherCondition = await prisma.studio_condiciones_comerciales.findMany({
+            where: {
+                studio_id: studio.id,
+                offer_id: { not: null },
+                ...(condicionIdExcluida ? { id: { not: condicionIdExcluida } } : {}),
+            },
+            select: { offer_id: true },
+        });
+        const usedOfferIds = new Set(usedByOtherCondition.map((c) => c.offer_id).filter(Boolean) as string[]);
+
+        const now = new Date();
+        const data: OfertaParaVincular[] = ofertas.map((o) => {
+            const isVigente =
+                o.is_active &&
+                (o.is_permanent || !!(o.has_date_range && o.start_date && o.end_date && now >= o.start_date && now <= o.end_date));
+            let vigenciaLabel = "Permanente";
+            if (!o.is_permanent && o.has_date_range && o.end_date) {
+                vigenciaLabel = `Hasta ${o.end_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}`;
+            } else if (!o.is_permanent && o.has_date_range && o.start_date && o.end_date) {
+                vigenciaLabel = `${o.start_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" })} – ${o.end_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}`;
+            }
+            return {
+                id: o.id,
+                name: o.name,
+                vigenciaLabel,
+                isVigente,
+                linkedToOtraCondicion: usedOfferIds.has(o.id),
+            };
+        });
+
+        data.sort((a, b) => (a.isVigente === b.isVigente ? 0 : a.isVigente ? -1 : 1));
+
+        return { success: true, data };
+    } catch (error) {
+        console.error("Error al obtener ofertas para vincular:", error);
+        return { success: false, error: "Error al cargar ofertas" };
+    }
+}
+
+/** Ofertas activas y vigentes que aún no tienen condición exclusiva (1:1). Opcionalmente excluir la condición en edición para que su oferta actual siga en la lista. */
+export async function obtenerOfertasDisponiblesParaVincular(
+    studioSlug: string,
+    condicionIdExcluida?: string | null
+): Promise<{ success: boolean; data?: OfertaDisponibleParaVincular[]; error?: string }> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        const usedOfferIds = await prisma.studio_condiciones_comerciales.findMany({
+            where: {
+                studio_id: studio.id,
+                offer_id: { not: null },
+                ...(condicionIdExcluida ? { id: { not: condicionIdExcluida } } : {}),
+            },
+            select: { offer_id: true },
+        });
+        const usedIds = usedOfferIds.map((c) => c.offer_id).filter(Boolean) as string[];
+
+        const now = new Date();
+        const ofertas = await prisma.studio_offers.findMany({
+            where: {
+                studio_id: studio.id,
+                is_active: true,
+                ...(usedIds.length ? { id: { notIn: usedIds } } : {}),
+            },
+            select: {
+                id: true,
+                name: true,
+                is_permanent: true,
+                has_date_range: true,
+                start_date: true,
+                end_date: true,
+            },
+        });
+
+        const vigentes = ofertas.filter((o) => {
+            if (o.is_permanent) return true;
+            if (!o.has_date_range || !o.start_date || !o.end_date) return false;
+            return now >= o.start_date && now <= o.end_date;
+        });
+
+        const data: OfertaDisponibleParaVincular[] = vigentes.map((o) => {
+            let vigenciaLabel = "Permanente";
+            if (!o.is_permanent && o.has_date_range && o.end_date) {
+                vigenciaLabel = `Hasta ${o.end_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}`;
+            } else if (!o.is_permanent && o.has_date_range && o.start_date && o.end_date) {
+                vigenciaLabel = `${o.start_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" })} – ${o.end_date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}`;
+            }
+            return { id: o.id, name: o.name, vigenciaLabel };
+        });
+
+        return { success: true, data };
+    } catch (error) {
+        console.error("Error al obtener ofertas disponibles:", error);
+        return { success: false, error: "Error al cargar ofertas" };
     }
 }
 
@@ -168,12 +398,8 @@ export async function crearCondicionComercial(
             throw new Error("Studio no encontrado");
         }
 
-        // Determinar el tipo y offer_id
-        // Si viene desde contexto de oferta, crear como tipo "offer" pero sin asociar (offer_id = null)
-        // El usuario seleccionará después cuál condición usar para la oferta
         const typeToUse = context?.type === 'offer' ? 'offer' : validationResult.data.type || 'standard';
-        // No asociar automáticamente: el usuario seleccionará la condición desde el selector
-        const offerIdToUse = null; // Siempre null al crear, el usuario asociará después si lo desea
+        const offerIdToUse = typeToUse === 'offer' && validationResult.data.offer_id ? validationResult.data.offer_id : null;
 
         // Verificar que el nombre sea único para este studio
         const condicionExistente = await prisma.studio_condiciones_comerciales.findFirst({
@@ -214,6 +440,7 @@ export async function crearCondicionComercial(
             type: typeToUse,
             offer_id: offerIdToUse,
             override_standard: validationResult.data.override_standard || false,
+            is_public: typeToUse === 'offer' ? true : (validationResult.data.is_public ?? true),
             updated_at: new Date(),
         };
 
@@ -232,7 +459,7 @@ export async function crearCondicionComercial(
 
         // Manejar error de restricción única en offer_id
         if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-            const meta = error.meta as { target?: string[] } | undefined;
+            const meta = (error as { meta?: { target?: string[] } }).meta;
             if (meta?.target?.includes('offer_id')) {
                 return {
                     success: false,
@@ -316,6 +543,7 @@ export async function actualizarCondicionComercial(
             ? parseFloat(validationResult.data.monto_anticipo)
             : (tipoAnticipo === 'fixed_amount' ? condicionExistente.advance_amount : null);
 
+        const typeToSave = validationResult.data.type !== undefined ? validationResult.data.type : (context?.type === 'offer' ? 'offer' : condicionExistente.type || 'standard');
         const dataToSave = {
             name: validationResult.data.nombre,
             description: validationResult.data.descripcion,
@@ -325,9 +553,10 @@ export async function actualizarCondicionComercial(
             advance_amount: advanceAmount,
             status: validationResult.data.status,
             order: validationResult.data.orden || 0,
-            type: validationResult.data.type !== undefined ? validationResult.data.type : (context?.type === 'offer' ? 'offer' : condicionExistente.type || 'standard'),
+            type: typeToSave,
             offer_id: validationResult.data.offer_id !== undefined ? validationResult.data.offer_id : (context?.offerId || condicionExistente.offer_id),
             override_standard: validationResult.data.override_standard ?? condicionExistente.override_standard ?? false,
+            is_public: typeToSave === 'offer' ? true : (validationResult.data.is_public ?? (condicionExistente as { is_public?: boolean }).is_public ?? true),
             updated_at: new Date(),
         };
 
@@ -473,6 +702,54 @@ export async function eliminarCondicionComercial(studioSlug: string, condicionId
         };
     } catch (error) {
         console.error("Error al eliminar condición comercial:", error);
+        return {
+            success: false,
+            error: "Error al eliminar condición comercial",
+        };
+    }
+}
+
+/** Elimina la condición comercial desvinculándola antes de las cotizaciones que la usan (pone condiciones_comerciales_id = null). */
+export async function eliminarCondicionComercialDesvinculando(studioSlug: string, condicionId: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            throw new Error("Studio no encontrado");
+        }
+
+        const condicion = await prisma.studio_condiciones_comerciales.findFirst({
+            where: { id: condicionId, studio_id: studio.id },
+        });
+
+        if (!condicion) {
+            return {
+                success: false,
+                error: "Condición comercial no encontrada o no pertenece al studio",
+            };
+        }
+
+        await prisma.$transaction([
+            prisma.studio_cotizaciones.updateMany({
+                where: { studio_id: studio.id, condiciones_comerciales_id: condicionId },
+                data: { condiciones_comerciales_id: null },
+            }),
+            prisma.studio_condiciones_comerciales.delete({
+                where: { id: condicionId },
+            }),
+        ]);
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/comercial/condiciones-comerciales`);
+
+        return {
+            success: true,
+            message: "Condición comercial eliminada. Se desvinculó de las cotizaciones que la usaban.",
+        };
+    } catch (error) {
+        console.error("Error al eliminar condición comercial (desvinculando):", error);
         return {
             success: false,
             error: "Error al eliminar condición comercial",
