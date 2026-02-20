@@ -1292,7 +1292,7 @@ export function CondicionesComercialesManager({
               }}
               required
               placeholder="Ej: Pago de contado 10%"
-              error={formErrors.nombre?.[0]?.includes('Ya existe') ? 'Ya tienes una condición con este nombre en tu catálogo' : formErrors.nombre?.[0]}
+              error={formErrors.nombre?.[0]?.includes('Ya existe') ? 'Este nombre ya está en uso. Elige uno diferente o usa la condición existente' : formErrors.nombre?.[0]}
             />
 
             <ZenTextarea

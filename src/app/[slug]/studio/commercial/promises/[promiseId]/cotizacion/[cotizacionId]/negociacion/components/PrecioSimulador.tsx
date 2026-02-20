@@ -102,6 +102,13 @@ export function PrecioSimulador({
         <ZenCardDescription>
           Establece un precio final personalizado para esta cotización
         </ZenCardDescription>
+        {itemsCortesia.size > 0 && (
+          <p className="text-xs text-emerald-400/90 mt-1">
+            {itemsCortesia.size} {itemsCortesia.size === 1 ? 'cortesía seleccionada' : 'cortesías seleccionadas'}
+            {' · '}
+            <span className="font-medium">{formatearMoneda(montoItemsCortesia)}</span> descontado
+          </p>
+        )}
       </ZenCardHeader>
       <ZenCardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -136,16 +143,7 @@ export function PrecioSimulador({
           </div>
         </div>
 
-        <div className="space-y-2 pt-2 border-t border-zinc-700">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-400">Precio mínimo para no generar pérdida:</span>
-            <span className="font-semibold text-red-400">
-              {formatearMoneda(precioMinimo)}
-            </span>
-          </div>
-        </div>
-
-        {/* Desglose integrado */}
+        {/* Desglose integrado (Costos = mínimo sin pérdida) */}
         {showDesglose && (() => {
           // Calcular costos y gastos (siempre se suman todos, incluso si es cortesía)
           const costoTotal = cotizacion.items.reduce((sum, item) => {

@@ -14,6 +14,8 @@ interface CalculoConCondicionesProps {
   cotizacionOriginal: CotizacionCompleta;
   condicionComercial: CondicionComercial | CondicionComercialTemporal | null;
   configuracionPrecios: ConfiguracionPrecios | null;
+  /** Precio negociado actual (estado). Si se pasa, el desglose usa este valor (ya validado) en lugar del guardado. */
+  precioPersonalizado?: number | null;
   onTotalAPagarCalculado?: (totalAPagar: number | null) => void;
 }
 
@@ -21,6 +23,7 @@ export function CalculoConCondiciones({
   cotizacionOriginal,
   condicionComercial,
   configuracionPrecios,
+  precioPersonalizado: precioPersonalizadoProp,
   onTotalAPagarCalculado,
 }: CalculoConCondicionesProps) {
 
@@ -41,10 +44,13 @@ export function CalculoConCondiciones({
   }, [cotizacionOriginal, condicionComercial, configuracionPrecios]);
 
 
-  // Verificar si hay precio negociado guardado (modo negociación)
+  // Precio negociado: priorizar el del estado (input validado); si no, el guardado en cotización
   const precioNegociadoGuardado = cotizacionOriginal.negociacion_precio_personalizado ?? null;
+  const precioNegociadoParaDesglose = (precioPersonalizadoProp !== undefined && precioPersonalizadoProp !== null && precioPersonalizadoProp > 0)
+    ? precioPersonalizadoProp
+    : precioNegociadoGuardado;
   const precioOriginalNegociacion = cotizacionOriginal.negociacion_precio_original ?? null;
-  const tienePrecioNegociado = precioNegociadoGuardado !== null && precioNegociadoGuardado > 0;
+  const tienePrecioNegociado = precioNegociadoParaDesglose !== null && precioNegociadoParaDesglose > 0;
 
   // Precio base para el desglose:
   // - Si hay precio negociado guardado: usar precio original de negociación como precio base
@@ -70,9 +76,9 @@ export function CalculoConCondiciones({
       return null;
     }
 
-    // Si hay precio negociado guardado, el total a pagar es el precio negociado
-    if (tienePrecioNegociado && precioNegociadoGuardado !== null) {
-      return precioNegociadoGuardado;
+    // Si hay precio negociado (estado o guardado), el total a pagar es ese valor
+    if (tienePrecioNegociado && precioNegociadoParaDesglose !== null) {
+      return precioNegociadoParaDesglose;
     }
 
     // Calcular igual que el desglose: precioBase - descuento
@@ -81,7 +87,7 @@ export function CalculoConCondiciones({
       : 0;
     const subtotal = precioBaseParaDesglose - descuentoMonto;
     return subtotal;
-  }, [condicionComercial, condicionParaResumen, precioBaseParaDesglose, tienePrecioNegociado, precioNegociadoGuardado]);
+  }, [condicionComercial, condicionParaResumen, precioBaseParaDesglose, tienePrecioNegociado, precioNegociadoParaDesglose]);
 
   // Notificar al padre el total a pagar calculado
   useEffect(() => {
@@ -101,7 +107,7 @@ export function CalculoConCondiciones({
         precioBase={precioBaseParaDesglose}
         condicion={condicionParaResumen}
         negociacionPrecioOriginal={tienePrecioNegociado ? precioOriginalNegociacion : null}
-        negociacionPrecioPersonalizado={precioNegociadoGuardado}
+        negociacionPrecioPersonalizado={precioNegociadoParaDesglose}
       />
     </div>
   );

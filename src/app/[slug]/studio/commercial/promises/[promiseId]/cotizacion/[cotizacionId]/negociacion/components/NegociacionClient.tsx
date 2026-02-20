@@ -293,7 +293,23 @@ export function NegociacionClient({
             negociada={calculoNegociado}
           />
 
-          {/* 2. Selector de condiciones comerciales */}
+          {/* 2. Precio de Negociación (Precio Personalizado) */}
+          <PrecioSimulador
+            cotizacion={cotizacionOriginal}
+            precioPersonalizado={negociacionState.precioPersonalizado}
+            onPrecioChange={(precio) =>
+              setNegociacionState((prev) => ({
+                ...prev,
+                precioPersonalizado: precio,
+              }))
+            }
+            validacionMargen={validacionMargen}
+            precioReferencia={totalAPagarCondiciones}
+            itemsCortesia={negociacionState.itemsCortesia}
+            showDesglose={true}
+          />
+
+          {/* 3. Selector de condiciones comerciales */}
           <SelectorCondicionesComerciales
             studioSlug={studioSlug}
             condicionSeleccionada={negociacionState.condicionComercialId}
@@ -316,42 +332,29 @@ export function NegociacionClient({
               setCondicionesComerciales(condiciones);
             }}
           />
+          <p className="text-xs text-zinc-500 -mt-2">
+            Para mantener la salud financiera te recomendamos no combinar descuento de condición con precio ajustado.
+          </p>
 
-          {/* 3. Desglose de precio con condiciones comerciales aplicadas */}
-          <>
-            <CalculoConCondiciones
-              cotizacionOriginal={cotizacionOriginal}
-              condicionComercial={condicionComercialCompleta}
-              configuracionPrecios={configPrecios}
-              onTotalAPagarCalculado={setTotalAPagarCondiciones}
-            />
+          {/* 4. Desglose de precio con condiciones comerciales (solo si hay condición) */}
+          <CalculoConCondiciones
+            cotizacionOriginal={cotizacionOriginal}
+            condicionComercial={condicionComercialCompleta}
+            configuracionPrecios={configPrecios}
+            precioPersonalizado={negociacionState.precioPersonalizado}
+            onTotalAPagarCalculado={setTotalAPagarCondiciones}
+          />
 
-            {/* 4. Precio de Negociación con Desglose integrado */}
-            <PrecioSimulador
-              cotizacion={cotizacionOriginal}
-              precioPersonalizado={negociacionState.precioPersonalizado}
-              onPrecioChange={(precio) =>
-                setNegociacionState((prev) => ({
-                  ...prev,
-                  precioPersonalizado: precio,
-                }))
-              }
-              validacionMargen={validacionMargen}
-              precioReferencia={totalAPagarCondiciones}
-              itemsCortesia={negociacionState.itemsCortesia}
-              showDesglose={true}
-            />
+          {/* 5. Tarjeta Finanzas (utilidad con markup + alerta descuento) */}
+          <TarjetaFinanzas
+            calculoNegociado={calculoNegociado}
+            configPrecios={configPrecios}
+            descuentoAdicional={negociacionState.descuentoAdicional}
+            precioOriginal={cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price}
+          />
 
-            {/* 5. Tarjeta Finanzas (utilidad con markup + alerta descuento) */}
-            <TarjetaFinanzas
-              calculoNegociado={calculoNegociado}
-              configPrecios={configPrecios}
-              descuentoAdicional={negociacionState.descuentoAdicional}
-              precioOriginal={cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price}
-            />
-
-            {/* 6. Impacto en utilidad */}
-            {calculoNegociado && (() => {
+          {/* 6. Impacto en utilidad */}
+          {calculoNegociado && (() => {
               const costoTotalOriginal = cotizacionOriginal.items.reduce(
                 (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
                 0
@@ -368,34 +371,33 @@ export function NegociacionClient({
                   ? (utilidadNetaOriginal / precioOriginal) * 100
                   : 0;
 
-              return (
-                <ImpactoUtilidad
-                  original={{
-                    precioFinal: precioOriginal,
-                    utilidadNeta: utilidadNetaOriginal,
-                    margenPorcentaje: margenOriginal,
-                  }}
-                  negociada={calculoNegociado}
-                  validacionMargen={validacionMargen}
-                />
-              );
-            })()}
+            return (
+              <ImpactoUtilidad
+                original={{
+                  precioFinal: precioOriginal,
+                  utilidadNeta: utilidadNetaOriginal,
+                  margenPorcentaje: margenOriginal,
+                }}
+                negociada={calculoNegociado}
+                validacionMargen={validacionMargen}
+              />
+            );
+          })()}
 
-            {/* 7. Finalizar negociación */}
-            <FinalizarNegociacion
-              negociacionState={negociacionState}
-              calculoNegociado={calculoNegociado}
-              validacionMargen={validacionMargen}
-              cotizacionOriginal={cotizacionOriginal}
-              onNotasChange={(notas) =>
-                setNegociacionState((prev) => ({ ...prev, notas }))
-              }
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              cotizacionId={cotizacionId}
-              condicionEsPrivada={condicionComercialCompleta?.is_public === false}
-            />
-          </>
+          {/* 7. Finalizar negociación */}
+          <FinalizarNegociacion
+            negociacionState={negociacionState}
+            calculoNegociado={calculoNegociado}
+            validacionMargen={validacionMargen}
+            cotizacionOriginal={cotizacionOriginal}
+            onNotasChange={(notas) =>
+              setNegociacionState((prev) => ({ ...prev, notas }))
+            }
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            cotizacionId={cotizacionId}
+            condicionEsPrivada={condicionComercialCompleta?.is_public === false}
+          />
         </div>
       </div>
     </div>

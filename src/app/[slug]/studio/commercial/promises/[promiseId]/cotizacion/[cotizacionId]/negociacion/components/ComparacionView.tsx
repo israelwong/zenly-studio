@@ -43,6 +43,9 @@ export function ComparacionView({
         </div>
       </ZenCardHeader>
       <ZenCardContent className="pt-0">
+        <p className="text-xs font-medium uppercase tracking-wider text-amber-400/90 mb-3">
+          Desglose financiero actual
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex flex-col">
             <span className="text-xs text-zinc-400 mb-1">Costos</span>

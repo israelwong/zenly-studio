@@ -32,7 +32,7 @@ interface CondicionesComercialesDesgloseProps {
  * Componente reutilizable para mostrar el desglose financiero de condiciones comerciales.
  * Maneja dos modos:
  * - Modo normal: Precio base → Descuento → Subtotal → Total a pagar → Anticipo → Diferido
- * - Modo negociación: Precio original → Precio negociado → Ahorro total → Total a pagar → Anticipo → Diferido
+ * - Modo negociación: Precio original → Precio negociado → Descuento total → Total a pagar → Anticipo → Diferido
  * 
  * Usado en:
  * - Promise cierre
@@ -81,7 +81,7 @@ export function CondicionesComercialesDesglose({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h4 className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-                Condiciones Comerciales
+                Desglose de condiciones para la negociación
               </h4>
               {dropdownMenu}
             </div>
@@ -113,7 +113,7 @@ export function CondicionesComercialesDesglose({
             </div>
             {ahorroTotal > 0 && (
               <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Ahorro total:</span>
+                <span className="text-zinc-400">Descuento total:</span>
                 <span className="text-emerald-400 font-medium tabular-nums">
                   {formatMoney(ahorroTotal)}
                 </span>
@@ -185,7 +185,7 @@ export function CondicionesComercialesDesglose({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <h4 className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-              Condiciones Comerciales
+              Desglose de condiciones para la negociación
             </h4>
             {dropdownMenu}
           </div>

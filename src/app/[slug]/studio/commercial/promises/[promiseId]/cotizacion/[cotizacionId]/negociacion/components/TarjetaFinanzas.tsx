@@ -84,7 +84,7 @@ export function TarjetaFinanzas({
                 : '—'}
             </p>
             <p className="text-[10px] text-zinc-500 mt-0.5">
-              Precio/(1+{markup}) − Costo
+              Precio/(1+{markup}) − Costo · Distinto a utilidad neta contable
             </p>
           </div>
         </div>

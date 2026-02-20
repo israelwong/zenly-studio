@@ -173,7 +173,7 @@ export function NegociacionItemsTree({
       <ZenCardHeader>
         <ZenCardTitle>Servicios Incluidos</ZenCardTitle>
         <ZenCardDescription>
-          Revisa los servicios y marca como cortesía los que se incluyen sin cargo
+          Revisa los servicios y <span className="text-emerald-400 font-medium">marca como cortesía</span> los que <span className="text-emerald-400 font-medium">se incluyen sin cargo</span>
         </ZenCardDescription>
         <div className="mt-4">
           <div className="relative">
