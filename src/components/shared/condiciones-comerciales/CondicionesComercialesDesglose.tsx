@@ -81,7 +81,7 @@ export function CondicionesComercialesDesglose({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h4 className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-                Desglose de condiciones para la negociación
+                Desglose de negociación
               </h4>
               {dropdownMenu}
             </div>
@@ -185,7 +185,7 @@ export function CondicionesComercialesDesglose({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <h4 className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-              Desglose de condiciones para la negociación
+              Desglose de negociación
             </h4>
             {dropdownMenu}
           </div>

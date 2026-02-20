@@ -170,35 +170,45 @@ export const condicionComercialTemporalSchema = z.object({
 
 export type CondicionComercialTemporal = z.infer<typeof condicionComercialTemporalSchema>;
 
-// Schema para crear versión negociada
-export const crearVersionNegociadaSchema = z.object({
-  studio_slug: z.string().min(1, 'Studio slug requerido'),
-  cotizacion_original_id: z.string().cuid('ID de cotización original inválido'),
-  nombre: z.string().min(1, 'El nombre es requerido'),
-  descripcion: z.string().optional(),
-  precio_personalizado: z.number().min(0).optional().nullable(),
-  descuento_adicional: z.number().min(0).optional().nullable(),
-  condicion_comercial_id: z.string().cuid().optional().nullable(),
-  condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
-  items_cortesia: z.array(z.string().cuid()).default([]),
-  notas: z.string().optional(),
-  visible_to_client: z.boolean().default(false),
-});
+// Schema para crear versión negociada (condición comercial obligatoria)
+export const crearVersionNegociadaSchema = z
+  .object({
+    studio_slug: z.string().min(1, 'Studio slug requerido'),
+    cotizacion_original_id: z.string().cuid('ID de cotización original inválido'),
+    nombre: z.string().min(1, 'El nombre es requerido'),
+    descripcion: z.string().optional(),
+    precio_personalizado: z.number().min(0).optional().nullable(),
+    descuento_adicional: z.number().min(0).optional().nullable(),
+    condicion_comercial_id: z.string().cuid().optional().nullable(),
+    condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
+    items_cortesia: z.array(z.string().cuid()).default([]),
+    notas: z.string().optional(),
+    visible_to_client: z.boolean().default(false),
+  })
+  .refine(
+    (data) => data.condicion_comercial_id != null || data.condicion_comercial_temporal != null,
+    { message: 'Se requiere una condición comercial de negociación', path: ['condicion_comercial_id'] }
+  );
 
 export type CrearVersionNegociadaData = z.infer<typeof crearVersionNegociadaSchema>;
 
-// Schema para aplicar cambios de negociación a cotización existente
-export const aplicarCambiosNegociacionSchema = z.object({
-  studio_slug: z.string().min(1, 'Studio slug requerido'),
-  cotizacion_id: z.string().cuid('ID de cotización inválido'),
-  precio_personalizado: z.number().min(0).optional().nullable(),
-  descuento_adicional: z.number().min(0).optional().nullable(),
-  condicion_comercial_id: z.string().cuid().optional().nullable(),
-  condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
-  items_cortesia: z.array(z.string().cuid()).default([]),
-  notas: z.string().optional(),
-  visible_to_client: z.boolean().optional(),
-});
+// Schema para aplicar cambios de negociación (condición comercial obligatoria)
+export const aplicarCambiosNegociacionSchema = z
+  .object({
+    studio_slug: z.string().min(1, 'Studio slug requerido'),
+    cotizacion_id: z.string().cuid('ID de cotización inválido'),
+    precio_personalizado: z.number().min(0).optional().nullable(),
+    descuento_adicional: z.number().min(0).optional().nullable(),
+    condicion_comercial_id: z.string().cuid().optional().nullable(),
+    condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
+    items_cortesia: z.array(z.string().cuid()).default([]),
+    notas: z.string().optional(),
+    visible_to_client: z.boolean().optional(),
+  })
+  .refine(
+    (data) => data.condicion_comercial_id != null || data.condicion_comercial_temporal != null,
+    { message: 'Se requiere una condición comercial de negociación', path: ['condicion_comercial_id'] }
+  );
 
 export type AplicarCambiosNegociacionData = z.infer<typeof aplicarCambiosNegociacionSchema>;
 

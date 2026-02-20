@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Lock } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, X, Lock, Pencil } from 'lucide-react';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
@@ -13,6 +14,8 @@ interface SelectorCondicionesComercialesProps {
   studioSlug: string;
   condicionSeleccionada: string | null;
   condicionTemporal: CondicionComercialTemporal | null;
+  /** ID de condición ya asignada a la cotización (para mostrar condición pública si aplica). */
+  condicionComercialIdAsignadaACotizacion?: string | null;
   onCondicionChange: (
     condicionId: string | null,
     condicionTemporal: CondicionComercialTemporal | null,
@@ -34,10 +37,14 @@ export function SelectorCondicionesComerciales({
   studioSlug,
   condicionSeleccionada,
   condicionTemporal,
+  condicionComercialIdAsignadaACotizacion,
   onCondicionChange,
   onCondicionesLoaded,
 }: SelectorCondicionesComercialesProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingConditionId, setEditingConditionId] = useState<string | null>(null);
   const [pendingSelectedId, setPendingSelectedId] = useState<string | null>(null);
   const [condicionesComerciales, setCondicionesComerciales] = useState<
     Array<{
@@ -86,20 +93,20 @@ export function SelectorCondicionesComerciales({
           })),
         }));
 
-        // Ordenar: condiciones de tipo "offer" al final
-        const condicionesOrdenadas = [...condicionesMapeadas].sort((a, b) => {
+        // En negociación: solo privadas, salvo la condición ya asignada a la cotización (para poder verla)
+        const filtradas = condicionesMapeadas.filter(
+          (c) => c.is_public === false || c.id === condicionComercialIdAsignadaACotizacion
+        );
+        // Ordenar: privadas primero, luego offer al final
+        const condicionesOrdenadas = [...filtradas].sort((a, b) => {
+          const aPriv = a.is_public === false ? 0 : 1;
+          const bPriv = b.is_public === false ? 0 : 1;
+          if (aPriv !== bPriv) return aPriv - bPriv;
           const aType = a.type || 'standard';
           const bType = b.type || 'standard';
-          
-          // Si ambos son del mismo tipo, mantener orden original
-          if (aType === bType) {
-            return 0;
-          }
-          
-          // Standard primero, luego offer
+          if (aType === bType) return 0;
           if (aType === 'standard' && bType === 'offer') return -1;
           if (aType === 'offer' && bType === 'standard') return 1;
-          
           return 0;
         });
 
@@ -112,7 +119,7 @@ export function SelectorCondicionesComerciales({
     } finally {
       setLoadingCondiciones(false);
     }
-  }, [studioSlug]);
+  }, [studioSlug, condicionComercialIdAsignadaACotizacion]);
 
   useEffect(() => {
     loadCondiciones();
@@ -183,9 +190,12 @@ export function SelectorCondicionesComerciales({
     (id: string) => {
       setShowCreateModal(false);
       setPendingSelectedId(id);
-      loadCondiciones();
+      startTransition(() => {
+        loadCondiciones();
+        router.refresh();
+      });
     },
-    [loadCondiciones]
+    [loadCondiciones, router]
   );
 
   useEffect(() => {
@@ -309,9 +319,21 @@ export function SelectorCondicionesComerciales({
                               }
                               return null;
                             })()}
-                            <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
                           </div>
                         </div>
+                        <ZenButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 h-8 px-2 text-zinc-400 hover:text-zinc-200"
+                          icon={Pencil}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingConditionId(condicion.id);
+                          }}
+                        >
+                          Editar
+                        </ZenButton>
                       </div>
                     </div>
                   );
@@ -387,10 +409,22 @@ export function SelectorCondicionesComerciales({
                                   }
                                   return null;
                                 })()}
-                                <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
                                 <span className="text-emerald-400">Método: {metodo.metodo_pago_name}</span>
                               </div>
                             </div>
+                            <ZenButton
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 h-8 px-2 text-zinc-400 hover:text-zinc-200"
+                              icon={Pencil}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingConditionId(condicion.id);
+                              }}
+                            >
+                              Editar
+                            </ZenButton>
                           </div>
                         </div>
                       );
@@ -450,8 +484,27 @@ export function SelectorCondicionesComerciales({
           onClose={() => setShowCreateModal(false)}
           initialMode="create"
           defaultIsPublic={false}
-          customTitle="Condición especial de negociación"
+          customTitle="Configurar acuerdo de pago privado"
+          originContext="negotiation"
           onSelect={handleCreatedSelect}
+        />
+      )}
+
+      {editingConditionId && (
+        <CondicionesComercialesManager
+          studioSlug={studioSlug}
+          isOpen={!!editingConditionId}
+          onClose={() => {
+            setEditingConditionId(null);
+            startTransition(() => {
+              loadCondiciones();
+              router.refresh();
+            });
+          }}
+          initialEditingId={editingConditionId}
+          originContext="negotiation"
+          defaultIsPublic={false}
+          onRefresh={() => loadCondiciones()}
         />
       )}
     </div>

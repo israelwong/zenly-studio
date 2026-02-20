@@ -10,8 +10,6 @@ import { CalculoConCondiciones } from './CalculoConCondiciones';
 import { ComparacionView } from './ComparacionView';
 import { SelectorCondicionesComerciales } from './SelectorCondicionesComerciales';
 import { PrecioSimulador } from './PrecioSimulador';
-import { ImpactoUtilidad } from './ImpactoUtilidad';
-import { TarjetaFinanzas } from './TarjetaFinanzas';
 import { FinalizarNegociacion } from './FinalizarNegociacion';
 import {
   calcularPrecioNegociado,
@@ -22,7 +20,6 @@ import type {
   CondicionComercialTemporal,
 } from '@/lib/utils/negociacion-calc';
 import { useState } from 'react';
-import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 
 export interface NegociacionState {
   precioPersonalizado: number | null;
@@ -66,7 +63,7 @@ export function NegociacionClient({
     CondicionComercial | CondicionComercialTemporal | null
   >(null);
   const [negociacionState, setNegociacionState] = useState<NegociacionState>(() => {
-    // Inicializar estado con valores guardados si la cotización ya está en negociación
+    // Inicializar estado con valores guardados si la cotizaci?n ya est? en negociaci?n
     if (initialCotizacion.status === 'negociacion') {
       const itemsCortesia = new Set<string>();
       initialCotizacion.items.forEach((item) => {
@@ -95,7 +92,7 @@ export function NegociacionClient({
   });
   const [totalAPagarCondiciones, setTotalAPagarCondiciones] = useState<number | null>(null);
 
-  // Inicializar condición comercial temporal si existe
+  // Inicializar condici?n comercial temporal si existe
   React.useEffect(() => {
     if (initialCotizacion.condicion_comercial_temporal) {
       setCondicionComercialCompleta(initialCotizacion.condicion_comercial_temporal);
@@ -138,7 +135,7 @@ export function NegociacionClient({
         condicionComercial = negociacionState.condicionComercialTemporal;
       }
 
-      // Calcular "Cálculo de items seleccionados" (Total a pagar - cortesías)
+      // Calcular "C?lculo de items seleccionados" (Total a pagar - cortes?as)
       const montoItemsCortesia = cotizacionOriginal.items.reduce((sum, item) => {
         if (negociacionState.itemsCortesia.has(item.id)) {
           return sum + (item.unit_price || 0) * item.quantity;
@@ -225,7 +222,7 @@ export function NegociacionClient({
     totalAPagarCondiciones,
   ]);
 
-  // Validación de margen
+  // Validaci?n de margen
   const validacionMargen = useMemo(() => {
     if (!calculoNegociado) return null;
 
@@ -236,6 +233,27 @@ export function NegociacionClient({
       calculoNegociado.gastoTotal
     );
   }, [calculoNegociado]);
+
+  // Valores originales (sin negociaci?n) para comparativa en PrecioSimulador
+  const originalFinanciero = useMemo(() => {
+    const costoTotalOriginal = cotizacionOriginal.items.reduce(
+      (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
+      0
+    );
+    const gastoTotalOriginal = cotizacionOriginal.items.reduce(
+      (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
+      0
+    );
+    const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
+    const utilidadNetaOriginal = precioOriginal - costoTotalOriginal - gastoTotalOriginal;
+    const margenOriginal =
+      precioOriginal > 0 ? (utilidadNetaOriginal / precioOriginal) * 100 : 0;
+    return {
+      precioFinal: precioOriginal,
+      utilidadNeta: utilidadNetaOriginal,
+      margenPorcentaje: margenOriginal,
+    };
+  }, [cotizacionOriginal]);
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -258,9 +276,9 @@ export function NegociacionClient({
           }
         />
 
-        {/* Columna 2: Condiciones y Cálculos */}
+        {/* Columna 2: Condiciones y C?lculos */}
         <div className="space-y-6">
-          {/* 1. Precio cotización original */}
+          {/* 1. Precio cotizaci?n original */}
           <ComparacionView
             original={{
               precioFinal: cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price,
@@ -293,7 +311,7 @@ export function NegociacionClient({
             negociada={calculoNegociado}
           />
 
-          {/* 2. Precio de Negociación (Precio Personalizado) */}
+          {/* 2. Precio de Negociaci?n (Precio Personalizado) + desglose comparativo y salud financiera */}
           <PrecioSimulador
             cotizacion={cotizacionOriginal}
             precioPersonalizado={negociacionState.precioPersonalizado}
@@ -307,6 +325,8 @@ export function NegociacionClient({
             precioReferencia={totalAPagarCondiciones}
             itemsCortesia={negociacionState.itemsCortesia}
             showDesglose={true}
+            calculoNegociado={calculoNegociado}
+            original={calculoNegociado ? originalFinanciero : null}
           />
 
           {/* 3. Selector de condiciones comerciales */}
@@ -314,6 +334,7 @@ export function NegociacionClient({
             studioSlug={studioSlug}
             condicionSeleccionada={negociacionState.condicionComercialId}
             condicionTemporal={negociacionState.condicionComercialTemporal}
+            condicionComercialIdAsignadaACotizacion={cotizacionOriginal.condiciones_comerciales_id ?? null}
             onCondicionChange={(condicionId, condicionTemporal, condicionCompleta) => {
               setNegociacionState((prev) => ({
                 ...prev,
@@ -332,11 +353,8 @@ export function NegociacionClient({
               setCondicionesComerciales(condiciones);
             }}
           />
-          <p className="text-xs text-zinc-500 -mt-2">
-            Para mantener la salud financiera te recomendamos no combinar descuento de condición con precio ajustado.
-          </p>
 
-          {/* 4. Desglose de precio con condiciones comerciales (solo si hay condición) */}
+          {/* 4. Desglose de precio con condiciones comerciales (solo si hay condici?n) */}
           <CalculoConCondiciones
             cotizacionOriginal={cotizacionOriginal}
             condicionComercial={condicionComercialCompleta}
@@ -345,46 +363,7 @@ export function NegociacionClient({
             onTotalAPagarCalculado={setTotalAPagarCondiciones}
           />
 
-          {/* 5. Tarjeta Finanzas (utilidad con markup + alerta descuento) */}
-          <TarjetaFinanzas
-            calculoNegociado={calculoNegociado}
-            configPrecios={configPrecios}
-            descuentoAdicional={negociacionState.descuentoAdicional}
-            precioOriginal={cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price}
-          />
-
-          {/* 6. Impacto en utilidad */}
-          {calculoNegociado && (() => {
-              const costoTotalOriginal = cotizacionOriginal.items.reduce(
-                (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
-                0
-              );
-              const gastoTotalOriginal = cotizacionOriginal.items.reduce(
-                (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
-                0
-              );
-              const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-              const utilidadNetaOriginal =
-                precioOriginal - costoTotalOriginal - gastoTotalOriginal;
-              const margenOriginal =
-                precioOriginal > 0
-                  ? (utilidadNetaOriginal / precioOriginal) * 100
-                  : 0;
-
-            return (
-              <ImpactoUtilidad
-                original={{
-                  precioFinal: precioOriginal,
-                  utilidadNeta: utilidadNetaOriginal,
-                  margenPorcentaje: margenOriginal,
-                }}
-                negociada={calculoNegociado}
-                validacionMargen={validacionMargen}
-              />
-            );
-          })()}
-
-          {/* 7. Finalizar negociación */}
+          {/* 5. Finalizar negociaci?n */}
           <FinalizarNegociacion
             negociacionState={negociacionState}
             calculoNegociado={calculoNegociado}

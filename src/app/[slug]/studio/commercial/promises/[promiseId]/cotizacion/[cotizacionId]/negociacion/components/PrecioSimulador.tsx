@@ -8,11 +8,19 @@ import {
   ZenCardTitle,
   ZenCardDescription,
   ZenInput,
+  ZenBadge,
 } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CotizacionCompleta } from '@/lib/utils/negociacion-calc';
-import type { ValidacionMargen } from '@/lib/utils/negociacion-calc';
-import { AlertCircle } from 'lucide-react';
+import type { ValidacionMargen, CalculoNegociacionResult } from '@/lib/utils/negociacion-calc';
+import { calculateFinancialHealth } from '@/lib/utils/negociacion-calc';
+import { AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+
+export interface OriginalFinanciero {
+  precioFinal: number;
+  utilidadNeta: number;
+  margenPorcentaje: number;
+}
 
 interface PrecioSimuladorProps {
   cotizacion: CotizacionCompleta;
@@ -22,6 +30,10 @@ interface PrecioSimuladorProps {
   precioReferencia: number | null; // Precio con condiciones comerciales aplicadas (Total a pagar)
   itemsCortesia: Set<string>; // Items marcados como cortesía
   showDesglose?: boolean; // Mostrar desglose dentro del card
+  /** Cuando hay cambios en negociación: datos calculados en tiempo real para comparativa */
+  calculoNegociado?: CalculoNegociacionResult | null;
+  /** Valores originales (sin negociación) para mostrar deltas y "Original:" */
+  original?: OriginalFinanciero | null;
 }
 
 export function PrecioSimulador({
@@ -32,6 +44,8 @@ export function PrecioSimulador({
   precioReferencia,
   itemsCortesia,
   showDesglose = false,
+  calculoNegociado = null,
+  original = null,
 }: PrecioSimuladorProps) {
   const [inputValue, setInputValue] = useState(
     precioPersonalizado?.toString() || ''
@@ -143,69 +157,138 @@ export function PrecioSimulador({
           </div>
         </div>
 
-        {/* Desglose integrado (Costos = mínimo sin pérdida) */}
+        {/* Desglose siempre visible: Costos, Gastos, Utilidad, Margen + salud. La condición comercial no condiciona visibilidad. */}
         {showDesglose && (() => {
-          // Calcular costos y gastos (siempre se suman todos, incluso si es cortesía)
-          const costoTotal = cotizacion.items.reduce((sum, item) => {
-            return sum + (item.cost || 0) * item.quantity;
-          }, 0);
+          const costoTotal = cotizacion.items.reduce(
+            (sum, item) => sum + (item.cost || 0) * item.quantity,
+            0
+          );
+          const gastoTotal = cotizacion.items.reduce(
+            (sum, item) => sum + (item.expense || 0) * item.quantity,
+            0
+          );
+          const tieneComparativa = calculoNegociado && original;
+          const precioActual = calculoNegociado?.precioFinal ?? (precioPersonalizado ?? calculoItemsSeleccionados);
+          const utilidadActual = calculoNegociado?.utilidadNeta ?? (precioActual - costoTotal - gastoTotal);
+          const margenActual = precioActual > 0 ? (utilidadActual / precioActual) * 100 : 0;
+          const costosParaSalud = calculoNegociado?.costoTotal ?? costoTotal;
+          const gastosParaSalud = calculoNegociado?.gastoTotal ?? gastoTotal;
+          const financialHealth = calculateFinancialHealth(
+            costosParaSalud,
+            gastosParaSalud,
+            precioActual
+          );
+          const diferenciaUtilidad = tieneComparativa
+            ? calculoNegociado!.utilidadNeta - original!.utilidadNeta
+            : 0;
+          const diferenciaMargen = tieneComparativa
+            ? (calculoNegociado!.margenPorcentaje - original!.margenPorcentaje)
+            : 0;
+          const margenOriginalStr =
+            tieneComparativa && original!.precioFinal > 0
+              ? ((original!.utilidadNeta / original!.precioFinal) * 100).toFixed(1)
+              : '0.0';
 
-          const gastoTotal = cotizacion.items.reduce((sum, item) => {
-            return sum + (item.expense || 0) * item.quantity;
-          }, 0);
-
-          // Calcular costo de items de cortesía (se incurre en el costo pero no se recupera)
-          const costoItemsCortesia = cotizacion.items.reduce((sum, item) => {
-            if (itemsCortesia.has(item.id)) {
-              return sum + (item.cost || 0) * item.quantity;
-            }
-            return sum;
-          }, 0);
-
-          // Usar precio personalizado si existe, sino el precio base (precio referencia - cortesías)
-          const precioParaCalcular = precioPersonalizado ?? calculoItemsSeleccionados;
-
-          // Calcular utilidad: precio - costos - gastos - costo de items cortesía
-          // Los costos de cortesías se restan adicionalmente porque se incurren pero no se recuperan
-          const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal;
-          const margenPorcentaje =
-            precioParaCalcular > 0 ? (utilidadNeta / precioParaCalcular) * 100 : 0;
+          const esMargenSaludable = financialHealth.estado === 'saludable';
+          const bloqueSaludBajo = !esMargenSaludable && (
+            <div className={`p-3 rounded-lg border ${financialHealth.bgColor}`}>
+              <p className={`text-sm font-medium ${financialHealth.color}`}>
+                {financialHealth.mensaje}
+              </p>
+              {financialHealth.diferenciaFaltante > 0 && (
+                <div className="mt-2 pt-2 border-t border-current/20">
+                  <p className={`text-xs ${financialHealth.color} opacity-80`}>
+                    Precio de rescate sugerido:{' '}
+                    <span className="font-semibold">{formatearMoneda(financialHealth.precioRescate)}</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          );
 
           return (
-            <div className="pt-4 border-t border-zinc-700">
-              <h4 className="text-sm font-semibold text-white mb-3">Desglose</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex flex-col">
-                  <span className="text-xs text-zinc-400 mb-1">Costos</span>
-                  <span className="text-sm text-zinc-300">
-                    {formatearMoneda(costoTotal)}
-                  </span>
+            <div className="pt-4 border-t border-zinc-700 space-y-4">
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-sm font-semibold text-white">Desglose</h4>
+                {esMargenSaludable && (
+                  <ZenBadge variant="success" className="text-[10px] px-2 py-1 shrink-0">
+                    {financialHealth.mensaje}
+                  </ZenBadge>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-400">Costos</div>
+                  <span className="text-sm text-zinc-300">{formatearMoneda(costosParaSalud)}</span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-zinc-400 mb-1">Gastos</span>
-                  <span className="text-sm text-zinc-300">
-                    {formatearMoneda(gastoTotal)}
-                  </span>
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-400">Gastos</div>
+                  <span className="text-sm text-zinc-300">{formatearMoneda(gastosParaSalud)}</span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-zinc-400 mb-1">Utilidad</span>
-                  <span
-                    className={`text-sm font-semibold ${utilidadNeta >= 0 ? 'text-emerald-400' : 'text-red-400'
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-400">Utilidad</div>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold text-zinc-200">
+                      {formatearMoneda(utilidadActual)}
+                    </span>
+                    {tieneComparativa && diferenciaUtilidad !== 0 && (
+                      <span
+                        className={`text-xs flex items-center gap-0.5 ${
+                          diferenciaUtilidad < 0 ? 'text-red-400' : 'text-emerald-400'
+                        }`}
+                      >
+                        {diferenciaUtilidad < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
+                        {diferenciaUtilidad > 0 ? '+' : ''}
+                        {formatearMoneda(diferenciaUtilidad)}
+                      </span>
+                    )}
+                  </div>
+                  {tieneComparativa && (
+                    <div className="text-[10px] text-zinc-500">
+                      Original: {formatearMoneda(original!.utilidadNeta)}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-400">Margen</div>
+                  <div className="flex flex-col gap-0.5">
+                    <span
+                      className={`text-sm font-medium ${
+                        financialHealth.estado === 'saludable'
+                          ? 'text-emerald-400'
+                          : financialHealth.estado === 'advertencia'
+                            ? 'text-amber-400'
+                            : 'text-red-400'
                       }`}
-                  >
-                    {formatearMoneda(utilidadNeta)}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-zinc-400 mb-1">Margen</span>
-                  <span
-                    className={`text-sm font-medium ${margenPorcentaje >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }`}
-                  >
-                    {margenPorcentaje.toFixed(1)}%
-                  </span>
+                    >
+                      {margenActual.toFixed(1)}%
+                    </span>
+                    {tieneComparativa && diferenciaMargen !== 0 && (
+                      <span
+                        className={`text-xs flex items-center gap-0.5 ${
+                          diferenciaMargen < 0 ? 'text-red-400' : 'text-emerald-400'
+                        }`}
+                      >
+                        {diferenciaMargen < 0 ? (
+                          <TrendingDown className="h-3 w-3" />
+                        ) : diferenciaMargen > 0 ? (
+                          <TrendingUp className="h-3 w-3" />
+                        ) : (
+                          <Minus className="h-3 w-3" />
+                        )}
+                        {diferenciaMargen > 0 ? '+' : ''}
+                        {diferenciaMargen.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                  {tieneComparativa && (
+                    <div className="text-[10px] text-zinc-500">
+                      Original: {margenOriginalStr}%
+                    </div>
+                  )}
                 </div>
               </div>
+              {bloqueSaludBajo}
             </div>
           );
         })()}

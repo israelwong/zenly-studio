@@ -11,7 +11,6 @@ import {
   ZenInput,
   ZenTextarea,
   ZenSwitch,
-  ZenBadge,
 } from '@/components/ui/zen';
 import {
   crearVersionNegociada,
@@ -19,7 +18,6 @@ import {
 } from '@/lib/actions/studio/commercial/promises/negociacion.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { Lock } from 'lucide-react';
 import type {
   CalculoNegociacionResult,
   ValidacionMargen,
@@ -56,9 +54,9 @@ export function FinalizarNegociacion({
   // Detectar si estamos editando una negociación existente o creando una nueva
   const isUpdating = cotizacionOriginal.status === 'negociacion';
   
-  // Solo agregar "- Negociada" si estamos creando una nueva negociación
+  // Solo agregar "- Especial" si estamos creando una nueva negociación
   const [nombreVersion, setNombreVersion] = useState(
-    isUpdating ? cotizacionOriginal.name : `${cotizacionOriginal.name} - Negociada`
+    isUpdating ? cotizacionOriginal.name : `${cotizacionOriginal.name} - Especial`
   );
   const [loading, setLoading] = useState(false);
   const [visibleToClient, setVisibleToClient] = useState(
@@ -72,7 +70,16 @@ export function FinalizarNegociacion({
     negociacionState.condicionComercialTemporal !== null ||
     negociacionState.itemsCortesia.size > 0;
 
+  const tieneCondicionComercial =
+    negociacionState.condicionComercialId !== null ||
+    negociacionState.condicionComercialTemporal !== null;
+
   const handleFinalizar = async () => {
+    if (!tieneCondicionComercial) {
+      toast.error('Selecciona una condición comercial de negociación para poder crear o actualizar');
+      return;
+    }
+
     // Solo validar nombre si estamos creando una nueva cotización
     if (!isUpdating && !nombreVersion.trim()) {
       toast.error('El nombre de la cotización es requerido');
@@ -186,88 +193,21 @@ export function FinalizarNegociacion({
             label="Nombre de la cotización"
             value={nombreVersion}
             onChange={(e) => setNombreVersion(e.target.value)}
-            placeholder="Ej: Cotización Básica - Negociada"
+            placeholder="Ej: Cotización Básica - Especial"
             required
           />
         </div>
 
-        {/* Notas */}
+        {/* Notas + Visible para el cliente (menor separación entre ambos) */}
         <div className="space-y-2">
             <ZenTextarea
-              label="Notas (opcional)"
+              label="Descripción (opcional)"
               value={negociacionState.notas}
               onChange={(e) => onNotasChange(e.target.value)}
-              placeholder="Notas sobre esta negociación..."
+              placeholder="Descripción de la negociación..."
               rows={3}
             />
-        </div>
-
-        {/* Resumen de cambios */}
-        {calculoNegociado && (
-          <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg space-y-2">
-            <div className="text-sm font-medium text-zinc-300 mb-3">
-              Resumen de cambios:
-            </div>
-            <ul className="space-y-1 text-sm text-zinc-400">
-              {negociacionState.precioPersonalizado !== null && (
-                <li>
-                  • Precio personalizado:{' '}
-                  {calculoNegociado.precioFinal.toLocaleString('es-MX', {
-                    style: 'currency',
-                    currency: 'MXN',
-                  })}
-                </li>
-              )}
-              {negociacionState.descuentoAdicional !== null &&
-                negociacionState.descuentoAdicional > 0 && (
-                  <li>
-                    • Descuento adicional:{' '}
-                    {negociacionState.descuentoAdicional.toLocaleString('es-MX', {
-                      style: 'currency',
-                      currency: 'MXN',
-                    })}
-                  </li>
-                )}
-              {(negociacionState.condicionComercialId ||
-                negociacionState.condicionComercialTemporal) && (
-                <li className="flex items-center gap-2 flex-wrap">
-                  <span>• Condición comercial especial aplicada</span>
-                  {condicionEsPrivada && (
-                    <ZenBadge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0 rounded-full inline-flex items-center gap-1">
-                      <Lock className="h-3 w-3" />
-                      Condición Privada
-                    </ZenBadge>
-                  )}
-                </li>
-              )}
-              {negociacionState.itemsCortesia.size > 0 && (
-                <li>
-                  • {negociacionState.itemsCortesia.size} item(s) marcado(s) como
-                  cortesía
-                </li>
-              )}
-              <li>
-                • Impacto en utilidad:{' '}
-                <span
-                  className={
-                    calculoNegociado.impactoUtilidad < 0
-                      ? 'text-red-400'
-                      : 'text-emerald-400'
-                  }
-                >
-                  {calculoNegociado.impactoUtilidad > 0 ? '+' : ''}
-                  {calculoNegociado.impactoUtilidad.toLocaleString('es-MX', {
-                    style: 'currency',
-                    currency: 'MXN',
-                  })}
-                </span>
-              </li>
-            </ul>
-          </div>
-        )}
-
-        {/* Switch visible para el cliente */}
-        <div className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
           <div className="flex-1">
             <label className="text-sm font-medium text-zinc-300 cursor-pointer">
               Visible para el cliente
@@ -280,14 +220,20 @@ export function FinalizarNegociacion({
             checked={visibleToClient}
             onCheckedChange={setVisibleToClient}
           />
+          </div>
         </div>
 
         {/* Botones */}
+        {!tieneCondicionComercial && (
+          <p className="text-xs text-amber-400/90">
+            Selecciona una condición comercial arriba para poder crear o actualizar la negociación.
+          </p>
+        )}
         <div className="space-y-3">
           <ZenButton
             variant="primary"
             onClick={handleFinalizar}
-            disabled={loading}
+            disabled={loading || !tieneCondicionComercial}
             loading={loading}
             className="w-full"
           >

@@ -86,6 +86,8 @@ interface CondicionesComercialesManagerProps {
   defaultIsPublic?: boolean;
   /** Título del modal cuando se abre desde un contexto específico (ej. negociación). */
   customTitle?: string;
+  /** Origen: desde negociación se oculta descuento y switches oferta/pública, se fuerza is_public false. */
+  originContext?: 'negotiation';
 }
 
 interface SortableCondicionItemProps {
@@ -339,6 +341,7 @@ export function CondicionesComercialesManager({
   initialMode = 'list',
   defaultIsPublic = true,
   customTitle,
+  originContext,
 }: CondicionesComercialesManagerProps) {
   const [condiciones, setCondiciones] = useState<CondicionComercial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,6 +360,8 @@ export function CondicionesComercialesManager({
   );
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** True cuando se edita una condición de negociación (privada sin descuento) abierta desde otro contexto. Deshabilita descuento y switches. */
+  const [editingConditionIsSpecial, setEditingConditionIsSpecial] = useState(false);
   const [maxDescuento, setMaxDescuento] = useState<number | null>(null);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [pendingClose, setPendingClose] = useState<(() => void) | null>(null);
@@ -400,6 +405,9 @@ export function CondicionesComercialesManager({
     offer_id: null as string | null,
   });
 
+  /** Crear/editar condición de negociación (originContext negotiation o condición privada sin descuento): descuento y switches deshabilitados. */
+  const isNegotiationSpecial = originContext === 'negotiation' || editingConditionIsSpecial;
+
   // Verificar si hay cambios sin guardar
   const hasUnsavedChanges = () => {
     if (!showForm && !viewingOfferCondition) return false;
@@ -430,6 +438,7 @@ export function CondicionesComercialesManager({
   const resetFormState = () => {
     setShowForm(false);
     setEditingId(null);
+    setEditingConditionIsSpecial(false);
     setViewingOfferCondition(null);
     setOfertasParaVincular([]);
     setShowDesvincularConfirm(false);
@@ -517,12 +526,20 @@ export function CondicionesComercialesManager({
   useEffect(() => {
     if (isOpen && initialMode === 'create' && !showForm) {
       const isPublic = defaultIsPublic ?? false;
-      setFormData((prev) => ({ ...prev, is_public: isPublic }));
-      setInitialFormData((prev) => ({ ...prev, is_public: isPublic }));
+      setFormData((prev) => ({
+        ...prev,
+        is_public: isPublic,
+        ...(originContext === 'negotiation' ? { discount_percentage: '' } : {}),
+      }));
+      setInitialFormData((prev) => ({
+        ...prev,
+        is_public: isPublic,
+        ...(originContext === 'negotiation' ? { discount_percentage: '' } : {}),
+      }));
       setShowForm(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialMode, defaultIsPublic]);
+  }, [isOpen, initialMode, defaultIsPublic, originContext]);
 
   // Escuchar actualizaciones de configuración de precios
   useConfiguracionPreciosUpdateListener(studioSlug, (config?: ConfiguracionPreciosUpdateEventDetail) => {
@@ -630,6 +647,7 @@ export function CondicionesComercialesManager({
   const handleEdit = (condicion: CondicionComercial) => {
     setEditingId(condicion.id);
     setViewingOfferCondition(null);
+    setEditingConditionIsSpecial(condicion.discount_percentage === null && condicion.is_public === false);
     const advanceType = condicion.advance_type || 'percentage';
     const editForm = {
       name: condicion.name,
@@ -1058,7 +1076,7 @@ export function CondicionesComercialesManager({
       const data = {
         nombre: formData.name,
         descripcion: formData.description || null,
-        porcentaje_descuento: formData.discount_percentage || null,
+        porcentaje_descuento: isNegotiationSpecial ? null : (formData.discount_percentage || null),
         porcentaje_anticipo: formData.advance_type === 'percentage' ? (formData.advance_percentage || null) : null,
         tipo_anticipo: formData.advance_type,
         monto_anticipo: montoAnticipo,
@@ -1067,7 +1085,7 @@ export function CondicionesComercialesManager({
         type: (formData.is_offer ? 'offer' : 'standard') as 'standard' | 'offer',
         offer_id: formData.is_offer ? (formData.offer_id ?? (context?.offerId ?? (condicionExistente?.offer_id ?? null))) : null,
         override_standard: editingId ? (condicionExistente?.override_standard || false) : false,
-        is_public: formData.is_offer ? true : formData.is_public,
+        is_public: isNegotiationSpecial ? false : (formData.is_offer ? true : formData.is_public),
       } satisfies CondicionComercialForm;
 
       let result;
@@ -1114,6 +1132,7 @@ export function CondicionesComercialesManager({
         );
         setShowForm(false);
         setEditingId(null);
+        setEditingConditionIsSpecial(false);
         // Actualizar initialFormData para que no detecte cambios
         setInitialFormData(formData);
         setFormErrors({});
@@ -1163,6 +1182,8 @@ export function CondicionesComercialesManager({
               cancelLabel: 'Cancelar',
               isLoading: false,
               saveDisabled: !!formErrors.nombre,
+              cancelAlignRight: !!editingId,
+              cancelVariant: editingId ? 'outline' : 'ghost',
               footerLeftContent: editingId ? (
                 <ZenButton
                   type="button"
@@ -1355,31 +1376,34 @@ export function CondicionesComercialesManager({
                   inputMode="decimal"
                   min="0"
                   max={maxDescuento !== null ? maxDescuento.toString() : '100'}
-                  value={formData.discount_percentage}
+                  value={isNegotiationSpecial ? '0' : formData.discount_percentage}
                   onChange={handleDiscountChange}
                   placeholder="10"
+                  disabled={isNegotiationSpecial}
                   error={
-                    formData.discount_percentage
-                      ? (() => {
-                        const numValue = parseFloat(formData.discount_percentage);
-                        if (isNaN(numValue)) {
+                    isNegotiationSpecial
+                      ? undefined
+                      : formData.discount_percentage
+                        ? (() => {
+                          const numValue = parseFloat(formData.discount_percentage);
+                          if (isNaN(numValue)) {
+                            return undefined;
+                          }
+                          if (numValue > 100) {
+                            return 'El porcentaje no puede ser mayor a 100%';
+                          }
+                          if (maxDescuento !== null && numValue > maxDescuento) {
+                            return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
+                          }
                           return undefined;
-                        }
-                        if (numValue > 100) {
-                          return 'El porcentaje no puede ser mayor a 100%';
-                        }
-                        if (maxDescuento !== null && numValue > maxDescuento) {
-                          return `No es posible aplicar el ${formData.discount_percentage}% de descuento por seguridad de la utilidad del negocio. El máximo permitido es ${maxDescuento}%`;
-                        }
-                        return undefined;
-                      })()
-                      : undefined
+                        })()
+                        : undefined
                   }
                 />
               </div>
             </div>
 
-            {maxDescuento !== null && (
+            {originContext !== 'negotiation' && maxDescuento !== null && (
               <p className="text-xs text-zinc-400 mt-2">
                 Porcentaje de descuento máximo del {maxDescuento}% definido en la{' '}
                 <button
@@ -1389,6 +1413,11 @@ export function CondicionesComercialesManager({
                 >
                   configuración
                 </button>
+              </p>
+            )}
+            {isNegotiationSpecial && (
+              <p className="text-xs text-zinc-500 mt-1">
+                En condición de negociación el descuento no aplica (se mantiene en 0%).
               </p>
             )}
 
@@ -1402,6 +1431,7 @@ export function CondicionesComercialesManager({
             <ZenSwitch
               checked={formData.is_offer}
               onCheckedChange={(checked) => setFormData({ ...formData, is_offer: checked, is_public: checked ? true : formData.is_public })}
+              disabled={isNegotiationSpecial}
               label="Es oferta"
               description={formData.is_offer ? 'Esta condición está vinculada a una oferta específica' : 'Esta condición es estándar y está disponible para todas las ofertas'}
             />
@@ -1409,11 +1439,11 @@ export function CondicionesComercialesManager({
             <ZenSwitch
               checked={formData.is_offer ? true : formData.is_public}
               onCheckedChange={(checked) => setFormData({ ...formData, is_public: checked })}
-              disabled={formData.is_offer}
+              disabled={isNegotiationSpecial || formData.is_offer}
               label="Es pública"
-              description={formData.is_offer ? 'Las condiciones de oferta son siempre públicas' : formData.is_public ? 'Visible en el portal del cliente' : (defaultIsPublic === false ? 'Esta condición será privada y solo visible para el estudio' : 'Solo visible para el estudio y en negociaciones directas')}
+              description={formData.is_offer ? 'Las condiciones de oferta son siempre públicas' : formData.is_public ? 'Visible en el portal del cliente' : (defaultIsPublic === false || isNegotiationSpecial ? 'Esta condición será privada y solo visible para el estudio' : 'Solo visible para el estudio y en negociaciones directas')}
             />
-            {defaultIsPublic === false && !formData.is_public && !formData.is_offer && (
+            {(defaultIsPublic === false || isNegotiationSpecial) && !formData.is_public && !formData.is_offer && (
               <p className="text-xs text-zinc-500 flex items-center gap-1.5">
                 <Info className="h-3.5 w-3.5 shrink-0" />
                 Esta condición será privada y solo visible para el estudio.

@@ -224,16 +224,16 @@ export function ZenDialog({
             <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-4 border-t border-zinc-700 bg-zinc-900">
               {/* Izquierda: footerLeftContent o Cancelar (salvo cancelAlignRight) */}
               <div className={cn("flex items-center gap-4", (footerLeftContent || (onCancel && !cancelAlignRight)) && "flex-1 min-w-0")}>
-                {footerLeftContent}
                 {!footerLeftContent && onCancel && !cancelAlignRight && (
                   <ZenButton
                     variant={cancelVariant}
-                    onClick={onClose}
+                    onClick={onCancel}
                     disabled={isLoading}
                   >
                     {cancelLabel}
                   </ZenButton>
                 )}
+                {footerLeftContent}
                 {showDeleteButton && onDelete && !deleteOnRight && (
                   <ZenButton
                     variant="ghost"
@@ -250,7 +250,7 @@ export function ZenDialog({
                 {onCancel && cancelAlignRight && (
                   <ZenButton
                     variant={cancelVariant}
-                    onClick={onClose}
+                    onClick={onCancel}
                     disabled={isLoading}
                   >
                     {cancelLabel}
