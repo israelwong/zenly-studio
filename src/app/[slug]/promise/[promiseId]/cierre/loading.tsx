@@ -1,7 +1,5 @@
-'use client';
-
-import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { CierrePageSkeleton } from './CierrePageSkeleton';
 
 export default function CierreLoading() {
-  return <PromisePageSkeleton />;
+  return <CierrePageSkeleton />;
 }

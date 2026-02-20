@@ -7,7 +7,7 @@ import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PendientesPageSkeleton } from '@/components/promise/PendientesPageSkeleton';
 import { PendientesPageBasic } from './PendientesPageBasic';
 import { PendientesPageDeferred } from './PendientesPageDeferred';
-import { ProgressOverlayWrapper } from './ProgressOverlayWrapper';
+import { ProgressOverlayWrapper } from '@/components/promise/shared/ProgressOverlayWrapper';
 import { PromiseContactBlock } from '@/components/promise/PromiseContactBlock';
 
 // ⚠️ FORCE-DYNAMIC: Evitar caché estático en página de validación

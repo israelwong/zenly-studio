@@ -7,6 +7,7 @@ import { createStageNameMap, getStageDisplayName } from '@/lib/utils/pipeline-st
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
+import { ProgressOverlayWrapper } from '@/components/promise/shared/ProgressOverlayWrapper';
 import { NegociacionPageBasic } from './NegociacionPageBasic';
 import { NegociacionPageDeferred } from './NegociacionPageDeferred';
 
@@ -72,6 +73,8 @@ export default async function NegociacionPage({ params }: NegociacionPageProps) 
 
   return (
     <PromisePageProvider>
+      <ProgressOverlayWrapper studioSlug={slug} promiseId={promiseId} />
+
       {/* ⚠️ STREAMING: Parte A - Instantánea (datos básicos + precio total) */}
       <NegociacionPageBasic
         promise={promiseBasic}

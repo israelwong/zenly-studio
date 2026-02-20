@@ -8,7 +8,6 @@ import { PublicServiciosTree } from '@/components/promise/PublicServiciosTree';
 import { PrecioDesglose } from '@/components/promise/shared/PrecioDesglose';
 import { AutorizarCotizacionModal } from '@/components/promise/AutorizarCotizacionModal';
 import { TerminosCondiciones } from '@/components/promise/shared/TerminosCondiciones';
-import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
@@ -84,16 +83,7 @@ export function NegociacionView({
   pipelineStages = [],
 }: NegociacionViewProps) {
   const router = useRouter();
-  const {
-    onSuccess,
-    showProgressOverlay,
-    progressStep,
-    progressError,
-    autoGenerateContract,
-    setShowProgressOverlay,
-    setProgressStep,
-    setProgressError,
-  } = usePromisePageContext();
+  const { onSuccess } = usePromisePageContext();
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   
   // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions
@@ -159,15 +149,6 @@ export function NegociacionView({
     }
     // NO redirigir aquí - la redirección ocurrirá cuando el proceso termine
   };
-
-  // ⚠️ SIN REDIRECCIÓN: El Gatekeeper detectará el cambio de estado y redirigirá automáticamente
-  // Solo limpiar el overlay cuando el proceso esté completado
-  useEffect(() => {
-    if (progressStep === 'completed' && !showProgressOverlay) {
-      // El Gatekeeper detectará el cambio y redirigirá automáticamente
-      // No necesitamos hacer nada aquí
-    }
-  }, [progressStep, showProgressOverlay]);
 
   return (
     <>
@@ -285,24 +266,6 @@ export function NegociacionView({
           isFromNegociacion={true}
         />
       )}
-
-      {/* Overlay de progreso */}
-      <ProgressOverlay
-        show={showProgressOverlay}
-        currentStep={progressStep}
-        error={progressError}
-        autoGenerateContract={autoGenerateContract}
-        onClose={() => {
-          setShowProgressOverlay(false);
-          setProgressError(null);
-          setProgressStep('validating');
-        }}
-        onRetry={() => {
-          setProgressError(null);
-          setProgressStep('validating');
-          setShowProgressOverlay(false);
-        }}
-      />
     </>
   );
 }

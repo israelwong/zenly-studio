@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
-import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { updatePublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
 
 interface ProgressOverlayWrapperProps {
@@ -13,8 +13,9 @@ interface ProgressOverlayWrapperProps {
 }
 
 /**
- * Wrapper que siempre renderiza el ProgressOverlay cuando está activo
- * Contiene la lógica de procesamiento de autorización
+ * Wrapper compartido que renderiza el ProgressOverlay cuando la autorización está activa.
+ * Contiene la lógica de procesamiento (updatePublicPromiseData → autorizarCotizacionPublica).
+ * Usado en pendientes y negociación para UX consistente (confetti, checklist, redirección a cierre).
  */
 export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverlayWrapperProps) {
   const {
@@ -29,29 +30,14 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     setAuthorizationData,
   } = usePromisePageContext();
 
-  // ⚠️ ARCHITECTURE FIX: sessionStorage workaround REMOVED
-  // Provider is now in layout, state persists across page revalidations
-  // No need for sessionStorage persistence anymore
-
-  // Debug logs desactivados (solo en producción si es necesario)
-  // useEffect(() => {
-  //   if (isAuthorizationInProgress) {
-  //     console.log('[ProgressOverlayWrapper] 👁️ Overlay VISIBLE');
-  //   }
-  // }, [isAuthorizationInProgress]);
-
-
-
   // Procesar autorización cuando se active el estado
   useEffect(() => {
     if (!isAuthorizationInProgress || !authorizationData) {
       return;
     }
 
-    // Prevenir ejecuciones múltiples
     let isProcessing = false;
 
-    // Función async para procesar la autorización
     const processAuthorization = async () => {
       if (isProcessing) {
         return;
@@ -60,31 +46,27 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
       isProcessing = true;
 
       try {
-        const { 
-          promiseId: authPromiseId, 
-          cotizacionId, 
-          studioSlug: authStudioSlug, 
-          formData, 
-          condicionesComercialesId, 
-          condicionesComercialesMetodoPagoId, 
-          autoGenerateContract: shouldGenerateContract 
+        const {
+          promiseId: authPromiseId,
+          cotizacionId,
+          studioSlug: authStudioSlug,
+          formData,
+          condicionesComercialesId,
+          condicionesComercialesMetodoPagoId,
+          autoGenerateContract: shouldGenerateContract,
         } = authorizationData;
 
-        // Micro-delay para garantizar propagación del lock
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Paso 1: Recopilando información
         setProgressStep('collecting');
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 2: Validando datos
         setProgressStep('validating');
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 3: Enviando solicitud a estudio
         setProgressStep('sending');
         await new Promise(resolve => setTimeout(resolve, 800));
-        
+
         const updateResult = await updatePublicPromiseData(authStudioSlug, authPromiseId, {
           contact_name: formData.contact_name,
           contact_phone: formData.contact_phone,
@@ -104,9 +86,8 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Paso 4: Registrando solicitud
         setProgressStep('registering');
-        
+
         let result;
         try {
           result = await autorizarCotizacionPublica(
@@ -143,17 +124,14 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Paso 5: Generando contrato (SIEMPRE mostrar si shouldGenerateContract es true)
         if (shouldGenerateContract) {
           setProgressStep('generating_contract');
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
-        // Paso final: completed
         setProgressStep('completed');
 
         isProcessing = false;
-        // ⚠️ isAuthorizationInProgress permanece en true hasta que el usuario navegue manualmente
       } catch (error) {
         setProgressError('Error al enviar solicitud. Por favor, intenta de nuevo o contacta al estudio.');
         setProgressStep('error');
@@ -167,11 +145,6 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     processAuthorization();
   }, [isAuthorizationInProgress, authorizationData, setProgressStep, setProgressError, setIsAuthorizationInProgress, setAuthorizationData, studioSlug, promiseId]);
 
-  // ⚠️ REDIRECCIÓN MANUAL: Ya NO hay auto-redirect
-  // El usuario debe hacer clic en el botón "Revisar y Firmar Contrato"
-
-  // ⚠️ ARCHITECTURE FIX: Provider is now in layout, so unmounting is expected behavior
-  // Only cleanup when actually navigating away (layout unmount)
   useEffect(() => {
     return () => {
       (window as any).__IS_AUTHORIZING = false;
