@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X } from 'lucide-react';
-import { ZenInput, ZenButton, ZenBadge } from '@/components/ui/zen';
+import { Plus, X, Lock } from 'lucide-react';
+import { ZenButton, ZenBadge } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
+import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import type { CondicionComercial, CondicionComercialTemporal } from '@/lib/utils/negociacion-calc';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
 
@@ -36,7 +37,8 @@ export function SelectorCondicionesComerciales({
   onCondicionChange,
   onCondicionesLoaded,
 }: SelectorCondicionesComercialesProps) {
-  const [crearTemporal, setCrearTemporal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [pendingSelectedId, setPendingSelectedId] = useState<string | null>(null);
   const [condicionesComerciales, setCondicionesComerciales] = useState<
     Array<{
       id: string;
@@ -47,6 +49,7 @@ export function SelectorCondicionesComerciales({
       advance_type: string | null;
       advance_amount: number | null;
       type?: string;
+      is_public?: boolean;
       metodo_pago_id: string | null;
       metodos_pago: Array<{
         id: string;
@@ -56,16 +59,6 @@ export function SelectorCondicionesComerciales({
     }>
   >([]);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
-  const [formTemporal, setFormTemporal] = useState<CondicionComercialTemporal>({
-    name: '',
-    description: '',
-    discount_percentage: null,
-    advance_percentage: null,
-    advance_type: 'percentage',
-    advance_amount: null,
-    metodo_pago_id: null,
-    is_temporary: true,
-  });
   const hasNotifiedRef = useRef(false);
 
   // Cargar condiciones comerciales
@@ -84,6 +77,7 @@ export function SelectorCondicionesComerciales({
           advance_type: c.advance_type,
           advance_amount: c.advance_amount,
           type: c.type,
+          is_public: (c as { is_public?: boolean }).is_public ?? true,
           metodo_pago_id: null,
           metodos_pago: c.condiciones_comerciales_metodo_pago.map((mp) => ({
             id: mp.id,
@@ -144,6 +138,7 @@ export function SelectorCondicionesComerciales({
           advance_type: condicion.advance_type,
           advance_amount: condicion.advance_amount,
           metodo_pago_id: metodoPagoSeleccionado?.metodo_pago_id || condicion.metodo_pago_id || null,
+          is_public: condicion.is_public ?? true,
         };
         onCondicionChange(condicionSeleccionada, null, condicionCompleta);
         hasNotifiedRef.current = true;
@@ -158,7 +153,6 @@ export function SelectorCondicionesComerciales({
   const handleSelectCondicion = (condicionId: string, metodoPagoId?: string) => {
     if (condicionId === '') {
       onCondicionChange(null, null, null);
-      setCrearTemporal(false);
     } else {
       const condicion = condicionesComerciales.find((c) => c.id === condicionId);
       if (!condicion) return;
@@ -178,40 +172,41 @@ export function SelectorCondicionesComerciales({
         advance_type: condicion.advance_type,
         advance_amount: condicion.advance_amount,
         metodo_pago_id: metodoPagoSeleccionado?.metodo_pago_id || condicion.metodo_pago_id || null,
+        is_public: condicion.is_public ?? true,
       };
       onCondicionChange(condicionId, null, condicionCompleta);
-      setCrearTemporal(false);
     }
   };
 
-  const handleCrearTemporal = () => {
-    setCrearTemporal(true);
-    onCondicionChange(null, null, null);
-  };
+  // Tras crear condición desde el modal: cerrar, refrescar lista y seleccionar la nueva (Atomic Seeding)
+  const handleCreatedSelect = useCallback(
+    (id: string) => {
+      setShowCreateModal(false);
+      setPendingSelectedId(id);
+      loadCondiciones();
+    },
+    [loadCondiciones]
+  );
 
-  const handleGuardarTemporal = () => {
-    if (!formTemporal.name.trim()) {
-      toast.error('El nombre es requerido');
-      return;
+  useEffect(() => {
+    if (!pendingSelectedId || loadingCondiciones) return;
+    const c = condicionesComerciales.find((x) => x.id === pendingSelectedId);
+    if (c) {
+      const condicionCompleta: CondicionComercial = {
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        discount_percentage: c.discount_percentage,
+        advance_percentage: c.advance_percentage,
+        advance_type: c.advance_type ?? 'percentage',
+        advance_amount: c.advance_amount,
+        metodo_pago_id: null,
+        is_public: c.is_public ?? true,
+      };
+      onCondicionChange(pendingSelectedId, null, condicionCompleta);
+      setPendingSelectedId(null);
     }
-
-    onCondicionChange(null, formTemporal, null);
-    setCrearTemporal(false);
-  };
-
-  const handleCancelarTemporal = () => {
-    setCrearTemporal(false);
-    setFormTemporal({
-      name: '',
-      description: '',
-      discount_percentage: null,
-      advance_percentage: null,
-      advance_type: 'percentage',
-      advance_amount: null,
-      metodo_pago_id: null,
-      is_temporary: true,
-    });
-  };
+  }, [pendingSelectedId, condicionesComerciales, loadingCondiciones, onCondicionChange]);
 
   // Determinar método de pago seleccionado (si existe)
   const condicionActual = condicionesComerciales.find((c) => c.id === condicionSeleccionada);
@@ -230,9 +225,7 @@ export function SelectorCondicionesComerciales({
         </p>
       </div>
 
-      {!crearTemporal ? (
-        <>
-          {loadingCondiciones ? (
+      {loadingCondiciones ? (
             <div className="space-y-2">
               {[1, 2].map((i) => (
                 <div key={i} className="p-4 border border-zinc-700 rounded-lg bg-zinc-800/30 animate-pulse">
@@ -290,6 +283,12 @@ export function SelectorCondicionesComerciales({
                             {condicion.type === 'offer' && (
                               <ZenBadge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] px-1.5 py-0.5 rounded-full">
                                 Oferta especial
+                              </ZenBadge>
+                            )}
+                            {condicion.is_public === false && (
+                              <ZenBadge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                                <Lock className="h-2.5 w-2.5" />
+                                Privada
                               </ZenBadge>
                             )}
                           </div>
@@ -364,6 +363,12 @@ export function SelectorCondicionesComerciales({
                                     Oferta especial
                                   </ZenBadge>
                                 )}
+                                {condicion.is_public === false && (
+                                  <ZenBadge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                                    <Lock className="h-2.5 w-2.5" />
+                                    Privada
+                                  </ZenBadge>
+                                )}
                               </div>
 
                               {condicion.description && (
@@ -407,12 +412,12 @@ export function SelectorCondicionesComerciales({
 
           <ZenButton
             variant="outline"
-            onClick={handleCrearTemporal}
+            onClick={() => setShowCreateModal(true)}
             icon={Plus}
             iconPosition="left"
-            className="w-full"
+            className="w-full border-zinc-600 text-zinc-300 hover:bg-zinc-700/50"
           >
-            Crear condición especial
+            Crear condición de negociación
           </ZenButton>
 
           {condicionTemporal && (
@@ -437,103 +442,17 @@ export function SelectorCondicionesComerciales({
               </div>
             </div>
           )}
-        </>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-zinc-300">
-              Nueva condición temporal
-            </h4>
-            <button
-              onClick={handleCancelarTemporal}
-              className="text-zinc-400 hover:text-zinc-200"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
 
-          <ZenInput
-            label="Nombre"
-            value={formTemporal.name}
-            onChange={(e) =>
-              setFormTemporal((prev) => ({ ...prev, name: e.target.value }))
-            }
-            placeholder="Ej: Oferta Especial Enero"
-            required
-          />
-
-          <ZenInput
-            label="Descripción (opcional)"
-            value={formTemporal.description || ''}
-            onChange={(e) =>
-              setFormTemporal((prev) => ({
-                ...prev,
-                description: e.target.value,
-              }))
-            }
-            placeholder="Descripción de la condición"
-          />
-
-          <div className="grid grid-cols-2 gap-4">
-            <ZenInput
-              label="Descuento (%)"
-              type="number"
-              value={formTemporal.discount_percentage?.toString() || ''}
-              onChange={(e) =>
-                setFormTemporal((prev) => ({
-                  ...prev,
-                  discount_percentage: e.target.value
-                    ? parseFloat(e.target.value)
-                    : null,
-                }))
-              }
-              placeholder="0"
-              min="0"
-              max="100"
-            />
-
-            <ZenInput
-              label="Anticipo (%)"
-              type="number"
-              value={formTemporal.advance_percentage?.toString() || ''}
-              onChange={(e) =>
-                setFormTemporal((prev) => ({
-                  ...prev,
-                  advance_percentage: e.target.value
-                    ? parseFloat(e.target.value)
-                    : null,
-                }))
-              }
-              placeholder="0"
-              min="0"
-              max="100"
-            />
-          </div>
-
-          <div className="p-3 bg-yellow-950/20 border border-yellow-800/30 rounded-lg">
-            <p className="text-xs text-yellow-400">
-              ⚠️ Esta condición solo aplica a esta promesa y no se guarda como
-              general
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <ZenButton
-              variant="primary"
-              onClick={handleGuardarTemporal}
-              className="flex-1"
-            >
-              Guardar condición
-            </ZenButton>
-            <ZenButton
-              variant="outline"
-              onClick={handleCancelarTemporal}
-              className="flex-1"
-            >
-              Cancelar
-            </ZenButton>
-          </div>
-        </div>
+      {showCreateModal && (
+        <CondicionesComercialesManager
+          studioSlug={studioSlug}
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          initialMode="create"
+          defaultIsPublic={false}
+          customTitle="Condición especial de negociación"
+          onSelect={handleCreatedSelect}
+        />
       )}
     </div>
   );

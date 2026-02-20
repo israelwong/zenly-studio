@@ -63,6 +63,8 @@ export interface CondicionComercial {
   advance_type?: string | null;
   advance_amount?: number | null;
   metodo_pago_id?: string | null;
+  /** Si es false, condición privada (solo esta cotización / no portal) */
+  is_public?: boolean;
 }
 
 /**

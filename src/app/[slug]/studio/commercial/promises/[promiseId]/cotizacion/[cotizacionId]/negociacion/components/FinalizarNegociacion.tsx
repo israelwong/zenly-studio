@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, startTransition } from 'react';
 import {
   ZenCard,
   ZenCardContent,
@@ -11,6 +11,7 @@ import {
   ZenInput,
   ZenTextarea,
   ZenSwitch,
+  ZenBadge,
 } from '@/components/ui/zen';
 import {
   crearVersionNegociada,
@@ -18,6 +19,7 @@ import {
 } from '@/lib/actions/studio/commercial/promises/negociacion.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { Lock } from 'lucide-react';
 import type {
   CalculoNegociacionResult,
   ValidacionMargen,
@@ -34,6 +36,8 @@ interface FinalizarNegociacionProps {
   promiseId: string;
   cotizacionId: string;
   onNotasChange: (notas: string) => void;
+  /** true cuando la condición seleccionada es privada (is_public: false) */
+  condicionEsPrivada?: boolean;
 }
 
 export function FinalizarNegociacion({
@@ -45,6 +49,7 @@ export function FinalizarNegociacion({
   promiseId,
   cotizacionId,
   onNotasChange,
+  condicionEsPrivada = false,
 }: FinalizarNegociacionProps) {
   const router = useRouter();
   
@@ -142,8 +147,10 @@ export function FinalizarNegociacion({
             ? 'Cotización en negociación actualizada exitosamente'
             : 'Cotización en negociación creada exitosamente'
         );
-        // Redirigir a la página de la promesa en el studio
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+        startTransition(() => {
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          router.refresh();
+        });
       } else {
         toast.error(
           result.error ||
@@ -223,8 +230,14 @@ export function FinalizarNegociacion({
                 )}
               {(negociacionState.condicionComercialId ||
                 negociacionState.condicionComercialTemporal) && (
-                <li>
-                  • Condición comercial especial aplicada
+                <li className="flex items-center gap-2 flex-wrap">
+                  <span>• Condición comercial especial aplicada</span>
+                  {condicionEsPrivada && (
+                    <ZenBadge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0 rounded-full inline-flex items-center gap-1">
+                      <Lock className="h-3 w-3" />
+                      Condición Privada
+                    </ZenBadge>
+                  )}
                 </li>
               )}
               {negociacionState.itemsCortesia.size > 0 && (

@@ -11,6 +11,7 @@ import { ComparacionView } from './ComparacionView';
 import { SelectorCondicionesComerciales } from './SelectorCondicionesComerciales';
 import { PrecioSimulador } from './PrecioSimulador';
 import { ImpactoUtilidad } from './ImpactoUtilidad';
+import { TarjetaFinanzas } from './TarjetaFinanzas';
 import { FinalizarNegociacion } from './FinalizarNegociacion';
 import {
   calcularPrecioNegociado,
@@ -341,7 +342,15 @@ export function NegociacionClient({
               showDesglose={true}
             />
 
-            {/* 5. Impacto en utilidad */}
+            {/* 5. Tarjeta Finanzas (utilidad con markup + alerta descuento) */}
+            <TarjetaFinanzas
+              calculoNegociado={calculoNegociado}
+              configPrecios={configPrecios}
+              descuentoAdicional={negociacionState.descuentoAdicional}
+              precioOriginal={cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price}
+            />
+
+            {/* 6. Impacto en utilidad */}
             {calculoNegociado && (() => {
               const costoTotalOriginal = cotizacionOriginal.items.reduce(
                 (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
@@ -372,7 +381,7 @@ export function NegociacionClient({
               );
             })()}
 
-            {/* 6. Finalizar negociación */}
+            {/* 7. Finalizar negociación */}
             <FinalizarNegociacion
               negociacionState={negociacionState}
               calculoNegociado={calculoNegociado}
@@ -384,6 +393,7 @@ export function NegociacionClient({
               studioSlug={studioSlug}
               promiseId={promiseId}
               cotizacionId={cotizacionId}
+              condicionEsPrivada={condicionComercialCompleta?.is_public === false}
             />
           </>
         </div>

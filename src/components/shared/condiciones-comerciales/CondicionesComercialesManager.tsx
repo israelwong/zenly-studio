@@ -80,6 +80,12 @@ interface CondicionesComercialesManagerProps {
   };
   onSelect?: (condicionId: string) => void; // Callback opcional para modo selección
   initialEditingId?: string | null; // ID de condición para abrir directamente en modo edición
+  /** Abrir directamente en modo creación (sin listado). Usado desde negociación. */
+  initialMode?: 'list' | 'create';
+  /** Por defecto para nueva condición (ej. false = privada en negociación). */
+  defaultIsPublic?: boolean;
+  /** Título del modal cuando se abre desde un contexto específico (ej. negociación). */
+  customTitle?: string;
 }
 
 interface SortableCondicionItemProps {
@@ -330,6 +336,9 @@ export function CondicionesComercialesManager({
   context,
   onSelect,
   initialEditingId,
+  initialMode = 'list',
+  defaultIsPublic = true,
+  customTitle,
 }: CondicionesComercialesManagerProps) {
   const [condiciones, setCondiciones] = useState<CondicionComercial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -503,6 +512,17 @@ export function CondicionesComercialesManager({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialEditingId, condiciones.length, loading]);
+
+  // Abrir directamente en modo creación (ej. desde negociación, condición privada)
+  useEffect(() => {
+    if (isOpen && initialMode === 'create' && !showForm) {
+      const isPublic = defaultIsPublic ?? false;
+      setFormData((prev) => ({ ...prev, is_public: isPublic }));
+      setInitialFormData((prev) => ({ ...prev, is_public: isPublic }));
+      setShowForm(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialMode, defaultIsPublic]);
 
   // Escuchar actualizaciones de configuración de precios
   useConfiguracionPreciosUpdateListener(studioSlug, (config?: ConfiguracionPreciosUpdateEventDetail) => {
@@ -1131,8 +1151,8 @@ export function CondicionesComercialesManager({
       <ZenDialog
         isOpen={isOpen}
         onClose={handleClose}
-        title="Gestionar Condiciones Comerciales"
-        description="Crea y gestiona condiciones comerciales reutilizables"
+        title={customTitle ?? 'Gestionar Condiciones Comerciales'}
+        description={customTitle ? 'Crea una condición privada para esta negociación' : 'Crea y gestiona condiciones comerciales reutilizables'}
         maxWidth="xl"
         zIndex={10090}
         {...(showForm
@@ -1142,7 +1162,7 @@ export function CondicionesComercialesManager({
               saveLabel: editingId ? 'Actualizar Condición' : 'Crear Condición',
               cancelLabel: 'Cancelar',
               isLoading: false,
-              saveDisabled: false,
+              saveDisabled: !!formErrors.nombre,
               footerLeftContent: editingId ? (
                 <ZenButton
                   type="button"
@@ -1272,7 +1292,7 @@ export function CondicionesComercialesManager({
               }}
               required
               placeholder="Ej: Pago de contado 10%"
-              error={formErrors.nombre?.[0]}
+              error={formErrors.nombre?.[0]?.includes('Ya existe') ? 'Ya tienes una condición con este nombre en tu catálogo' : formErrors.nombre?.[0]}
             />
 
             <ZenTextarea
@@ -1391,8 +1411,14 @@ export function CondicionesComercialesManager({
               onCheckedChange={(checked) => setFormData({ ...formData, is_public: checked })}
               disabled={formData.is_offer}
               label="Es pública"
-              description={formData.is_offer ? 'Las condiciones de oferta son siempre públicas' : formData.is_public ? 'Visible en el portal del cliente' : 'Solo visible para el estudio y en negociaciones directas'}
+              description={formData.is_offer ? 'Las condiciones de oferta son siempre públicas' : formData.is_public ? 'Visible en el portal del cliente' : (defaultIsPublic === false ? 'Esta condición será privada y solo visible para el estudio' : 'Solo visible para el estudio y en negociaciones directas')}
             />
+            {defaultIsPublic === false && !formData.is_public && !formData.is_offer && (
+              <p className="text-xs text-zinc-500 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                Esta condición será privada y solo visible para el estudio.
+              </p>
+            )}
 
             {formData.is_offer && (
               <div className="space-y-3 pt-4 border-t border-zinc-800">

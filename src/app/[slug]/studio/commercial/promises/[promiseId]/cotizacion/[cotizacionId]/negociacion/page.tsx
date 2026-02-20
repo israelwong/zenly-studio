@@ -5,6 +5,8 @@ import { NegociacionClient } from './components/NegociacionClient';
 import { redirect } from 'next/navigation';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 
+export type { NegociacionState } from './components/NegociacionClient';
+
 interface NegociacionPageProps {
   params: Promise<{
     slug: string;

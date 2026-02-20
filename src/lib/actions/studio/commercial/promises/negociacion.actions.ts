@@ -248,7 +248,7 @@ export async function crearVersionNegociada(
 
     const newOrder = (maxOrder?.order ?? -1) + 1;
 
-    // Transacci?n para crear nueva cotizaci?n en negociaci?n
+    // Clon exacto: nueva cotización en negociación; la original permanece intacta en pendiente (rollback)
     const nuevaVersion = await prisma.$transaction(async (tx) => {
       // 1. Crear nueva cotizaci?n con status 'negociacion' (no es revisi?n)
       const nuevaCotizacion = await tx.studio_cotizaciones.create({
@@ -367,12 +367,22 @@ export async function crearVersionNegociada(
       );
     }
 
+    // DTO con ancla y delta: negociacion_precio_original ya guardado en nuevaVersion
+    const ancla = nuevaVersion.negociacion_precio_original != null
+      ? Number(nuevaVersion.negociacion_precio_original)
+      : null;
+    const precioFinalDto = nuevaVersion.price != null ? Number(nuevaVersion.price) : null;
+    const delta = ancla != null && precioFinalDto != null ? ancla - precioFinalDto : null;
+
     return {
       success: true,
       data: {
         id: nuevaVersion.id,
         name: nuevaVersion.name,
-        evento_id: cotizacionOriginal.evento_id || undefined,
+        evento_id: cotizacionOriginal.evento_id ?? undefined,
+        negociacion_precio_original: ancla ?? undefined,
+        negociacion_precio_personalizado: precioFinalDto ?? undefined,
+        delta: delta ?? undefined,
       },
     };
   } catch (error) {
@@ -407,7 +417,7 @@ export async function aplicarCambiosNegociacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotizaci?n
+    // Obtener cotizaci?n (evento_id para revalidatePath; name para DTO)
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_id,
@@ -415,10 +425,13 @@ export async function aplicarCambiosNegociacion(
       },
       select: {
         id: true,
+        name: true,
         price: true,
         status: true,
         promise_id: true,
+        evento_id: true,
         negociacion_created_at: true,
+        negociacion_precio_original: true,
         cotizacion_items: {
           select: {
             id: true,
@@ -568,12 +581,29 @@ export async function aplicarCambiosNegociacion(
       );
     }
 
+    // Re-leer cotización para DTO con ancla y delta (valores ya persistidos)
+    const actualizada = await prisma.studio_cotizaciones.findUnique({
+      where: { id: validatedData.cotizacion_id },
+      select: {
+        negociacion_precio_original: true,
+        price: true,
+      },
+    });
+    const ancla = actualizada?.negociacion_precio_original != null
+      ? Number(actualizada.negociacion_precio_original)
+      : null;
+    const precioFinalDto = actualizada?.price != null ? Number(actualizada.price) : null;
+    const delta = ancla != null && precioFinalDto != null ? ancla - precioFinalDto : null;
+
     return {
       success: true,
       data: {
         id: cotizacion.id,
         name: cotizacion.name,
-        evento_id: cotizacion.evento_id || undefined,
+        evento_id: cotizacion.evento_id ?? undefined,
+        negociacion_precio_original: ancla ?? undefined,
+        negociacion_precio_personalizado: precioFinalDto ?? undefined,
+        delta: delta ?? undefined,
       },
     };
   } catch (error) {

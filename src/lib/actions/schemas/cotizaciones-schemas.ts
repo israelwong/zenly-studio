@@ -95,6 +95,12 @@ export interface CotizacionResponse {
     evento_id?: string;
     promise_id?: string;
     status?: string;
+    /** Ancla: precio original al entrar a negociación (inmutable) */
+    negociacion_precio_original?: number | null;
+    /** Precio final negociado (lo que paga el cliente) */
+    negociacion_precio_personalizado?: number | null;
+    /** Diferencia exacta para la UI: ancla - precio negociado */
+    delta?: number | null;
     cotizacion?: {
       id: string;
       name: string;
