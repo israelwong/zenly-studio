@@ -214,14 +214,14 @@ export function ZenDialog({
             {children}
           </ZenCardContent>
 
-          {/* Footer */}
+          {/* Footer - fijo abajo, no hace scroll con el content */}
           {(onSave || onCancel || showDeleteButton || footerLeftContent || footerRightContent) && (
             footerLeftContent && !onSave && !(showDeleteButton && onDelete && deleteOnRight) && !footerRightContent && (!onCancel || !cancelAlignRight) ? (
-              <div className="w-full px-6 py-4 border-t border-zinc-700">
+              <div className="w-full flex-shrink-0 px-6 py-4 border-t border-zinc-700 bg-zinc-900">
                 {footerLeftContent}
               </div>
             ) : (
-            <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-zinc-700">
+            <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-4 border-t border-zinc-700 bg-zinc-900">
               {/* Izquierda: footerLeftContent o Cancelar (salvo cancelAlignRight) */}
               <div className={cn("flex items-center gap-4", (footerLeftContent || (onCancel && !cancelAlignRight)) && "flex-1 min-w-0")}>
                 {footerLeftContent}

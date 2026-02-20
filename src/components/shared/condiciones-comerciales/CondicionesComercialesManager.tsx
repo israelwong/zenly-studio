@@ -1135,6 +1135,31 @@ export function CondicionesComercialesManager({
         description="Crea y gestiona condiciones comerciales reutilizables"
         maxWidth="xl"
         zIndex={10090}
+        {...(showForm
+          ? {
+              onCancel: handleClose,
+              onSave: () => document.getElementById('condiciones-comerciales-form')?.requestSubmit(),
+              saveLabel: editingId ? 'Actualizar Condición' : 'Crear Condición',
+              cancelLabel: 'Cancelar',
+              isLoading: false,
+              saveDisabled: false,
+              footerLeftContent: editingId ? (
+                <ZenButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400 hover:text-red-300 gap-1.5"
+                  onClick={() => {
+                    setPendingDeleteId(editingId);
+                    setShowConfirmDelete(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar
+                </ZenButton>
+              ) : undefined,
+            }
+          : {})}
       >
         {viewingOfferCondition ? (
           <div className="space-y-4">
@@ -1234,7 +1259,7 @@ export function CondicionesComercialesManager({
             </div>
           </div>
         ) : showForm ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form id="condiciones-comerciales-form" onSubmit={handleSubmit} className="space-y-4">
             <ZenInput
               label="Nombre de la condición"
               value={formData.name}
@@ -1447,48 +1472,6 @@ export function CondicionesComercialesManager({
                 )}
               </div>
             )}
-
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-800">
-              <div className="flex items-center min-h-8">
-                {editingId && (
-                  <ZenButton
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-400 hover:text-red-300 gap-1.5"
-                    onClick={() => {
-                      setPendingDeleteId(editingId);
-                      setShowConfirmDelete(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Eliminar
-                  </ZenButton>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <ZenButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (hasUnsavedChanges()) {
-                      setPendingClose(() => () => {
-                        resetFormState();
-                      });
-                      setShowConfirmClose(true);
-                    } else {
-                      resetFormState();
-                    }
-                  }}
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton type="submit" variant="primary" size="sm">
-                  {editingId ? 'Actualizar' : 'Crear'} Condición
-                </ZenButton>
-              </div>
-            </div>
           </form>
         ) : (
           <div className="space-y-4">

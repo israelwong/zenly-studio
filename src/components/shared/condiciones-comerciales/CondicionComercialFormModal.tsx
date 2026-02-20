@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Settings, Unlink, ExternalLink } from 'lucide-react';
+import { useState, useEffect, startTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { Unlink, ExternalLink, Search } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
@@ -69,7 +70,9 @@ export function CondicionComercialFormModal({
     offer_id: null as string | null,
   });
   const [ofertasParaVincular, setOfertasParaVincular] = useState<OfertaParaVincular[]>([]);
+  const [busquedaOfertas, setBusquedaOfertas] = useState('');
   const [cargandoOfertas, setCargandoOfertas] = useState(false);
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [maxDescuento, setMaxDescuento] = useState<number | null>(null);
@@ -181,6 +184,7 @@ export function CondicionComercialFormModal({
     setFormErrors({});
     setLoadedCondicion(null);
     setOfertasParaVincular([]);
+    setBusquedaOfertas('');
   }
 
   async function loadOfertasParaVincular() {
@@ -342,8 +346,7 @@ export function CondicionComercialFormModal({
             ? 'Condición comercial actualizada exitosamente'
             : 'Condición comercial creada exitosamente'
         );
-        
-        // Notificar al componente padre con los nuevos valores (solo en modo edición)
+        startTransition(() => router.refresh());
         if (isEditMode && onSuccess) {
           onSuccess({
             discount_percentage: result.data.discount_percentage,
@@ -352,7 +355,6 @@ export function CondicionComercialFormModal({
         } else if (!isEditMode && onSuccess) {
           onSuccess();
         }
-        
         resetAndClose();
       } else {
         if (typeof result.error === 'object') {
@@ -380,6 +382,19 @@ export function CondicionComercialFormModal({
     ? 'Modifica los detalles de la condición comercial'
     : (context ? `Condición especial vinculada a la oferta: ${context.offerName}` : 'Crea una nueva condición comercial');
 
+  const saveDisabled =
+    !formData.name ||
+    isSubmitting ||
+    (!!formData.discount_percentage &&
+      (() => {
+        const numValue = parseFloat(formData.discount_percentage);
+        return !isNaN(numValue) && maxDescuento !== null && numValue > maxDescuento;
+      })());
+
+  const handleSaveClick = () => {
+    document.getElementById('condicion-comercial-form-modal')?.requestSubmit();
+  };
+
   return (
     <>
       <ZenDialog
@@ -389,6 +404,12 @@ export function CondicionComercialFormModal({
         description={description}
         maxWidth="md"
         zIndex={10090}
+        onCancel={handleClose}
+        onSave={handleSaveClick}
+        saveLabel={isEditMode ? 'Guardar cambios' : 'Crear Condición'}
+        cancelLabel="Cancelar"
+        isLoading={isSubmitting}
+        saveDisabled={saveDisabled}
       >
         {isLoading ? (
           <div className="space-y-4 animate-pulse">
@@ -434,7 +455,11 @@ export function CondicionComercialFormModal({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            id="condicion-comercial-form-modal"
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
             <ZenInput
               label="Nombre de la condición"
               value={formData.name}
@@ -599,13 +624,20 @@ export function CondicionComercialFormModal({
               )}
             </div>
 
-            {/* Sección de Vínculos: lista de ofertas (vigentes y vencidas) con toggle Vincular / Desvincular */}
+            {/* Sección de Vínculos: buscador + lista de ofertas con toggle Vincular / Desvincular */}
             {(() => {
               const isOfferType = context?.type === 'offer' || (isEditMode && loadedCondicion && (loadedCondicion.type === 'offer' || !!loadedCondicion.offer_id));
               if (!isOfferType) return null;
 
               const currentOfferId = formData.offer_id ?? loadedCondicion?.offer_id ?? null;
               const isLinked = (offerId: string) => currentOfferId === offerId;
+              const q = busquedaOfertas.trim().toLowerCase();
+              const filtered = ofertasParaVincular.filter(
+                (o) => !q || o.name.toLowerCase().includes(q) || o.id === currentOfferId
+              );
+              const displayedOfertas = currentOfferId
+                ? [...filtered].sort((a, b) => (a.id === currentOfferId ? -1 : b.id === currentOfferId ? 1 : 0))
+                : filtered;
 
               return (
                 <div className="space-y-3 pt-4 border-t border-zinc-800">
@@ -616,8 +648,19 @@ export function CondicionComercialFormModal({
                   ) : ofertasParaVincular.length === 0 ? (
                     <div className="text-sm text-zinc-400">No hay ofertas en este estudio.</div>
                   ) : (
-                    <ul className="space-y-2 max-h-48 overflow-y-auto">
-                      {ofertasParaVincular.map((o) => (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
+                        <ZenInput
+                          type="text"
+                          value={busquedaOfertas}
+                          onChange={(e) => setBusquedaOfertas(e.target.value)}
+                          placeholder="Buscar ofertas..."
+                          className="pl-8"
+                        />
+                      </div>
+                      <ul className="space-y-2 max-h-48 overflow-y-auto">
+                      {displayedOfertas.map((o) => (
                         <li
                           key={o.id}
                           className="p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 flex flex-wrap items-center justify-between gap-2"
@@ -640,7 +683,7 @@ export function CondicionComercialFormModal({
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="min-w-[8rem] h-7 justify-center gap-1 text-xs text-zinc-300 hover:text-amber-400 border-zinc-600"
+                                  className="min-w-[8rem] h-7 justify-center gap-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/40"
                                   onClick={(e) => {
                                     e.preventDefault();
                                     setShowDesvincularConfirm(true);
@@ -679,42 +722,14 @@ export function CondicionComercialFormModal({
                         </li>
                       ))}
                     </ul>
+                    {displayedOfertas.length === 0 && (
+                      <p className="text-sm text-zinc-500">Ninguna oferta coincide con la búsqueda. La oferta vinculada siempre se muestra arriba.</p>
+                    )}
+                    </>
                   )}
                 </div>
               );
             })()}
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton
-                type="submit"
-                variant="primary"
-                loading={isSubmitting}
-                disabled={
-                  !formData.name ||
-                  isSubmitting ||
-                  (formData.discount_percentage
-                    ? (() => {
-                        const numValue = parseFloat(formData.discount_percentage);
-                        return (
-                          !isNaN(numValue) &&
-                          maxDescuento !== null &&
-                          numValue > maxDescuento
-                        );
-                      })()
-                    : false)
-                }
-              >
-                {isEditMode ? 'Guardar cambios' : 'Crear Condición'}
-              </ZenButton>
-            </div>
           </form>
         )}
       </ZenDialog>
@@ -740,6 +755,7 @@ export function CondicionComercialFormModal({
           setShowDesvincularConfirm(false);
           if (result.success) {
             toast.success('Oferta desvinculada. La condición pasó a tipo estándar.');
+            startTransition(() => router.refresh());
             await loadCondicion();
             onSuccess?.();
           } else {

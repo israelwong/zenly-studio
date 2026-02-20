@@ -143,7 +143,19 @@ async function _obtenerCondicionesComercialesPublicasInternal(
 
     const now = new Date();
 
-    // Públicas y activas; si type 'offer', solo si la oferta vinculada está viva (activa y en fecha)
+    const ofertaViva = {
+      is_active: true,
+      OR: [
+        { is_permanent: true },
+        {
+          has_date_range: true,
+          start_date: { lte: now },
+          end_date: { gte: now },
+        },
+      ],
+    } as const;
+
+    // Públicas y activas; si type 'offer', solo si la oferta asociada (vía offer_id o como business_term) está viva
     const condiciones = await prisma.studio_condiciones_comerciales.findMany({
       where: {
         studio_id: studio.id,
@@ -153,17 +165,10 @@ async function _obtenerCondicionesComercialesPublicasInternal(
           { type: 'standard' },
           {
             type: 'offer',
-            exclusive_offer: {
-              is_active: true,
-              OR: [
-                { is_permanent: true },
-                {
-                  has_date_range: true,
-                  start_date: { lte: now },
-                  end_date: { gte: now },
-                },
-              ],
-            },
+            OR: [
+              { exclusive_offer: ofertaViva },
+              { used_by_offers: { some: ofertaViva } },
+            ],
           },
         ],
       },

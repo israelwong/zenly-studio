@@ -15,6 +15,7 @@
 4. [Checklist de Control](#4-checklist-de-control)
 5. [Rutas Públicas de Promesas](#5-rutas-públicas-de-promesas)
 6. [Atomic Seeding (Carga Atómica)](#6-atomic-seeding-carga-atómica)
+7. [Condiciones Comerciales (Gestión Studio)](#7-condiciones-comerciales-gestión-studio)
 
 ---
 
@@ -619,5 +620,75 @@ Validaciones Estado:   2/2   (100%) ✅
 
 ---
 
-**Última actualización:** 27 de enero de 2025  
+## 7. Condiciones Comerciales (Gestión Studio)
+
+**Estado:** ✅ **COMPLETADO** (19/02/2026)
+
+**Ámbito:** Modal y lista de condiciones comerciales en configuración del studio (Manager), ofertas vinculadas, DnD y eliminación.
+
+### 7.1 Ofertas vinculadas (vigentes y vencidas)
+
+| Criterio | Estado |
+|----------|--------|
+| Incluir oferta actualmente vinculada en lista al editar aunque esté inactiva/vencida | ✅ |
+| `obtenerOfertasParaVincular`: OR `is_active: true` \| `id = offerIdVinculadaActual` | ✅ |
+| `isVigente` considera `is_active` además de fechas | ✅ |
+| Botones Vincular/Desvincular y "Gestionar oferta" (texto explícito, mismo tamaño) | ✅ |
+
+### 7.2 Orden y drag & drop
+
+| Criterio | Estado |
+|----------|--------|
+| Orden por campo `order` (asc); tipo estándar primero, luego oferta | ✅ |
+| Actualización optimista al soltar: estado local antes del API para evitar rebote | ✅ |
+| Estilo al arrastrar: z-index, sombra, ring; sin `scale` que interfiera con transform | ✅ |
+
+### 7.3 UI del card y del modal
+
+| Criterio | Estado |
+|----------|--------|
+| Badges (Normal/Oferta, Pública/Privada) en misma fila que nombre; nombre primero, luego badges | ✅ |
+| Divisor vertical entre badges y switch | ✅ |
+| Título con ellipsis y `title` para nombre largo | ✅ |
+| Botón Eliminar solo en pie del modal (no en card); alineado a la izquierda | ✅ |
+| Pie del modal: borde superior, botón Eliminar en rojo; Cancelar y Actualizar a la derecha | ✅ |
+| Botones del pie con `size="sm"` y misma altura | ✅ |
+
+### 7.4 Eliminar con cotizaciones asociadas
+
+| Criterio | Estado |
+|----------|--------|
+| Si tiene cotizaciones: segundo confirm "Desvincular y eliminar" | ✅ |
+| Action `eliminarCondicionComercialDesvinculando`: pone `condiciones_comerciales_id = null` en cotizaciones, luego elimina condición | ✅ |
+| Fix: no limpiar `pendingDeleteId` en `finally` al abrir segundo modal | ✅ |
+
+### 7.5 Modal CondicionComercialFormModal (Fase 3)
+
+| Criterio | Estado |
+|----------|--------|
+| Buscador de ofertas con `obtenerOfertasParaVincular` | ✅ |
+| Filtro por texto mantiene oferta vinculada en lista (aunque vencida/inactiva); oferta vinculada ordenada primero | ✅ |
+| Vincular/Desvincular reflejan estado en tiempo real; "Gestionar oferta" link estable a manager de ofertas | ✅ |
+| Botón Desvincular estilo destructivo (rojo) | ✅ |
+| `router.refresh()` en `startTransition` al guardar y al desvincular (Atomic Seeding / portal) | ✅ |
+| Footer fijo: uso de ZenDialog `onSave`/`onCancel`; solo el content hace scroll | ✅ |
+
+### 7.6 Modal CondicionesComercialesManager y ZenDialog
+
+| Criterio | Estado |
+|----------|--------|
+| Manager: footer (Eliminar, Cancelar, Crear/Actualizar) fuera del form; uso de ZenDialog `onSave`, `onCancel`, `footerLeftContent` cuando `showForm` | ✅ |
+| Form con `id="condiciones-comerciales-form"` para `requestSubmit()` desde footer | ✅ |
+| ZenDialog: footer con `flex-shrink-0` y `bg-zinc-900` para que no haga scroll con el content | ✅ |
+| Estructura modal: header fijo → content scrollable → footer fijo | ✅ |
+
+**Archivos clave:**
+- `src/lib/actions/studio/config/condiciones-comerciales.actions.ts` – `obtenerOfertasParaVincular`, `eliminarCondicionComercialDesvinculando`
+- `src/components/shared/condiciones-comerciales/CondicionesComercialesManager.tsx` – lista DnD, modal con footer fijo vía ZenDialog
+- `src/components/shared/condiciones-comerciales/CondicionComercialFormModal.tsx` – buscador ofertas, footer fijo, router.refresh
+- `src/components/ui/zen/modals/ZenDialog.tsx` – footer con flex-shrink-0 y bg-zinc-900
+
+---
+
+**Última actualización:** 19 de febrero de 2026  
 **Mantenido por:** Equipo ZEN Platform
