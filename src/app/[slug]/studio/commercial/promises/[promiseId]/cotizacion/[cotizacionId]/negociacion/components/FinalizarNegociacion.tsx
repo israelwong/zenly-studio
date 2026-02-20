@@ -213,7 +213,7 @@ export function FinalizarNegociacion({
               Visible para el cliente
             </label>
             <p className="text-xs text-zinc-500 mt-0.5">
-              La cotización será visible para el prospecto en su portal
+              La cotización negociada será visible por el prospecto para revisión
             </p>
           </div>
           <ZenSwitch

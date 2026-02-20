@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
-import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
+import { ZenButton, SeparadorZen } from '@/components/ui/zen';
 import { PublicServiciosTree } from '@/components/promise/PublicServiciosTree';
 import { PrecioDesglose } from '@/components/promise/shared/PrecioDesglose';
 import { AutorizarCotizacionModal } from '@/components/promise/AutorizarCotizacionModal';
@@ -220,27 +220,11 @@ export function NegociacionView({
 
           <SeparadorZen />
 
-          {/* Condición comercial definida */}
+          {/* Condición comercial: solo desglose de precio */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-white mb-4">
               Condiciones Comerciales
             </h3>
-            <div className="bg-blue-950/30 rounded-lg p-4 border border-blue-500/30">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h4 className="text-base font-semibold text-white mb-1">
-                    {condicionesComerciales.name}
-                  </h4>
-                  {condicionesComerciales.description && (
-                    <p className="text-sm text-zinc-400">
-                      {condicionesComerciales.description}
-                    </p>
-                  )}
-                </div>
-                <ZenBadge variant="secondary" className="text-xs px-2 py-0.5 rounded-full">Definida</ZenBadge>
-              </div>
-            </div>
-
             {/* Cálculo de precio con la condición comercial */}
             <PrecioDesglose
               precioBase={precioCalculado.precioOriginal}
