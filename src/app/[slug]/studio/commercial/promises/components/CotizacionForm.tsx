@@ -1729,63 +1729,61 @@ export function CotizacionForm({
               </div>
             </div>
 
-            {/* 2 KPIs: Utilidad sin descuento (izq) | Utilidad con descuento (der) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad sin descuento</span>
-                <span
-                  className={`mt-1.5 text-xl font-semibold tabular-nums ${
-                    calculoPrecio.utilidadSinDescuento >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {formatearMoneda(calculoPrecio.utilidadSinDescuento)}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-0.5">Utilidad máxima permitida (sin ajustes)</p>
-              </div>
-              <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
-                  Utilidad con descuento
-                </span>
-                {(() => {
-                  const precioNum = precioPersonalizado !== '' ? Number(precioPersonalizado) || 0 : 0;
-                  const subtotal = calculoPrecio.subtotal;
-                  const descuentoRealPercent = subtotal > 0 && precioNum > 0 && precioNum < subtotal
-                    ? ((subtotal - precioNum) / subtotal) * 100
-                    : 0;
-                  const maxDiscountPercent = configuracionPrecios
-                    ? (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100)
-                    : 10;
-                  const excedeDescuento = precioNum > 0 && descuentoRealPercent > maxDiscountPercent;
-                  const comisionRatio = configuracionPrecios
-                    ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
-                    : 0.1;
-                  const precioEnPiso = subtotal * (1 - maxDiscountPercent / 100);
-                  const comisionEnPiso = precioEnPiso * comisionRatio;
-                  const utilidadEnPiso = precioEnPiso - calculoPrecio.totalCosto - calculoPrecio.totalGasto - comisionEnPiso;
-                  const sacrificioExtra = excedeDescuento
-                    ? utilidadEnPiso - calculoPrecio.utilidadNeta
-                    : 0;
-                  const showAlert = excedeDescuento;
-                  const colorClass = showAlert ? 'text-red-500' : calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-rose-400';
-                  return (
-                    <>
-                      <span className={`mt-1.5 text-xl font-semibold tabular-nums flex items-center gap-1.5 ${colorClass}`}>
-                        {formatearMoneda(calculoPrecio.utilidadNeta)}
-                        {showAlert && <AlertTriangle className="w-5 h-5 shrink-0 text-red-500" aria-hidden />}
-                      </span>
-                      {showAlert && sacrificioExtra > 0 && (
-                        <p className="text-xs text-red-400/90 mt-1">
-                          Estás {(descuentoRealPercent - maxDiscountPercent).toFixed(0)}% por debajo del margen sugerido. Sacrificio extra: {formatearMoneda(sacrificioExtra)}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-zinc-500 mt-0.5">
-                        {precioNum > 0 ? `Según precio ingresado (${formatearMoneda(precioNum)})` : 'Basado en el precio de catálogo'}
-                      </p>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+            {/* Simulador: Utilidad sin descuento (escenario A) | Utilidad con descuento comercial (escenario B) */}
+            {(() => {
+              const precioNum = precioPersonalizado !== '' ? Number(precioPersonalizado) || 0 : 0;
+              const subtotal = calculoPrecio.subtotal;
+              const base = precioNum > 0 ? precioNum : subtotal;
+              const comisionRatio = configuracionPrecios
+                ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
+                : 0.05;
+              // N% del simulador = sobreprecio de la configuración del estudio (descuento máximo sugerido)
+              const descuentoComercialPercent = configuracionPrecios
+                ? (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100)
+                : (condicionComercialPreAutorizada?.discount_percentage ?? 10);
+
+              // Escenario A: utilidad sin descuento comercial (base - costos - gastos - comisión sobre base)
+              const utilidadSinDescuentoSim = base - calculoPrecio.totalCosto - calculoPrecio.totalGasto - (base * comisionRatio);
+
+              // Escenario B: ingreso proyectado si el cliente aplica el descuento comercial
+              const ingresoProyectado = base * (1 - descuentoComercialPercent / 100);
+              const utilidadConDescuentoSim = ingresoProyectado - calculoPrecio.totalCosto - calculoPrecio.totalGasto - (ingresoProyectado * comisionRatio);
+              const margenConDescuento = ingresoProyectado > 0 ? (utilidadConDescuentoSim / ingresoProyectado) * 100 : 0;
+              const margenCritico = 15;
+              const alertaMargenBajo = margenConDescuento < margenCritico;
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad sin descuento</span>
+                    <span
+                      className={`mt-1.5 text-xl font-semibold tabular-nums ${
+                        utilidadSinDescuentoSim >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {formatearMoneda(utilidadSinDescuentoSim)}
+                    </span>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      {precioNum > 0 ? `Según precio ingresado (${formatearMoneda(base)})` : 'Basado en el precio de catálogo'}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad con descuento</span>
+                    <span
+                      className={`mt-1.5 text-xl font-semibold tabular-nums flex items-center gap-1.5 ${
+                        alertaMargenBajo ? 'text-red-500' : utilidadConDescuentoSim >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {formatearMoneda(utilidadConDescuentoSim)}
+                      {alertaMargenBajo && <AlertTriangle className="w-5 h-5 shrink-0 text-red-500" aria-hidden />}
+                    </span>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      Si el cliente aplica el {descuentoComercialPercent}% de descuento comercial, tu utilidad final será la mostrada arriba
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Desglose: construcción de precio (para revisar números) */}
             <div className="border-t border-zinc-700 pt-3">
