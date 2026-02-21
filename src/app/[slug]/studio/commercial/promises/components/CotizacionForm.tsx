@@ -364,7 +364,7 @@ export function CotizacionForm({
           // Pre-poblar items desde la original, combinando con initialItems
           const revisionItems: { [id: string]: number } = {};
           if (originalData.items) {
-            originalData.items.forEach((item: { item_id: string; quantity: number }) => {
+            originalData.items.forEach((item: { item_id: string | null; quantity: number }) => {
               if (item.item_id) {
                 revisionItems[item.item_id] = item.quantity;
               }
@@ -547,18 +547,21 @@ export function CotizacionForm({
     return resumen;
   }, [catalogoFiltrado, items, customItems]);
 
-  // Estado para el cálculo de precios
+  // Estado para el cálculo de precios (driver: Precio Personalizado cuando existe)
   const [calculoPrecio, setCalculoPrecio] = useState({
     subtotal: 0,
     totalCosto: 0,
     totalGasto: 0,
     total: 0,
     utilidadNeta: 0,
-    utilidadNetaCalculada: 0,
-    diferenciaPrecio: 0
+    utilidadSinDescuento: 0,
+    montoComision: 0,
+    margenPorcentaje: 0,
+    diferenciaPrecio: 0,
+    descuentoPorcentaje: 0,
   });
 
-  // Items de la cotización para el desglose
+  // Items de la cotización para el desglose (cantidadEfectiva = ej. horas para billing HOUR)
   const [itemsParaDesglose, setItemsParaDesglose] = useState<Array<{
     id: string;
     nombre: string;
@@ -566,6 +569,7 @@ export function CotizacionForm({
     gasto: number;
     tipo_utilidad: 'service' | 'product';
     cantidad: number;
+    cantidadEfectiva?: number;
   }>>([]);
 
   // Cálculo dinámico del precio usando useEffect
@@ -577,8 +581,11 @@ export function CotizacionForm({
         totalGasto: 0,
         total: 0,
         utilidadNeta: 0,
-        utilidadNetaCalculada: 0,
-        diferenciaPrecio: 0
+        utilidadSinDescuento: 0,
+        montoComision: 0,
+        margenPorcentaje: 0,
+        diferenciaPrecio: 0,
+        descuentoPorcentaje: 0,
       });
       return;
     }
@@ -619,8 +626,11 @@ export function CotizacionForm({
         totalGasto: 0,
         total: 0,
         utilidadNeta: 0,
-        utilidadNetaCalculada: 0,
-        diferenciaPrecio: 0
+        utilidadSinDescuento: 0,
+        montoComision: 0,
+        margenPorcentaje: 0,
+        diferenciaPrecio: 0,
+        descuentoPorcentaje: 0,
       });
       setItemsParaDesglose([]);
       return;
@@ -630,58 +640,88 @@ export function CotizacionForm({
     let totalCosto = 0;
     let totalGasto = 0;
 
+    const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
+
+    // --- AUDITORÍA: Log de configuración global ---
+    console.group('[Auditoría] Configuración de precios');
+    console.log('Comisión %:', configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta : configuracionPrecios.comision_venta * 100);
+    console.log('Sobreprecio %:', configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100);
+    console.log('Utilidad servicio:', configuracionPrecios.utilidad_servicio, '| producto:', configuracionPrecios.utilidad_producto);
+    console.log('durationHours (para cantidad efectiva):', durationHours, '| safeDurationHours:', safeDurationHours);
+    console.groupEnd();
+
+    // --- AUDITORÍA: Log de ítems seleccionados (catálogo) ---
+    console.group('Auditoría de Ítems Seleccionados');
     serviciosSeleccionados.forEach(s => {
-      // Obtener billing_type del servicio (default: SERVICE para compatibilidad)
       const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-
-      // Calcular cantidad efectiva usando calcularCantidadEfectiva
-      // Usar mínimo 1 hora si durationHours es null o 0 para evitar precios en cero
-      const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
-      const cantidadEfectiva = calcularCantidadEfectiva(
-        billingType,
-        s.cantidad,
-        safeDurationHours
-      );
-
-      subtotal += (s.precioUnitario || 0) * cantidadEfectiva;
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+      const r = s.resultadoPrecio;
+      const subtotalItem = (s.precioUnitario || 0) * cantidadEfectiva;
+      console.group(`📦 ${s.nombre} (cant: ${s.cantidad}, cantEfectiva: ${cantidadEfectiva}, billing: ${billingType})`);
+      console.log('Costo unitario:', s.costo ?? 0, '| Gasto unitario:', s.gasto ?? 0);
+      console.log('calcularPrecio() → Precio Base:', r.precio_base, '| Sobreprecio monto:', r.monto_sobreprecio, '| Precio Final:', r.precio_final);
+      console.log('Subtotal ítem (precio_final × cantEfectiva):', r.precio_final, '×', cantidadEfectiva, '=', subtotalItem);
+      console.groupEnd();
+      subtotal += subtotalItem;
       totalCosto += (s.costo || 0) * cantidadEfectiva;
       totalGasto += (s.gasto || 0) * cantidadEfectiva;
     });
 
-    // Agregar items personalizados al cálculo
-    const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
+    // --- AUDITORÍA: Log de ítems personalizados ---
     customItems.forEach(customItem => {
-      const cantidadEfectiva = calcularCantidadEfectiva(
-        customItem.billing_type,
-        customItem.quantity,
-        safeDurationHours
-      );
-      subtotal += customItem.unit_price * cantidadEfectiva;
+      const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+      const subtotalItem = customItem.unit_price * cantidadEfectiva;
+      console.group(`📦 [Custom] ${customItem.name} (cant: ${customItem.quantity}, cantEfectiva: ${cantidadEfectiva})`);
+      console.log('Costo unitario:', customItem.cost ?? 0, '| Gasto unitario:', customItem.expense ?? 0);
+      console.log('Precio unitario (ya calculado):', customItem.unit_price);
+      console.log('Subtotal ítem:', customItem.unit_price, '×', cantidadEfectiva, '=', subtotalItem);
+      console.groupEnd();
+      subtotal += subtotalItem;
       totalCosto += (customItem.cost || 0) * cantidadEfectiva;
       totalGasto += (customItem.expense || 0) * cantidadEfectiva;
     });
 
+    // --- AUDITORÍA: Acumuladores del formulario ---
+    console.group('[Auditoría] Acumuladores (Precio Calculado arriba)');
+    console.log('subtotal (Precio Calculado):', subtotal);
+    console.log('totalCosto:', totalCosto, '| totalGasto:', totalGasto);
+    console.groupEnd();
+
     const precioPersonalizadoNum = precioPersonalizado === '' ? 0 : Number(precioPersonalizado) || 0;
-    const utilidadNetaCalculada = subtotal - (totalCosto + totalGasto);
+    const precioCobrar = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
+    const comisionRatio = configuracionPrecios.comision_venta > 1
+      ? configuracionPrecios.comision_venta / 100
+      : configuracionPrecios.comision_venta;
+    const montoComision = precioCobrar * comisionRatio;
+    const utilidadNeta = precioCobrar - totalCosto - totalGasto - montoComision;
+    const montoComisionSinDescuento = subtotal * comisionRatio;
+    const utilidadSinDescuento = subtotal - totalCosto - totalGasto - montoComisionSinDescuento;
+    const margenPorcentaje = precioCobrar > 0 ? (utilidadNeta / precioCobrar) * 100 : 0;
     const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotal : 0;
-    const total = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
-    const utilidadNeta = total - (totalCosto + totalGasto);
+    const descuentoPorcentaje = subtotal > 0 && precioPersonalizadoNum > 0
+      ? ((precioPersonalizadoNum - subtotal) / subtotal) * 100
+      : 0;
 
     setCalculoPrecio({
       subtotal: Number(subtotal.toFixed(2)) || 0,
       totalCosto: Number(totalCosto.toFixed(2)) || 0,
       totalGasto: Number(totalGasto.toFixed(2)) || 0,
-      total: Number(total.toFixed(2)) || 0,
+      total: Number(precioCobrar.toFixed(2)) || 0,
       utilidadNeta: Number(utilidadNeta.toFixed(2)) || 0,
-      utilidadNetaCalculada: Number(utilidadNetaCalculada.toFixed(2)) || 0,
-      diferenciaPrecio: Number(diferenciaPrecio.toFixed(2)) || 0
+      utilidadSinDescuento: Number(utilidadSinDescuento.toFixed(2)) || 0,
+      montoComision: Number(montoComision.toFixed(2)) || 0,
+      margenPorcentaje: Number(margenPorcentaje.toFixed(1)) || 0,
+      diferenciaPrecio: Number(diferenciaPrecio.toFixed(2)) || 0,
+      descuentoPorcentaje: Number(descuentoPorcentaje.toFixed(1)) || 0,
     });
 
-    // Preparar items para el desglose de la cotización (incluyendo personalizados)
+    // Preparar items para el desglose con cantidad efectiva (misma lógica que acumuladores)
     const itemsDesglose = [
       ...serviciosSeleccionados
         .filter((s): s is NonNullable<typeof s> => s !== null)
         .map(s => {
+          const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+          const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
           const tipoUtilidad: 'service' | 'product' = s.tipo_utilidad === 'service' ? 'service' : 'product';
           return {
             id: s.id,
@@ -690,18 +730,40 @@ export function CotizacionForm({
             gasto: s.gasto || 0,
             tipo_utilidad: tipoUtilidad,
             cantidad: s.cantidad,
+            cantidadEfectiva,
           };
         }),
-      // Agregar items personalizados al desglose
-      ...customItems.map(customItem => ({
-        id: `custom-${customItem.name}`,
-        nombre: customItem.name,
-        costo: customItem.cost || 0,
-        gasto: customItem.expense || 0,
-        tipo_utilidad: customItem.tipoUtilidad === 'servicio' ? 'service' : 'product',
-        cantidad: customItem.quantity,
-      })),
+      ...customItems.map(customItem => {
+        const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+        return {
+          id: `custom-${customItem.name}`,
+          nombre: customItem.name,
+          costo: customItem.cost || 0,
+          gasto: customItem.expense || 0,
+          tipo_utilidad: (customItem.tipoUtilidad === 'servicio' ? 'service' : 'product') as 'service' | 'product',
+          cantidad: customItem.quantity,
+          cantidadEfectiva,
+        };
+      }),
     ];
+
+    // --- AUDITORÍA: Comparativa (Desglose ahora usa cantidadEfectiva como el formulario) ---
+    const qtyDesglose = (item: typeof itemsDesglose[0]) => item.cantidadEfectiva ?? item.cantidad;
+    let desglosePrecioBaseTotal = 0;
+    let desgloseSobreprecioTotal = 0;
+    itemsDesglose.forEach(item => {
+      const tipoUtilidad = item.tipo_utilidad === 'service' ? 'servicio' : 'producto';
+      const res = calcularPrecio(item.costo, item.gasto, tipoUtilidad, configuracionPrecios);
+      const mult = qtyDesglose(item);
+      desglosePrecioBaseTotal += res.precio_base * mult;
+      desgloseSobreprecioTotal += res.monto_sobreprecio * mult;
+    });
+    const desglosePrecioCalculado = desglosePrecioBaseTotal + desgloseSobreprecioTotal;
+    console.group('[Auditoría] Comparativa Final (Desglose con cantidad efectiva)');
+    console.log('Formulario → subtotal Precio Calculado:', subtotal);
+    console.log('Desglose   → precioBase + sobreprecio:', desglosePrecioCalculado);
+    console.log('Diferencia:', subtotal - desglosePrecioCalculado);
+    console.groupEnd();
 
     setItemsParaDesglose(itemsDesglose as Array<{
       id: string;
@@ -710,6 +772,7 @@ export function CotizacionForm({
       gasto: number;
       tipo_utilidad: 'service' | 'product';
       cantidad: number;
+      cantidadEfectiva?: number;
     }>);
   }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems]);
 
@@ -837,11 +900,13 @@ export function CotizacionForm({
           }
 
           // Eliminar override si existía (ya está en catálogo global)
-          setItemOverrides(prev => {
-            const updated = new Map(prev);
-            updated.delete(data.id);
-            return updated;
-          });
+          if (data.id) {
+            setItemOverrides(prev => {
+              const updated = new Map(prev);
+              updated.delete(data.id!);
+              return updated;
+            });
+          }
         } else {
           // Modo snapshot: convertir item del catálogo a custom item
           // 1. Obtener cantidad actual antes de remover
@@ -883,21 +948,25 @@ export function CotizacionForm({
           };
 
           // 5. Remover item del catálogo de la selección
-          setItems(prev => {
-            const updated = { ...prev };
-            delete updated[data.id];
-            return updated;
-          });
+          if (data.id) {
+            setItems(prev => {
+              const updated = { ...prev };
+              delete updated[data.id!];
+              return updated;
+            });
+          }
 
           // 6. Agregar como custom item
           setCustomItems(prev => [...prev, customItemData]);
 
           // 7. Eliminar override si existía (ya no es necesario)
-          setItemOverrides(prev => {
-            const updated = new Map(prev);
-            updated.delete(data.id);
-            return updated;
-          });
+          if (data.id) {
+            setItemOverrides(prev => {
+              const updated = new Map(prev);
+              updated.delete(data.id!);
+              return updated;
+            });
+          }
 
           toast.success('Item convertido a personalizado. Los cambios solo afectan esta cotización.');
         }
@@ -1228,7 +1297,7 @@ export function CotizacionForm({
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
           ),
           customItems: customItems,
-          itemOverrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
+          itemOverrides: Object.keys(overridesObj).length > 0 ? overridesObj : {},
           event_duration: durationHours && durationHours > 0 ? durationHours : null,
         });
 
@@ -1257,7 +1326,7 @@ export function CotizacionForm({
             router.push(redirectOnSuccess);
           } else if (result.data?.promise_id) {
             // Redirigir según el estado de la cotización
-            const status = result.data.status || cotizacionData?.status || 'pendiente';
+            const status = result.data.status || 'pendiente';
             if (status === 'negociacion') {
               router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cotizacion/${result.data.id}/negociacion`);
             } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
@@ -1633,108 +1702,151 @@ export function CotizacionForm({
             />
           </div>
 
-          {/* Resumen Financiero */}
+          {/* Cálculo Financiero — 3 columnas (homologado con Negociación) */}
           <div className="z-10">
             <h3 className="text-lg font-semibold text-white mb-4">
               Cálculo Financiero
             </h3>
-            <div className="bg-zinc-800/50 rounded-lg p-4 space-y-4">
-              {/* Precio calculado y Precio personalizado en 2 columnas */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Precio calculado */}
-                <div>
-                  <label className="text-xs text-zinc-500 mb-1 block">Precio calculado</label>
-                  <ZenInput
-                    type="text"
-                    value={formatearMoneda(calculoPrecio.subtotal)}
-                    readOnly
-                    className="mt-0"
-                  />
-                </div>
 
-                {/* Precio personalizado */}
-                <div>
-                  <label className="text-xs text-zinc-500 mb-1 block">Precio personalizado</label>
-                  <ZenInput
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={precioPersonalizado}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      // Permitir vacío para borrar
-                      if (value === '') {
-                        setPrecioPersonalizado('');
+            {/* Precio calculado (items seleccionados) + Precio personalizado */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">Precio calculado</label>
+                <ZenInput
+                  type="text"
+                  value={formatearMoneda(calculoPrecio.subtotal)}
+                  readOnly
+                  disabled
+                  className="mt-0"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">Precio personalizado</label>
+                <ZenInput
+                  type="number"
+                  min={configuracionPrecios && calculoPrecio.subtotal > 0
+                    ? (calculoPrecio.subtotal * (1 - (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio / 100 : configuracionPrecios.sobreprecio))).toFixed(2)
+                    : '0'}
+                  step="0.01"
+                  value={precioPersonalizado}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setPrecioPersonalizado('');
+                      return;
+                    }
+                    const numValue = parseFloat(value);
+                    if (isNaN(numValue) || numValue < 0) return;
+                    if (configuracionPrecios && calculoPrecio.subtotal > 0) {
+                      const sobreprecioNorm = configuracionPrecios.sobreprecio > 1
+                        ? configuracionPrecios.sobreprecio / 100
+                        : configuracionPrecios.sobreprecio;
+                      const precioMinimo = calculoPrecio.subtotal * (1 - sobreprecioNorm);
+                      if (numValue < precioMinimo) {
+                        setPrecioPersonalizado(precioMinimo.toFixed(2));
                         return;
                       }
-                      // Convertir a número y validar que sea no negativo
-                      const numValue = parseFloat(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setPrecioPersonalizado(value);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      // Asegurar que el valor final sea válido
-                      const value = e.target.value;
-                      if (value !== '' && (isNaN(parseFloat(value)) || parseFloat(value) < 0)) {
-                        setPrecioPersonalizado('');
-                      }
-                    }}
-                    placeholder="0"
-                    className="mt-0"
-                  />
-                </div>
-              </div>
-
-              {/* Ganarás */}
-              <div>
-                <label className="text-sm font-semibold text-amber-500 mb-2 block">Ganancia bruta</label>
-                <div className={`text-2xl font-bold ${calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatearMoneda(calculoPrecio.utilidadNeta)}
-                </div>
-                {calculoPrecio.diferenciaPrecio !== 0 && (
-                  <div className="text-xs mt-2 text-zinc-400">
-                    <span className={calculoPrecio.diferenciaPrecio > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                      {calculoPrecio.diferenciaPrecio > 0 ? '+' : ''}{formatearMoneda(calculoPrecio.diferenciaPrecio)}
-                    </span>
-                    {' '}sobre la ganancia calculada
-                  </div>
-                )}
-              </div>
-
-              {/* Desglose colapsable */}
-              <div className="border-t border-zinc-700 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setSeccionesExpandidas(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has('desglose-financiero')) {
-                      newSet.delete('desglose-financiero');
-                    } else {
-                      newSet.add('desglose-financiero');
                     }
-                    return newSet;
-                  })}
-                  className="w-full flex items-center justify-between text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
+                    setPrecioPersonalizado(value);
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    if (value === '') return;
+                    const numValue = parseFloat(value);
+                    if (isNaN(numValue) || numValue < 0) {
+                      setPrecioPersonalizado('');
+                      return;
+                    }
+                    if (configuracionPrecios && calculoPrecio.subtotal > 0) {
+                      const sobreprecioNorm = configuracionPrecios.sobreprecio > 1
+                        ? configuracionPrecios.sobreprecio / 100
+                        : configuracionPrecios.sobreprecio;
+                      const precioMinimo = calculoPrecio.subtotal * (1 - sobreprecioNorm);
+                      if (numValue < precioMinimo) {
+                        setPrecioPersonalizado(precioMinimo.toFixed(2));
+                      }
+                    }
+                  }}
+                  placeholder="0"
+                  className="mt-0"
+                />
+              </div>
+            </div>
+
+            {/* 2 KPIs: Utilidad sin descuento | Utilidad con N% de descuento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad sin descuento</span>
+                <span
+                  className={`mt-1.5 text-xl font-semibold tabular-nums ${
+                    calculoPrecio.utilidadSinDescuento >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
                 >
-                  <span>Desglose de precio</span>
-                  {seccionesExpandidas.has('desglose-financiero') ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                </button>
-                {seccionesExpandidas.has('desglose-financiero') && itemsParaDesglose.length > 0 && configuracionPrecios && (
-                  <div className="mt-3">
+                  {formatearMoneda(calculoPrecio.utilidadSinDescuento)}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Al precio calculado (sin personalizar)</p>
+              </div>
+              <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
+                  Utilidad con precio personalizado
+                </span>
+                <span
+                  className={`mt-1.5 text-xl font-semibold tabular-nums ${
+                    calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {precioPersonalizado !== '' && Number(precioPersonalizado) > 0
+                    ? formatearMoneda(calculoPrecio.utilidadNeta)
+                    : '—'}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {configuracionPrecios
+                    ? `Descuento máx. ${(configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100).toFixed(0)}% (config.)`
+                    : 'Ingresa precio personalizado'}
+                </p>
+              </div>
+            </div>
+
+            {/* Desglose: construcción de precio (para revisar números) */}
+            <div className="border-t border-zinc-700 pt-3">
+              <button
+                type="button"
+                onClick={() => setSeccionesExpandidas(prev => {
+                  const newSet = new Set(prev);
+                  if (newSet.has('desglose-financiero')) {
+                    newSet.delete('desglose-financiero');
+                  } else {
+                    newSet.add('desglose-financiero');
+                  }
+                  return newSet;
+                })}
+                className="w-full flex items-center justify-between text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
+              >
+                <span>Desglose (construcción de precio)</span>
+                {seccionesExpandidas.has('desglose-financiero') ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              {seccionesExpandidas.has('desglose-financiero') && configuracionPrecios && (
+                <div className="mt-3 space-y-4">
+                  <div className="rounded-lg border border-zinc-700/30 bg-zinc-800/10 p-3 text-xs text-zinc-500">
+                    <span className="font-medium text-zinc-400">¿Cómo se calcula?</span>
+                    <p className="mt-1">
+                      Utilidad neta = Precio a cobrar − (Costos + Gastos + Comisión). La comisión se calcula sobre el precio que se va a cobrar (personalizado o calculado). No se aplica penalización por sobreprecio al bajar el precio.
+                    </p>
+                  </div>
+                  {itemsParaDesglose.length > 0 && (
                     <PrecioDesglosePaquete
                       items={itemsParaDesglose}
                       configuracion={configuracionPrecios}
                       precioPersonalizado={precioPersonalizado === '' ? undefined : Number(precioPersonalizado) || undefined}
                       showCard={false}
                     />
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1908,8 +2020,8 @@ export function CotizacionForm({
           onSave={handleSaveCustomItem}
           item={itemToEdit || undefined}
           studioSlug={studioSlug}
-          categoriaId={selectedCategoriaForItem || undefined}
-          preciosConfig={configuracionPrecios || undefined}
+          categoriaId={selectedCategoriaForItem ?? ''}
+          preciosConfig={configuracionPrecios ?? undefined}
           showOverlay={true}
           context="cotizaciones"
         />

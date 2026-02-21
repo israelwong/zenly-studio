@@ -10,6 +10,8 @@ interface ItemPaquete {
     gasto: number;
     tipo_utilidad: 'service' | 'product';
     cantidad: number;
+    /** Si se provee, se usa en lugar de cantidad para costos, gastos y precios (ej. horas efectivas en billing HOUR). */
+    cantidadEfectiva?: number;
 }
 
 interface PrecioDesglosePaqueteProps {
@@ -29,7 +31,10 @@ export function PrecioDesglosePaquete({
     precioPersonalizado,
     showCard = true 
 }: PrecioDesglosePaqueteProps) {
-    // Calcular cada item individualmente
+    // Cantidad a usar: cantidadEfectiva (ej. horas) si existe, sino cantidad (retrocompatible)
+    const qty = (item: ItemPaquete) => item.cantidadEfectiva ?? item.cantidad;
+
+    // Calcular cada item individualmente (costos/gastos/precios × cantidad efectiva)
     const itemsCalculados = items.map(item => {
         const tipoUtilidad = item.tipo_utilidad === 'service' ? 'servicio' : 'producto';
         const resultado = calcularPrecio(
@@ -38,18 +43,18 @@ export function PrecioDesglosePaquete({
             tipoUtilidad,
             configuracion
         );
-        
+        const mult = qty(item);
         return {
             ...item,
             resultado,
             tipoUtilidad,
-            totalCosto: item.costo * item.cantidad,
-            totalGasto: item.gasto * item.cantidad,
-            totalPrecioFinal: resultado.precio_final * item.cantidad,
-            totalPrecioBase: resultado.precio_base * item.cantidad,
-            totalComision: resultado.monto_comision * item.cantidad,
-            totalSobreprecio: resultado.monto_sobreprecio * item.cantidad,
-            totalSubtotal: resultado.subtotal * item.cantidad,
+            totalCosto: item.costo * mult,
+            totalGasto: item.gasto * mult,
+            totalPrecioFinal: resultado.precio_final * mult,
+            totalPrecioBase: resultado.precio_base * mult,
+            totalComision: resultado.monto_comision * mult,
+            totalSobreprecio: resultado.monto_sobreprecio * mult,
+            totalSubtotal: resultado.subtotal * mult,
         };
     });
 
@@ -57,11 +62,13 @@ export function PrecioDesglosePaquete({
     const servicios = itemsCalculados.filter(item => item.tipoUtilidad === 'servicio');
     const productos = itemsCalculados.filter(item => item.tipoUtilidad === 'producto');
 
-    // Calcular totales por tipo
+    const multItem = (item: typeof itemsCalculados[0]) => item.cantidadEfectiva ?? item.cantidad;
+
+    // Calcular totales por tipo (utilidad_base × cantidad efectiva)
     const totalServicios = servicios.reduce((acc, item) => ({
         costo: acc.costo + item.totalCosto,
         gasto: acc.gasto + item.totalGasto,
-        utilidad: acc.utilidad + (item.resultado.utilidad_base * item.cantidad),
+        utilidad: acc.utilidad + (item.resultado.utilidad_base * multItem(item)),
         precioFinal: acc.precioFinal + item.totalPrecioFinal,
         precioBase: acc.precioBase + item.totalPrecioBase,
         comision: acc.comision + item.totalComision,
@@ -72,7 +79,7 @@ export function PrecioDesglosePaquete({
     const totalProductos = productos.reduce((acc, item) => ({
         costo: acc.costo + item.totalCosto,
         gasto: acc.gasto + item.totalGasto,
-        utilidad: acc.utilidad + (item.resultado.utilidad_base * item.cantidad),
+        utilidad: acc.utilidad + (item.resultado.utilidad_base * multItem(item)),
         precioFinal: acc.precioFinal + item.totalPrecioFinal,
         precioBase: acc.precioBase + item.totalPrecioBase,
         comision: acc.comision + item.totalComision,
@@ -84,18 +91,20 @@ export function PrecioDesglosePaquete({
     const totalCosto = totalServicios.costo + totalProductos.costo;
     const totalGasto = totalServicios.gasto + totalProductos.gasto;
     const totalUtilidad = totalServicios.utilidad + totalProductos.utilidad;
-    const precioCalculado = totalServicios.precioFinal + totalProductos.precioFinal;
     const subtotalCostos = totalCosto + totalGasto;
     const subtotal = totalServicios.subtotal + totalProductos.subtotal;
     const precioBaseTotal = totalServicios.precioBase + totalProductos.precioBase;
     const totalComision = totalServicios.comision + totalProductos.comision;
     const totalSobreprecio = totalServicios.sobreprecio + totalProductos.sobreprecio;
-    
+
+    // Precio calculado = Precio base + Sobreprecio (para que cuadre con las filas del desglose)
+    const precioCalculado = precioBaseTotal + totalSobreprecio;
+
     // Porcentajes de comisión y sobreprecio (usar el primero como referencia, todos deberían ser iguales)
     const porcentajeComision = itemsCalculados.length > 0 ? itemsCalculados[0].resultado.porcentaje_comision : 0;
     const porcentajeSobreprecio = itemsCalculados.length > 0 ? itemsCalculados[0].resultado.porcentaje_sobreprecio : 0;
-    
-    // Usar precio personalizado si existe, sino usar el calculado
+
+    // Usar precio personalizado si existe, sino usar el calculado (base + sobreprecio)
     const precioFinal = precioPersonalizado && precioPersonalizado > 0 ? precioPersonalizado : precioCalculado;
     
     // Si hay precio personalizado, recalcular la utilidad basada en ese precio
@@ -218,19 +227,11 @@ export function PrecioDesglosePaquete({
                     <span className="text-sm font-medium text-purple-400">+{formatearMoneda(totalSobreprecio)}</span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-zinc-600">
-                    <span className="text-base font-semibold text-zinc-200">Precio Final del Paquete</span>
+                    <span className="text-base font-semibold text-zinc-200">Precio calculado</span>
                     <span className="text-xl font-bold text-emerald-400">
                         {formatearMoneda(precioFinal)}
                     </span>
                 </div>
-                {precioPersonalizado && precioPersonalizado > 0 && precioPersonalizado !== precioCalculado && (
-                    <div className="text-xs text-zinc-500 mt-1">
-                        Precio calculado: {formatearMoneda(precioCalculado)} 
-                        {' '}(<span className={precioPersonalizado > precioCalculado ? 'text-emerald-400' : 'text-red-400'}>
-                            {precioPersonalizado > precioCalculado ? '+' : ''}{formatearMoneda(precioPersonalizado - precioCalculado)}
-                        </span>)
-                    </div>
-                )}
             </div>
         </div>
     );
