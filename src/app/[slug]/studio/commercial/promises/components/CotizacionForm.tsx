@@ -642,50 +642,20 @@ export function CotizacionForm({
 
     const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
 
-    // --- AUDITORÍA: Log de configuración global ---
-    console.group('[Auditoría] Configuración de precios');
-    console.log('Comisión %:', configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta : configuracionPrecios.comision_venta * 100);
-    console.log('Sobreprecio %:', configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100);
-    console.log('Utilidad servicio:', configuracionPrecios.utilidad_servicio, '| producto:', configuracionPrecios.utilidad_producto);
-    console.log('durationHours (para cantidad efectiva):', durationHours, '| safeDurationHours:', safeDurationHours);
-    console.groupEnd();
-
-    // --- AUDITORÍA: Log de ítems seleccionados (catálogo) ---
-    console.group('Auditoría de Ítems Seleccionados');
     serviciosSeleccionados.forEach(s => {
       const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
       const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
-      const r = s.resultadoPrecio;
-      const subtotalItem = (s.precioUnitario || 0) * cantidadEfectiva;
-      console.group(`📦 ${s.nombre} (cant: ${s.cantidad}, cantEfectiva: ${cantidadEfectiva}, billing: ${billingType})`);
-      console.log('Costo unitario:', s.costo ?? 0, '| Gasto unitario:', s.gasto ?? 0);
-      console.log('calcularPrecio() → Precio Base:', r.precio_base, '| Sobreprecio monto:', r.monto_sobreprecio, '| Precio Final:', r.precio_final);
-      console.log('Subtotal ítem (precio_final × cantEfectiva):', r.precio_final, '×', cantidadEfectiva, '=', subtotalItem);
-      console.groupEnd();
-      subtotal += subtotalItem;
+      subtotal += (s.precioUnitario || 0) * cantidadEfectiva;
       totalCosto += (s.costo || 0) * cantidadEfectiva;
       totalGasto += (s.gasto || 0) * cantidadEfectiva;
     });
 
-    // --- AUDITORÍA: Log de ítems personalizados ---
     customItems.forEach(customItem => {
       const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
-      const subtotalItem = customItem.unit_price * cantidadEfectiva;
-      console.group(`📦 [Custom] ${customItem.name} (cant: ${customItem.quantity}, cantEfectiva: ${cantidadEfectiva})`);
-      console.log('Costo unitario:', customItem.cost ?? 0, '| Gasto unitario:', customItem.expense ?? 0);
-      console.log('Precio unitario (ya calculado):', customItem.unit_price);
-      console.log('Subtotal ítem:', customItem.unit_price, '×', cantidadEfectiva, '=', subtotalItem);
-      console.groupEnd();
-      subtotal += subtotalItem;
+      subtotal += customItem.unit_price * cantidadEfectiva;
       totalCosto += (customItem.cost || 0) * cantidadEfectiva;
       totalGasto += (customItem.expense || 0) * cantidadEfectiva;
     });
-
-    // --- AUDITORÍA: Acumuladores del formulario ---
-    console.group('[Auditoría] Acumuladores (Precio Calculado arriba)');
-    console.log('subtotal (Precio Calculado):', subtotal);
-    console.log('totalCosto:', totalCosto, '| totalGasto:', totalGasto);
-    console.groupEnd();
 
     const precioPersonalizadoNum = precioPersonalizado === '' ? 0 : Number(precioPersonalizado) || 0;
     const precioCobrar = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
@@ -746,24 +716,6 @@ export function CotizacionForm({
         };
       }),
     ];
-
-    // --- AUDITORÍA: Comparativa (Desglose ahora usa cantidadEfectiva como el formulario) ---
-    const qtyDesglose = (item: typeof itemsDesglose[0]) => item.cantidadEfectiva ?? item.cantidad;
-    let desglosePrecioBaseTotal = 0;
-    let desgloseSobreprecioTotal = 0;
-    itemsDesglose.forEach(item => {
-      const tipoUtilidad = item.tipo_utilidad === 'service' ? 'servicio' : 'producto';
-      const res = calcularPrecio(item.costo, item.gasto, tipoUtilidad, configuracionPrecios);
-      const mult = qtyDesglose(item);
-      desglosePrecioBaseTotal += res.precio_base * mult;
-      desgloseSobreprecioTotal += res.monto_sobreprecio * mult;
-    });
-    const desglosePrecioCalculado = desglosePrecioBaseTotal + desgloseSobreprecioTotal;
-    console.group('[Auditoría] Comparativa Final (Desglose con cantidad efectiva)');
-    console.log('Formulario → subtotal Precio Calculado:', subtotal);
-    console.log('Desglose   → precioBase + sobreprecio:', desglosePrecioCalculado);
-    console.log('Diferencia:', subtotal - desglosePrecioCalculado);
-    console.groupEnd();
 
     setItemsParaDesglose(itemsDesglose as Array<{
       id: string;
