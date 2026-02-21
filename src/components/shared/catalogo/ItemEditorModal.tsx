@@ -941,6 +941,9 @@ export function ItemEditorModal({
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm font-medium text-zinc-200">
                                                     Precio Calculado
+                                                    {formData.billing_type === 'HOUR' && (
+                                                        <span className="text-zinc-500 font-normal ml-1">(por hora)</span>
+                                                    )}
                                                 </span>
                                                 <span className="text-2xl font-bold text-emerald-400">
                                                     {formatearMoneda(resultadoPrecio.precio_final)}
@@ -986,13 +989,13 @@ export function ItemEditorModal({
                                         </div>
                                     )}
                                     
-                                    {/* Checkbox para guardar en catálogo (solo en contexto de cotización) */}
-                                    {context === 'cotizaciones' && item?.id && (
+                                    {/* Opción guardar en catálogo: ítem al vuelo (nuevo) o edición en cotización */}
+                                    {context === 'cotizaciones' && (
                                         <div className="space-y-3 p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/5 rounded-lg border border-blue-500/30">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                                                 <h4 className="text-sm font-semibold text-blue-200">
-                                                    Actualización del Catálogo
+                                                    {item?.id ? 'Actualización del Catálogo' : 'Agregar al catálogo'}
                                                 </h4>
                                             </div>
                                             <div className="space-y-2">
@@ -1000,17 +1003,23 @@ export function ItemEditorModal({
                                                     checked={saveToCatalog}
                                                     onCheckedChange={setSaveToCatalog}
                                                     disabled={isSaving}
-                                                    label="Actualizar también en el catálogo global"
+                                                    label={item?.id ? 'Actualizar también en el catálogo global' : 'Agregar permanentemente al catálogo'}
                                                     variant="blue"
                                                 />
                                                 <p className="text-xs text-zinc-400 leading-relaxed pl-1">
                                                     {saveToCatalog ? (
                                                         <span>
-                                                            <span className="text-blue-300 font-medium">Los cambios se aplicarán globalmente.</span> Todos los paquetes y cotizaciones futuras usarán los nuevos datos.
+                                                            <span className="text-blue-300 font-medium">
+                                                                {item?.id ? 'Los cambios se aplicarán globalmente.' : 'Se creará en la cotización y en el catálogo.'}
+                                                            </span>{' '}
+                                                            Todos los paquetes y cotizaciones futuras podrán usar este ítem.
                                                         </span>
                                                     ) : (
                                                         <span>
-                                                            <span className="text-amber-300 font-medium">Modo Snapshot activado.</span> Los cambios solo afectarán a esta cotización. El catálogo original permanecerá intacto.
+                                                            <span className="text-amber-300 font-medium">
+                                                                {item?.id ? 'Modo Snapshot activado.' : 'Solo esta cotización.'}
+                                                            </span>{' '}
+                                                            {item?.id ? 'Los cambios solo afectarán a esta cotización.' : 'El ítem se agrega solo a esta cotización (snapshot).'}
                                                         </span>
                                                     )}
                                                 </p>

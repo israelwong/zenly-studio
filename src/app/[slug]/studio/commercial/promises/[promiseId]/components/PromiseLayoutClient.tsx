@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { PromiseDetailHeader } from './PromiseDetailHeader';
 import { PromiseDetailToolbar } from './PromiseDetailToolbar';
 import { PromiseShareOptionsModal } from './PromiseShareOptionsModal';
 import { PromiseProvider } from '../context/PromiseContext';
+import { PromiseFocusModeProvider } from '../context/PromiseFocusModeContext';
 import { usePromisesConfig } from '../../context/PromisesConfigContext';
 import { BitacoraSheet } from '@/components/shared/bitacora';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
@@ -34,7 +35,11 @@ export function PromiseLayoutClient({
   children,
 }: PromiseLayoutClientProps & { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const promisesConfig = usePromisesConfig();
+
+  /** Modo foco: edición de cotización o negociación; ocultar toolbar y regresar global */
+  const isFocusMode = pathname?.includes('/cotizacion/') === true;
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
@@ -266,7 +271,11 @@ export function PromiseLayoutClient({
       promiseState={stateData.state}
       cotizacionEnCierre={initialCotizacionEnCierre}
     >
-      <div className="w-full max-w-7xl mx-auto">
+      <div
+        className={
+          isFocusMode ? 'w-full' : 'w-full max-w-7xl mx-auto'
+        }
+      >
         <ZenCard variant="default" padding="none">
           <PromiseDetailHeader
             studioSlug={studioSlug}
@@ -287,7 +296,9 @@ export function PromiseLayoutClient({
             isArchiving={isArchiving}
             isUnarchiving={false}
             isDeleting={false}
+            focusMode={isFocusMode}
           />
+          {!isFocusMode && (
           <PromiseDetailToolbar
             studioSlug={studioSlug}
             promiseId={promiseId}
@@ -303,8 +314,13 @@ export function PromiseLayoutClient({
               window.open(previewUrl, '_blank');
             }}
           />
-          <ZenCardContent className="p-6 min-h-[600px]">
-            {children || <PromiseContentSkeleton />}
+          )}
+          <ZenCardContent
+            className={isFocusMode ? 'p-0 min-h-[600px]' : 'p-6 min-h-[600px]'}
+          >
+            <PromiseFocusModeProvider value={isFocusMode}>
+              {children || <PromiseContentSkeleton />}
+            </PromiseFocusModeProvider>
           </ZenCardContent>
         </ZenCard>
 

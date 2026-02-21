@@ -20,6 +20,8 @@ import type {
   CondicionComercialTemporal,
 } from '@/lib/utils/negociacion-calc';
 import { useState } from 'react';
+import { usePromiseContext } from '../../../../context/PromiseContext';
+import { usePromiseFocusMode } from '../../../../context/PromiseFocusModeContext';
 
 export interface NegociacionState {
   precioPersonalizado: number | null;
@@ -52,9 +54,11 @@ export function NegociacionClient({
 }: NegociacionClientProps) {
   const params = useParams();
   const router = useRouter();
+  const { promiseState } = usePromiseContext();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
   const cotizacionId = params.cotizacionId as string;
+  const backHref = `/${studioSlug}/studio/commercial/promises/${promiseId}/${promiseState ?? 'pendiente'}`;
 
   const [cotizacionOriginal] = React.useState(initialCotizacion);
   const [configPrecios] = React.useState(initialConfigPrecios);
@@ -270,29 +274,67 @@ export function NegociacionClient({
     };
   }, [cotizacionOriginal, precioOriginalReferencia, configPrecios]);
 
+  const focusMode = usePromiseFocusMode();
+
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <NegociacionHeader
-        cotizacion={cotizacionOriginal}
-        onBack={() => router.back()}
-      />
+    <div
+      className={
+        focusMode
+          ? 'w-full space-y-6'
+          : 'max-w-7xl mx-auto p-6 space-y-6'
+      }
+    >
+      {focusMode ? (
+        <div className="px-6 pt-6 pb-6 border-b border-zinc-800">
+          <NegociacionHeader
+            cotizacion={cotizacionOriginal}
+            backHref={backHref}
+          />
+        </div>
+      ) : (
+        <NegociacionHeader
+          cotizacion={cotizacionOriginal}
+          backHref={backHref}
+        />
+      )}
 
       {/* Layout de 2 columnas: Items Tree y otros componentes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div
+        className={
+          focusMode
+            ? 'grid grid-cols-1 lg:grid-cols-2 gap-2'
+            : 'grid grid-cols-1 lg:grid-cols-2 gap-6'
+        }
+      >
         {/* Columna 1: Items con estructura anidada */}
-        <NegociacionItemsTree
-          items={cotizacionOriginal.items}
-          itemsCortesia={negociacionState.itemsCortesia}
-          onItemsChange={(items) =>
-            setNegociacionState((prev) => ({
-              ...prev,
-              itemsCortesia: items,
-            }))
-          }
-        />
+        {focusMode ? (
+          <div className="pl-6 pr-3 py-6">
+            <NegociacionItemsTree
+              items={cotizacionOriginal.items}
+              itemsCortesia={negociacionState.itemsCortesia}
+              onItemsChange={(items) =>
+                setNegociacionState((prev) => ({
+                  ...prev,
+                  itemsCortesia: items,
+                }))
+              }
+            />
+          </div>
+        ) : (
+          <NegociacionItemsTree
+            items={cotizacionOriginal.items}
+            itemsCortesia={negociacionState.itemsCortesia}
+            onItemsChange={(items) =>
+              setNegociacionState((prev) => ({
+                ...prev,
+                itemsCortesia: items,
+              }))
+            }
+          />
+        )}
 
         {/* Columna 2: Condiciones y C?lculos */}
-        <div className="space-y-6">
+        <div className={focusMode ? 'space-y-6 pl-3 pr-6 py-6' : 'space-y-6'}>
           {/* 1. Precio cotización original (desglose con comisión de venta) */}
           <ComparacionView
             original={originalFinanciero}

@@ -32,6 +32,8 @@ interface PromiseDetailHeaderProps {
     isArchiving: boolean;
     isUnarchiving: boolean;
     isDeleting: boolean;
+    /** Modo foco (edición/negociación): ocultar Regresar al Kanban y controles derecha */
+    focusMode?: boolean;
 }
 
 export function PromiseDetailHeader({
@@ -53,6 +55,7 @@ export function PromiseDetailHeader({
     isArchiving,
     isUnarchiving,
     isDeleting,
+    focusMode = false,
 }: PromiseDetailHeaderProps) {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
@@ -77,11 +80,11 @@ export function PromiseDetailHeader({
         <ZenCardHeader className="border-b border-zinc-800">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                    {!focusMode && (
                     <ZenButton
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                            // Cerrar overlays al regresar
                             window.dispatchEvent(new CustomEvent('close-overlays'));
                             startTransition(() => {
                                 router.push(`/${studioSlug}/studio/commercial/promises`);
@@ -91,34 +94,32 @@ export function PromiseDetailHeader({
                     >
                         <ArrowLeft className="h-4 w-4" />
                     </ZenButton>
+                    )}
                     <div className="flex items-baseline gap-2">
                         <ZenCardTitle>Promesa</ZenCardTitle>
-                        {(() => {
-                            // Verificar estado del evento primero
-                            if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
-                                return (
-                                    <div className="flex items-center gap-1.5 pb-0.5">
-                                        <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />
-                                        <span className="text-xs text-zinc-500">Cargando...</span>
-                                    </div>
-                                );
-                            }
-
-                            const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-
-                            return (
-                                <span
-                                    title="Etapa actual del pipeline"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                >
-                                    {currentStage?.name ?? '—'}
-                                </span>
-                            );
-                        })()}
+                        {loading && (
+                            <div className="flex items-center gap-1.5 pb-0.5">
+                                <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />
+                                <span className="text-xs text-zinc-500">Cargando...</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    {(() => {
+                {/* Derecha: badge siempre (esquina superior derecha); resto solo si no es modo foco */}
+                <div className="flex items-center gap-3 ml-auto">
+                    {/* Badge de Seguimiento (estado) */}
+                    {!loading && pipelineStages.length > 0 && currentPipelineStageId && (() => {
+                        const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+                        return (
+                            <span
+                                title="Etapa actual del pipeline"
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            >
+                                {currentStage?.name ?? '—'}
+                            </span>
+                        );
+                    })()}
+                    {!focusMode && (() => {
                         // Mostrar botón de gestionar evento si está aprobado y tiene evento
                         if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
                             return null;
@@ -149,9 +150,8 @@ export function PromiseDetailHeader({
 
                         return null;
                     })()}
-                    {/* Botones de plantillas y automatizar: solo mostrar si NO hay evento creado */}
-                    {(() => {
-                        // Validar primero: si hay evento creado, no mostrar botones
+                    {/* Botones de plantillas y automatizar: solo si no es modo foco */}
+                    {!focusMode && (() => {
                         if (loading || !promiseData) {
                             return null;
                         }
@@ -183,9 +183,8 @@ export function PromiseDetailHeader({
                             </>
                         );
                     })()}
-                    {/* Dropdown menu: solo mostrar si NO hay evento creado */}
-                    {(() => {
-                        // Validar primero: si hay evento creado, no mostrar dropdown
+                    {/* Dropdown menu: solo si no es modo foco */}
+                    {!focusMode && (() => {
                         if (loading || !promiseData) {
                             return null;
                         }

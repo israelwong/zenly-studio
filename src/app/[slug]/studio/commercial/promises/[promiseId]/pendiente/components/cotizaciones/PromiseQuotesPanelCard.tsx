@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, startTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -219,61 +220,35 @@ export function PromiseQuotesPanelCard({
     return status;
   };
 
-  const handleClick = () => {
-    // En modo selección, toggle de selección en lugar de navegar
+  /** href para Link: misma ruta que handleClick (edición, negociación o evento). */
+  const getHref = (): string => {
+    const estadosConEvento = ['aprobada', 'autorizada', 'approved', 'en_cierre', 'contract_signed'];
+    if (estadosConEvento.includes(cotizacion.status) && cotizacion.evento_id) {
+      return `/${studioSlug}/studio/business/events/${cotizacion.evento_id}`;
+    }
+    if (!promiseId) return '#';
+    const params = new URLSearchParams();
+    if (contactId) params.set('contactId', contactId);
+    const qs = params.toString();
+    const base = `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`;
+    if (cotizacion.status === 'negociacion') {
+      return `${base}/negociacion`;
+    }
+    return qs ? `${base}?${qs}` : base;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
     if (selectionMode && onToggleSelect) {
+      e.preventDefault();
       onToggleSelect();
       return;
     }
-
-    // Cerrar overlays antes de navegar
-    window.dispatchEvent(new CustomEvent('close-overlays'));
-
-    // Si la cotización tiene evento_id asociado, redirigir al evento
-    // Esto aplica para estados: aprobada/autorizada/approved, en_cierre, contract_signed
-    const estadosConEvento = ['aprobada', 'autorizada', 'approved', 'en_cierre', 'contract_signed'];
-    if (estadosConEvento.includes(cotizacion.status) && cotizacion.evento_id) {
-      startTransition(() => {
-        router.push(`/${studioSlug}/studio/business/events/${cotizacion.evento_id}`);
-      });
-      return;
-    }
-
-    if (!promiseId) {
+    if (getHref() === '#') {
+      e.preventDefault();
       toast.error('No se puede editar la cotización sin una promesa asociada');
       return;
     }
-
-    // Si es revisión pendiente, redirigir a página de edición normal (flujo legacy eliminado)
-    // Las revisiones ahora se manejan como cotizaciones normales
-    if (cotizacion.revision_of_id && cotizacion.revision_status === 'pending_revision') {
-      const params = new URLSearchParams();
-      if (contactId) {
-        params.set('contactId', contactId);
-      }
-      const queryString = params.toString();
-      startTransition(() => {
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
-      });
-      return;
-    }
-
-    // Si está en negociación, redirigir a la página de negociación para editar
-    if (cotizacion.status === 'negociacion') {
-      startTransition(() => {
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
-      });
-      return;
-    }
-
-    const params = new URLSearchParams();
-    if (contactId) {
-      params.set('contactId', contactId);
-    }
-    const queryString = params.toString();
-    startTransition(() => {
-      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
-    });
+    window.dispatchEvent(new CustomEvent('close-overlays'));
   };
 
   const handleDuplicate = async (e: React.MouseEvent) => {
@@ -667,18 +642,21 @@ export function PromiseQuotesPanelCard({
   const isNegociacion = cotizacion.status === 'negociacion';
   const isRevision = cotizacion.revision_status === 'pending_revision' || cotizacion.revision_status === 'active';
 
+  const href = getHref();
+  const cardClassName = `p-3 border rounded-lg transition-colors relative no-underline text-inherit block ${isArchivada
+    ? 'bg-zinc-900/30 border-zinc-800/50 opacity-50 grayscale'
+    : selectionMode && isSelected
+      ? 'bg-emerald-950/40 border-emerald-800/30'
+      : 'bg-zinc-800/50 border-zinc-700'
+  } ${isArchivada ? 'cursor-default' : 'cursor-pointer hover:bg-zinc-800'}`;
+
   return (
     <>
-      <div
+      <Link
         ref={setNodeRef}
         style={style}
-        className={`p-3 border rounded-lg transition-colors relative ${isArchivada
-          ? 'bg-zinc-900/30 border-zinc-800/50 opacity-50 grayscale'
-          : selectionMode && isSelected
-            ? 'bg-emerald-950/40 border-emerald-800/30'
-            : 'bg-zinc-800/50 border-zinc-700'
-          } ${isArchivada ? 'cursor-default' : selectionMode ? 'cursor-pointer hover:bg-zinc-800' : 'cursor-pointer hover:bg-zinc-800'
-          }`}
+        href={href}
+        className={cardClassName}
         onClick={handleClick}
       >
         {isDuplicating && (
@@ -1028,7 +1006,7 @@ export function PromiseQuotesPanelCard({
             )}
           </div>
         </div>
-      </div>
+      </Link>
 
       <ZenConfirmModal
         isOpen={showDeleteModal}

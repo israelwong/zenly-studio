@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, Trash2, CheckCircle } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenBadge } from '@/components/ui/zen';
@@ -10,6 +11,7 @@ import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoM
 import { toast } from 'sonner';
 import { startTransition } from 'react';
 import { getStudioPageTitle, STUDIO_PAGE_NAMES } from '@/lib/utils/studio-page-title';
+import { usePromiseFocusMode } from '../../../context/PromiseFocusModeContext';
 
 interface EditarCotizacionClientProps {
   initialCotizacion: {
@@ -82,10 +84,13 @@ export function EditarCotizacionClient({
   const cotizacionId = params.cotizacionId as string;
   const contactId = searchParams.get('contactId');
   const fromCierre = searchParams.get('from') === 'cierre';
+  const focusMode = usePromiseFocusMode();
 
   // Fallback: si no llega promiseState (ej. cache antiguo), ir a pendiente en lugar de raíz para evitar redirect
   const effectiveState = promiseState ?? 'pendiente';
-  const backHref = `/${studioSlug}/studio/commercial/promises/${promiseId}/${effectiveState}`;
+  const backHref = fromCierre
+    ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
+    : `/${studioSlug}/studio/commercial/promises/${promiseId}/${effectiveState}`;
 
   const [isMounted, setIsMounted] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -153,112 +158,125 @@ export function EditarCotizacionClient({
     return null; // El skeleton se muestra en loading.tsx
   }
 
-  return (
-    <div className="w-full max-w-7xl mx-auto">
-      <ZenCard variant="default" padding="none">
-        <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
+  const headerContent = (
+    <div className="flex items-center justify-between w-full">
+      <div className="flex items-center gap-3">
+        {isPassingToCierre ? (
+          <span className="inline-flex items-center justify-center p-2 rounded-md text-zinc-500 opacity-50 cursor-not-allowed" aria-hidden>
+            <ArrowLeft className="h-4 w-4" />
+          </span>
+        ) : (
+          <Link
+            href={backHref}
+            onClick={() => window.dispatchEvent(new CustomEvent('close-overlays'))}
+            className="inline-flex items-center justify-center p-2 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+            aria-label="Volver al detalle de la promesa"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        )}
+        <div>
+          <div className="flex items-center gap-2">
+            <ZenCardTitle>Editar Cotización</ZenCardTitle>
+            {condicionComercial && !fromCierre && (
+              <ZenBadge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+                {condicionComercial.name}
+              </ZenBadge>
+            )}
+          </div>
+          {!fromCierre && (
+            <ZenCardDescription>
+              {condicionComercial?.description || 'Actualiza la información de la cotización'}
+            </ZenCardDescription>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {false && canShowPasarACierre && (
+          <ZenButton
+            variant="primary"
+            size="md"
+            onClick={handlePasarACierreClick}
+            disabled={isFormLoading || isActionLoading || isPassingToCierre}
+            loading={isPassingToCierre}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Pasar a Cierre
+          </ZenButton>
+        )}
+        {!isInCierre && isMounted && (
+          <ZenDropdownMenu>
+            <ZenDropdownMenuTrigger asChild>
               <ZenButton
                 variant="ghost"
-                size="sm"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('close-overlays'));
-                  startTransition(() => {
-                    if (fromCierre) {
-                      router.back();
-                    } else {
-                      router.push(backHref);
-                    }
-                  });
-                }}
-                disabled={isPassingToCierre}
-                className="p-2"
+                size="md"
+                disabled={isFormLoading || isActionLoading || isPassingToCierre}
+                className="h-9 w-9 p-0"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <MoreVertical className="h-4 w-4" />
               </ZenButton>
-              <div>
-                <div className="flex items-center gap-2">
-                  <ZenCardTitle>Editar Cotización</ZenCardTitle>
-                  {condicionComercial && !fromCierre && (
-                    <ZenBadge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
-                      {condicionComercial.name}
-                    </ZenBadge>
-                  )}
-                </div>
-                {!fromCierre && (
-                  <ZenCardDescription>
-                    {condicionComercial?.description || 'Actualiza la información de la cotización'}
-                  </ZenCardDescription>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {false && canShowPasarACierre && (
-                <ZenButton
-                  variant="primary"
-                  size="md"
-                  onClick={handlePasarACierreClick}
-                  disabled={isFormLoading || isActionLoading || isPassingToCierre}
-                  loading={isPassingToCierre}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Pasar a Cierre
-                </ZenButton>
-              )}
-              {!isInCierre && isMounted && (
-                <ZenDropdownMenu>
-                  <ZenDropdownMenuTrigger asChild>
-                    <ZenButton
-                      variant="ghost"
-                      size="md"
-                      disabled={isFormLoading || isActionLoading || isPassingToCierre}
-                      className="h-9 w-9 p-0"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </ZenButton>
-                  </ZenDropdownMenuTrigger>
-                  <ZenDropdownMenuContent align="end">
-                    <ZenDropdownMenuItem
-                      onClick={() => setShowArchiveModal(true)}
-                      disabled={isActionLoading || isPassingToCierre}
-                    >
-                      <Archive className="h-4 w-4 mr-2" />
-                      Archivar
-                    </ZenDropdownMenuItem>
-                    <ZenDropdownMenuSeparator />
-                    <ZenDropdownMenuItem
-                      onClick={() => setShowDeleteModal(true)}
-                      disabled={isActionLoading || isPassingToCierre}
-                      className="text-red-400 focus:text-red-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar
-                    </ZenDropdownMenuItem>
-                  </ZenDropdownMenuContent>
-                </ZenDropdownMenu>
-              )}
-            </div>
+            </ZenDropdownMenuTrigger>
+            <ZenDropdownMenuContent align="end">
+              <ZenDropdownMenuItem
+                onClick={() => setShowArchiveModal(true)}
+                disabled={isActionLoading || isPassingToCierre}
+              >
+                <Archive className="h-4 w-4 mr-2" />
+                Archivar
+              </ZenDropdownMenuItem>
+              <ZenDropdownMenuSeparator />
+              <ZenDropdownMenuItem
+                onClick={() => setShowDeleteModal(true)}
+                disabled={isActionLoading || isPassingToCierre}
+                className="text-red-400 focus:text-red-300"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </ZenDropdownMenuItem>
+            </ZenDropdownMenuContent>
+          </ZenDropdownMenu>
+        )}
+      </div>
+    </div>
+  );
+
+  const formContent = (
+    <CotizacionForm
+      studioSlug={studioSlug}
+      cotizacionId={cotizacionId}
+      promiseId={promiseId}
+      contactId={contactId || null}
+      redirectOnSuccess={fromCierre ? undefined : undefined}
+      onAfterSave={fromCierre ? () => startTransition(() => router.push(backHref)) : undefined}
+      onLoadingChange={setIsFormLoading}
+      condicionComercialPreAutorizada={condicionComercial}
+      isPreAutorizada={selectedByProspect}
+      isAlreadyAuthorized={isAlreadyAuthorized}
+      isDisabled={isPassingToCierre}
+      hideVisibilityToggle={fromCierre}
+    />
+  );
+
+  return (
+    <div className={focusMode ? 'w-full' : 'w-full max-w-7xl mx-auto'}>
+      {focusMode ? (
+        <>
+          <div className="border-b border-zinc-800 px-6 py-4">
+            {headerContent}
           </div>
-        </ZenCardHeader>
-        <ZenCardContent className="p-6">
-          <CotizacionForm
-            studioSlug={studioSlug}
-            cotizacionId={cotizacionId}
-            promiseId={promiseId}
-            contactId={contactId || null}
-            redirectOnSuccess={fromCierre ? undefined : undefined} // Dejar que la lógica de estado maneje la redirección
-            onAfterSave={fromCierre ? () => router.back() : undefined}
-            onLoadingChange={setIsFormLoading}
-            condicionComercialPreAutorizada={condicionComercial}
-            isPreAutorizada={selectedByProspect}
-            isAlreadyAuthorized={isAlreadyAuthorized}
-            isDisabled={isPassingToCierre}
-            hideVisibilityToggle={fromCierre}
-          />
-        </ZenCardContent>
-      </ZenCard>
+          <div>{formContent}</div>
+        </>
+      ) : (
+        <ZenCard variant="default" padding="none">
+          <ZenCardHeader className="border-b border-zinc-800">
+            {headerContent}
+          </ZenCardHeader>
+          <ZenCardContent className="p-6">
+            {formContent}
+          </ZenCardContent>
+        </ZenCard>
+      )}
 
       <ZenConfirmModal
         isOpen={showArchiveModal}
@@ -271,15 +289,9 @@ export function EditarCotizacionClient({
               toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} archivada exitosamente`);
               setShowArchiveModal(false);
               window.dispatchEvent(new CustomEvent('close-overlays'));
-              if (fromCierre) {
-                startTransition(() => {
-                  router.back();
-                });
-              } else {
-                startTransition(() => {
-                  router.push(backHref);
-                });
-              }
+              startTransition(() => {
+                router.push(backHref);
+              });
             } else {
               toast.error(result.error || 'Error al archivar cotizaciรณn');
             }
@@ -308,15 +320,9 @@ export function EditarCotizacionClient({
               toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} eliminada exitosamente`);
               setShowDeleteModal(false);
               window.dispatchEvent(new CustomEvent('close-overlays'));
-              if (fromCierre) {
-                startTransition(() => {
-                  router.back();
-                });
-              } else {
-                startTransition(() => {
-                  router.push(backHref);
-                });
-              }
+              startTransition(() => {
+                router.push(backHref);
+              });
             } else {
               toast.error(result.error || 'Error al eliminar cotizaciรณn');
             }

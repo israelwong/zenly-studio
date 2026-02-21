@@ -19,6 +19,7 @@ import { ItemEditorModal, type ItemFormData, type ItemEditorContext } from '@/co
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
+import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 
 interface CotizacionFormProps {
   studioSlug: string;
@@ -82,6 +83,7 @@ export function CotizacionForm({
   const isSubmittingRef = useRef(false);
   const redirectingRef = useRef(false);
   const isEditMode = !!cotizacionId;
+  const focusMode = usePromiseFocusMode();
   const onLoadingChangeRef = useRef(onLoadingChange);
 
   // Mantener referencia actualizada sin causar re-renders
@@ -934,6 +936,7 @@ export function CotizacionForm({
         if (data.id && data.id.startsWith('custom-')) {
           // Crear nuevo item en catálogo desde personalizado
           const createResult = await crearItem({
+            studioSlug,
             categoriaeId: selectedCategoriaForItem,
             name: data.name,
             cost: data.cost ?? 0,
@@ -956,8 +959,9 @@ export function CotizacionForm({
             return;
           }
         } else if (!data.id) {
-          // Crear nuevo item en catálogo
+          // Crear nuevo item en catálogo (ítem al vuelo + "Agregar al catálogo")
           const createResult = await crearItem({
+            studioSlug,
             categoriaeId: selectedCategoriaForItem,
             name: data.name,
             cost: data.cost ?? 0,
@@ -1417,9 +1421,15 @@ export function CotizacionForm({
 
   if (cargandoCatalogo) {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
+      <div
+        className={
+          focusMode
+            ? 'grid grid-cols-1 lg:grid-cols-3 gap-2'
+            : 'grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6'
+        }
+      >
         {/* Columna 1: Servicios Disponibles - Skeleton */}
-        <div className="lg:col-span-2">
+        <div className={focusMode ? 'lg:col-span-2 pl-6 pr-3 py-6' : 'lg:col-span-2'}>
           <div className="mb-4">
             {/* Header skeleton */}
             <div className="flex items-center gap-2 mb-3">
@@ -1487,7 +1497,13 @@ export function CotizacionForm({
         </div>
 
         {/* Columna 2: Configuración - Skeleton */}
-        <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
+        <div
+          className={
+            focusMode
+              ? 'lg:col-span-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto pl-3 pr-6 py-6'
+              : 'lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2'
+          }
+        >
           <div className="space-y-4">
             <div>
               <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse mb-4" />
@@ -1541,9 +1557,15 @@ export function CotizacionForm({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
+    <div
+      className={
+        focusMode
+          ? 'grid grid-cols-1 lg:grid-cols-3 gap-2'
+          : 'grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6'
+      }
+    >
       {/* Columna 1: Servicios Disponibles */}
-      <div className="lg:col-span-2">
+      <div className={focusMode ? 'lg:col-span-2 pl-6 pr-3 py-6' : 'lg:col-span-2'}>
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             Servicios Disponibles
@@ -1612,7 +1634,13 @@ export function CotizacionForm({
       </div>
 
       {/* Columna 2: Configuración de la Cotización */}
-      <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
+      <div
+        className={
+          focusMode
+            ? 'lg:col-span-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto pl-3 pr-6 py-6'
+            : 'lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2'
+        }
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">Configuración</h3>
@@ -1676,9 +1704,7 @@ export function CotizacionForm({
                 <label className="text-xs text-zinc-500 mb-1 block">Precio personalizado</label>
                 <ZenInput
                   type="number"
-                  min={configuracionPrecios && calculoPrecio.subtotal > 0
-                    ? (calculoPrecio.subtotal * (1 - (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio / 100 : configuracionPrecios.sobreprecio))).toFixed(2)
-                    : '0'}
+                  min="0"
                   step="0.01"
                   value={precioPersonalizado}
                   onChange={(e) => {
@@ -1689,35 +1715,13 @@ export function CotizacionForm({
                     }
                     const numValue = parseFloat(value);
                     if (isNaN(numValue) || numValue < 0) return;
-                    if (configuracionPrecios && calculoPrecio.subtotal > 0) {
-                      const sobreprecioNorm = configuracionPrecios.sobreprecio > 1
-                        ? configuracionPrecios.sobreprecio / 100
-                        : configuracionPrecios.sobreprecio;
-                      const precioMinimo = calculoPrecio.subtotal * (1 - sobreprecioNorm);
-                      if (numValue < precioMinimo) {
-                        setPrecioPersonalizado(precioMinimo.toFixed(2));
-                        return;
-                      }
-                    }
                     setPrecioPersonalizado(value);
                   }}
                   onBlur={(e) => {
                     const value = e.target.value;
                     if (value === '') return;
                     const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) {
-                      setPrecioPersonalizado('');
-                      return;
-                    }
-                    if (configuracionPrecios && calculoPrecio.subtotal > 0) {
-                      const sobreprecioNorm = configuracionPrecios.sobreprecio > 1
-                        ? configuracionPrecios.sobreprecio / 100
-                        : configuracionPrecios.sobreprecio;
-                      const precioMinimo = calculoPrecio.subtotal * (1 - sobreprecioNorm);
-                      if (numValue < precioMinimo) {
-                        setPrecioPersonalizado(precioMinimo.toFixed(2));
-                      }
-                    }
+                    if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
                   }}
                   placeholder="0"
                   className="mt-0"
@@ -1725,7 +1729,7 @@ export function CotizacionForm({
               </div>
             </div>
 
-            {/* 2 KPIs: Utilidad sin descuento | Utilidad con N% de descuento */}
+            {/* 2 KPIs: Utilidad sin descuento (izq) | Utilidad con descuento (der) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
                 <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad sin descuento</span>
@@ -1736,26 +1740,50 @@ export function CotizacionForm({
                 >
                   {formatearMoneda(calculoPrecio.utilidadSinDescuento)}
                 </span>
-                <p className="text-[10px] text-zinc-500 mt-0.5">Al precio calculado (sin personalizar)</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Utilidad máxima permitida (sin ajustes)</p>
               </div>
               <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
                 <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
-                  Utilidad con precio personalizado
+                  Utilidad con descuento
                 </span>
-                <span
-                  className={`mt-1.5 text-xl font-semibold tabular-nums ${
-                    calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {precioPersonalizado !== '' && Number(precioPersonalizado) > 0
-                    ? formatearMoneda(calculoPrecio.utilidadNeta)
-                    : '—'}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
-                  {configuracionPrecios
-                    ? `Descuento máx. ${(configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100).toFixed(0)}% (config.)`
-                    : 'Ingresa precio personalizado'}
-                </p>
+                {(() => {
+                  const precioNum = precioPersonalizado !== '' ? Number(precioPersonalizado) || 0 : 0;
+                  const subtotal = calculoPrecio.subtotal;
+                  const descuentoRealPercent = subtotal > 0 && precioNum > 0 && precioNum < subtotal
+                    ? ((subtotal - precioNum) / subtotal) * 100
+                    : 0;
+                  const maxDiscountPercent = configuracionPrecios
+                    ? (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100)
+                    : 10;
+                  const excedeDescuento = precioNum > 0 && descuentoRealPercent > maxDiscountPercent;
+                  const comisionRatio = configuracionPrecios
+                    ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
+                    : 0.1;
+                  const precioEnPiso = subtotal * (1 - maxDiscountPercent / 100);
+                  const comisionEnPiso = precioEnPiso * comisionRatio;
+                  const utilidadEnPiso = precioEnPiso - calculoPrecio.totalCosto - calculoPrecio.totalGasto - comisionEnPiso;
+                  const sacrificioExtra = excedeDescuento
+                    ? utilidadEnPiso - calculoPrecio.utilidadNeta
+                    : 0;
+                  const showAlert = excedeDescuento;
+                  const colorClass = showAlert ? 'text-red-500' : calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                  return (
+                    <>
+                      <span className={`mt-1.5 text-xl font-semibold tabular-nums flex items-center gap-1.5 ${colorClass}`}>
+                        {formatearMoneda(calculoPrecio.utilidadNeta)}
+                        {showAlert && <AlertTriangle className="w-5 h-5 shrink-0 text-red-500" aria-hidden />}
+                      </span>
+                      {showAlert && sacrificioExtra > 0 && (
+                        <p className="text-xs text-red-400/90 mt-1">
+                          Estás {(descuentoRealPercent - maxDiscountPercent).toFixed(0)}% por debajo del margen sugerido. Sacrificio extra: {formatearMoneda(sacrificioExtra)}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-zinc-500 mt-0.5">
+                        {precioNum > 0 ? `Según precio ingresado (${formatearMoneda(precioNum)})` : 'Basado en el precio de catálogo'}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
