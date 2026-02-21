@@ -14,7 +14,8 @@ import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CotizacionCompleta } from '@/lib/utils/negociacion-calc';
 import type { ValidacionMargen, CalculoNegociacionResult } from '@/lib/utils/negociacion-calc';
 import { calculateFinancialHealth } from '@/lib/utils/negociacion-calc';
-import { AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { ConsolaFinanciera } from './ConsolaFinanciera';
 
 export interface OriginalFinanciero {
   precioFinal: number;
@@ -68,12 +69,14 @@ export function PrecioSimulador({
     0
   );
 
-  // Precio de referencia: si hay condiciones comerciales, usar el "Total a pagar" del desglose; sino el precio original
-  // Este precio ya incluye descuentos de condiciones comerciales
+  // Precio original de referencia (inmutable): cotización madre / catálogo. No debe cambiar al re-editar una negociación.
+  const precioOriginalReferencia =
+    cotizacion.negociacion_precio_original ?? cotizacion.precioOriginal ?? cotizacion.price;
+
+  // Para placeholder del precio negociado: si hay condiciones comerciales usar Total a pagar; sino el original
   const precioRef = precioReferencia ?? (cotizacion.precioOriginal ?? cotizacion.price);
 
   // Calcular monto de items de cortesía (los que están marcados como cortesía)
-  // Se calcula sobre el precio unitario original de cada item
   const montoItemsCortesia = cotizacion.items.reduce((sum, item) => {
     const isCortesia = itemsCortesia.has(item.id);
     if (isCortesia) {
@@ -82,9 +85,8 @@ export function PrecioSimulador({
     return sum;
   }, 0);
 
-  // Cálculo: Precio de referencia (Total a pagar del desglose de condiciones comerciales) - Monto de items de cortesía
-  // Este cálculo parte del precio con condiciones comerciales aplicadas y resta las cortesías
-  const calculoItemsSeleccionados = precioRef - montoItemsCortesia;
+  // Base para desglose cuando no hay precio personalizado: referencia con condiciones - cortesías
+  const precioBaseConCondicionesYCortesias = precioRef - montoItemsCortesia;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -126,16 +128,19 @@ export function PrecioSimulador({
       </ZenCardHeader>
       <ZenCardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          {/* Input: Cálculo de items seleccionados (Total a pagar - items cortesía) */}
+          {/* Input: Precio original de referencia (solo lectura, inmutable) */}
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">
-              Cálculo de items seleccionados
+              Precio original de referencia
             </label>
             <ZenInput
               type="text"
-              value={formatearMoneda(calculoItemsSeleccionados)}
+              value={formatearMoneda(precioOriginalReferencia)}
               readOnly
-              className="mt-0 bg-zinc-900/50"
+              disabled
+              aria-readonly="true"
+              title="Solo lectura: precio de la cotización original (catálogo)"
+              className="mt-0 bg-zinc-800/80 text-zinc-400 cursor-not-allowed select-none"
             />
           </div>
 
@@ -168,7 +173,7 @@ export function PrecioSimulador({
             0
           );
           const tieneComparativa = calculoNegociado && original;
-          const precioActual = calculoNegociado?.precioFinal ?? (precioPersonalizado ?? calculoItemsSeleccionados);
+          const precioActual = calculoNegociado?.precioFinal ?? (precioPersonalizado ?? precioBaseConCondicionesYCortesias);
           const utilidadActual = calculoNegociado?.utilidadNeta ?? (precioActual - costoTotal - gastoTotal);
           const margenActual = precioActual > 0 ? (utilidadActual / precioActual) * 100 : 0;
           const costosParaSalud = calculoNegociado?.costoTotal ?? costoTotal;
@@ -176,14 +181,9 @@ export function PrecioSimulador({
           const financialHealth = calculateFinancialHealth(
             costosParaSalud,
             gastosParaSalud,
-            precioActual
+            precioActual,
+            calculoNegociado?.porcentajeComisionVenta
           );
-          const diferenciaUtilidad = tieneComparativa
-            ? calculoNegociado!.utilidadNeta - original!.utilidadNeta
-            : 0;
-          const diferenciaMargen = tieneComparativa
-            ? (calculoNegociado!.margenPorcentaje - original!.margenPorcentaje)
-            : 0;
           const margenOriginalStr =
             tieneComparativa && original!.precioFinal > 0
               ? ((original!.utilidadNeta / original!.precioFinal) * 100).toFixed(1)
@@ -191,7 +191,7 @@ export function PrecioSimulador({
 
           const esMargenSaludable = financialHealth.estado === 'saludable';
           const bloqueSaludBajo = !esMargenSaludable && (
-            <div className={`p-3 rounded-lg border ${financialHealth.bgColor}`}>
+            <div className={`mt-3 p-3 rounded-lg border ${financialHealth.bgColor}`}>
               <p className={`text-sm font-medium ${financialHealth.color}`}>
                 {financialHealth.mensaje}
               </p>
@@ -208,7 +208,7 @@ export function PrecioSimulador({
 
           return (
             <div className="pt-4 border-t border-zinc-700 space-y-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <h4 className="text-sm font-semibold text-white">Desglose</h4>
                 {esMargenSaludable && (
                   <ZenBadge variant="success" className="text-[10px] px-2 py-1 shrink-0">
@@ -216,78 +216,23 @@ export function PrecioSimulador({
                   </ZenBadge>
                 )}
               </div>
-              <div className="grid grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <div className="text-xs text-zinc-400">Costos</div>
-                  <span className="text-sm text-zinc-300">{formatearMoneda(costosParaSalud)}</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-zinc-400">Gastos</div>
-                  <span className="text-sm text-zinc-300">{formatearMoneda(gastosParaSalud)}</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-zinc-400">Utilidad</div>
-                  <div className="flex items-baseline gap-1.5 flex-wrap">
-                    <span className="text-sm font-semibold text-zinc-200">
-                      {formatearMoneda(utilidadActual)}
-                    </span>
-                    {tieneComparativa && diferenciaUtilidad !== 0 && (
-                      <span
-                        className={`text-xs flex items-center gap-0.5 ${
-                          diferenciaUtilidad < 0 ? 'text-red-400' : 'text-emerald-400'
-                        }`}
-                      >
-                        {diferenciaUtilidad < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
-                        {diferenciaUtilidad > 0 ? '+' : ''}
-                        {formatearMoneda(diferenciaUtilidad)}
-                      </span>
-                    )}
-                  </div>
-                  {tieneComparativa && (
-                    <div className="text-[10px] text-zinc-500">
-                      Original: {formatearMoneda(original!.utilidadNeta)}
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-zinc-400">Margen</div>
-                  <div className="flex flex-col gap-0.5">
-                    <span
-                      className={`text-sm font-medium ${
-                        financialHealth.estado === 'saludable'
-                          ? 'text-emerald-400'
-                          : financialHealth.estado === 'advertencia'
-                            ? 'text-amber-400'
-                            : 'text-red-400'
-                      }`}
-                    >
-                      {margenActual.toFixed(1)}%
-                    </span>
-                    {tieneComparativa && diferenciaMargen !== 0 && (
-                      <span
-                        className={`text-xs flex items-center gap-0.5 ${
-                          diferenciaMargen < 0 ? 'text-red-400' : 'text-emerald-400'
-                        }`}
-                      >
-                        {diferenciaMargen < 0 ? (
-                          <TrendingDown className="h-3 w-3" />
-                        ) : diferenciaMargen > 0 ? (
-                          <TrendingUp className="h-3 w-3" />
-                        ) : (
-                          <Minus className="h-3 w-3" />
-                        )}
-                        {diferenciaMargen > 0 ? '+' : ''}
-                        {diferenciaMargen.toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                  {tieneComparativa && (
-                    <div className="text-[10px] text-zinc-500">
-                      Original: {margenOriginalStr}%
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ConsolaFinanciera
+                precioReferencia={tieneComparativa ? original!.precioFinal : undefined}
+                costoTotal={costosParaSalud}
+                gastoTotal={gastosParaSalud}
+                montoComision={calculoNegociado?.montoComision ?? 0}
+                utilidadNeta={utilidadActual}
+                margenPorcentaje={margenActual}
+                financialHealth={financialHealth}
+                comparativa={
+                  tieneComparativa
+                    ? {
+                        utilidadOriginal: formatearMoneda(original!.utilidadNeta),
+                        margenOriginalStr,
+                      }
+                    : undefined
+                }
+              />
               {bloqueSaludBajo}
             </div>
           );

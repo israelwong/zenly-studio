@@ -4,10 +4,11 @@ import React, { memo } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { DatosRequeridosSection } from './DatosRequeridosSection';
 import { ContratoSection } from './ContratoSection';
+import { ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
 interface ContratoDigitalCardProps {
-  cotizacion: CotizacionListItem;
+  cotizacion: CotizacionListItem | null;
   studioSlug: string;
   promiseId: string;
   contractData: {
@@ -71,6 +72,9 @@ function ContratoDigitalCardInner({
   onRegenerateContract,
   onEditarDatosClick,
 }: ContratoDigitalCardProps) {
+  if (!cotizacion) {
+    return <ContratoDigitalCardSkeleton />;
+  }
   return (
     <ZenCard className="h-auto">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">

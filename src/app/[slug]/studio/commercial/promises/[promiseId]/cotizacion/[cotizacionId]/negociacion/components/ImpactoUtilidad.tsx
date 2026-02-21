@@ -1,21 +1,11 @@
 'use client';
 
 import React from 'react';
-import {
-  ZenCard,
-  ZenCardContent,
-  ZenCardHeader,
-  ZenCardTitle,
-  ZenBadge,
-} from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CalculoNegociacionResult, ValidacionMargen } from '@/lib/utils/negociacion-calc';
-import {
-  getColorIndicadorMargen,
-  getBgColorIndicadorMargen,
-  calculateFinancialHealth,
-} from '@/lib/utils/negociacion-calc';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { calculateFinancialHealth } from '@/lib/utils/negociacion-calc';
+import { ConsolaFinanciera } from './ConsolaFinanciera';
 
 interface ImpactoUtilidadProps {
   original: {
@@ -30,24 +20,18 @@ interface ImpactoUtilidadProps {
 export function ImpactoUtilidad({
   original,
   negociada,
-  validacionMargen,
 }: ImpactoUtilidadProps) {
-  const diferenciaPrecio = negociada.precioFinal - original.precioFinal;
-  const diferenciaUtilidad = negociada.utilidadNeta - original.utilidadNeta;
-  const diferenciaMargen =
-    negociada.margenPorcentaje - original.margenPorcentaje;
-
-  const margenOriginal =
-    original.precioFinal > 0
-      ? ((original.utilidadNeta / original.precioFinal) * 100).toFixed(1)
-      : '0.0';
-
-  // Calcular salud financiera (incluye costos de items de cortesía en costoTotal)
   const financialHealth = calculateFinancialHealth(
     negociada.costoTotal,
     negociada.gastoTotal,
-    negociada.precioFinal
+    negociada.precioFinal,
+    negociada.porcentajeComisionVenta
   );
+
+  const margenOriginalStr =
+    original.precioFinal > 0
+      ? ((original.utilidadNeta / original.precioFinal) * 100).toFixed(1)
+      : '0.0';
 
   return (
     <ZenCard>
@@ -55,120 +39,35 @@ export function ImpactoUtilidad({
         <ZenCardTitle className="text-sm">Impacto en Utilidad</ZenCardTitle>
       </ZenCardHeader>
       <ZenCardContent className="pt-0">
-        <div className="grid grid-cols-3 gap-4">
-          {/* Precio */}
-          <div className="space-y-1">
-            <div className="text-xs text-zinc-400">Precio</div>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-sm font-semibold text-zinc-200">
-                {formatearMoneda(negociada.precioFinal)}
-              </span>
-              {diferenciaPrecio !== 0 && (
-                <span
-                  className={`text-xs flex items-center gap-0.5 ${
-                    diferenciaPrecio < 0 ? 'text-red-400' : 'text-emerald-400'
-                  }`}
-                >
-                  {diferenciaPrecio < 0 ? (
-                    <TrendingDown className="h-3 w-3" />
-                  ) : (
-                    <TrendingUp className="h-3 w-3" />
-                  )}
-                  {diferenciaPrecio > 0 ? '+' : ''}
-                  {formatearMoneda(diferenciaPrecio)}
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-zinc-500">
-              Original: {formatearMoneda(original.precioFinal)}
-            </div>
-          </div>
+        <ConsolaFinanciera
+          precioReferencia={original.precioFinal}
+          costoTotal={negociada.costoTotal}
+          gastoTotal={negociada.gastoTotal}
+          montoComision={negociada.montoComision ?? 0}
+          utilidadNeta={negociada.utilidadNeta}
+          margenPorcentaje={negociada.margenPorcentaje}
+          financialHealth={financialHealth}
+          comparativa={{
+            utilidadOriginal: formatearMoneda(original.utilidadNeta),
+            margenOriginalStr,
+          }}
+        />
 
-          {/* Utilidad */}
-          <div className="space-y-1">
-            <div className="text-xs text-zinc-400">Utilidad Neta</div>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span
-                className={`text-sm font-semibold ${
-                  diferenciaUtilidad < 0 ? 'text-red-400' : 'text-emerald-400'
-                }`}
-              >
-                {formatearMoneda(negociada.utilidadNeta)}
-              </span>
-              {diferenciaUtilidad !== 0 && (
-                <span
-                  className={`text-xs flex items-center gap-0.5 ${
-                    diferenciaUtilidad < 0 ? 'text-red-400' : 'text-emerald-400'
-                  }`}
-                >
-                  {diferenciaUtilidad < 0 ? (
-                    <TrendingDown className="h-3 w-3" />
-                  ) : (
-                    <TrendingUp className="h-3 w-3" />
-                  )}
-                  {diferenciaUtilidad > 0 ? '+' : ''}
-                  {formatearMoneda(diferenciaUtilidad)}
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-zinc-500">
-              Original: {formatearMoneda(original.utilidadNeta)}
-            </div>
+        {financialHealth.estado !== 'saludable' && (
+          <div className={`mt-3 p-3 rounded-lg border ${financialHealth.bgColor}`}>
+            <p className={`text-sm font-medium ${financialHealth.color}`}>
+              {financialHealth.mensaje}
+            </p>
+            {financialHealth.diferenciaFaltante > 0 && (
+              <div className="mt-2 pt-2 border-t border-current/20">
+                <p className={`text-xs ${financialHealth.color} opacity-80`}>
+                  Precio de rescate sugerido:{' '}
+                  <span className="font-semibold">{formatearMoneda(financialHealth.precioRescate)}</span>
+                </p>
+              </div>
+            )}
           </div>
-
-          {/* Margen */}
-          <div className="space-y-1">
-            <div className="text-xs text-zinc-400">Margen</div>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <ZenBadge
-                variant={
-                  financialHealth.estado === 'saludable'
-                    ? 'success'
-                    : financialHealth.estado === 'advertencia'
-                    ? 'warning'
-                    : 'destructive'
-                }
-                className="text-[10px] px-1.5 py-0.5"
-              >
-                {negociada.margenPorcentaje.toFixed(1)}%
-              </ZenBadge>
-              {diferenciaMargen !== 0 && (
-                <span
-                  className={`text-xs flex items-center gap-0.5 ${
-                    diferenciaMargen < 0 ? 'text-red-400' : 'text-emerald-400'
-                  }`}
-                >
-                  {diferenciaMargen < 0 ? (
-                    <TrendingDown className="h-3 w-3" />
-                  ) : diferenciaMargen > 0 ? (
-                    <TrendingUp className="h-3 w-3" />
-                  ) : (
-                    <Minus className="h-3 w-3" />
-                  )}
-                  {diferenciaMargen > 0 ? '+' : ''}
-                  {diferenciaMargen.toFixed(1)}%
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-zinc-500">
-              Original: {margenOriginal}%
-            </div>
-          </div>
-        </div>
-
-        {/* Alerta de salud financiera */}
-        <div className={`mt-3 p-3 rounded-lg border ${financialHealth.bgColor}`}>
-          <p className={`text-sm font-medium ${financialHealth.color}`}>
-            {financialHealth.mensaje}
-          </p>
-          {financialHealth.estado !== 'saludable' && financialHealth.diferenciaFaltante > 0 && (
-            <div className="mt-2 pt-2 border-t border-current/20">
-              <p className={`text-xs ${financialHealth.color} opacity-80`}>
-                Precio de rescate sugerido: <span className="font-semibold">{formatearMoneda(financialHealth.precioRescate)}</span>
-              </p>
-            </div>
-          )}
-        </div>
+        )}
       </ZenCardContent>
     </ZenCard>
   );

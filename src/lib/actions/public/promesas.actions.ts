@@ -3089,6 +3089,28 @@ export async function getPublicPromiseCierre(
                 name: true,
               },
             },
+            condicion_comercial_negociacion: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
+            condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
           },
           orderBy: { order: 'asc' },
           take: 1, // Solo una cotización en cierre
@@ -3311,6 +3333,17 @@ export async function getPublicPromiseCierre(
 
     const cierre = cotizacion.cotizacion_cierre as any;
     const condCierre = cierre?.condiciones_comerciales;
+    // Fallback: cierre → condicion_comercial_negociacion → condiciones_comerciales (catálogo) para que el anticipo no sea 0
+    const condNeg = (cotizacion as any).condicion_comercial_negociacion;
+    const condCat = (cotizacion as any).condiciones_comerciales;
+    const mapCond = (c: { discount_percentage?: unknown; advance_percentage?: unknown; advance_type?: string | null; advance_amount?: unknown }) => (c ? {
+      discount_percentage: c.discount_percentage != null ? Number(c.discount_percentage) : null,
+      advance_percentage: c.advance_percentage != null ? Number(c.advance_percentage) : null,
+      advance_type: c.advance_type ?? null,
+      advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+    } : null);
+    const condUnified = mapCond(condCierre) ?? mapCond(condNeg) ?? mapCond(condCat) ?? null;
+
     const engineOut = calculateCotizacionTotals({
       price: Number(cotizacion.price),
       discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
@@ -3320,12 +3353,7 @@ export async function getPublicPromiseCierre(
       condiciones_comerciales_advance_percentage_snapshot: (cotizacion as any).condiciones_comerciales_advance_percentage_snapshot != null ? Number((cotizacion as any).condiciones_comerciales_advance_percentage_snapshot) : null,
       condiciones_comerciales_advance_type_snapshot: (cotizacion as any).condiciones_comerciales_advance_type_snapshot ?? null,
       condiciones_comerciales_advance_amount_snapshot: (cotizacion as any).condiciones_comerciales_advance_amount_snapshot != null ? Number((cotizacion as any).condiciones_comerciales_advance_amount_snapshot) : null,
-      condiciones_comerciales: condCierre ? {
-        discount_percentage: condCierre.discount_percentage != null ? Number(condCierre.discount_percentage) : null,
-        advance_percentage: condCierre.advance_percentage != null ? Number(condCierre.advance_percentage) : null,
-        advance_type: condCierre.advance_type ?? null,
-        advance_amount: condCierre.advance_amount != null ? Number(condCierre.advance_amount) : null,
-      } : null,
+      condiciones_comerciales: condUnified,
     });
 
     const mappedCotizacion: PublicCotizacion = {
@@ -3359,8 +3387,11 @@ export async function getPublicPromiseCierre(
         const hasContractContent = !!cierre?.contract_content;
         const hasContractTemplate = !!cierre?.contract_template_id;
         const hasContractDefined = !!cierre?.contrato_definido;
-        const hasCondicionesDefinidas = !!(cierre?.condiciones_comerciales && cierre?.condiciones_comerciales_definidas);
-        
+        const hasCondicionCierre = !!(cierre?.condiciones_comerciales && cierre?.condiciones_comerciales_definidas);
+        const hasCondicionNegociacion = !!(cotizacion as any).condicion_comercial_negociacion;
+        const hasCondicionCatalogo = !!(cotizacion as any).condiciones_comerciales;
+        const hasCondicionesDefinidas = hasCondicionCierre || hasCondicionNegociacion || hasCondicionCatalogo;
+
         // Contrato existe si tiene contenido generado O template_id (incluso si no está marcado como definido)
         const hasContract = hasContractContent || hasContractTemplate || hasContractDefined || hasCondicionesDefinidas;
 
@@ -3368,21 +3399,29 @@ export async function getPublicPromiseCierre(
           return undefined;
         }
 
+        const mapC = (c: { id: string; name: string; description: string | null; advance_percentage: number | null; advance_type: string | null; advance_amount: unknown; discount_percentage: number | null }) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          advance_percentage: c.advance_percentage != null ? Number(c.advance_percentage) : null,
+          advance_type: c.advance_type,
+          advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+          discount_percentage: c.discount_percentage != null ? Number(c.discount_percentage) : null,
+        });
+        const condC = cierre.condiciones_comerciales
+          ? mapC(cierre.condiciones_comerciales)
+          : (cotizacion as any).condicion_comercial_negociacion
+            ? mapC((cotizacion as any).condicion_comercial_negociacion)
+            : (cotizacion as any).condiciones_comerciales
+              ? mapC((cotizacion as any).condiciones_comerciales)
+              : null;
         return {
           created_at: cierre.created_at || null,
           template_id: cierre.contract_template_id || null,
           content: cierre.contract_content || null,
           version: cierre.contract_version ?? 1,
           signed_at: cierre.contract_signed_at || null,
-          condiciones_comerciales: (cierre.condiciones_comerciales ? {
-            id: cierre.condiciones_comerciales.id,
-            name: cierre.condiciones_comerciales.name,
-            description: cierre.condiciones_comerciales.description,
-            advance_percentage: cierre.condiciones_comerciales.advance_percentage ? Number(cierre.condiciones_comerciales.advance_percentage) : null,
-            advance_type: cierre.condiciones_comerciales.advance_type,
-            advance_amount: cierre.condiciones_comerciales.advance_amount ? Number(cierre.condiciones_comerciales.advance_amount) : null,
-            discount_percentage: cierre.condiciones_comerciales.discount_percentage ? Number(cierre.condiciones_comerciales.discount_percentage) : null,
-          } : null),
+          condiciones_comerciales: condC,
         };
       })(),
     };
@@ -4706,6 +4745,28 @@ export async function getPublicCotizacionContract(
             },
           },
         },
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
+        condiciones_comerciales: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
       },
     });
 
@@ -4715,6 +4776,33 @@ export async function getPublicCotizacionContract(
 
     const cierre = cotizacion.cotizacion_cierre;
 
+    const mapCond = (c: {
+      id: string;
+      name: string;
+      description: string | null;
+      advance_percentage: number | null;
+      advance_type: string | null;
+      advance_amount: unknown;
+      discount_percentage: number | null;
+    }) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      advance_percentage: c.advance_percentage != null ? Number(c.advance_percentage) : null,
+      advance_type: c.advance_type,
+      advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+      discount_percentage: c.discount_percentage != null ? Number(c.discount_percentage) : null,
+    });
+
+    let condicionesComerciales: ReturnType<typeof mapCond> | null = null;
+    if (cierre.condiciones_comerciales) {
+      condicionesComerciales = mapCond(cierre.condiciones_comerciales);
+    } else if (cotizacion.condicion_comercial_negociacion) {
+      condicionesComerciales = mapCond(cotizacion.condicion_comercial_negociacion);
+    } else if (cotizacion.condiciones_comerciales) {
+      condicionesComerciales = mapCond(cotizacion.condiciones_comerciales);
+    }
+
     return {
       success: true,
       data: {
@@ -4722,15 +4810,7 @@ export async function getPublicCotizacionContract(
         content: cierre.contract_content,
         version: cierre.contract_version || 1,
         signed_at: cierre.contract_signed_at,
-        condiciones_comerciales: cierre.condiciones_comerciales ? {
-          id: cierre.condiciones_comerciales.id,
-          name: cierre.condiciones_comerciales.name,
-          description: cierre.condiciones_comerciales.description,
-          advance_percentage: cierre.condiciones_comerciales.advance_percentage ? Number(cierre.condiciones_comerciales.advance_percentage) : null,
-          advance_type: cierre.condiciones_comerciales.advance_type,
-          advance_amount: cierre.condiciones_comerciales.advance_amount ? Number(cierre.condiciones_comerciales.advance_amount) : null,
-          discount_percentage: cierre.condiciones_comerciales.discount_percentage ? Number(cierre.condiciones_comerciales.discount_percentage) : null,
-        } : null,
+        condiciones_comerciales: condicionesComerciales,
       },
     };
   } catch (error) {

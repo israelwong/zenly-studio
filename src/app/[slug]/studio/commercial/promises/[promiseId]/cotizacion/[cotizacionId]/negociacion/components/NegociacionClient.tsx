@@ -92,6 +92,12 @@ export function NegociacionClient({
   });
   const [totalAPagarCondiciones, setTotalAPagarCondiciones] = useState<number | null>(null);
 
+  // Precio original de referencia (inmutable): cotización madre. No usar price actual al re-editar una negociación.
+  const precioOriginalReferencia =
+    cotizacionOriginal.negociacion_precio_original ??
+    cotizacionOriginal.precioOriginal ??
+    cotizacionOriginal.price;
+
   // Inicializar condici?n comercial temporal si existe
   React.useEffect(() => {
     if (initialCotizacion.condicion_comercial_temporal) {
@@ -143,7 +149,7 @@ export function NegociacionClient({
         return sum;
       }, 0);
       
-      const precioReferencia = totalAPagarCondiciones ?? (cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price);
+      const precioReferencia = totalAPagarCondiciones ?? precioOriginalReferencia;
       const calculoItemsSeleccionados = precioReferencia - montoItemsCortesia;
 
       // PRIORIDAD: Si hay precio personalizado, usar ese precio directamente
@@ -164,7 +170,9 @@ export function NegociacionClient({
           (sum, item) => sum + (item.expense || 0) * item.quantity,
           0
         );
-        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal;
+        const porcentajeComisionVenta = configPrecios.comision_venta ?? 0;
+        const montoComision = precioParaCalcular * porcentajeComisionVenta;
+        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal - montoComision;
         const margenPorcentaje =
           precioParaCalcular > 0
             ? (utilidadNeta / precioParaCalcular) * 100
@@ -178,8 +186,8 @@ export function NegociacionClient({
           (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
           0
         );
-        const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-        const utilidadNetaOriginal = precioOriginal - costoTotalOriginal - gastoTotalOriginal;
+        const montoComisionOriginal = precioOriginalReferencia * porcentajeComisionVenta;
+        const utilidadNetaOriginal = precioOriginalReferencia - costoTotalOriginal - gastoTotalOriginal - montoComisionOriginal;
         const impactoUtilidad = utilidadNeta - utilidadNetaOriginal;
 
         return {
@@ -188,6 +196,8 @@ export function NegociacionClient({
           descuentoTotal: 0,
           costoTotal: Number(costoTotal.toFixed(2)),
           gastoTotal: Number(gastoTotal.toFixed(2)),
+          montoComision: Number(montoComision.toFixed(2)),
+          porcentajeComisionVenta,
           utilidadNeta: Number(utilidadNeta.toFixed(2)),
           margenPorcentaje: Number(margenPorcentaje.toFixed(2)),
           impactoUtilidad: Number(impactoUtilidad.toFixed(2)),
@@ -220,6 +230,7 @@ export function NegociacionClient({
     negociacionState,
     condicionesComerciales,
     totalAPagarCondiciones,
+    precioOriginalReferencia,
   ]);
 
   // Validaci?n de margen
@@ -234,7 +245,7 @@ export function NegociacionClient({
     );
   }, [calculoNegociado]);
 
-  // Valores originales (sin negociaci?n) para comparativa en PrecioSimulador
+  // Valores originales (sin negociación) para comparativa: precio original de referencia, con comisión de venta restada
   const originalFinanciero = useMemo(() => {
     const costoTotalOriginal = cotizacionOriginal.items.reduce(
       (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
@@ -244,16 +255,20 @@ export function NegociacionClient({
       (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
       0
     );
-    const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-    const utilidadNetaOriginal = precioOriginal - costoTotalOriginal - gastoTotalOriginal;
+    const porcentajeComision = configPrecios?.comision_venta ?? 0;
+    const montoComisionOriginal = precioOriginalReferencia * porcentajeComision;
+    const utilidadNetaOriginal = precioOriginalReferencia - costoTotalOriginal - gastoTotalOriginal - montoComisionOriginal;
     const margenOriginal =
-      precioOriginal > 0 ? (utilidadNetaOriginal / precioOriginal) * 100 : 0;
+      precioOriginalReferencia > 0 ? (utilidadNetaOriginal / precioOriginalReferencia) * 100 : 0;
     return {
-      precioFinal: precioOriginal,
+      precioFinal: precioOriginalReferencia,
       utilidadNeta: utilidadNetaOriginal,
       margenPorcentaje: margenOriginal,
+      montoComision: montoComisionOriginal,
+      costoTotal: costoTotalOriginal,
+      gastoTotal: gastoTotalOriginal,
     };
-  }, [cotizacionOriginal]);
+  }, [cotizacionOriginal, precioOriginalReferencia, configPrecios]);
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -278,36 +293,9 @@ export function NegociacionClient({
 
         {/* Columna 2: Condiciones y C?lculos */}
         <div className="space-y-6">
-          {/* 1. Precio cotizaci?n original */}
+          {/* 1. Precio cotización original (desglose con comisión de venta) */}
           <ComparacionView
-            original={{
-              precioFinal: cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price,
-              costoTotal:
-                calculoNegociado?.costoTotal ??
-                cotizacionOriginal.items.reduce(
-                  (sum, item) => sum + (item.cost || 0) * item.quantity,
-                  0
-                ),
-              gastoTotal:
-                calculoNegociado?.gastoTotal ??
-                cotizacionOriginal.items.reduce(
-                  (sum, item) => sum + (item.expense || 0) * item.quantity,
-                  0
-                ),
-              utilidadNeta:
-                (cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price) -
-                (calculoNegociado?.costoTotal ??
-                  cotizacionOriginal.items.reduce(
-                    (sum, item) => sum + (item.cost || 0) * item.quantity,
-                    0
-                  )) -
-                (calculoNegociado?.gastoTotal ??
-                  cotizacionOriginal.items.reduce(
-                    (sum, item) => sum + (item.expense || 0) * item.quantity,
-                    0
-                  )),
-              margenPorcentaje: 0,
-            }}
+            original={originalFinanciero}
             negociada={calculoNegociado}
           />
 

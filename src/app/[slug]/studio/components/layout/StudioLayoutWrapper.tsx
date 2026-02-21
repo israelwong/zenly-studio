@@ -16,7 +16,9 @@ import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/Tar
 import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideSheet';
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin } from 'lucide-react';
+import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
+import { ZenDialog } from '@/components/ui/zen';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent } from 'lucide-react';
 import { LocationManagerModal } from '@/components/shared/agenda/LocationManagerModal';
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -96,6 +98,7 @@ function StudioLayoutContent({
   const [showEventTypesModal, setShowEventTypesModal] = useState(false);
   const [showAutomationModal, setShowAutomationModal] = useState(false);
   const [showLocationsManagerModal, setShowLocationsManagerModal] = useState(false);
+  const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
 
   // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
   const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
@@ -114,6 +117,7 @@ function StudioLayoutContent({
     const handleOpenTerminos = () => setShowTerminosManager(true);
     const handleOpenAviso = () => setShowAvisoPrivacidad(true);
     const handleOpenCondiciones = () => setShowCondicionesManager(true);
+    const handleOpenRentabilidad = () => setShowRentabilidadModal(true);
     const handleOpenPaymentMethods = (e?: Event) => {
       const detail = (e as CustomEvent<{ openTransferConfigDirectly?: boolean }> | undefined)?.detail;
       setPaymentMethodsModalOptions(detail ?? {});
@@ -126,6 +130,7 @@ function StudioLayoutContent({
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
     window.addEventListener('open-condiciones-modal', handleOpenCondiciones);
+    window.addEventListener('open-rentabilidad-modal', handleOpenRentabilidad);
     window.addEventListener('open-payment-methods-modal', handleOpenPaymentMethods as EventListener);
     window.addEventListener('open-contracts-modal', handleOpenContracts);
     window.addEventListener('open-studio-data-modal', handleOpenStudioData);
@@ -135,6 +140,7 @@ function StudioLayoutContent({
       window.removeEventListener('open-terminos-modal', handleOpenTerminos);
       window.removeEventListener('open-aviso-modal', handleOpenAviso);
       window.removeEventListener('open-condiciones-modal', handleOpenCondiciones);
+      window.removeEventListener('open-rentabilidad-modal', handleOpenRentabilidad);
       window.removeEventListener('open-payment-methods-modal', handleOpenPaymentMethods);
       window.removeEventListener('open-contracts-modal', handleOpenContracts);
       window.removeEventListener('open-studio-data-modal', handleOpenStudioData);
@@ -240,6 +246,19 @@ function StudioLayoutContent({
           },
           category: 'comercial',
           keywords: ['condiciones', 'pago', 'utilidad', 'descuento'],
+        },
+        {
+          id: 'rentabilidad',
+          title: 'Configuración de Rentabilidad',
+          description: 'Utilidad por servicio/producto, comisión de venta y sobreprecio para cotizaciones',
+          icon: Percent,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-rentabilidad-modal'));
+            }, 100);
+          },
+          category: 'comercial',
+          keywords: ['rentabilidad', 'utilidad', 'margen', 'sobreprecio', 'comisión', 'precios', 'cotización'],
         },
         {
           id: 'pagos',
@@ -503,6 +522,21 @@ function StudioLayoutContent({
         onClose={() => setShowLocationsManagerModal(false)}
         studioSlug={studioSlug}
       />
+
+      {/* Modal compartido: Configuración de Rentabilidad (desde Configurar o catálogo) */}
+      <ZenDialog
+        isOpen={showRentabilidadModal}
+        onClose={() => setShowRentabilidadModal(false)}
+        title="Configuración de Rentabilidad"
+        description="Gestiona los márgenes de utilidad, comisiones y sobreprecios"
+        maxWidth="2xl"
+        closeOnClickOutside={false}
+      >
+        <RentabilidadForm
+          studioSlug={studioSlug}
+          onClose={() => setShowRentabilidadModal(false)}
+        />
+      </ZenDialog>
 
       <PromiseShareOptionsModal
         isOpen={showAutomationModal}

@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { useParams, useRouter } from 'next/navigation';
 import { construirEstructuraJerarquicaCotizacion } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
+import { formatItemQuantity } from '@/lib/utils/contract-item-formatter';
 
 interface ResumenCotizacionProps {
   cotizacion: {
@@ -24,6 +25,8 @@ interface ResumenCotizacionProps {
       expense: number;
       order?: number;
       id?: string;
+      billing_type?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
+      profit_type_snapshot?: string | null;
       // Campos operacionales (para compatibilidad)
       name: string | null;
       description: string | null;
@@ -41,6 +44,10 @@ interface ResumenCotizacionProps {
       seccion_name_raw?: string | null;
     }>;
   };
+  /** Duración del evento en horas (para ítems HOUR: mostrar "x N /hrs"). Snapshot de cotización manda. */
+  event_duration?: number | null;
+  /** Fallback: duración desde la promesa (solo si event_duration es null). */
+  promiseDurationHours?: number | null;
   studioSlug?: string;
   promiseId?: string;
   onEditar?: () => void;
@@ -67,7 +74,8 @@ interface ResumenCotizacionProps {
  * cotizaciones asociadas a la misma promesa para mantener solo una cotización activa.
  */
 
-export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado }: ResumenCotizacionProps) {
+export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationHours, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado }: ResumenCotizacionProps) {
+  const effectiveDuration = event_duration ?? promiseDurationHours ?? null;
   const params = useParams();
   const router = useRouter();
   const studioSlug = propStudioSlug || (params.slug as string);
@@ -82,7 +90,7 @@ export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, prom
       return { secciones: [], total: 0 };
     }
 
-    // Mapear items al formato esperado por la función centralizada
+    // Mapear items al formato esperado por la función centralizada (incl. billing_type y profit_type_snapshot para formato y badge)
     const itemsMapeados = cotizacion.items.map((item) => ({
       item_id: item.item_id,
       quantity: item.quantity,
@@ -90,6 +98,8 @@ export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, prom
       subtotal: item.subtotal,
       order: item.order ?? 0,
       id: item.id,
+      billing_type: item.billing_type ?? undefined,
+      profit_type_snapshot: item.profit_type_snapshot ?? undefined,
       // Snapshots primero, luego campos operacionales como fallback
       name_snapshot: item.name_snapshot,
       description_snapshot: item.description_snapshot,
@@ -254,15 +264,31 @@ export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, prom
                                   <div className="px-3 py-2 space-y-0.5">
                                     {categoria.items.map((item) => {
                                       const nombre = item.nombre || 'Sin nombre';
+                                      const billingType = ((item as { billing_type?: 'HOUR' | 'SERVICE' | 'UNIT' | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+                                      const formatted = formatItemQuantity({
+                                        quantity: item.cantidad,
+                                        billingType,
+                                        eventDurationHours: effectiveDuration,
+                                      });
+                                      const cantidadDisplay = formatted.displayText || `x${item.cantidad ?? 1}`;
+                                      const profitTypeSnapshot = (item as { profit_type_snapshot?: string | null }).profit_type_snapshot;
+                                      const tipoLabel = profitTypeSnapshot?.toLowerCase() === 'producto' || profitTypeSnapshot?.toLowerCase() === 'product' ? 'Producto' : profitTypeSnapshot ? 'Servicio' : null;
 
                                       return (
                                         <div
                                           key={item.id || item.item_id || `item-${item.nombre}`}
                                           className={`grid gap-2 items-baseline py-1.5 px-2 text-sm text-zinc-300 rounded hover:bg-zinc-800/30 transition-colors ${hideSubtotals ? 'grid-cols-[1fr_60px]' : 'grid-cols-[1fr_60px_100px]'}`}
                                         >
-                                          <span className="wrap-break-word text-zinc-300">{nombre}</span>
+                                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                            <span className="wrap-break-word text-zinc-300">{nombre}</span>
+                                            {tipoLabel && (
+                                              <ZenBadge variant="outline" size="sm" className="shrink-0 text-[10px] px-1 py-0 border-zinc-600 text-zinc-400">
+                                                {tipoLabel}
+                                              </ZenBadge>
+                                            )}
+                                          </div>
                                           <span className="text-emerald-400 font-medium whitespace-nowrap text-right">
-                                            x{item.cantidad}
+                                            {cantidadDisplay}
                                           </span>
                                           {!hideSubtotals && (
                                             <span className="text-zinc-400 whitespace-nowrap text-right">

@@ -264,6 +264,11 @@ export function construirEstructuraJerarquicaCotizacion(
       itemData.billing_type = item.billing_type;
     }
 
+    // Preservar profit_type_snapshot si existe (para badge Servicio/Producto)
+    if ((item as { profit_type_snapshot?: string | null }).profit_type_snapshot !== undefined) {
+      itemData.profit_type_snapshot = (item as { profit_type_snapshot?: string | null }).profit_type_snapshot;
+    }
+
     // ⚠️ HIGIENE DE DATOS: Ordenar items dentro de la categoría por order
     categoriaData.items.push(itemData);
   });
@@ -416,6 +421,7 @@ export const COTIZACION_ITEMS_SELECT_STANDARD = {
   subtotal: true,
   order: true,
   billing_type: true,
+  profit_type_snapshot: true,
   // Snapshots (prioridad - inmutables)
   name_snapshot: true,
   description_snapshot: true,

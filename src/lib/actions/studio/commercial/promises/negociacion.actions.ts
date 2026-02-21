@@ -188,13 +188,24 @@ export async function crearVersionNegociada(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotizaci?n original
+    // Obtener cotizaci?n original (select explícito incl. event_duration para clonar en versión negociada)
     const cotizacionOriginal = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_original_id,
         studio_id: studio.id,
       },
-      include: {
+      select: {
+        event_duration: true,
+        promise_id: true,
+        contact_id: true,
+        event_type_id: true,
+        name: true,
+        description: true,
+        price: true,
+        order: true,
+        status: true,
+        studio_id: true,
+        visible_to_client: true,
         promise: {
           select: {
             id: true,
@@ -208,6 +219,7 @@ export async function crearVersionNegociada(
             quantity: true,
             order: true,
             billing_type: true,
+            profit_type_snapshot: true,
           },
         },
       },
@@ -278,6 +290,7 @@ export async function crearVersionNegociada(
             : null,
           negociacion_notas: validatedData.notas || null,
           negociacion_created_at: new Date(),
+          event_duration: cotizacionOriginal.event_duration ?? null, // Heredar duración del evento de la cotización original
         },
       });
 
@@ -290,7 +303,8 @@ export async function crearVersionNegociada(
             quantity: item.quantity,
             order: item.order,
             billing_type: item.billing_type, // Copiar billing_type del item
-            // Marcar items como cortes?a si est?n en la lista
+            // Priorizar snapshot del original; default 'servicio' solo si es nulo
+            profit_type_snapshot: item.profit_type_snapshot ?? 'servicio',
             is_courtesy: validatedData.items_cortesia.includes(item.id),
           })),
         });

@@ -40,11 +40,13 @@ export const CondicionesSection = memo(function CondicionesSection({
   negociacionPrecioOriginal,
   negociacionPrecioPersonalizado,
 }: CondicionesSectionProps) {
-  if (condicionesData?.condiciones_comerciales_definidas && condicionesData?.condiciones_comerciales) {
+  const condicion = condicionesData?.condiciones_comerciales;
+  const tieneCondicion = condicion && condicion.name;
+  if (tieneCondicion) {
     return (
       <CondicionesComercialesDesglose
         precioBase={precioBase}
-        condicion={condicionesData.condiciones_comerciales as any}
+        condicion={condicion as CondicionComercial}
         negociacionPrecioOriginal={negociacionPrecioOriginal}
         negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
         dropdownMenu={
@@ -95,17 +97,24 @@ export const CondicionesSection = memo(function CondicionesSection({
             </button>
           </div>
           <span className="text-sm text-zinc-300">
-            No definidas
+            {condicion?.name ? (
+              <span className="text-emerald-400/90 font-medium">{condicion.name}</span>
+            ) : (
+              'No definidas'
+            )}
           </span>
         </div>
       </div>
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Solo re-renderizar si cambian datos de condiciones
+  const prev = prevProps.condicionesData;
+  const next = nextProps.condicionesData;
   return (
-    prevProps.condicionesData?.condiciones_comerciales_id === nextProps.condicionesData?.condiciones_comerciales_id &&
-    prevProps.condicionesData?.condiciones_comerciales_definidas === nextProps.condicionesData?.condiciones_comerciales_definidas &&
+    prev?.condiciones_comerciales_id === next?.condiciones_comerciales_id &&
+    prev?.condiciones_comerciales_definidas === next?.condiciones_comerciales_definidas &&
+    prev?.condiciones_comerciales?.id === next?.condiciones_comerciales?.id &&
+    prev?.condiciones_comerciales?.name === next?.condiciones_comerciales?.name &&
     prevProps.loadingRegistro === nextProps.loadingRegistro &&
     prevProps.isRemovingCondiciones === nextProps.isRemovingCondiciones &&
     prevProps.precioBase === nextProps.precioBase &&

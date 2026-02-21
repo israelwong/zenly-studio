@@ -359,7 +359,8 @@ export function PublicContractView({
     <>
       <ZenDialog
         isOpen={isOpen}
-        onClose={() => !isSigning && onClose()}
+        onClose={onClose}
+        showCloseButton={!isSigning}
         title="Contrato de Prestación de Servicios"
         description={
           isSigned ? (
@@ -438,8 +439,8 @@ export function PublicContractView({
                 content={shouldUseTemplate && templateContent ? templateContent : (renderedContent || '')}
                 eventData={eventData || eventDataFallback}
                 cotizacionData={eventData?.cotizacionData}
-                // ⚠️ HIGIENE DE DATOS: Priorizar condicionesData local (siempre actualizado) sobre eventData?.condicionesData
-                condicionesData={condicionesData || eventData?.condicionesData}
+                // Priorizar condicionesData del servidor (desglose completo: precio original, precio especial, ahorro, anticipo, saldo)
+                condicionesData={eventData?.condicionesData || condicionesData}
                 showVariables={false}
                 noCard={true}
               />
@@ -595,8 +596,8 @@ export function PublicContractView({
               content={shouldUseTemplate && templateContent ? templateContent : (renderedContent || '')}
               eventData={eventData || eventDataFallback}
               cotizacionData={eventData?.cotizacionData}
-              // ⚠️ HIGIENE DE DATOS: Priorizar condicionesData local (siempre actualizado) sobre eventData?.condicionesData
-              condicionesData={condicionesData || eventData?.condicionesData}
+              // Priorizar condicionesData del servidor (desglose completo: precio original, precio especial, ahorro, anticipo, saldo)
+              condicionesData={eventData?.condicionesData || condicionesData}
               noCard={true}
               showVariables={false}
             />

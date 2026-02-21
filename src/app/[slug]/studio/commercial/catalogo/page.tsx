@@ -9,10 +9,13 @@ import { CatalogoHeaderActions } from './components/CatalogoHeaderActions';
 
 interface CatalogoPageProps {
     params: Promise<{ slug: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function CatalogoPage({ params }: CatalogoPageProps) {
+export default async function CatalogoPage({ params, searchParams }: CatalogoPageProps) {
     const { slug: studioSlug } = await params;
+    const resolvedSearchParams = await searchParams;
+    const openUtilidad = resolvedSearchParams?.openUtilidad === '1' || resolvedSearchParams?.openUtilidad === 'true';
 
     // Cachear catálogo con tag para invalidación selectiva
     // ⚠️ CRÍTICO: Tag incluye studioSlug para aislamiento entre tenants
@@ -95,6 +98,7 @@ export default async function CatalogoPage({ params }: CatalogoPageProps) {
                         studioSlug={studioSlug}
                         initialCatalogo={catalogoResult.data}
                         initialPreciosConfig={preciosConfig}
+                        initialOpenUtilidad={openUtilidad}
                     />
                 </ZenCardContent>
             </ZenCard>

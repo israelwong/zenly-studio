@@ -277,7 +277,7 @@ export const ContratoSection = memo(function ContratoSection({
                 }
               }}
               disabled={isRegenerating}
-              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
+              className="text-xs text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
               title="Regenerar contrato"
               aria-label="Regenerar contrato"
             >
@@ -312,7 +312,7 @@ export const ContratoSection = memo(function ContratoSection({
             <button
               type="button"
               onClick={handleOpenPreview}
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors w-full text-left cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-white hover:text-zinc-200 transition-colors w-full text-left cursor-pointer"
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
               Clic para ver preview
@@ -400,10 +400,16 @@ export const ContratoSection = memo(function ContratoSection({
         onClose={() => !isRegenerating && setShowRegenerateConfirm(false)}
         onConfirm={handleConfirmRegenerate}
         title="Regenerar contrato"
-        description="Esta acción invalidará la firma actual del cliente y requerirá que firme de nuevo. ¿Deseas continuar?"
-        confirmText="Regenerar"
+        description={
+          <ul className="list-disc list-inside space-y-1.5 text-zinc-300">
+            <li>La firma actual del cliente quedará <strong>invalidada</strong>.</li>
+            <li>Se generará una nueva versión del contrato con los datos actuales.</li>
+            <li>El cliente deberá <strong>firmar nuevamente</strong> desde el enlace de cierre.</li>
+          </ul>
+        }
+        confirmText="Sí, regenerar"
         cancelText="Cancelar"
-        variant="default"
+        variant="destructive"
         loading={isRegenerating}
       />
 

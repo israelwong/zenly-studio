@@ -53,11 +53,15 @@ export async function obtenerRegistroCierre(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Verificar que la cotizaci?n pertenece al studio
+    // Verificar que la cotizaci?n pertenece al studio e incluir AMBAS relaciones de condiciones (negociación + catálogo/privada)
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
         studio_id: studio.id,
+      },
+      include: {
+        condicion_comercial_negociacion: true,
+        condiciones_comerciales: true,
       },
     });
 
@@ -101,14 +105,45 @@ export async function obtenerRegistroCierre(
       }
     }
 
-    // Convertir Decimal a number para serializaci?n
+    // Construir condiciones_comerciales: 1) registro cierre, 2) condicion_comercial_negociacion, 3) condiciones_comerciales (catálogo/privada en cotización)
+    type CondicionMapeada = {
+      id: string;
+      name: string;
+      description: string | null;
+      discount_percentage: number | null;
+      advance_type: string | undefined;
+      advance_percentage: number | null;
+      advance_amount: number | null;
+    };
+    const mapCondicion = (c: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_type?: string | null; advance_percentage?: number | null; advance_amount?: unknown }): CondicionMapeada => ({
+      id: c.id,
+      name: c.name,
+      description: c.description ?? null,
+      discount_percentage: c.discount_percentage != null ? Number(c.discount_percentage) : null,
+      advance_type: c.advance_type ?? undefined,
+      advance_percentage: c.advance_percentage != null ? Number(c.advance_percentage) : null,
+      advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+    });
+    let condicionesComercialesMapeado: CondicionMapeada | null = null;
+    if (registro.condiciones_comerciales) {
+      condicionesComercialesMapeado = mapCondicion(registro.condiciones_comerciales);
+    } else if (cotizacion.condicion_comercial_negociacion) {
+      condicionesComercialesMapeado = mapCondicion(cotizacion.condicion_comercial_negociacion);
+    } else if (cotizacion.condiciones_comerciales) {
+      condicionesComercialesMapeado = mapCondicion(cotizacion.condiciones_comerciales);
+    }
+    const condicionesDefinidas =
+      registro.condiciones_comerciales_definidas ||
+      !!cotizacion.condicion_comercial_negociacion ||
+      !!cotizacion.condiciones_comerciales;
+
+    // Convertir Decimal a number para serialización
     return {
       success: true,
       data: {
         id: registro.id,
         cotizacion_id: registro.cotizacion_id,
         condiciones_comerciales_id: registro.condiciones_comerciales_id,
-        condiciones_comerciales_definidas: registro.condiciones_comerciales_definidas,
         contract_template_id: registro.contract_template_id,
         contract_content: registro.contract_content,
         contract_version: registro.contract_version,
@@ -120,15 +155,8 @@ export async function obtenerRegistroCierre(
         pago_fecha: registro.pago_fecha,
         pago_metodo_id: registro.pago_metodo_id,
         pago_metodo_nombre,
-        condiciones_comerciales: registro.condiciones_comerciales ? {
-          id: registro.condiciones_comerciales.id,
-          name: registro.condiciones_comerciales.name,
-          description: registro.condiciones_comerciales.description,
-          discount_percentage: registro.condiciones_comerciales.discount_percentage ? Number(registro.condiciones_comerciales.discount_percentage) : null,
-          advance_type: registro.condiciones_comerciales.advance_type,
-          advance_percentage: registro.condiciones_comerciales.advance_percentage ? Number(registro.condiciones_comerciales.advance_percentage) : null,
-          advance_amount: registro.condiciones_comerciales.advance_amount ? Number(registro.condiciones_comerciales.advance_amount) : null,
-        } : null,
+        condiciones_comerciales: condicionesComercialesMapeado,
+        condiciones_comerciales_definidas: condicionesDefinidas,
         contract_template: registro.contract_template,
         ultima_version_info: ultimaVersion ? {
           version: ultimaVersion.version,

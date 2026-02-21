@@ -549,6 +549,8 @@ export function PromiseCierreClient({
             ) : cierreLogic.cotizacionCompleta ? (
               <ResumenCotizacion
                 cotizacion={cierreLogic.cotizacionCompleta}
+                event_duration={cierreLogic.cotizacionCompleta.event_duration ?? null}
+                promiseDurationHours={contextPromiseData.duration_hours ?? null}
                 studioSlug={studioSlug}
                 promiseId={promiseId}
                 condicionesComerciales={(cierreLogic.condicionesData?.condiciones_comerciales ?? null) as React.ComponentProps<typeof ResumenCotizacion>['condicionesComerciales']}

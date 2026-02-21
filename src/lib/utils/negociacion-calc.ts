@@ -95,6 +95,10 @@ export interface CalculoNegociacionResult {
   descuentoTotal: number;
   costoTotal: number;
   gastoTotal: number;
+  /** Monto de comisión de venta (precioFinal * comision_venta) */
+  montoComision: number;
+  /** Porcentaje de comisión usado (0-1, ej. 0.10 = 10%). De configuracionPrecios. */
+  porcentajeComisionVenta: number;
   utilidadNeta: number;
   margenPorcentaje: number;
   impactoUtilidad: number;
@@ -179,15 +183,17 @@ export function calcularPrecioNegociado(
     return null;
   }
 
-  // 7. Calcular utilidad
-  const utilidadNeta = precioFinal - costoTotal - gastoTotal;
+  // 7. Comisión de venta (de configuración de rentabilidad del estudio)
+  const porcentajeComisionVenta = configPrecios.comision_venta ?? 0;
+  const montoComision = precioFinal * porcentajeComisionVenta;
+  const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision;
   const margenPorcentaje =
     precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
 
-  // 8. Calcular impacto vs original
-  // Usar precio original si existe, sino usar price (para compatibilidad con negociaciones antiguas)
+  // 8. Calcular impacto vs original (original también resta comisión para comparativa justa)
   const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-  const utilidadOriginal = precioOriginal - costoTotal - gastoTotal;
+  const montoComisionOriginal = precioOriginal * porcentajeComisionVenta;
+  const utilidadOriginal = precioOriginal - costoTotal - gastoTotal - montoComisionOriginal;
   const impactoUtilidad = utilidadNeta - utilidadOriginal;
 
   return {
@@ -196,6 +202,8 @@ export function calcularPrecioNegociado(
     descuentoTotal: Number(descuentoTotal.toFixed(2)),
     costoTotal: Number(costoTotal.toFixed(2)),
     gastoTotal: Number(gastoTotal.toFixed(2)),
+    montoComision: Number(montoComision.toFixed(2)),
+    porcentajeComisionVenta,
     utilidadNeta: Number(utilidadNeta.toFixed(2)),
     margenPorcentaje: Number(margenPorcentaje.toFixed(2)),
     impactoUtilidad: Number(impactoUtilidad.toFixed(2)),
@@ -273,29 +281,35 @@ export interface FinancialHealthResult {
 }
 
 /**
- * Calcula la salud financiera basada en el margen de utilidad
- * 
+ * Calcula la salud financiera basada en el margen de utilidad (después de comisión de venta)
+ *
  * @param costos - Costo total (incluyendo costos de items de cortesía)
  * @param gastos - Gasto total
  * @param precioNegociado - Precio negociado actual
+ * @param comisionVenta - Porcentaje de comisión 0-1 (ej. 0.10 = 10%). Si se omite, no se resta comisión.
  * @returns Resultado con estado, precio de rescate y mensaje
  */
 export function calculateFinancialHealth(
   costos: number,
   gastos: number,
-  precioNegociado: number
+  precioNegociado: number,
+  comisionVenta?: number
 ): FinancialHealthResult {
   const costosTotales = costos + gastos;
-  
-  // Calcular margen actual
-  const utilidadNeta = precioNegociado - costosTotales;
-  const margenActual = precioNegociado > 0 
-    ? (utilidadNeta / precioNegociado) * 100 
+  const porcentajeComision = comisionVenta ?? 0;
+  const montoComision = precioNegociado * porcentajeComision;
+
+  // Margen = utilidad neta después de costos, gastos y comisión
+  const utilidadNeta = precioNegociado - costosTotales - montoComision;
+  const margenActual = precioNegociado > 0
+    ? (utilidadNeta / precioNegociado) * 100
     : 0;
 
-  // Calcular precio de rescate para alcanzar 20% de margen
-  // Precio de Rescate = Costos / (1 - 0.20) = Costos / 0.80
-  const precioRescate = costosTotales / 0.80;
+  // Precio de rescate para alcanzar 20% de margen (después de comisión)
+  // utilidadNeta = precio - costosTotales - precio*comision = precio*(1-comision) - costosTotales
+  // 20% = utilidadNeta/precio => precio*0.20 = precio*(1-comision) - costosTotales => precio*(0.20-1+comision) = -costosTotales
+  const denominador = 0.80 - porcentajeComision;
+  const precioRescate = denominador > 0 ? costosTotales / denominador : precioNegociado;
   const diferenciaFaltante = precioRescate - precioNegociado;
 
   // Determinar estado según el margen

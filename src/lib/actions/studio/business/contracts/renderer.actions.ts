@@ -200,6 +200,28 @@ export async function getPromiseContractData(
             },
           },
         },
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
+        condiciones_comerciales: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
       },
     });
 
@@ -312,21 +334,25 @@ export async function getPromiseContractData(
       }
     }
 
-    // Usar condiciones comerciales pasadas como par?metro, o obtenerlas desde cotizacion_cierre
-    let condiciones = condicionesComerciales;
-    
-    // Si no se pasaron condiciones comerciales como par?metro, obtenerlas desde cotizacion_cierre
+    // Usar condiciones: 1) par?metro, 2) cotizacion_cierre, 3) condicion_comercial_negociacion, 4) condiciones_comerciales (cat?logo)
+    const mapCond = (c: { id: string; name: string; description: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown }) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      discount_percentage: c.discount_percentage != null ? Number(c.discount_percentage) : null,
+      advance_percentage: c.advance_percentage != null ? Number(c.advance_percentage) : null,
+      advance_type: c.advance_type ?? null,
+      advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+    });
+    let condiciones = condicionesComerciales ?? null;
     if (!condiciones && cotizacion.cotizacion_cierre?.condiciones_comerciales) {
-      const condicionCierre = cotizacion.cotizacion_cierre.condiciones_comerciales;
-      condiciones = {
-        id: condicionCierre.id,
-        name: condicionCierre.name,
-        description: condicionCierre.description,
-        discount_percentage: condicionCierre.discount_percentage ? Number(condicionCierre.discount_percentage) : null,
-        advance_percentage: condicionCierre.advance_percentage ? Number(condicionCierre.advance_percentage) : null,
-        advance_type: condicionCierre.advance_type,
-        advance_amount: condicionCierre.advance_amount ? Number(condicionCierre.advance_amount) : null,
-      };
+      condiciones = mapCond(cotizacion.cotizacion_cierre.condiciones_comerciales);
+    }
+    if (!condiciones && (cotizacion as any).condicion_comercial_negociacion) {
+      condiciones = mapCond((cotizacion as any).condicion_comercial_negociacion);
+    }
+    if (!condiciones && (cotizacion as any).condiciones_comerciales) {
+      condiciones = mapCond((cotizacion as any).condiciones_comerciales);
     }
     
     // Si tenemos un ID de condiciones comerciales, obtener datos completos desde la base de datos
@@ -705,8 +731,19 @@ export async function getEventContractData(
             condiciones_comerciales_advance_type_snapshot: true,
             condiciones_comerciales_advance_amount_snapshot: true,
             condiciones_comerciales_discount_percentage_snapshot: true,
-            // Relaci?n legacy (fallback si no hay snapshots)
+            // Relación catálogo + negociación (mismo fallback que getPromiseContractData)
             condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                discount_percentage: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+              },
+            },
+            condicion_comercial_negociacion: {
               select: {
                 id: true,
                 name: true,
@@ -763,7 +800,8 @@ export async function getEventContractData(
             selected_by_prospect: true,
             tyc_accepted: true,
             condiciones_comerciales_id: true,
-            // Snapshots inmutables (prioridad cuando existen)
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
             condiciones_comerciales_name_snapshot: true,
             condiciones_comerciales_description_snapshot: true,
             condiciones_comerciales_advance_percentage_snapshot: true,
@@ -771,8 +809,18 @@ export async function getEventContractData(
             condiciones_comerciales_advance_amount_snapshot: true,
             condiciones_comerciales_discount_percentage_snapshot: true,
             event_duration: true,
-            // Relaci?n legacy (fallback si no hay snapshots)
             condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                discount_percentage: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+              },
+            },
+            condicion_comercial_negociacion: {
               select: {
                 id: true,
                 name: true,
@@ -963,9 +1011,11 @@ export async function getEventContractData(
     const descuentoExistente = cotizacionAprobada.discount ? Number(cotizacionAprobada.discount) : 0;
     const precioBaseReal = descuentoExistente > 0 ? precioBase + descuentoExistente : precioBase;
     
-    // Priorizar snapshots; si faltan (legacy), usar relación viva para no devolver condiciones vacías
+    // Fallback condiciones: snapshots → condicion_comercial_negociacion → condiciones_comerciales (catálogo)
     const tieneSnapshots = !!cotizacionAprobada.condiciones_comerciales_name_snapshot;
-    let condiciones = tieneSnapshots
+    type CondicionRow = { name: string; description?: string | null; discount_percentage?: unknown; advance_percentage?: unknown; advance_type?: string | null; advance_amount?: unknown };
+    const cot = cotizacionAprobada as typeof cotizacionAprobada & { condicion_comercial_negociacion?: CondicionRow | null };
+    let condiciones: CondicionRow | null = tieneSnapshots
       ? {
           name: cotizacionAprobada.condiciones_comerciales_name_snapshot || '',
           description: cotizacionAprobada.condiciones_comerciales_description_snapshot,
@@ -977,10 +1027,9 @@ export async function getEventContractData(
               ? Number(cotizacionAprobada.condiciones_comerciales_advance_amount_snapshot)
               : null,
         }
-      : cotizacionAprobada.condiciones_comerciales;
-    if (!condiciones && cotizacionAprobada.condiciones_comerciales) {
-      condiciones = cotizacionAprobada.condiciones_comerciales;
-    }
+      : null;
+    if (!condiciones && cot.condicion_comercial_negociacion) condiciones = cot.condicion_comercial_negociacion;
+    if (!condiciones && cotizacionAprobada.condiciones_comerciales) condiciones = cotizacionAprobada.condiciones_comerciales;
     
     // Calcular total final y descuento seg?n modo
     let totalFinal: number;

@@ -9,12 +9,15 @@ import {
 } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CalculoNegociacionResult } from '@/lib/utils/negociacion-calc';
+import { calculateFinancialHealth } from '@/lib/utils/negociacion-calc';
+import { ConsolaFinanciera } from './ConsolaFinanciera';
 
 interface ComparacionViewProps {
   original: {
     precioFinal: number;
     costoTotal: number;
     gastoTotal: number;
+    montoComision?: number;
     utilidadNeta: number;
     margenPorcentaje: number;
   };
@@ -23,12 +26,18 @@ interface ComparacionViewProps {
 
 export function ComparacionView({
   original,
-  negociada,
 }: ComparacionViewProps) {
-  const margenOriginal =
-    original.precioFinal > 0
-      ? ((original.utilidadNeta / original.precioFinal) * 100).toFixed(1)
-      : '0.0';
+  const comisionVenta =
+    original.precioFinal > 0 && (original.montoComision ?? 0) > 0
+      ? (original.montoComision ?? 0) / original.precioFinal
+      : undefined;
+
+  const financialHealth = calculateFinancialHealth(
+    original.costoTotal,
+    original.gastoTotal,
+    original.precioFinal,
+    comisionVenta
+  );
 
   return (
     <ZenCard>
@@ -46,32 +55,14 @@ export function ComparacionView({
         <p className="text-xs font-medium uppercase tracking-wider text-amber-400/90 mb-3">
           Desglose financiero original
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-400 mb-1">Costos</span>
-            <span className="text-sm text-zinc-300">
-              {formatearMoneda(original.costoTotal)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-400 mb-1">Gastos</span>
-            <span className="text-sm text-zinc-300">
-              {formatearMoneda(original.gastoTotal)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-400 mb-1">Utilidad</span>
-            <span className="text-sm font-semibold text-emerald-400">
-              {formatearMoneda(original.utilidadNeta)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-400 mb-1">Margen</span>
-            <span className="text-sm font-medium text-zinc-300">
-              {margenOriginal}%
-            </span>
-          </div>
-        </div>
+        <ConsolaFinanciera
+          costoTotal={original.costoTotal}
+          gastoTotal={original.gastoTotal}
+          montoComision={original.montoComision ?? 0}
+          utilidadNeta={original.utilidadNeta}
+          margenPorcentaje={original.margenPorcentaje}
+          financialHealth={financialHealth}
+        />
       </ZenCardContent>
     </ZenCard>
   );

@@ -1191,6 +1191,8 @@ export function AuthorizeCotizacionModal({
         ) : cotizacionCompleta ? (
           <ResumenCotizacion
             cotizacion={cotizacionCompleta}
+            event_duration={cotizacionCompleta.event_duration ?? null}
+            promiseDurationHours={promiseData?.duration_hours ?? null}
             studioSlug={studioSlug}
             promiseId={promiseId}
           />

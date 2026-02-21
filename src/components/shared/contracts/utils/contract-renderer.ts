@@ -174,7 +174,7 @@ export function renderCondicionesComercialesBlock(
 
       html += `
         <tr style="border-bottom: 1px solid ${t.border};">
-          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio negociado</td>
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio especial</td>
           <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">${precioNegociadoFormateado}</td>
         </tr>
       `;

@@ -600,6 +600,7 @@ export async function getCotizacionById(
     selected_at?: Date | null;
     negociacion_precio_original?: number | null;
     negociacion_precio_personalizado?: number | null;
+    event_duration?: number | null;
     promise_route_state?: PromiseRouteState | null;
     items: Array<{
       item_id: string | null; // null para custom items
@@ -611,6 +612,7 @@ export async function getCotizacionById(
       order: number;
       id: string;
       billing_type: 'HOUR' | 'SERVICE' | 'UNIT' | null;
+      profit_type_snapshot?: string | null;
       // Campos operacionales (para compatibilidad)
       name: string | null;
       description: string | null;
@@ -667,6 +669,7 @@ export async function getCotizacionById(
         selected_at: true,
         negociacion_precio_original: true,
         negociacion_precio_personalizado: true,
+        event_duration: true,
         promise: {
           select: {
             pipeline_stage: { select: { slug: true } },
@@ -705,12 +708,13 @@ export async function getCotizacionById(
         order: item.order ?? 0,
         id: item.id,
         billing_type: item.billing_type,
+        profit_type_snapshot: item.profit_type_snapshot ?? undefined,
         // Campos operacionales (para compatibilidad)
         name: item.name_snapshot || item.name,
         description: item.description_snapshot || item.description,
         category_name: item.category_name_snapshot || item.category_name,
         seccion_name: item.seccion_name_snapshot || item.seccion_name,
-        // Snapshots raw (para usar con funciรณn centralizada)
+        // Snapshots raw (para usar con función centralizada)
         name_snapshot: item.name_snapshot,
         description_snapshot: item.description_snapshot,
         category_name_snapshot: item.category_name_snapshot,
@@ -735,6 +739,7 @@ export async function getCotizacionById(
         order: item.order ?? 0,
         id: item.id,
         billing_type: item.billing_type,
+        profit_type_snapshot: item.profit_type_snapshot ?? undefined,
         // Campos operacionales (para compatibilidad)
         name: item.name_snapshot || item.name || '',
         description: item.description_snapshot || item.description,
@@ -788,6 +793,7 @@ export async function getCotizacionById(
         negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado !== null && cotizacion.negociacion_precio_personalizado !== undefined
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
+        event_duration: cotizacion.event_duration ?? null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
       },
@@ -2526,7 +2532,7 @@ export async function pasarACierre(
           previous_status: previousStatus,
         },
         update: {
-          // Limpiar todos los campos si el registro ya existรญa
+          // Limpiar todos los campos si el registro ya existía
           previous_status: previousStatus, // Actualizar también el estado anterior
           condiciones_comerciales_id: null,
           condiciones_comerciales_definidas: false,
@@ -2541,6 +2547,23 @@ export async function pasarACierre(
           updated_at: new Date(),
         },
       });
+
+      // 3. Archivar las demás cotizaciones de la misma promesa (homólogo al flujo público)
+      // Así listados y pipeline solo consideran la cotización en cierre; al cancelar cierre se desarchivan.
+      if (cotizacion.promise_id) {
+        await tx.studio_cotizaciones.updateMany({
+          where: {
+            promise_id: cotizacion.promise_id,
+            id: { not: cotizacionId },
+            status: { in: ['pendiente', 'negociacion'] },
+            archived: false,
+          },
+          data: {
+            archived: true,
+            updated_at: new Date(),
+          },
+        });
+      }
     });
 
     // Sincronizar pipeline stage de la promesa

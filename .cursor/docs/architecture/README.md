@@ -30,7 +30,21 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 2. Panel de Gestión Logística (Scheduler)
+### 2. Flujos (paso a paso)
+**Carpeta:** [flujos/](flujos/)
+
+Documentos de flujos operativos (UI → acciones → servidor) para cierre, autorización, etc. Índice en `flujos/README.md`.
+
+| Documento | Descripción |
+|-----------|-------------|
+| [flujo-cierre-cotizacion.md](flujos/flujo-cierre-cotizacion.md) | Pasar a cierre (público y estudio), archivado, cancelar cierre. |
+| [contracts-flow.md](contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio). |
+
+**Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio). Índice completo y referencias a analysis en [flujos/README.md](flujos/README.md).
+
+---
+
+### 3. Panel de Gestión Logística (Scheduler)
 **Archivo:** `panel-gestion-logistica.md`  
 **Estado:** ✅ Producción
 
@@ -53,7 +67,10 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 .cursor/docs/
 ├── architecture/           # ← ESTÁS AQUÍ
 │   ├── README.md          # Este archivo
-│   └── public-promise-authorization-flow.md
+│   ├── flujos/            # Flujos paso a paso (cierre, autorización, etc.)
+│   │   ├── README.md
+│   │   └── flujo-cierre-cotizacion.md
+│   └── ... (contracts-flow, promise-detalle, etc.)
 │
 ├── analysis/              # Análisis técnicos específicos
 │   └── ... (análisis puntuales)

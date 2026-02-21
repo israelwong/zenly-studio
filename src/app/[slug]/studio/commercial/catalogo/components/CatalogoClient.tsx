@@ -124,12 +124,15 @@ interface CatalogoClientProps {
         }>;
     }>;
     initialPreciosConfig: ConfiguracionPrecios | null;
+    /** Abrir modal de rentabilidad al montar (ej. desde Configurar > Configuración de Rentabilidad) */
+    initialOpenUtilidad?: boolean;
 }
 
 export function CatalogoClient({
     studioSlug,
     initialCatalogo,
     initialPreciosConfig,
+    initialOpenUtilidad = false,
 }: CatalogoClientProps) {
     // Procesar datos iniciales del catálogo completo
     const [secciones, setSecciones] = useState<Seccion[]>(() => {
@@ -142,7 +145,7 @@ export function CatalogoClient({
             items: s.categorias.reduce((acc, cat) => acc + cat.servicios.length, 0),
         }));
     });
-    const [isUtilidadModalOpen, setIsUtilidadModalOpen] = useState(false);
+    const [isUtilidadModalOpen, setIsUtilidadModalOpen] = useState(initialOpenUtilidad);
 
     // Exponer función para abrir modal desde el header
     React.useEffect(() => {
