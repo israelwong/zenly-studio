@@ -709,7 +709,7 @@ export function PromiseQuotesPanelCard({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-sm font-semibold ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'
                   }`}>
-                  ${(cotizacion.price - (cotizacion.discount || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  ${(cotizacion.total_a_pagar ?? cotizacion.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 {isArchivada ? (
                   <ZenBadge

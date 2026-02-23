@@ -163,9 +163,12 @@ export async function getPromiseContractData(
         negociacion_precio_original: true,
         event_duration: true,
         paquete_id: true, // ✅ Para identificar si viene de paquete y aplicar precio charm
+        precio_calculado: true,
+        bono_especial: true,
         cotizacion_items: {
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
+            is_courtesy: true,
             service_category_id: true,
             service_categories: {
               select: {
@@ -441,6 +444,25 @@ export async function getPromiseContractData(
       }
     }
 
+    // Fase 10.3: Desglose de negociación (precio lista, cortesías, bono, ajuste). Total contrato = precio_final_cierre (congruencia de firma).
+    const precioCalculadoNum = cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null;
+    const bonoEspecialNum = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
+    const precioListaContrato = precioCalculadoNum != null && precioCalculadoNum > 0 ? precioCalculadoNum : precioBaseReal;
+    const montoCortesiasContrato = cotizacion.cotizacion_items
+      .filter((it: { is_courtesy?: boolean }) => it.is_courtesy === true)
+      .reduce((sum: number, it: { subtotal?: number }) => sum + Number(it.subtotal ?? 0), 0);
+    const precioFinalCierreContrato = Number(cotizacion.price);
+    const ajusteCierreContrato = precioFinalCierreContrato - Math.max(0, precioListaContrato - montoCortesiasContrato - bonoEspecialNum);
+    const tieneConcesionesContrato = precioListaContrato > 0 && (montoCortesiasContrato > 0 || bonoEspecialNum > 0 || Math.abs(ajusteCierreContrato) >= 0.01);
+    // Congruencia: el total impreso en el contrato debe ser EXACTAMENTE el precio de cierre autorizado.
+    totalFinalParaContrato = precioFinalCierreContrato;
+    if (condiciones && totalFinalParaContrato !== totalFinal) {
+      if (condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
+        montoAnticipo = (totalFinalParaContrato * condiciones.advance_percentage) / 100;
+      }
+      // fixed_amount se mantiene
+    }
+
     // Convertir secciones a formato legacy para [SERVICIOS_INCLUIDOS]
     const serviciosLegacy: any[] = [];
     secciones.forEach(seccion => {
@@ -448,35 +470,30 @@ export async function getPromiseContractData(
         serviciosLegacy.push({
           categoria: categoria.nombre,
           servicios: categoria.items.map(item => {
-            // ✅ UNIFICADO: Obtener billing_type y calcular cantidad efectiva
             const itemId = item.item_id || (item as any)['item_id'];
+            const itemOriginal = cotizacion.cotizacion_items.find(
+              (ci: { id?: string; item_id?: string | null }) =>
+                (item.id && ci.id === item.id) || (itemId && ci.item_id === itemId)
+            );
+            const esCortesia = (itemOriginal as { is_courtesy?: boolean } | undefined)?.is_courtesy === true;
             const billingType = itemId ? (billingTypeMap.get(itemId) || 'SERVICE') : 'SERVICE';
             const cantidadBase = item.cantidad;
             let cantidadEfectiva = cantidadBase;
-            
-            // Calcular cantidad efectiva para items tipo HOUR
             if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
-              cantidadEfectiva = calcularCantidadEfectiva(
-                billingType,
-                cantidadBase,
-                eventDuration
-              );
+              cantidadEfectiva = calcularCantidadEfectiva(billingType, cantidadBase, eventDuration);
             }
-            
             const servicio: any = {
               nombre: item.nombre,
               descripcion: item.descripcion,
-              precio: item.subtotal,
-              cantidad: cantidadBase, // ✅ Cantidad base
-              cantidadEfectiva: cantidadEfectiva, // ✅ Cantidad efectiva calculada
-              billing_type: billingType, // ✅ Tipo de facturación
+              precio: esCortesia ? 0 : item.subtotal,
+              cantidad: cantidadBase,
+              cantidadEfectiva: cantidadEfectiva,
+              billing_type: billingType,
+              is_courtesy: esCortesia,
             };
-            
-            // Si el item tiene billing_type HOUR y hay event_duration, agregar horas
             if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
               servicio.horas = eventDuration;
             }
-            
             return servicio;
           }),
         });
@@ -590,42 +607,53 @@ export async function getPromiseContractData(
                 );
               }
               
+              const esCortesia = (itemOriginal as { is_courtesy?: boolean } | undefined)?.is_courtesy === true;
               const itemData: any = {
                 nombre: item.nombre,
                 descripcion: item.descripcion,
-                cantidad: cantidadBase, // ✅ Cantidad base para display (1 para HOUR, cantidad real para SERVICE/UNIT)
-                cantidadEfectiva: cantidadEfectiva, // ✅ Cantidad efectiva calculada (cantidad * horas para HOUR)
-                subtotal: item.subtotal,
-                billing_type: billingTypeFinal, // ✅ Tipo de facturación para renderizado (con fallback correcto)
+                cantidad: cantidadBase,
+                cantidadEfectiva: cantidadEfectiva,
+                subtotal: esCortesia ? 0 : item.subtotal, // Fase 10.3: cortesía se muestra $0.00
+                billing_type: billingTypeFinal,
+                is_courtesy: esCortesia,
               };
-              
-              // Si el item tiene billing_type HOUR y hay event_duration, agregar horas
               if (esHOUR && eventDuration && eventDuration > 0) {
                 itemData.horas = eventDuration;
               }
-              
               return itemData;
             }),
           })),
         })),
         total: totalFinalParaContrato,
       },
-      condicionesData: condiciones ? {
+      condicionesData: (condiciones ? {
         nombre: condiciones.name,
         descripcion: condiciones.description || undefined,
         porcentaje_descuento: condiciones.discount_percentage || undefined,
         porcentaje_anticipo: condiciones.advance_percentage || undefined,
         tipo_anticipo: (condiciones.advance_type as "percentage" | "fixed_amount") || undefined,
         monto_anticipo: montoAnticipo,
-        total_contrato: esNegociacion ? precioOriginalParaContrato : precioBaseReal, // Precio original en negociaci?n, precio base antes de descuentos en normal
-        total_final: totalFinalParaContrato, // ✅ Precio con charm si es paquete, precio negociado en negociaci?n, precio despu?s de descuentos en normal
-        descuento_aplicado: descuentoAplicado, // Monto del descuento aplicado (0 en negociaci?n)
-        // Campos para modo negociaci?n
+        total_contrato: esNegociacion ? precioOriginalParaContrato : precioBaseReal,
+        total_final: totalFinalParaContrato,
+        descuento_aplicado: descuentoAplicado,
         es_negociacion: esNegociacion,
         precio_negociado: precioNegociado ?? undefined,
         precio_original: esNegociacion ? precioOriginalParaContrato : undefined,
         ahorro_total: ahorroTotal,
-      } : undefined,
+        tiene_concesiones: tieneConcesionesContrato,
+        precio_lista: precioListaContrato,
+        monto_cortesias: montoCortesiasContrato,
+        monto_bono: bonoEspecialNum,
+        ajuste_cierre: ajusteCierreContrato,
+      } : {
+        nombre: "Resumen de pago",
+        total_final: totalFinalParaContrato,
+        tiene_concesiones: tieneConcesionesContrato,
+        precio_lista: precioListaContrato,
+        monto_cortesias: montoCortesiasContrato,
+        monto_bono: bonoEspecialNum,
+        ajuste_cierre: ajusteCierreContrato,
+      }) as CondicionesComercialesData,
     };
 
     return { success: true, data: eventData };
@@ -1307,12 +1335,13 @@ function renderServiciosBlock(servicios: ServiceCategory[] | undefined | null): 
       });
       
       let servicioTexto = servicio.nombre;
-      
-      // Agregar texto formateado si existe
       if (formatted.displayText) {
         servicioTexto += ` <span class="text-zinc-500">${formatted.displayText}</span>`;
       }
-      
+      const esCortesia = (servicio as { is_courtesy?: boolean }).is_courtesy === true;
+      if (esCortesia) {
+        servicioTexto += ' <span class="text-zinc-500 italic">— $0.00 MXN (Cortesía / Beneficio)</span>';
+      }
       html += `<li>${servicioTexto}</li>`;
 
       if (servicio.descripcion) {

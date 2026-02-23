@@ -46,7 +46,6 @@ export interface CotizacionCompleta {
   status: string;
   items: CotizacionItem[];
   visible_to_client?: boolean | null;
-  /** Duración del evento en horas; usada para cantidad efectiva en ítems HOUR */
   event_duration?: number | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
@@ -54,6 +53,8 @@ export interface CotizacionCompleta {
   negociacion_notas?: string | null;
   condiciones_comerciales_id?: string | null;
   condicion_comercial_temporal?: CondicionComercialTemporal | null;
+  /** Fase 11: bono especial en $ para restar de utilidad neta. */
+  bono_especial?: number | null;
 }
 
 /**
@@ -111,10 +112,10 @@ export interface CalculoNegociacionResult {
     precioNegociado: number;
     isCortesia: boolean;
   }>;
-  /** KPI comparativo: utilidad si el cliente aplica descuento comercial (ej. 10%) */
   utilidadConDescuentoComercial?: number;
-  /** Porcentaje de descuento comercial usado para el KPI (ej. 10) */
   descuentoComercialPercent?: number;
+  /** Fase 11: suma de descuentos otorgados (cortesías + bono) para "Impacto de Negociación". */
+  impactoNegociacion?: number;
 }
 
 /**
@@ -176,17 +177,22 @@ export function calcularPrecioNegociado(
   let costoTotal = 0;
   let gastoTotal = 0;
 
+  let montoCortesias = 0;
   cotizacionOriginal.items.forEach((item) => {
     const qtyEfectiva = cantidadEfectiva(item, durationHours);
     const isCortesia = itemsCortesia.has(item.id);
 
     costoTotal += (item.cost || 0) * qtyEfectiva;
     gastoTotal += (item.expense || 0) * qtyEfectiva;
-
+    if (isCortesia) {
+      montoCortesias += item.subtotal ?? (item.unit_price || 0) * item.quantity;
+    }
     if (!isCortesia) {
       precioBaseItems += (item.unit_price || 0) * item.quantity;
     }
   });
+  const bonoEspecial = Number((cotizacionOriginal as { bono_especial?: number | null }).bono_especial ?? 0);
+  const impactoNegociacion = montoCortesias + bonoEspecial;
 
   // 2. Aplicar precio personalizado si existe
   let precioBase = precioPersonalizado ?? precioBaseItems;
@@ -214,7 +220,7 @@ export function calcularPrecioNegociado(
   // 7. Comisión normalizada (misma regla que CotizacionForm: 5 → 0.05)
   const ratioComision = comisionRatio(configPrecios);
   const montoComision = precioFinal * ratioComision;
-  const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision;
+  const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision - bonoEspecial;
   const margenPorcentaje =
     precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
 
@@ -235,6 +241,7 @@ export function calcularPrecioNegociado(
     utilidadNeta: Number(utilidadNeta.toFixed(2)),
     margenPorcentaje: Number(margenPorcentaje.toFixed(2)),
     impactoUtilidad: Number(impactoUtilidad.toFixed(2)),
+    impactoNegociacion: Number(impactoNegociacion.toFixed(2)),
     items: cotizacionOriginal.items.map((item) => ({
       id: item.id,
       precioOriginal: (item.unit_price || 0) * item.quantity,

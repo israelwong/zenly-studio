@@ -116,13 +116,13 @@ export const PrecioDesglose = forwardRef<HTMLDivElement, PrecioDesgloseProps>(
                   </span>
                 </div>
               )}
-              {ajusteCierre !== 0 && (
+              {Math.abs(ajusteCierre ?? 0) >= 0.01 && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">
-                    {ajusteCierre < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
+                    {(ajusteCierre ?? 0) < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
                   </span>
                   <span className="text-sm font-medium text-zinc-300">
-                    {ajusteCierre < 0 ? `-${formatPrice(Math.abs(ajusteCierre))}` : `+${formatPrice(ajusteCierre)}`}
+                    {(ajusteCierre ?? 0) < 0 ? `-${formatPrice(Math.abs(ajusteCierre ?? 0))}` : `+${formatPrice(ajusteCierre ?? 0)}`}
                   </span>
                 </div>
               )}

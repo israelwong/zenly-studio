@@ -55,6 +55,7 @@ export async function loadCotizacionParaNegociacion(
         negociacion_precio_personalizado: true,
         negociacion_descuento_adicional: true,
         negociacion_notas: true,
+        bono_especial: true,
         cotizacion_items: {
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -143,6 +144,7 @@ export async function loadCotizacionParaNegociacion(
           : null,
         negociacion_notas: cotizacion.negociacion_notas || null,
         condiciones_comerciales_id: cotizacion.condiciones_comerciales_id || null,
+        bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
         condicion_comercial_temporal: condicionTemporal ? {
           name: condicionTemporal.name,
           description: condicionTemporal.description || null,

@@ -219,11 +219,20 @@ export function NegociacionClient({
           (sum, item) => sum + (item.expense || 0) * qtyEfectiva(item),
           0
         );
+        const bonoEspecial = Number((workingCotizacion as { bono_especial?: number | null }).bono_especial ?? 0);
+        const montoCortesias = workingCotizacion.items.reduce(
+          (sum, item) => {
+            const esCortesia = item.is_courtesy === true || negociacionState.itemsCortesia.has(item.id);
+            return sum + (esCortesia ? (item.subtotal ?? (item.unit_price || 0) * item.quantity) : 0);
+          },
+          0
+        );
+        const impactoNegociacion = montoCortesias + bonoEspecial;
         const comisionRatio = (configPrecios.comision_venta ?? 0) > 1
           ? (configPrecios.comision_venta ?? 0) / 100
           : (configPrecios.comision_venta ?? 0);
         const montoComision = precioParaCalcular * comisionRatio;
-        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal - montoComision;
+        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal - montoComision - bonoEspecial;
         const margenPorcentaje =
           precioParaCalcular > 0 ? (utilidadNeta / precioParaCalcular) * 100 : 0;
 
@@ -258,6 +267,7 @@ export function NegociacionClient({
           impactoUtilidad: Number(impactoUtilidad.toFixed(2)),
           utilidadConDescuentoComercial: Number(utilidadConDescuentoComercial.toFixed(2)),
           descuentoComercialPercent: Number(descuentoComercialPercent.toFixed(0)),
+          impactoNegociacion: Number(impactoNegociacion.toFixed(2)),
           items: workingCotizacion.items.map((item) => ({
             id: item.id,
             precioOriginal: (item.unit_price || 0) * item.quantity,

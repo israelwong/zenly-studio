@@ -87,6 +87,9 @@ export function renderCotizacionBlock(
         if (formatted.displayText) {
           html += ` <span class="text-zinc-500">${formatted.displayText}</span>`;
         }
+        if (item.is_courtesy) {
+          html += ` <span class="text-zinc-500 italic">— $0.00 MXN (Cortesía / Beneficio)</span>`;
+        }
 
         html += `</li>`;
 
@@ -137,11 +140,10 @@ export function renderCondicionesComercialesBlock(
 
   const tieneDescuento = tieneDescuentoPorMonto || tieneDescuentoPorPorcentaje || tieneDiferencia;
 
-  const debeMostrarDesglose = condiciones.total_contrato !== undefined &&
-    condiciones.total_final !== undefined &&
-    condiciones.total_contrato > 0;
+  const tieneConcesiones = condiciones.tiene_concesiones === true;
+  const debeMostrarTabla = condiciones.total_final !== undefined;
 
-  if (debeMostrarDesglose) {
+  if (debeMostrarTabla) {
     html += `
       <div class="calculo-total mb-4 pt-3">
         <table style="width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid ${t.border}; border-radius: 8px; overflow: hidden;">
@@ -154,7 +156,38 @@ export function renderCondicionesComercialesBlock(
           <tbody>
     `;
 
-    if (esNegociacion) {
+    if (tieneConcesiones && condiciones.precio_lista !== undefined && condiciones.precio_lista > 0) {
+      const fmt = (n: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
+      html += `
+        <tr style="border-bottom: 1px solid ${t.border};">
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio de lista</td>
+          <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${fmt(condiciones.precio_lista)}</td>
+        </tr>`;
+      if ((condiciones.monto_cortesias ?? 0) > 0) {
+        html += `
+        <tr style="border-bottom: 1px solid ${t.border};">
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Cortesías</td>
+          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_cortesias!)}</td>
+        </tr>`;
+      }
+      if ((condiciones.monto_bono ?? 0) > 0) {
+        html += `
+        <tr style="border-bottom: 1px solid ${t.border};">
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Bono especial</td>
+          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_bono!)}</td>
+        </tr>`;
+      }
+      const ajuste = condiciones.ajuste_cierre ?? 0;
+      if (Math.abs(ajuste) >= 0.01) {
+        const label = ajuste < 0 ? "Descuento adicional / Ajuste por cierre" : "Ajuste por cierre";
+        const valor = ajuste < 0 ? `-${fmt(Math.abs(ajuste))}` : `+${fmt(ajuste)}`;
+        html += `
+        <tr style="border-bottom: 1px solid ${t.border};">
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">${label}</td>
+          <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${valor}</td>
+        </tr>`;
+      }
+    } else if (!tieneConcesiones && esNegociacion) {
       const precioOriginalFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
@@ -192,11 +225,11 @@ export function renderCondicionesComercialesBlock(
           </tr>
         `;
       }
-    } else {
+    } else if (!tieneConcesiones) {
       const precioFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
-      }).format(condiciones.total_contrato);
+      }).format(condiciones.total_contrato ?? 0);
 
       html += `
         <tr style="border-bottom: 1px solid ${t.border};">

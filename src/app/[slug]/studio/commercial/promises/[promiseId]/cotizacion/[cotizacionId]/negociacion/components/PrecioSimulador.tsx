@@ -235,6 +235,7 @@ export function PrecioSimulador({
                       }
                     : undefined
                 }
+                impactoNegociacion={calculoNegociado?.impactoNegociacion}
               />
               {calculoNegociado?.utilidadConDescuentoComercial != null &&
                 calculoNegociado?.descuentoComercialPercent != null && (

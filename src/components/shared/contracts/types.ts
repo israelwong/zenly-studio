@@ -23,6 +23,8 @@ export interface CotizacionRenderData {
         subtotal: number;
         horas?: number;
         billing_type?: "HOUR" | "SERVICE" | "UNIT";
+        /** Si true, mostrar $0.00 y leyenda (Cortesía / Beneficio). */
+        is_courtesy?: boolean;
       }>;
     }>;
   }>;
@@ -47,6 +49,12 @@ export interface CondicionesComercialesData {
   precio_original?: number;
   ahorro_total?: number;
   es_negociacion?: boolean;
+  /** Desglose negociación (Fase 10.3): Precio de lista, bono, cortesías, ajuste. */
+  tiene_concesiones?: boolean;
+  precio_lista?: number;
+  monto_cortesias?: number;
+  monto_bono?: number;
+  ajuste_cierre?: number;
 }
 
 export interface ParsedVariable {

@@ -51,6 +51,7 @@ export function ImpactoUtilidad({
             utilidadOriginal: formatearMoneda(original.utilidadNeta),
             margenOriginalStr,
           }}
+          impactoNegociacion={negociada.impactoNegociacion}
         />
 
         {financialHealth.estado !== 'saludable' && (

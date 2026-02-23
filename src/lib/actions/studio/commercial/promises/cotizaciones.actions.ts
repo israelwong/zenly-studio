@@ -66,6 +66,8 @@ export interface CotizacionListItem {
   } | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
+  /** Fase 11: Total a pagar (precio_final_cierre) para congruencia en listados. */
+  total_a_pagar?: number;
 }
 
 export interface CotizacionesListResponse {
@@ -409,6 +411,7 @@ export async function getCotizacionesByPromiseId(
         discount: true,
         evento_id: true,
         condiciones_comerciales_id: true,
+        negociacion_precio_personalizado: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -431,27 +434,33 @@ export async function getCotizacionesByPromiseId(
 
     return {
       success: true,
-      data: cotizaciones.map((cot) => ({
-        id: cot.id,
-        name: cot.name,
-        price: cot.price,
-        status: cot.status,
-        description: cot.description,
-        created_at: cot.created_at,
-        updated_at: cot.updated_at,
-        order: cot.order,
-        archived: cot.archived,
-        visible_to_client: cot.visible_to_client,
-        revision_of_id: cot.revision_of_id,
-        revision_number: cot.revision_number,
-        revision_status: cot.revision_status,
-        selected_by_prospect: cot.selected_by_prospect,
-        selected_at: cot.selected_at,
-        discount: cot.discount,
-        evento_id: cot.evento_id,
-        condiciones_comerciales_id: cot.condiciones_comerciales_id,
-        condiciones_comerciales: cot.condiciones_comerciales,
-      })),
+      data: cotizaciones.map((cot) => {
+        const negocio = (cot as { negociacion_precio_personalizado?: unknown }).negociacion_precio_personalizado;
+        const totalAPagar = negocio != null && Number(negocio) > 0 ? Number(negocio) : cot.price;
+        return {
+          id: cot.id,
+          name: cot.name,
+          price: cot.price,
+          status: cot.status,
+          description: cot.description,
+          created_at: cot.created_at,
+          updated_at: cot.updated_at,
+          order: cot.order,
+          archived: cot.archived,
+          visible_to_client: cot.visible_to_client,
+          revision_of_id: cot.revision_of_id,
+          revision_number: cot.revision_number,
+          revision_status: cot.revision_status,
+          selected_by_prospect: cot.selected_by_prospect,
+          selected_at: cot.selected_at,
+          discount: cot.discount,
+          evento_id: cot.evento_id,
+          condiciones_comerciales_id: cot.condiciones_comerciales_id,
+          condiciones_comerciales: cot.condiciones_comerciales,
+          negociacion_precio_personalizado: negocio != null ? Number(negocio) : null,
+          total_a_pagar: totalAPagar,
+        };
+      }),
     };
   } catch (error) {
     console.error('[COTIZACIONES] Error obteniendo cotizaciones:', error);

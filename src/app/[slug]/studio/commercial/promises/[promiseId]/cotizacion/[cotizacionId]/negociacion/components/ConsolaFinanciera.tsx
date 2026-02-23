@@ -13,7 +13,6 @@ import type { FinancialHealthResult } from '@/lib/utils/negociacion-calc';
 const HOVER_DELAY_MS = 150;
 
 export interface ConsolaFinancieraProps {
-  /** Precio original de referencia; si se pasa, se muestra una fila discreta arriba */
   precioReferencia?: number;
   costoTotal: number;
   gastoTotal: number;
@@ -21,11 +20,12 @@ export interface ConsolaFinancieraProps {
   utilidadNeta: number;
   margenPorcentaje: number;
   financialHealth: FinancialHealthResult;
-  /** Opcional: texto "Original: X" bajo utilidad y margen */
   comparativa?: {
     utilidadOriginal: string;
     margenOriginalStr: string;
   };
+  /** Fase 11: suma de descuentos otorgados (cortesías + bono + ajuste negativo) para línea "Impacto de Negociación". */
+  impactoNegociacion?: number;
 }
 
 export function ConsolaFinanciera({
@@ -37,6 +37,7 @@ export function ConsolaFinanciera({
   margenPorcentaje,
   financialHealth,
   comparativa,
+  impactoNegociacion,
 }: ConsolaFinancieraProps) {
   const deduccionesTotales = costoTotal + gastoTotal + montoComision;
   const [open, setOpen] = useState(false);
@@ -83,6 +84,13 @@ export function ConsolaFinanciera({
         <span className="text-zinc-400">Comisión:</span>
         <span className="font-medium tabular-nums">{formatearMoneda(montoComision)}</span>
       </div>
+      {impactoNegociacion !== undefined && impactoNegociacion > 0 && (
+        <div className="flex items-center gap-2 text-xs pt-1 border-t border-zinc-600/50 mt-1">
+          <span className="text-amber-400/90">↓</span>
+          <span className="text-zinc-400">Impacto de Negociación (cortesías + bono):</span>
+          <span className="font-medium tabular-nums text-amber-400">-{formatearMoneda(impactoNegociacion)}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -160,6 +168,12 @@ export function ConsolaFinanciera({
           )}
         </div>
       </div>
+      {impactoNegociacion !== undefined && impactoNegociacion > 0 && (
+        <p className="text-xs text-zinc-400 mt-2">
+          Impacto de Negociación: <span className="font-medium text-amber-400">-{formatearMoneda(impactoNegociacion)}</span>
+          <span className="text-zinc-500 ml-1">(cortesías + bono otorgados)</span>
+        </p>
+      )}
     </div>
   );
 }
