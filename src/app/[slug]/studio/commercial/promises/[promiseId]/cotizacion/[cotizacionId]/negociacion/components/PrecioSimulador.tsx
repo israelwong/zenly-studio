@@ -62,10 +62,13 @@ export function PrecioSimulador({
     }
   }, [precioPersonalizado, isEditing]);
 
-  // Calcular precio mínimo (costo + gasto)
+  const durationHours = cotizacion.event_duration ?? null;
+  const safeDuration = durationHours != null && durationHours > 0 ? durationHours : 1;
+  const qtyEfectiva = (item: (typeof cotizacion.items)[0]) =>
+    (item.billing_type?.toUpperCase?.() === 'HOUR') ? item.quantity * safeDuration : item.quantity;
   const precioMinimo = cotizacion.items.reduce(
     (sum, item) =>
-      sum + ((item.cost ?? 0) * item.quantity) + ((item.expense ?? 0) * item.quantity),
+      sum + ((item.cost ?? 0) * qtyEfectiva(item)) + ((item.expense ?? 0) * qtyEfectiva(item)),
     0
   );
 
@@ -162,14 +165,14 @@ export function PrecioSimulador({
           </div>
         </div>
 
-        {/* Desglose siempre visible: Costos, Gastos, Utilidad, Margen + salud. La condición comercial no condiciona visibilidad. */}
+        {/* Desglose siempre visible: Costos, Gastos, Utilidad, Margen + salud. Usa cantidad efectiva (HOUR × duration). */}
         {showDesglose && (() => {
           const costoTotal = cotizacion.items.reduce(
-            (sum, item) => sum + (item.cost || 0) * item.quantity,
+            (sum, item) => sum + (item.cost || 0) * qtyEfectiva(item),
             0
           );
           const gastoTotal = cotizacion.items.reduce(
-            (sum, item) => sum + (item.expense || 0) * item.quantity,
+            (sum, item) => sum + (item.expense || 0) * qtyEfectiva(item),
             0
           );
           const tieneComparativa = calculoNegociado && original;
@@ -233,6 +236,26 @@ export function PrecioSimulador({
                     : undefined
                 }
               />
+              {calculoNegociado?.utilidadConDescuentoComercial != null &&
+                calculoNegociado?.descuentoComercialPercent != null && (
+                  <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
+                      Utilidad con descuento comercial ({calculoNegociado.descuentoComercialPercent}%)
+                    </span>
+                    <p
+                      className={`mt-1 text-lg font-semibold tabular-nums ${
+                        calculoNegociado.utilidadConDescuentoComercial >= 0
+                          ? 'text-emerald-400'
+                          : 'text-rose-400'
+                      }`}
+                    >
+                      {formatearMoneda(calculoNegociado.utilidadConDescuentoComercial)}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      Si el cliente aplica el {calculoNegociado.descuentoComercialPercent}% de descuento comercial, tu utilidad será esta
+                    </p>
+                  </div>
+                )}
               {bloqueSaludBajo}
             </div>
           );

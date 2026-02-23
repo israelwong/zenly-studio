@@ -6,9 +6,13 @@ interface CondicionRadioCardProps {
   description: string | null;
   discount_percentage: number | null;
   advance_percentage: number | null;
+  advance_type?: string | null;
+  advance_amount?: number | null;
   type?: string | null;
   selected: boolean;
   onChange: (id: string) => void;
+  /** Para mostrar anticipo en monto fijo (ej. formatearMoneda) */
+  formatCurrency?: (value: number) => string;
 }
 
 export function CondicionRadioCard({
@@ -17,10 +21,17 @@ export function CondicionRadioCard({
   description,
   discount_percentage,
   advance_percentage,
+  advance_type,
+  advance_amount,
   type,
   selected,
   onChange,
+  formatCurrency = (n) => `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
 }: CondicionRadioCardProps) {
+  const isAdvanceMonto = advance_type === 'fixed_amount' || advance_type === 'amount';
+  const anticipoLabel = isAdvanceMonto && advance_amount != null && advance_amount > 0
+    ? `Anticipo: ${formatCurrency(advance_amount)}`
+    : `Anticipo: ${advance_percentage ?? 0}%`;
   return (
     <div
       onClick={() => onChange(id)}
@@ -69,10 +80,8 @@ export function CondicionRadioCard({
             </p>
           )}
 
-          <div className={`flex items-center gap-3 text-xs mt-1.5 ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>
-            {advance_percentage !== null && advance_percentage > 0 && (
-              <span>Anticipo: {advance_percentage}%</span>
-            )}
+          <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs mt-1.5 ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>
+            <span>{anticipoLabel}</span>
             <span>Descuento: {discount_percentage ?? 0}%</span>
           </div>
         </div>

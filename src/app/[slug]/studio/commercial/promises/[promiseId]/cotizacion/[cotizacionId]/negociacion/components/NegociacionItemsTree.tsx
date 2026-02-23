@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Gift, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Gift, Search, X, Trash2, Plus } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
@@ -9,6 +9,7 @@ import {
   ZenCardTitle,
   ZenCardDescription,
   ZenBadge,
+  ZenButton,
   ZenInput,
 } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
@@ -21,12 +22,24 @@ interface NegociacionItemsTreeProps {
   items: CotizacionItem[];
   itemsCortesia: Set<string>;
   onItemsChange: (items: Set<string>) => void;
+  isCourtesyMode?: boolean;
+  onRemoveItem?: (itemId: string) => void;
+  onQuantityChange?: (itemId: string, quantity: number) => void;
+  eventDuration?: number | null;
+  onEventDurationChange?: (hours: number | null) => void;
+  onOpenAgregar?: () => void;
 }
 
 export function NegociacionItemsTree({
   items,
   itemsCortesia,
   onItemsChange,
+  isCourtesyMode = false,
+  onRemoveItem,
+  onQuantityChange,
+  eventDuration,
+  onEventDurationChange,
+  onOpenAgregar,
 }: NegociacionItemsTreeProps) {
   const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
@@ -171,10 +184,46 @@ export function NegociacionItemsTree({
   return (
     <ZenCard>
       <ZenCardHeader>
-        <ZenCardTitle>Servicios Incluidos</ZenCardTitle>
-        <ZenCardDescription>
-          Revisa los servicios y <span className="text-emerald-400 font-medium">marca como cortesía</span> los que <span className="text-emerald-400 font-medium">se incluyen sin cargo</span>
-        </ZenCardDescription>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <ZenCardTitle>Servicios Incluidos</ZenCardTitle>
+            <ZenCardDescription>
+              Revisa los servicios y <span className="text-emerald-400 font-medium">marca como cortesía</span> los que se incluyen sin cargo
+            </ZenCardDescription>
+          </div>
+          {onOpenAgregar && (
+            <ZenButton
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-2"
+              onClick={onOpenAgregar}
+            >
+              <Plus className="h-4 w-4" />
+              Agregar ítems
+            </ZenButton>
+          )}
+        </div>
+        {(eventDuration != null || onEventDurationChange) && (
+          <div className="flex items-center gap-2 mb-4">
+            <label className="text-xs text-zinc-500">Horas (evento)</label>
+            <ZenInput
+              type="number"
+              min={1}
+              step={1}
+              value={eventDuration ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '') onEventDurationChange?.(null);
+                else {
+                  const n = parseInt(v, 10);
+                  if (!isNaN(n) && n >= 0) onEventDurationChange?.(n);
+                }
+              }}
+              className="w-20"
+            />
+          </div>
+        )}
         <div className="mt-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -272,71 +321,87 @@ export function NegociacionItemsTree({
                                 if (!item) return null;
 
                                 const isCortesia = itemsCortesia.has(item.id);
-                                const precioItem = item.unit_price * item.quantity;
+                                const precioItem = (item.unit_price || 0) * item.quantity;
 
                                 return (
                                   <div
                                     key={item.id}
-                                    onClick={() => toggleCortesia(item.id)}
                                     className={cn(
-                                      'flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors cursor-pointer',
+                                      'flex items-center justify-between gap-2 py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors',
                                       'border-t border-b border-zinc-700/30',
                                       itemIndex === 0 && 'border-t-0',
-                                      isCortesia &&
-                                      'bg-emerald-950/20 border-l-2 border-l-emerald-500/50'
+                                      isCortesia && 'bg-emerald-950/20 border-l-2 border-l-emerald-500/50'
                                     )}
                                   >
-                                    {/* Nivel 3: Item */}
-                                    <div className="flex-1 min-w-0">
+                                    <div
+                                      className={cn(
+                                        'flex-1 min-w-0',
+                                        (isCourtesyMode || onQuantityChange) && 'cursor-pointer'
+                                      )}
+                                      onClick={() => isCourtesyMode && toggleCortesia(item.id)}
+                                    >
                                       <div className="flex items-center gap-2 mb-1">
                                         <span
                                           className={cn(
                                             'text-sm font-medium truncate',
-                                            isCortesia
-                                              ? 'text-emerald-300'
-                                              : 'text-zinc-200'
+                                            isCortesia ? 'text-emerald-300' : 'text-zinc-200'
                                           )}
                                         >
                                           {item.name || 'Item sin nombre'}
                                         </span>
                                         {isCortesia && (
-                                          <ZenBadge
-                                            variant="success"
-                                            className="text-[10px] px-1.5 py-0.5"
-                                          >
+                                          <ZenBadge variant="success" className="text-[10px] px-1.5 py-0.5">
                                             <Gift className="h-3 w-3 mr-1" />
                                             Cortesía
                                           </ZenBadge>
                                         )}
                                       </div>
                                       {item.description && (
-                                        <p className="text-xs text-zinc-400 line-clamp-1">
-                                          {item.description}
-                                        </p>
+                                        <p className="text-xs text-zinc-400 line-clamp-1">{item.description}</p>
                                       )}
-                                      <div className="flex items-center gap-4 mt-2 text-xs">
-                                        <span className="text-zinc-500">
-                                          Cantidad: {item.quantity}
+                                      <div className="flex items-center gap-4 mt-2 text-xs flex-wrap">
+                                        {onQuantityChange ? (
+                                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                            <span className="text-zinc-500">Cantidad:</span>
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              step={1}
+                                              value={item.quantity}
+                                              onChange={(e) => {
+                                                const v = parseInt(e.target.value, 10);
+                                                if (!isNaN(v) && v >= 0) onQuantityChange(item.id, v);
+                                              }}
+                                              className="w-16 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 text-xs"
+                                            />
+                                          </div>
+                                        ) : (
+                                          <span className="text-zinc-500">Cantidad: {item.quantity}</span>
+                                        )}
+                                        <span className={cn(isCortesia ? 'text-emerald-400 line-through' : 'text-zinc-300')}>
+                                          Precio: {isCortesia ? formatearMoneda(0) : formatearMoneda(precioItem)}
                                         </span>
-                                        <span
-                                          className={cn(
-                                            isCortesia
-                                              ? 'text-emerald-400 line-through'
-                                              : 'text-zinc-300'
-                                          )}
-                                        >
-                                          Precio:{' '}
-                                          {isCortesia
-                                            ? formatearMoneda(0)
-                                            : formatearMoneda(precioItem)}
-                                        </span>
-                                        {item.cost !== null && item.cost !== undefined && (
+                                        {(item.cost != null) && (
                                           <span className="text-amber-400">
                                             Costo: {formatearMoneda((item.cost || 0) * item.quantity)}
                                           </span>
                                         )}
                                       </div>
                                     </div>
+                                    {onRemoveItem && (
+                                      <ZenButton
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onRemoveItem(item.id);
+                                        }}
+                                        aria-label="Eliminar ítem"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </ZenButton>
+                                    )}
                                   </div>
                                 );
                               })}

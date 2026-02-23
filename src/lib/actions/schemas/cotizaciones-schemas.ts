@@ -46,6 +46,10 @@ export const createCotizacionSchema = z.object({
   items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
   customItems: z.array(customItemSchema).optional().default([]),
   event_duration: z.number().positive().optional().nullable(),
+  items_cortesia: z.array(z.string()).optional().default([]),
+  bono_especial: z.number().min(0).optional().default(0),
+  condiciones_comerciales_id: z.string().cuid().optional().nullable(),
+  condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
@@ -76,6 +80,10 @@ export const updateCotizacionSchema = z.object({
   itemOverrides: z.record(z.string(), itemOverrideSchema).optional().default({}),
   visible_to_client: z.boolean().optional(),
   event_duration: z.number().positive().optional().nullable(),
+  items_cortesia: z.array(z.string()).optional().default([]),
+  bono_especial: z.number().min(0).optional().default(0),
+  condiciones_comerciales_id: z.string().cuid().optional().nullable(),
+  condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);

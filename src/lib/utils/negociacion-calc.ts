@@ -15,6 +15,9 @@ import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 /**
  * Item de cotización con estructura completa
  */
+/** HOUR = cantidad × event_duration; SERVICE/UNIT = cantidad */
+export type BillingTypeNegociacion = 'HOUR' | 'SERVICE' | 'UNIT';
+
 export interface CotizacionItem {
   id: string;
   item_id: string | null;
@@ -23,11 +26,12 @@ export interface CotizacionItem {
   subtotal: number;
   cost: number | null;
   expense: number | null;
+  billing_type?: BillingTypeNegociacion | string | null;
   name?: string | null;
   description?: string | null;
   category_name?: string | null;
   seccion_name?: string | null;
-  is_courtesy?: boolean; // Flag para identificar items marcados como cortesía
+  is_courtesy?: boolean;
 }
 
 /**
@@ -37,12 +41,13 @@ export interface CotizacionCompleta {
   id: string;
   name: string;
   description: string | null;
-  price: number; // Precio actual (negociado si está en negociación)
-  precioOriginal?: number; // Precio original antes de negociar (para cálculos y presentación)
+  price: number;
+  precioOriginal?: number;
   status: string;
   items: CotizacionItem[];
   visible_to_client?: boolean | null;
-  // Datos de negociación guardados (opcionales, solo si la cotización ya está en negociación)
+  /** Duración del evento en horas; usada para cantidad efectiva en ítems HOUR */
+  event_duration?: number | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
   negociacion_descuento_adicional?: number | null;
@@ -95,9 +100,7 @@ export interface CalculoNegociacionResult {
   descuentoTotal: number;
   costoTotal: number;
   gastoTotal: number;
-  /** Monto de comisión de venta (precioFinal * comision_venta) */
   montoComision: number;
-  /** Porcentaje de comisión usado (0-1, ej. 0.10 = 10%). De configuracionPrecios. */
   porcentajeComisionVenta: number;
   utilidadNeta: number;
   margenPorcentaje: number;
@@ -108,6 +111,10 @@ export interface CalculoNegociacionResult {
     precioNegociado: number;
     isCortesia: boolean;
   }>;
+  /** KPI comparativo: utilidad si el cliente aplica descuento comercial (ej. 10%) */
+  utilidadConDescuentoComercial?: number;
+  /** Porcentaje de descuento comercial usado para el KPI (ej. 10) */
+  descuentoComercialPercent?: number;
 }
 
 /**
@@ -120,14 +127,34 @@ export interface ValidacionMargen {
 }
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/** Cantidad efectiva: HOUR → quantity × durationHours; SERVICE/UNIT → quantity */
+function cantidadEfectiva(
+  item: CotizacionItem,
+  durationHours: number | null
+): number {
+  const bt = item.billing_type?.toUpperCase?.() ?? '';
+  if (bt === 'HOUR' && durationHours != null && durationHours > 0) {
+    return item.quantity * durationHours;
+  }
+  return item.quantity;
+}
+
+/** Normaliza comisión: si viene como entero (ej. 5 = 5%) convertir a 0.05 */
+function comisionRatio(config: { comision_venta?: number | null }): number {
+  const cv = config.comision_venta ?? 0;
+  return cv > 1 ? cv / 100 : cv;
+}
+
+// ============================================================================
 // FUNCIONES PRINCIPALES
 // ============================================================================
 
 /**
  * Calcula el precio negociado y el impacto en utilidad
- * 
- * @param params - Parámetros de negociación
- * @returns Resultado con todos los cálculos, o null si el precio es inválido
+ * Usa cantidad efectiva (HOUR × event_duration) para costo/gasto y normaliza comisión.
  */
 export function calcularPrecioNegociado(
   params: CalculoNegociacionParams
@@ -141,22 +168,23 @@ export function calcularPrecioNegociado(
     configPrecios,
   } = params;
 
-  // 1. Calcular precio base de items (sin cortesías)
+  const durationHours = cotizacionOriginal.event_duration ?? null;
+  const safeDuration = durationHours != null && durationHours > 0 ? durationHours : 1;
+
+  // 1. Precio base de items (sin cortesías) y coste/gasto con cantidad efectiva
   let precioBaseItems = 0;
   let costoTotal = 0;
   let gastoTotal = 0;
 
   cotizacionOriginal.items.forEach((item) => {
-    const cantidad = item.quantity;
+    const qtyEfectiva = cantidadEfectiva(item, durationHours);
     const isCortesia = itemsCortesia.has(item.id);
 
-    // Costos y gastos siempre se suman (incluso si es cortesía)
-    costoTotal += (item.cost || 0) * cantidad;
-    gastoTotal += (item.expense || 0) * cantidad;
+    costoTotal += (item.cost || 0) * qtyEfectiva;
+    gastoTotal += (item.expense || 0) * qtyEfectiva;
 
-    // Precio solo se suma si NO es cortesía
     if (!isCortesia) {
-      precioBaseItems += (item.unit_price || 0) * cantidad;
+      precioBaseItems += (item.unit_price || 0) * item.quantity;
     }
   });
 
@@ -183,16 +211,16 @@ export function calcularPrecioNegociado(
     return null;
   }
 
-  // 7. Comisión de venta (de configuración de rentabilidad del estudio)
-  const porcentajeComisionVenta = configPrecios.comision_venta ?? 0;
-  const montoComision = precioFinal * porcentajeComisionVenta;
+  // 7. Comisión normalizada (misma regla que CotizacionForm: 5 → 0.05)
+  const ratioComision = comisionRatio(configPrecios);
+  const montoComision = precioFinal * ratioComision;
   const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision;
   const margenPorcentaje =
     precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
 
-  // 8. Calcular impacto vs original (original también resta comisión para comparativa justa)
+  // 8. Impacto vs original (original con misma comisión y coste/gasto efectivos)
   const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-  const montoComisionOriginal = precioOriginal * porcentajeComisionVenta;
+  const montoComisionOriginal = precioOriginal * ratioComision;
   const utilidadOriginal = precioOriginal - costoTotal - gastoTotal - montoComisionOriginal;
   const impactoUtilidad = utilidadNeta - utilidadOriginal;
 
@@ -203,7 +231,7 @@ export function calcularPrecioNegociado(
     costoTotal: Number(costoTotal.toFixed(2)),
     gastoTotal: Number(gastoTotal.toFixed(2)),
     montoComision: Number(montoComision.toFixed(2)),
-    porcentajeComisionVenta,
+    porcentajeComisionVenta: ratioComision,
     utilidadNeta: Number(utilidadNeta.toFixed(2)),
     margenPorcentaje: Number(margenPorcentaje.toFixed(2)),
     impactoUtilidad: Number(impactoUtilidad.toFixed(2)),

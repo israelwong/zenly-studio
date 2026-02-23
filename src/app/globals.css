@@ -81,6 +81,18 @@
   .scheduler-dnd-shake {
     animation: scheduler-dnd-shake-kf 0.4s ease-in-out;
   }
+
+  /* Shake sutil para Precio Sugerido (2px, 2–3 oscilaciones) */
+  @keyframes sugerido-shake-kf {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-2px); }
+    40% { transform: translateX(2px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+  }
+  .animate-sugerido-shake {
+    animation: sugerido-shake-kf 0.45s ease-in-out;
+  }
 }
 
 :root {

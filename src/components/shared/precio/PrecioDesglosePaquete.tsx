@@ -1,7 +1,9 @@
 "use client";
 
 import { ZenCard } from "@/components/ui/zen";
+import { Separator } from "@/components/ui/shadcn/separator";
 import { formatearMoneda, calcularPrecio, type ResultadoPrecio, type ConfiguracionPrecios } from "@/lib/actions/studio/catalogo/calcular-precio";
+import { cn } from "@/lib/utils";
 
 interface ItemPaquete {
     id: string;
@@ -124,113 +126,153 @@ export function PrecioDesglosePaquete({
         ? ((precioPersonalizado && precioPersonalizado > 0 ? utilidadFinal : totalUtilidad) / subtotalCostos) * 100
         : 0;
 
+    // --- Salud financiera híbrida (mix-based) ---
+    const metaServicio = configuracion.utilidad_servicio > 1 ? configuracion.utilidad_servicio / 100 : configuracion.utilidad_servicio;
+    const metaProducto = configuracion.utilidad_producto > 1 ? configuracion.utilidad_producto / 100 : configuracion.utilidad_producto;
+    const totalVentaServicios = totalServicios.precioFinal;
+    const totalVentaProductos = totalProductos.precioFinal;
+    const precioParaMix = precioFinal > 0 ? precioFinal : precioCalculado;
+    const margenObjetivoPct = precioParaMix > 0
+        ? ((totalVentaServicios * metaServicio) + (totalVentaProductos * metaProducto)) / precioParaMix * 100
+        : 0;
+    const comisionRatio = porcentajeComision / 100;
+    const montoComisionSobreFinal = precioFinal * comisionRatio;
+    const utilidadNeta = precioFinal - subtotalCostos - montoComisionSobreFinal;
+    const margenRealPct = precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
+    const ratioAlObjetivo = margenObjetivoPct > 0 ? margenRealPct / margenObjetivoPct : 1;
+    const saludColor =
+        ratioAlObjetivo >= 0.9 ? 'verde' as const
+        : ratioAlObjetivo >= 0.7 ? 'ambar' as const
+        : 'rojo' as const;
+
+    const cardClass = "rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-4";
+    const rowClass = "flex justify-between items-center gap-3";
+    const labelClass = "text-sm text-zinc-400 font-normal";
+    const valueClass = "text-sm font-semibold text-zinc-100 tabular-nums";
+
     const contenido = (
         <div className="space-y-4">
-            {/* Subtotal de Costos */}
-            <div className="space-y-2 py-3 border-b border-zinc-700">
-                <div className="text-xs text-zinc-500 mb-2 font-medium">Subtotal de Costos</div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">Costo Base</span>
-                    <span className="text-sm font-medium text-zinc-200">
-                        {formatearMoneda(totalCosto)}
-                    </span>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">+ Gastos</span>
-                    <span className="text-sm font-medium text-zinc-200">
-                        {formatearMoneda(totalGasto)}
-                    </span>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t border-zinc-600">
-                    <span className="text-sm font-medium text-zinc-300">Subtotal Costos</span>
-                    <span className="text-sm font-semibold text-zinc-100">
-                        {formatearMoneda(subtotalCostos)}
-                    </span>
-                </div>
-            </div>
-
-            {/* Utilidad por tipo */}
-            <div className="space-y-3">
-                <div className="text-xs text-zinc-500 mb-2 font-medium">Utilidad por Tipo</div>
-                
-                {servicios.length > 0 && (
-                    <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-zinc-400">
-                                Utilidad Servicios ({porcentajeUtilidadServicios.toFixed(1)}%)
-                            </span>
-                            <span className="text-sm font-medium text-emerald-400">
-                                {formatearMoneda(totalServicios.utilidad)}
-                            </span>
-                        </div>
+            {/* Card 1: Costos */}
+            <div className={cardClass}>
+                <div className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wider">Costos</div>
+                <div className="space-y-2">
+                    <div className={rowClass}>
+                        <span className={labelClass}>Costo Base</span>
+                        <span className={valueClass}>{formatearMoneda(totalCosto)}</span>
                     </div>
-                )}
-
-                {productos.length > 0 && (
-                    <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-zinc-400">
-                                Utilidad Productos ({porcentajeUtilidadProductos.toFixed(1)}%)
-                            </span>
-                            <span className="text-sm font-medium text-emerald-400">
-                                {formatearMoneda(totalProductos.utilidad)}
-                            </span>
-                        </div>
+                    <div className={rowClass}>
+                        <span className={labelClass}>+ Gastos</span>
+                        <span className={valueClass}>{formatearMoneda(totalGasto)}</span>
                     </div>
-                )}
-
-                <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
-                    <span className="text-sm font-medium text-zinc-300">
-                        Utilidad Total ({porcentajeUtilidadTotal.toFixed(1)}%)
-                    </span>
-                    <span className="text-sm font-semibold text-emerald-400">
-                        {formatearMoneda(precioPersonalizado && precioPersonalizado > 0 ? utilidadFinal : totalUtilidad)}
-                    </span>
+                    <Separator className="bg-zinc-700/60 my-2" />
+                    <div className={rowClass}>
+                        <span className="text-sm font-medium text-zinc-300">Subtotal Costos</span>
+                        <span className="text-sm font-semibold text-zinc-100 tabular-nums">{formatearMoneda(subtotalCostos)}</span>
+                    </div>
                 </div>
             </div>
 
-            {/* Subtotal (Costos + Utilidad) */}
-            <div className="space-y-2 py-3 border-t border-zinc-700">
-                <div className="text-xs text-zinc-500 mb-2 font-medium">Subtotal (Costos + Utilidad)</div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-zinc-300">Subtotal</span>
-                    <span className="text-sm font-semibold text-zinc-200">{formatearMoneda(subtotal)}</span>
+            <Separator className="bg-zinc-700/50" />
+
+            {/* Card 2: Utilidad */}
+            <div className={cardClass}>
+                <div className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wider">Utilidad</div>
+                <div className="space-y-2">
+                    {servicios.length > 0 && (
+                        <div className={rowClass}>
+                            <span className={labelClass}>Utilidad Servicios ({porcentajeUtilidadServicios.toFixed(1)}%)</span>
+                            <span className="text-sm font-semibold text-emerald-400 tabular-nums">{formatearMoneda(totalServicios.utilidad)}</span>
+                        </div>
+                    )}
+                    {productos.length > 0 && (
+                        <div className={rowClass}>
+                            <span className={labelClass}>Utilidad Productos ({porcentajeUtilidadProductos.toFixed(1)}%)</span>
+                            <span className="text-sm font-semibold text-emerald-400 tabular-nums">{formatearMoneda(totalProductos.utilidad)}</span>
+                        </div>
+                    )}
+                    <Separator className="bg-zinc-700/60 my-2" />
+                    <div className={rowClass}>
+                        <span className="text-sm font-medium text-zinc-300">Utilidad Total ({porcentajeUtilidadTotal.toFixed(1)}%)</span>
+                        <span className="text-sm font-semibold text-emerald-400 tabular-nums">
+                            {formatearMoneda(precioPersonalizado && precioPersonalizado > 0 ? utilidadFinal : totalUtilidad)}
+                        </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-2 leading-snug">
+                        Promedio ponderado basado en la mezcla de servicios y productos seleccionados. (Utilidad $ ÷ Costo Base $)
+                    </p>
                 </div>
             </div>
 
-            {/* Precio Base y Comisión */}
-            <div className="space-y-2 py-3 border-t border-zinc-700">
-                <div className="text-xs text-zinc-500 mb-2 font-medium">Precio Base (absorbe comisión)</div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">Precio Base</span>
-                    <span className="text-sm font-medium text-zinc-200">{formatearMoneda(precioBaseTotal)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">- Comisión ({porcentajeComision.toFixed(1)}%)</span>
-                    <span className="text-sm font-medium text-blue-400">-{formatearMoneda(totalComision)}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t border-zinc-600">
-                    <span className="text-xs text-zinc-500 italic">= Subtotal (verificación)</span>
-                    <span className="text-xs text-zinc-500 italic">{formatearMoneda(subtotal)}</span>
+            <Separator className="bg-zinc-700/50" />
+
+            {/* Card 3: Precio Base (absorción comisión) */}
+            <div className={cardClass}>
+                <div className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wider">Precio Base</div>
+                <div className="space-y-2">
+                    <div className={rowClass}>
+                        <span className={labelClass}>Subtotal (Costo + Utilidad)</span>
+                        <span className={valueClass}>{formatearMoneda(subtotal)}</span>
+                    </div>
+                    <div className={rowClass}>
+                        <span className={labelClass}>+ Comisión ({porcentajeComision.toFixed(1)}%)</span>
+                        <span className="text-sm font-semibold text-blue-400 tabular-nums">+{formatearMoneda(totalComision)}</span>
+                    </div>
+                    <Separator className="bg-zinc-700/60 my-2" />
+                    <div className={rowClass}>
+                        <span className="text-sm font-medium text-zinc-300">Precio Base (absorción)</span>
+                        <span className={valueClass}>{formatearMoneda(precioBaseTotal)}</span>
+                    </div>
                 </div>
             </div>
 
-            {/* Precio Final y Sobreprecio */}
-            <div className="border-t border-zinc-600 pt-3">
-                <div className="text-xs text-zinc-500 mb-2 font-medium">Precio Final (con sobreprecio)</div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">Precio Base</span>
-                    <span className="text-sm font-medium text-zinc-200">{formatearMoneda(precioBaseTotal)}</span>
+            <Separator className="bg-zinc-700/50" />
+
+            {/* Card 4: Precio Final */}
+            <div className={cardClass}>
+                <div className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wider">Precio Final</div>
+                <div className="space-y-2">
+                    <div className={rowClass}>
+                        <span className={labelClass}>Precio Base</span>
+                        <span className={valueClass}>{formatearMoneda(precioBaseTotal)}</span>
+                    </div>
+                    <div className={rowClass}>
+                        <span className={labelClass}>+ Sobreprecio ({porcentajeSobreprecio.toFixed(1)}%)</span>
+                        <span className="text-sm font-semibold text-purple-400 tabular-nums">+{formatearMoneda(totalSobreprecio)}</span>
+                    </div>
+                    <Separator className="bg-zinc-700/60 my-2" />
+                    <div className="flex justify-between items-center pt-2">
+                        <span className="text-base font-semibold text-zinc-200">Precio calculado (comprobación)</span>
+                        <span className="text-2xl font-bold text-emerald-400 tabular-nums" title="Debe coincidir con el input Precio calculado">
+                            {formatearMoneda(precioCalculado)}
+                        </span>
+                    </div>
                 </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-400">+ Sobreprecio ({porcentajeSobreprecio.toFixed(1)}%)</span>
-                    <span className="text-sm font-medium text-purple-400">+{formatearMoneda(totalSobreprecio)}</span>
-                </div>
-                <div className="flex justify-between items-center pt-3 border-t border-zinc-600">
-                    <span className="text-base font-semibold text-zinc-200">Precio calculado</span>
-                    <span className="text-xl font-bold text-emerald-400">
-                        {formatearMoneda(precioFinal)}
-                    </span>
+            </div>
+
+            <Separator className="bg-zinc-700/50" />
+
+            {/* Salud de la Operación (mix-based) */}
+            <div className={cardClass}>
+                <div className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wider">Salud de la Operación</div>
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className={labelClass}>Margen real</span>
+                        <span className="font-semibold tabular-nums">{margenRealPct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-zinc-700/60 overflow-hidden">
+                        <div
+                            className={cn(
+                                "h-full rounded-full transition-all duration-300",
+                                saludColor === 'verde' && "bg-emerald-500",
+                                saludColor === 'ambar' && "bg-amber-500",
+                                saludColor === 'rojo' && "bg-rose-500"
+                            )}
+                            style={{ width: `${Math.min(100, (margenRealPct / (margenObjetivoPct || 1)) * 100)}%` }}
+                        />
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1.5">
+                        Meta de rentabilidad calculada según el mix de ítems: <span className="font-medium text-zinc-400">{margenObjetivoPct.toFixed(1)}%</span>
+                    </p>
                 </div>
             </div>
         </div>

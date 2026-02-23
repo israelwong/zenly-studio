@@ -49,6 +49,7 @@ export async function loadCotizacionParaNegociacion(
         status: true,
         promise_id: true,
         visible_to_client: true,
+        event_duration: true,
         condiciones_comerciales_id: true,
         negociacion_precio_original: true,
         negociacion_precio_personalizado: true,
@@ -94,23 +95,22 @@ export async function loadCotizacionParaNegociacion(
       };
     }
 
-    // Mapear items al formato esperado (incluir is_courtesy para identificar cortesías)
-    const items: CotizacionItem[] = cotizacion.cotizacion_items
-      .filter((item) => item.item_id !== null)
-      .map((item) => ({
-        id: item.id,
-        item_id: item.item_id as string, // Ya filtrado, seguro que no es null
-        quantity: item.quantity,
-        unit_price: item.unit_price ?? 0,
-        subtotal: item.subtotal ?? 0,
-        cost: item.cost ?? null,
-        expense: item.expense ?? null,
-        name: item.name_snapshot || item.name || null,
-        description: item.description_snapshot || item.description || null,
-        category_name: item.category_name_snapshot || item.category_name || null,
-        seccion_name: item.seccion_name_snapshot || item.seccion_name || null,
-        is_courtesy: item.is_courtesy || false, // Incluir flag de cortesía
-      }));
+    // Mapear TODOS los ítems (catálogo + custom) para que coste/gasto no se subestimen
+    const items: CotizacionItem[] = cotizacion.cotizacion_items.map((item) => ({
+      id: item.id,
+      item_id: item.item_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price ?? 0,
+      subtotal: item.subtotal ?? 0,
+      cost: item.cost ?? null,
+      expense: item.expense ?? null,
+      name: item.name_snapshot || item.name || null,
+      description: item.description_snapshot || item.description || null,
+      category_name: item.category_name_snapshot || item.category_name || null,
+      seccion_name: item.seccion_name_snapshot || item.seccion_name || null,
+      is_courtesy: item.is_courtesy || false,
+      billing_type: item.billing_type ?? null,
+    }));
 
     // Obtener condición comercial temporal si existe
     const condicionTemporal = cotizacion.condicion_comercial_negociacion;
@@ -131,6 +131,7 @@ export async function loadCotizacionParaNegociacion(
         precioOriginal, // Precio original antes de negociar
         status: cotizacion.status,
         visible_to_client: cotizacion.visible_to_client ?? false,
+        event_duration: cotizacion.event_duration ?? null,
         items,
         // Datos de negociación guardados (si la cotización ya está en negociación)
         negociacion_precio_original: precioOriginal,

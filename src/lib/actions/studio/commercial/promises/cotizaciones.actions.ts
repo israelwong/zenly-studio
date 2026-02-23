@@ -80,6 +80,10 @@ export async function createCotizacion(
   try {
     const validatedData = createCotizacionSchema.parse(data);
 
+    if (!validatedData.condiciones_visibles?.length) {
+      return { success: false, error: 'Selecciona al menos una condición visible para el cliente' };
+    }
+
     // Obtener studio
     const studio = await prisma.studios.findUnique({
       where: { slug: validatedData.studio_slug },
@@ -152,7 +156,7 @@ export async function createCotizacion(
     const cotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: studio.id,
-        evento_id: null, // No crear evento al crear cotizaciรณn
+        evento_id: null, // No crear evento al crear cotización
         event_type_id: eventTypeId,
         promise_id: validatedData.promise_id || null,
         contact_id: contactId,
@@ -160,8 +164,12 @@ export async function createCotizacion(
         description: validatedData.descripcion || null,
         price: validatedData.precio,
         status: 'pendiente',
-        visible_to_client: validatedData.visible_to_client ?? false, // Usar valor del schema (default false si no se proporciona)
-        event_duration: validatedData.event_duration ?? durationHours, // Prioridad: input manual > promise.duration_hours
+        visible_to_client: validatedData.visible_to_client ?? false,
+        event_duration: validatedData.event_duration ?? durationHours,
+        items_cortesia: validatedData.items_cortesia ?? [],
+        bono_especial: validatedData.bono_especial ?? 0,
+        condiciones_comerciales_id: validatedData.condiciones_comerciales_id ?? null,
+        condiciones_visibles: validatedData.condiciones_visibles?.length ? validatedData.condiciones_visibles : null,
       },
     });
 
@@ -602,6 +610,8 @@ export async function getCotizacionById(
     negociacion_precio_personalizado?: number | null;
     event_duration?: number | null;
     promise_route_state?: PromiseRouteState | null;
+    items_cortesia?: string[];
+    bono_especial?: number;
     items: Array<{
       item_id: string | null; // null para custom items
       quantity: number;
@@ -670,6 +680,21 @@ export async function getCotizacionById(
         negociacion_precio_original: true,
         negociacion_precio_personalizado: true,
         event_duration: true,
+        items_cortesia: true,
+        bono_especial: true,
+        condiciones_visibles: true,
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            discount_percentage: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            is_temporary: true,
+          },
+        },
         promise: {
           select: {
             pipeline_stage: { select: { slug: true } },
@@ -796,13 +821,117 @@ export async function getCotizacionById(
         event_duration: cotizacion.event_duration ?? null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
+        items_cortesia: Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [],
+        bono_especial: cotizacion.bono_especial !== null && cotizacion.bono_especial !== undefined ? Number(cotizacion.bono_especial) : 0,
+        condiciones_visibles: Array.isArray(cotizacion.condiciones_visibles) ? (cotizacion.condiciones_visibles as string[]) : null,
+        condicion_comercial_negociacion: cotizacion.condicion_comercial_negociacion
+          ? {
+              id: cotizacion.condicion_comercial_negociacion.id,
+              name: cotizacion.condicion_comercial_negociacion.name,
+              description: cotizacion.condicion_comercial_negociacion.description ?? null,
+              discount_percentage: cotizacion.condicion_comercial_negociacion.discount_percentage != null ? Number(cotizacion.condicion_comercial_negociacion.discount_percentage) : null,
+              advance_percentage: cotizacion.condicion_comercial_negociacion.advance_percentage != null ? Number(cotizacion.condicion_comercial_negociacion.advance_percentage) : null,
+              advance_type: cotizacion.condicion_comercial_negociacion.advance_type ?? null,
+              advance_amount: cotizacion.condicion_comercial_negociacion.advance_amount != null ? Number(cotizacion.condicion_comercial_negociacion.advance_amount) : null,
+              is_temporary: cotizacion.condicion_comercial_negociacion.is_temporary ?? false,
+            }
+          : null,
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error obteniendo cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error obteniendo cotización:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener cotizaciรณn',
+    };
+  }
+}
+
+/**
+ * Crear o actualizar la condición comercial de negociación para una cotización.
+ * Solo una condición de negociación por cotización; reemplaza la anterior si existe.
+ */
+export async function upsertCondicionNegociacionCotizacion(
+  studioSlug: string,
+  cotizacionId: string,
+  promiseId: string,
+  data: { name: string; discount_percentage: number | null }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+    if (!cotizacion || cotizacion.promise_id !== promiseId) {
+      return { success: false, error: 'Cotización no encontrada o no pertenece a la promesa' };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.studio_condiciones_comerciales_negociacion.deleteMany({
+        where: { cotizacion_id: cotizacionId },
+      });
+      await tx.studio_condiciones_comerciales_negociacion.create({
+        data: {
+          cotizacion_id: cotizacionId,
+          promise_id: promiseId,
+          studio_id: studio.id,
+          name: data.name.trim(),
+          description: null,
+          discount_percentage: data.discount_percentage,
+          advance_percentage: null,
+          advance_type: 'percentage',
+          advance_amount: null,
+          metodo_pago_id: null,
+          is_temporary: true,
+        },
+      });
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: { condiciones_comerciales_id: null },
+      });
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error upsert condicion negociación:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al guardar condición de negociación',
+    };
+  }
+}
+
+/**
+ * Eliminar la condición comercial de negociación de una cotización (si existe).
+ */
+export async function deleteCondicionNegociacionCotizacion(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    await prisma.studio_condiciones_comerciales_negociacion.deleteMany({
+      where: {
+        cotizacion_id: cotizacionId,
+        studio_id: studio.id,
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error eliminando condicion negociación:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar condición de negociación',
     };
   }
 }
@@ -1635,6 +1764,10 @@ export async function updateCotizacion(
   try {
     const validatedData = updateCotizacionSchema.parse(data);
 
+    if (!validatedData.condiciones_visibles?.length) {
+      return { success: false, error: 'Selecciona al menos una condición visible para el cliente' };
+    }
+
     // Obtener studio
     const studio = await prisma.studios.findUnique({
       where: { slug: validatedData.studio_slug },
@@ -1812,12 +1945,25 @@ export async function updateCotizacion(
         visible_to_client?: boolean;
         event_duration?: number | null;
         updated_at: Date;
+        items_cortesia: string[];
+        bono_especial: number;
+        condiciones_comerciales_id?: string | null;
+        condiciones_visibles?: string[] | null;
       } = {
         name: validatedData.nombre,
         description: validatedData.descripcion || null,
         price: validatedData.precio,
         updated_at: new Date(),
+        items_cortesia: validatedData.items_cortesia ?? [],
+        bono_especial: validatedData.bono_especial ?? 0,
       };
+
+      if (validatedData.condiciones_comerciales_id !== undefined) {
+        updateData.condiciones_comerciales_id = validatedData.condiciones_comerciales_id ?? null;
+      }
+      if (validatedData.condiciones_visibles !== undefined) {
+        updateData.condiciones_visibles = validatedData.condiciones_visibles?.length ? validatedData.condiciones_visibles : null;
+      }
 
       // Solo actualizar visible_to_client si se proporciona explícitamente
       if (validatedData.visible_to_client !== undefined) {

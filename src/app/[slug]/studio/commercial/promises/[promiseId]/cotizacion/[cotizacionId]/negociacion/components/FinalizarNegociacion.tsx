@@ -34,8 +34,9 @@ interface FinalizarNegociacionProps {
   promiseId: string;
   cotizacionId: string;
   onNotasChange: (notas: string) => void;
-  /** true cuando la condición seleccionada es privada (is_public: false) */
   condicionEsPrivada?: boolean;
+  /** true si hay cambios en ítems o duración (add/remove/qty/horas) */
+  hasItemOrDurationChanges?: boolean;
 }
 
 export function FinalizarNegociacion({
@@ -48,13 +49,12 @@ export function FinalizarNegociacion({
   cotizacionId,
   onNotasChange,
   condicionEsPrivada = false,
+  hasItemOrDurationChanges = false,
 }: FinalizarNegociacionProps) {
   const router = useRouter();
-  
-  // Detectar si estamos editando una negociación existente o creando una nueva
+
   const isUpdating = cotizacionOriginal.status === 'negociacion';
-  
-  // Solo agregar "- Especial" si estamos creando una nueva negociación
+
   const [nombreVersion, setNombreVersion] = useState(
     isUpdating ? cotizacionOriginal.name : `${cotizacionOriginal.name} - Especial`
   );
@@ -64,6 +64,7 @@ export function FinalizarNegociacion({
   );
 
   const tieneCambios =
+    hasItemOrDurationChanges ||
     negociacionState.precioPersonalizado !== null ||
     negociacionState.descuentoAdicional !== null ||
     negociacionState.condicionComercialId !== null ||

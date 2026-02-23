@@ -1,25 +1,32 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, startTransition } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Edit, Trash2 } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings } from 'lucide-react';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
+import { Separator } from '@/components/ui/shadcn/separator';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
-import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
+import { logAuditoriaCotizacion } from '@/lib/utils/audit-precios-logger';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import { ItemEditorModal, type ItemFormData, type ItemEditorContext } from '@/components/shared/catalogo/ItemEditorModal';
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
+import { cn } from '@/lib/utils';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
+import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 
 interface CotizacionFormProps {
   studioSlug: string;
@@ -116,6 +123,64 @@ export function CotizacionForm({
   const [visibleToClient, setVisibleToClient] = useState(false);
   const [items, setItems] = useState<{ [servicioId: string]: number }>({});
   const [customItems, setCustomItems] = useState<CustomItemData[]>([]);
+  const [isCourtesyMode, setIsCourtesyMode] = useState(false);
+  const [itemsCortesia, setItemsCortesia] = useState<Set<string>>(new Set());
+  const [bonoEspecial, setBonoEspecial] = useState<number>(0);
+  const [ajustesNegociacionOpen, setAjustesNegociacionOpen] = useState(true);
+  const [condicionesCierreOpen, setCondicionesCierreOpen] = useState(true);
+  const [confirmClearCortesiasOpen, setConfirmClearCortesiasOpen] = useState(false);
+  const [confirmClearDiscountMode, setConfirmClearDiscountMode] = useState<'cortesias' | 'all'>('cortesias');
+  const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    discount_percentage: number | null;
+    advance_percentage?: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+    type?: string;
+  }>>([]);
+  const [selectedCondicionComercialId, setSelectedCondicionComercialId] = useState<string | null>(null);
+  const [condicionNegociacion, setCondicionNegociacion] = useState<{ id: string; name: string; discount_percentage: number | null } | null>(null);
+  const [condicionIdsVisibles, setCondicionIdsVisibles] = useState<Set<string>>(new Set());
+  const [condicionSimulacionId, setCondicionSimulacionId] = useState<string | null>(null);
+  const [simulacionBlockExpanded, setSimulacionBlockExpanded] = useState(false);
+  const simulacionBlockRef = useRef<HTMLDivElement>(null);
+  const [auditoriaRentabilidadOpen, setAuditoriaRentabilidadOpen] = useState(false);
+  const [showCondicionesManager, setShowCondicionesManager] = useState(false);
+  const [editingCondicionId, setEditingCondicionId] = useState<string | null>(null);
+  const [createCondicionEspecialMode, setCreateCondicionEspecialMode] = useState(false);
+  const [flashSugerido, setFlashSugerido] = useState(false);
+  const [showPrecioSincronizadoBadge, setShowPrecioSincronizadoBadge] = useState(false);
+  const [ringPrecioSincronizadoVisible, setRingPrecioSincronizadoVisible] = useState(false);
+  const [pendingSyncFromAjustes, setPendingSyncFromAjustes] = useState(false);
+  const isFirstMountAjustesSyncRef = useRef(true);
+  const triggerShake = useCallback(() => {
+    setFlashSugerido(true);
+    const t = setTimeout(() => setFlashSugerido(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+  const bonoOnFocusRef = useRef<number>(0);
+
+  // Animación entrada y scroll suave del bloque "Simulación: El cliente pagará"
+  useEffect(() => {
+    if (condicionSimulacionId) {
+      setSimulacionBlockExpanded(false);
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setSimulacionBlockExpanded(true));
+      });
+      const scrollTimer = setTimeout(() => {
+        simulacionBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 350);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(scrollTimer);
+      };
+    } else {
+      setSimulacionBlockExpanded(false);
+    }
+  }, [condicionSimulacionId]);
+
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
   // Estado para almacenar overrides de items del catálogo (snapshots locales cuando saveToCatalog = false)
   const [itemOverrides, setItemOverrides] = useState<Map<string, {
@@ -147,16 +212,29 @@ export function CotizacionForm({
 
         // Si está en modo edición, cargar y validar la cotización en paralelo con catálogo
         // Si está creando revisión, también cargar datos de la original para pre-poblar
-        const [catalogoResult, configResult, linksResult, cotizacionResult, originalResult] = await Promise.all([
+        const [catalogoResult, configResult, linksResult, cotizacionResult, originalResult, condicionesResult] = await Promise.all([
           obtenerCatalogo(studioSlug),
           obtenerConfiguracionPrecios(studioSlug),
           getServiceLinks(studioSlug),
           cotizacionId ? getCotizacionById(cotizacionId, studioSlug) : Promise.resolve({ success: true as const, data: null }),
-          revisionOriginalId && !cotizacionId ? getCotizacionById(revisionOriginalId, studioSlug) : Promise.resolve({ success: true as const, data: null })
+          revisionOriginalId && !cotizacionId ? getCotizacionById(revisionOriginalId, studioSlug) : Promise.resolve({ success: true as const, data: null }),
+          obtenerCondicionesComerciales(studioSlug),
         ]);
 
         if (linksResult.success && linksResult.data) {
           setServiceLinksMap(linksResult.data);
+        }
+        if (condicionesResult.success && condicionesResult.data) {
+          setCondicionesComerciales(condicionesResult.data.map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description ?? null,
+            discount_percentage: c.discount_percentage ?? null,
+            advance_percentage: c.advance_percentage ?? null,
+            advance_type: c.advance_type ?? null,
+            advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+            type: c.type ?? undefined,
+          })));
         }
 
         // Validar cotización si está en modo edición
@@ -244,6 +322,28 @@ export function CotizacionForm({
           setDescripcion(cotizacionData.description || '');
           setPrecioPersonalizado(cotizacionData.price);
           setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? false);
+          setItemsCortesia(new Set(cotizacionData.items_cortesia ?? []));
+          setBonoEspecial(Number(cotizacionData.bono_especial) || 0);
+          const neg = (cotizacionData as { condicion_comercial_negociacion?: { id: string; name: string; discount_percentage: number | null } | null }).condicion_comercial_negociacion;
+          const visibles = (cotizacionData as { condiciones_visibles?: string[] | null }).condiciones_visibles;
+          if (neg) {
+            setCondicionNegociacion({ id: neg.id, name: neg.name, discount_percentage: neg.discount_percentage ?? null });
+            setSelectedCondicionComercialId(null);
+          } else {
+            setCondicionNegociacion(null);
+            setSelectedCondicionComercialId(cotizacionData.condiciones_comerciales_id ?? null);
+          }
+          if (Array.isArray(visibles) && visibles.length > 0) {
+            setCondicionIdsVisibles(new Set(visibles));
+          } else if (condicionesResult.success && condicionesResult.data) {
+            // Sin visibles guardados: por defecto todas las públicas visibles (igual que cotización nueva)
+            const publicIds = (condicionesResult.data as Array<{ id: string; is_public?: boolean }>)
+              .filter((c) => c.is_public !== false)
+              .map((c) => c.id);
+            setCondicionIdsVisibles(new Set(publicIds));
+          } else if (cotizacionData.condiciones_comerciales_id || neg?.id) {
+            setCondicionIdsVisibles(new Set([cotizacionData.condiciones_comerciales_id ?? neg!.id].filter(Boolean)));
+          }
 
           // Cargar event_duration de la cotización si existe
           const cotizacionEventDuration = (cotizacionData as { event_duration?: number | null }).event_duration;
@@ -381,6 +481,14 @@ export function CotizacionForm({
           setNombre('Personalizada');
           setDescripcion('');
           setPrecioPersonalizado('');
+        }
+
+        // Visibilidad por defecto: en cotización nueva, marcar como visibles todas las condiciones públicas
+        if (!cotizacionId && condicionesResult.success && condicionesResult.data) {
+          const publicIds = (condicionesResult.data as Array<{ id: string; is_public?: boolean }>)
+            .filter((c) => c.is_public !== false)
+            .map((c) => c.id);
+          setCondicionIdsVisibles(new Set(publicIds));
         }
 
         if (configResult) {
@@ -552,6 +660,9 @@ export function CotizacionForm({
   // Estado para el cálculo de precios (driver: Precio Personalizado cuando existe)
   const [calculoPrecio, setCalculoPrecio] = useState({
     subtotal: 0,
+    montoCortesias: 0,
+    subtotalProyectado: 0,
+    montoDescuentoCondicion: 0,
     totalCosto: 0,
     totalGasto: 0,
     total: 0,
@@ -562,6 +673,24 @@ export function CotizacionForm({
     diferenciaPrecio: 0,
     descuentoPorcentaje: 0,
   });
+
+  // Ajustes de negociación = solo cortesías y bono especial (no el precio final de cierre).
+  // Si hay ajustes: condiciones con descuento se ocultan por defecto; el usuario puede activarlas si lo desea.
+  const tieneAjustesNegociacion = itemsCortesia.size > 0 || (Number(bonoEspecial) || 0) > 0;
+
+  useEffect(() => {
+    if (!tieneAjustesNegociacion) return;
+    setCondicionIdsVisibles((prev) => {
+      const next = new Set(prev);
+      condicionesComerciales.forEach((c) => {
+        if ((c.discount_percentage ?? 0) > 0) next.delete(c.id);
+      });
+      if (condicionNegociacion && (condicionNegociacion.discount_percentage ?? 0) > 0) {
+        next.delete(condicionNegociacion.id);
+      }
+      return next;
+    });
+  }, [tieneAjustesNegociacion, condicionesComerciales, condicionNegociacion]);
 
   // Items de la cotización para el desglose (cantidadEfectiva = ej. horas para billing HOUR)
   const [itemsParaDesglose, setItemsParaDesglose] = useState<Array<{
@@ -579,6 +708,9 @@ export function CotizacionForm({
     if (!configuracionPrecios) {
       setCalculoPrecio({
         subtotal: 0,
+        montoCortesias: 0,
+        subtotalProyectado: 0,
+        montoDescuentoCondicion: 0,
         totalCosto: 0,
         totalGasto: 0,
         total: 0,
@@ -624,6 +756,9 @@ export function CotizacionForm({
     if (serviciosSeleccionados.length === 0 && customItems.length === 0) {
       setCalculoPrecio({
         subtotal: 0,
+        montoCortesias: 0,
+        subtotalProyectado: 0,
+        montoDescuentoCondicion: 0,
         totalCosto: 0,
         totalGasto: 0,
         total: 0,
@@ -659,23 +794,98 @@ export function CotizacionForm({
       totalGasto += (customItem.expense || 0) * cantidadEfectiva;
     });
 
+    let montoCortesias = 0;
+    serviciosSeleccionados.forEach(s => {
+      if (!itemsCortesia.has(s.id)) return;
+      const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+      montoCortesias += (s.precioUnitario || 0) * cantidadEfectiva;
+    });
+    customItems.forEach((customItem, idx) => {
+      if (!itemsCortesia.has(`custom-${idx}`)) return;
+      const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+      montoCortesias += customItem.unit_price * cantidadEfectiva;
+    });
+    const bonoNum = Number(bonoEspecial) || 0;
+    const subtotalProyectado = Math.max(0, subtotal - montoCortesias - bonoNum);
+
+    const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find(c => c.id === selectedCondicionComercialId) ?? null : null);
+    const pctDescuentoCondicion = condicionActiva?.discount_percentage ?? 0;
+    const montoDescuentoCondicion = subtotalProyectado > 0 && pctDescuentoCondicion > 0
+      ? (subtotalProyectado * pctDescuentoCondicion) / 100
+      : 0;
+    const precioSugeridoConCondicion = Math.max(0, subtotalProyectado - montoDescuentoCondicion);
+
     const precioPersonalizadoNum = precioPersonalizado === '' ? 0 : Number(precioPersonalizado) || 0;
-    const precioCobrar = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
+    const precioCobrar = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : precioSugeridoConCondicion;
     const comisionRatio = configuracionPrecios.comision_venta > 1
       ? configuracionPrecios.comision_venta / 100
       : configuracionPrecios.comision_venta;
     const montoComision = precioCobrar * comisionRatio;
     const utilidadNeta = precioCobrar - totalCosto - totalGasto - montoComision;
-    const montoComisionSinDescuento = subtotal * comisionRatio;
-    const utilidadSinDescuento = subtotal - totalCosto - totalGasto - montoComisionSinDescuento;
+    const montoComisionSinDescuento = precioSugeridoConCondicion * comisionRatio;
+    const utilidadSinDescuento = precioSugeridoConCondicion - totalCosto - totalGasto - montoComisionSinDescuento;
     const margenPorcentaje = precioCobrar > 0 ? (utilidadNeta / precioCobrar) * 100 : 0;
-    const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotal : 0;
-    const descuentoPorcentaje = subtotal > 0 && precioPersonalizadoNum > 0
-      ? ((precioPersonalizadoNum - subtotal) / subtotal) * 100
+    const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotalProyectado : 0;
+    const descuentoPorcentaje = subtotalProyectado > 0 && precioPersonalizadoNum > 0
+      ? ((precioPersonalizadoNum - subtotalProyectado) / subtotalProyectado) * 100
       : 0;
+
+    // Auditoría financiera: log detallado en consola (solo dev, activar con sessionStorage.setItem('zen_audit_precios','1'))
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development' && window.sessionStorage?.getItem('zen_audit_precios') === '1') {
+      const auditItems = [
+        ...serviciosSeleccionados.map(s => {
+          const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+          const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+          return {
+            id: s.id,
+            nombre: s.nombre,
+            costo: s.costo || 0,
+            gasto: s.gasto || 0,
+            cantidadEfectiva,
+            precioUnitario: s.precioUnitario || 0,
+            esCortesia: itemsCortesia.has(s.id),
+          };
+        }),
+        ...customItems.map((customItem, idx) => {
+          const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+          return {
+            id: `custom-${idx}`,
+            nombre: customItem.name,
+            costo: customItem.cost || 0,
+            gasto: customItem.expense || 0,
+            cantidadEfectiva,
+            precioUnitario: customItem.unit_price,
+            esCortesia: itemsCortesia.has(`custom-${idx}`),
+          };
+        }),
+      ];
+      logAuditoriaCotizacion({
+        config: {
+          utilidad_servicio: configuracionPrecios.utilidad_servicio,
+          utilidad_producto: configuracionPrecios.utilidad_producto,
+          comision_venta: configuracionPrecios.comision_venta,
+          sobreprecio: configuracionPrecios.sobreprecio,
+        },
+        items: auditItems,
+        subtotal,
+        montoCortesias,
+        bono: bonoNum,
+        subtotalProyectado,
+        precioCobrar,
+        totalCosto,
+        totalGasto,
+        comisionRatio,
+        montoComision,
+        utilidadNeta,
+      });
+    }
 
     setCalculoPrecio({
       subtotal: Number(subtotal.toFixed(2)) || 0,
+      montoCortesias: Number(montoCortesias.toFixed(2)) || 0,
+      subtotalProyectado: Number(subtotalProyectado.toFixed(2)) || 0,
+      montoDescuentoCondicion: Number(montoDescuentoCondicion.toFixed(2)) || 0,
       totalCosto: Number(totalCosto.toFixed(2)) || 0,
       totalGasto: Number(totalGasto.toFixed(2)) || 0,
       total: Number(precioCobrar.toFixed(2)) || 0,
@@ -728,7 +938,46 @@ export function CotizacionForm({
       cantidad: number;
       cantidadEfectiva?: number;
     }>);
-  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems]);
+  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales]);
+
+  // Fase 7.2: sincronizar Precio Final de Cierre con Precio Sugerido cuando cambian cortesías o bono
+  useEffect(() => {
+    if (isFirstMountAjustesSyncRef.current) {
+      isFirstMountAjustesSyncRef.current = false;
+      return;
+    }
+    setPendingSyncFromAjustes(true);
+    setShowPrecioSincronizadoBadge(true);
+    const tBadge = setTimeout(() => setShowPrecioSincronizadoBadge(false), 4000);
+    const tPending = setTimeout(() => setPendingSyncFromAjustes(false), 200);
+    return () => {
+      clearTimeout(tBadge);
+      clearTimeout(tPending);
+    };
+  }, [itemsCortesia.size, Array.from(itemsCortesia).sort().join(','), bonoEspecial]);
+
+  useEffect(() => {
+    if (!pendingSyncFromAjustes) return;
+    const sugerido = calculoPrecio.subtotalProyectado ?? 0;
+    setPrecioPersonalizado(sugerido);
+    setRingPrecioSincronizadoVisible(true);
+  }, [pendingSyncFromAjustes, calculoPrecio.subtotalProyectado]);
+
+  const loadCondicionesComerciales = useCallback(async () => {
+    const result = await obtenerCondicionesComerciales(studioSlug);
+    if (result.success && result.data) {
+      setCondicionesComerciales(result.data.map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description ?? null,
+        discount_percentage: c.discount_percentage ?? null,
+        advance_percentage: c.advance_percentage ?? null,
+        advance_type: c.advance_type ?? null,
+        advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+        type: c.type ?? undefined,
+      })));
+    }
+  }, [studioSlug]);
 
   // Handlers para toggles (accordion behavior)
   const toggleSeccion = (seccionId: string) => {
@@ -762,18 +1011,38 @@ export function CotizacionForm({
     });
   };
 
+  const toggleCortesia = (itemId: string) => {
+    setItemsCortesia(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
   // Handler para toggle de selección (click en el servicio). Inserción en cascada: al agregar un Padre se agregan sus Hijos (soft-linking).
+  // En modo cortesía, si el ítem ya está seleccionado, el clic solo alterna cortesía (no deselecciona).
   const onToggleSelection = (servicioId: string) => {
     const servicio = servicioMap.get(servicioId);
     if (!servicio) return;
 
     const currentQuantity = items[servicioId] || 0;
 
+    if (isCourtesyMode && currentQuantity > 0) {
+      toggleCortesia(servicioId);
+      return;
+    }
+
     if (currentQuantity > 0) {
       setItems(prev => {
         const newItems = { ...prev };
         delete newItems[servicioId];
         return newItems;
+      });
+      setItemsCortesia(prev => {
+        const next = new Set(prev);
+        next.delete(servicioId);
+        return next;
       });
     } else {
       const initialQuantity = 1;
@@ -805,6 +1074,13 @@ export function CotizacionForm({
       }
       return newItems;
     });
+    if (cantidad === 0) {
+      setItemsCortesia(prev => {
+        const next = new Set(prev);
+        next.delete(servicioId);
+        return next;
+      });
+    }
 
     if (cantidad > prevCantidad && servicio) {
       toast.success(`${servicio.nombre} agregado a la cotización`, { id: 'cotizacion-add' });
@@ -819,6 +1095,20 @@ export function CotizacionForm({
     const hasCustomItems = customItems.length > 0;
     return hasCatalogItems || hasCustomItems;
   }, [items, customItems]);
+
+  // Cantidad de ítems en cortesía que siguen en la cotización (para label del sidebar)
+  const cortesiaCount = useMemo(() => {
+    let n = 0;
+    itemsCortesia.forEach(id => {
+      if (id.startsWith('custom-')) {
+        const idx = parseInt(id.replace('custom-', ''), 10);
+        if (!Number.isNaN(idx) && idx >= 0 && idx < customItems.length) n += 1;
+      } else if (items[id] && items[id] > 0) {
+        n += 1;
+      }
+    });
+    return n;
+  }, [itemsCortesia, items, customItems.length]);
 
   // Manejar guardado de item desde ItemEditorModal (personalizado o del catálogo)
   const handleSaveCustomItem = async (
@@ -907,6 +1197,11 @@ export function CotizacionForm({
               const updated = { ...prev };
               delete updated[data.id!];
               return updated;
+            });
+            setItemsCortesia(prev => {
+              const next = new Set(prev);
+              next.delete(data.id!);
+              return next;
             });
           }
 
@@ -1255,11 +1550,29 @@ export function CotizacionForm({
           customItems: customItems,
           itemOverrides: Object.keys(overridesObj).length > 0 ? overridesObj : {},
           event_duration: durationHours && durationHours > 0 ? durationHours : null,
+          items_cortesia: Array.from(itemsCortesia),
+          bono_especial: Number(bonoEspecial) || 0,
+          condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
+          condiciones_visibles: Array.from(condicionIdsVisibles),
         });
 
         if (!result.success) {
           toast.error(result.error || 'Error al actualizar cotización');
           return;
+        }
+
+        if (condicionNegociacion && promiseId) {
+          const upsertResult = await upsertCondicionNegociacionCotizacion(
+            studioSlug,
+            cotizacionId!,
+            promiseId,
+            { name: condicionNegociacion.name, discount_percentage: condicionNegociacion.discount_percentage }
+          );
+          if (!upsertResult.success) {
+            toast.error(upsertResult.error || 'Error al guardar condición especial');
+          }
+        } else if (cotizacionId) {
+          await deleteCondicionNegociacionCotizacion(studioSlug, cotizacionId);
         }
 
         toast.success('Cotización actualizada exitosamente');
@@ -1353,11 +1666,24 @@ export function CotizacionForm({
         ),
         customItems: customItems,
         event_duration: durationHours && durationHours > 0 ? durationHours : null,
+        items_cortesia: Array.from(itemsCortesia),
+        bono_especial: Number(bonoEspecial) || 0,
+        condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
+        condiciones_visibles: Array.from(condicionIdsVisibles),
       });
 
       if (!result.success) {
         toast.error(result.error || 'Error al crear cotización');
         return;
+      }
+
+      if (condicionNegociacion && result.data?.id && result.data?.promise_id) {
+        await upsertCondicionNegociacionCotizacion(
+          studioSlug,
+          result.data.id,
+          result.data.promise_id,
+          { name: condicionNegociacion.name, discount_percentage: condicionNegociacion.discount_percentage }
+        );
       }
 
       toast.success('Cotización creada exitosamente');
@@ -1630,6 +1956,9 @@ export function CotizacionForm({
           serviciosSeleccionados={serviciosSeleccionados}
           configuracionPrecios={configuracionPrecios}
           baseHours={durationHours}
+          isCourtesyMode={isCourtesyMode}
+          itemsCortesia={itemsCortesia}
+          onToggleCortesia={toggleCortesia}
         />
       </div>
 
@@ -1684,148 +2013,764 @@ export function CotizacionForm({
 
           {/* Cálculo Financiero — 3 columnas (homologado con Negociación) */}
           <div className="z-10">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Cálculo Financiero
-            </h3>
 
-            {/* Precio calculado (items seleccionados) + Precio personalizado */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="text-xs text-zinc-500 mb-1 block">Precio calculado</label>
-                <ZenInput
-                  type="text"
-                  value={formatearMoneda(calculoPrecio.subtotal)}
-                  readOnly
-                  disabled
-                  className="mt-0"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500 mb-1 block">Precio personalizado</label>
-                <ZenInput
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={precioPersonalizado}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setPrecioPersonalizado('');
-                      return;
-                    }
-                    const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) return;
-                    setPrecioPersonalizado(value);
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value === '') return;
-                    const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
-                  }}
-                  placeholder="0"
-                  className="mt-0"
-                />
-              </div>
+            {/* 1. Precio calculado — compacto, abre Sheet de construcción de precio */}
+            <div className="mb-3">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).click();
+                      }
+                    }}
+                    className="cursor-pointer rounded-lg border border-emerald-800/40 bg-emerald-950/30 px-3 py-2.5 transition-colors hover:border-emerald-700/50 hover:bg-emerald-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 w-full flex items-center gap-3"
+                  >
+                    <ListChecks className="h-4 w-4 shrink-0 text-emerald-400/80" />
+                    <span className="text-sm text-zinc-500 shrink-0">Precio calculado</span>
+                    <span className="text-base font-semibold text-white tabular-nums truncate text-right min-w-0 flex-1">{formatearMoneda(calculoPrecio.subtotal)}</span>
+                  </div>
+                </SheetTrigger>
+                <SheetContent
+                  side="right"
+                  className="flex flex-col w-full max-w-md bg-zinc-900 border-zinc-800 shadow-xl"
+                >
+                  <SheetHeader className="border-b border-zinc-800/50 pb-4">
+                    <SheetTitle className="text-left text-white">
+                      Construcción de precio
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <p className="text-xs text-zinc-500">
+                      <span className="font-medium text-zinc-400">¿Cómo se calcula?</span>
+                      <br />
+                      <span className="mt-1 inline-block">
+                        Utilidad neta = Precio a cobrar − (Costos + Gastos + Comisión). La comisión se calcula sobre el precio que se va a cobrar (personalizado o calculado).
+                      </span>
+                    </p>
+                    {configuracionPrecios && itemsParaDesglose.length > 0 && (
+                      <PrecioDesglosePaquete
+                        items={itemsParaDesglose}
+                        configuracion={configuracionPrecios}
+                        precioPersonalizado={precioPersonalizado === '' ? undefined : Number(precioPersonalizado) || undefined}
+                        showCard={false}
+                      />
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
 
-            {/* Simulador: Utilidad sin descuento (escenario A) | Utilidad con descuento comercial (escenario B) */}
+            {/* 2. Ajustes de Negociación — fondo sutilmente más claro, sin borde de color; acentos violetas */}
+            <Collapsible
+              open={ajustesNegociacionOpen}
+              onOpenChange={(open) => {
+                setAjustesNegociacionOpen(open);
+                if (!open) setIsCourtesyMode(false);
+              }}
+              className="mb-4"
+            >
+              <CollapsibleTrigger
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 transition-colors border border-zinc-700/50 bg-zinc-800/30 hover:bg-zinc-800/40',
+                  ajustesNegociacionOpen ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+                )}
+              >
+                {ajustesNegociacionOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                <span>Ajustes de Negociación</span>
+                {(calculoPrecio.montoCortesias > 0 || bonoEspecial > 0) && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0 ml-auto" aria-hidden />
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="rounded-b-lg border border-t-0 border-zinc-700/50 bg-zinc-800/30 p-3">
+                  <div className="grid grid-cols-[auto_1fr] gap-3">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 mb-1 block">Cortesías</label>
+                      <ZenButton
+                        type="button"
+                        variant={isCourtesyMode ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setIsCourtesyMode(prev => !prev)}
+                        className={cn(
+                          'w-full justify-center gap-1.5 rounded-lg border backdrop-blur-sm h-9 text-xs',
+                          isCourtesyMode
+                            ? 'bg-purple-800 border-purple-700/80 text-white hover:bg-purple-700'
+                            : 'bg-zinc-800/30 border-zinc-600/80 text-zinc-300 hover:bg-zinc-800/50'
+                        )}
+                      >
+                        {isCourtesyMode ? (<><Gift className="w-3.5 h-3.5 shrink-0" /> Finalizar modo cortesía</>) : (<><Gift className="w-3.5 h-3.5 shrink-0" /> Habilitar modo cortesía</>)}
+                      </ZenButton>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 mb-1 block">Bono Especial</label>
+                      <ZenInput
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={bonoEspecial === 0 ? '' : bonoEspecial}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') { setBonoEspecial(0); return; }
+                          const n = parseFloat(v);
+                          if (!Number.isNaN(n) && n >= 0) setBonoEspecial(n);
+                        }}
+                        onFocus={() => { bonoOnFocusRef.current = bonoEspecial; }}
+                        onBlur={(e) => {
+                          if (e.target.value === '') setBonoEspecial(0);
+                          const tieneAjustes = itemsCortesia.size > 0 || bonoEspecial > 0 || bonoOnFocusRef.current > 0;
+                          if (tieneAjustes && bonoEspecial !== bonoOnFocusRef.current) triggerShake();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
+                        placeholder="0"
+                        className="mt-0 h-9 text-sm rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40"
+                      />
+                    </div>
+                  </div>
+                  <Separator className="my-3 bg-zinc-700/50" />
+                  {(() => {
+                    const hasCortesias = itemsCortesia.size > 0;
+                    const hasBono = bonoEspecial > 0;
+                    const showTotal = hasCortesias && hasBono;
+                    if (!hasCortesias && !hasBono) {
+                      return <p className="text-[10px] text-zinc-600">Sin ajustes. Precio sugerido = Precio calculado.</p>;
+                    }
+                    return (
+                      <>
+                        {hasCortesias && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-zinc-400">Cortesías ({itemsCortesia.size})</span>
+                            <div className="flex items-center gap-1">
+                              <span className="tabular-nums text-purple-400">-{formatearMoneda(calculoPrecio.montoCortesias)}</span>
+                              <ZenButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setConfirmClearDiscountMode('cortesias');
+                                  setConfirmClearCortesiasOpen(true);
+                                }}
+                                className="h-8 w-8 p-0 text-purple-400/80 hover:text-purple-300 hover:bg-purple-500/10"
+                                title="Eliminar todas las cortesías"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </ZenButton>
+                            </div>
+                          </div>
+                        )}
+                        {hasBono && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-zinc-400">Bono Especial</span>
+                            <div className="flex items-center gap-1">
+                              <span className="tabular-nums text-emerald-400/90">-{formatearMoneda(bonoEspecial)}</span>
+                              <ZenButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setBonoEspecial(0)}
+                                className="h-8 w-8 p-0 text-zinc-500 hover:text-destructive hover:bg-destructive/10"
+                                title="Eliminar bono especial"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </ZenButton>
+                            </div>
+                          </div>
+                        )}
+                        {showTotal && (
+                          <>
+                            <Separator className="my-3 bg-zinc-700/50" />
+                            <div className="flex items-center justify-between gap-2 text-sm font-medium">
+                              <span className="text-zinc-300">Descuento total</span>
+                              <div className="flex items-center gap-1">
+                                <span className="tabular-nums font-semibold text-red-400">
+                                  -{formatearMoneda(calculoPrecio.montoCortesias + bonoEspecial)}
+                                </span>
+                                <ZenButton
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setConfirmClearDiscountMode('all');
+                                    setConfirmClearCortesiasOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-zinc-500 hover:text-destructive hover:bg-destructive/10"
+                                  title="Eliminar todos los descuentos"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </ZenButton>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <ZenConfirmModal
+              isOpen={confirmClearCortesiasOpen}
+              onClose={() => setConfirmClearCortesiasOpen(false)}
+              onConfirm={() => {
+                setItemsCortesia(new Set());
+                if (confirmClearDiscountMode === 'all') setBonoEspecial(0);
+                setConfirmClearCortesiasOpen(false);
+              }}
+              title={confirmClearDiscountMode === 'all' ? 'Eliminar todos los descuentos' : 'Eliminar cortesías'}
+              description={confirmClearDiscountMode === 'all'
+                ? '¿Deseas eliminar todos los descuentos (cortesías y bono especial)? Los ítems seguirán en la cotización pero dejarán de ser regalo y el bono se pondrá en cero.'
+                : '¿Deseas eliminar todas las cortesías seleccionadas? Los ítems seguirán en la cotización pero dejarán de ser regalo.'}
+              confirmText={confirmClearDiscountMode === 'all' ? 'Eliminar todos' : 'Eliminar todas'}
+              cancelText="Cancelar"
+              variant="destructive"
+            />
+
+            {/* Precio Final de Cierre — Fase 7.2: se sincroniza con sugerido al cambiar cortesías/bono */}
+            <div className="mb-4">
+              <label className="text-xs text-zinc-500 mb-1 block">Precio Final de Cierre</label>
+              <ZenInput
+                type="number"
+                min="0"
+                step="0.01"
+                value={precioPersonalizado}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setRingPrecioSincronizadoVisible(false);
+                  if (value === '') { setPrecioPersonalizado(''); return; }
+                  const numValue = parseFloat(value);
+                  if (isNaN(numValue) || numValue < 0) return;
+                  setPrecioPersonalizado(value);
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value;
+                  if (value === '') return;
+                  const numValue = parseFloat(value);
+                  if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
+                }}
+                placeholder="0"
+                className={cn(
+                  'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
+                  ringPrecioSincronizadoVisible && 'ring-1 ring-amber-500 animate-sugerido-shake'
+                )}
+              />
+              {(showPrecioSincronizadoBadge || ringPrecioSincronizadoVisible) && (
+                <p className="text-[11px] text-amber-500 mt-1.5 mb-0.5">Precio actualizado por ajustes de negociación</p>
+              )}
+              <p className="text-[11px] text-zinc-500">Este es el monto real que se le cobrará al prospecto.</p>
+            </div>
+
+            {/* 3. Condiciones de cierre — mismo diseño que Ajustes de Negociación */}
+            <Collapsible
+              open={condicionesCierreOpen}
+              onOpenChange={setCondicionesCierreOpen}
+              className="mb-4"
+            >
+              <div
+                className={cn(
+                  'flex w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
+                  condicionesCierreOpen ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+                )}
+              >
+                <CollapsibleTrigger
+                  className={cn(
+                    'flex flex-1 items-center gap-2 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 hover:bg-zinc-800/30 transition-colors min-w-0'
+                  )}
+                >
+                  {condicionesCierreOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                  <span>Condiciones de cierre</span>
+                </CollapsibleTrigger>
+                <ZenButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingCondicionId(null);
+                    setCreateCondicionEspecialMode(false);
+                    setShowCondicionesManager(true);
+                  }}
+                  className="gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-6 min-h-6 px-1.5 text-[11px] shrink-0 mr-2"
+                >
+                  <Settings className="h-3 w-3" />
+                  Gestionar
+                </ZenButton>
+              </div>
+              <CollapsibleContent>
+                <div className="rounded-b-lg border border-t-0 border-zinc-700/50 bg-zinc-800/10 p-3">
+                  <p className="text-[11px] text-zinc-500 mb-3">
+                    Puedes habilitar u ocultar las condiciones de contratación que el prospecto podrá elegir para esta cotización.
+                  </p>
+                  {tieneAjustesNegociacion && (
+                    <p className="text-[11px] text-amber-600 mt-1 mb-3">
+                      Se ocultaron condiciones con descuento por los ajustes de negociación (cortesías/bono). Puedes activarlas si lo deseas.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-2">
+                  {condicionesComerciales.map((cond) => {
+                    const isVisible = condicionIdsVisibles.has(cond.id);
+                    const isSimulacion = condicionSimulacionId === cond.id;
+                    const descuentoPct = cond.discount_percentage ?? 0;
+                    const dobleBeneficio = tieneAjustesNegociacion && descuentoPct > 0 && (isSimulacion || isVisible);
+                    const totalCosto = calculoPrecio.totalCosto ?? 0;
+                    const totalGasto = calculoPrecio.totalGasto ?? 0;
+                    const comisionRatio = configuracionPrecios ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta) : 0.05;
+                    const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
+                    const totalRecibirCond = Math.max(0, precioCierreBase - (precioCierreBase * descuentoPct) / 100);
+                    const utilidadCond = totalRecibirCond - totalCosto - totalGasto - totalRecibirCond * comisionRatio;
+                    const margenCond = totalRecibirCond > 0 ? (utilidadCond / totalRecibirCond) * 100 : 0;
+                    const saludCond = margenCond < 15 ? 'destructive' : margenCond < 25 ? 'amber' : 'emerald';
+                    return (
+                      <div
+                        key={cond.id}
+                        className={cn(
+                          'rounded-lg border transition-all duration-300 ease-out relative',
+                          isSimulacion && 'ring-2 ring-emerald-500/80 border-emerald-500/60 bg-emerald-950/20',
+                          !isSimulacion && 'border-zinc-700 bg-zinc-800/30',
+                          dobleBeneficio && 'ring-amber-500/50 border-amber-500/80 bg-amber-950/30'
+                        )}
+                      >
+                        {/* Cabecera: nombre + etiqueta Visible/Oculto + lápiz */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/50">
+                          <span className={cn('font-medium text-sm min-w-0 truncate', isSimulacion ? 'text-white' : 'text-zinc-300')}>{cond.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCondicionIdsVisibles((prev) => {
+                                const next = new Set(prev);
+                                if (isVisible) next.delete(cond.id); else next.add(cond.id);
+                                return next;
+                              });
+                            }}
+                            className={cn(
+                              'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
+                              isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                            )}
+                            aria-label={isVisible ? 'Ocultar para el prospecto' : 'Visible para el prospecto'}
+                          >
+                            {isVisible ? 'Visible' : 'Oculto'}
+                          </button>
+                          {isSimulacion && <span className="text-[10px] text-emerald-400 shrink-0">[Simulando]</span>}
+                          {cond.type === 'offer' && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full shrink-0">OFERTA</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCreateCondicionEspecialMode(false);
+                              setEditingCondicionId(cond.id);
+                              setShowCondicionesManager(true);
+                            }}
+                            className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80"
+                            title="Editar condición"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {/* Cuerpo: clic = simulación */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id))}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id)); } }}
+                          className={cn(
+                            'px-3 py-2.5 cursor-pointer transition-colors text-left',
+                            isSimulacion ? 'bg-emerald-500/5' : 'hover:bg-zinc-800/50'
+                          )}
+                        >
+                          {cond.description && <p className="text-xs text-zinc-500">{cond.description}</p>}
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1 text-zinc-400">
+                            <span>Anticipo: {cond.advance_type === 'fixed_amount' && cond.advance_amount != null ? formatearMoneda(cond.advance_amount) : `${cond.advance_percentage ?? 0}%`}</span>
+                            <span>Descuento: {descuentoPct}%</span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-zinc-700/40">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-zinc-500">Utilidad real</span>
+                              <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
+                            </div>
+                            <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
+                              <div
+                                className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
+                                style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
+                          </div>
+                          {dobleBeneficio && (
+                            <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
+                              <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {condicionNegociacion && (() => {
+                    const isVisible = condicionIdsVisibles.has(condicionNegociacion.id);
+                    const isSimulacion = condicionSimulacionId === condicionNegociacion.id;
+                    const descuentoPct = condicionNegociacion.discount_percentage ?? 0;
+                    const dobleBeneficio = tieneAjustesNegociacion && descuentoPct > 0 && (isSimulacion || isVisible);
+                    const totalCosto = calculoPrecio.totalCosto ?? 0;
+                    const totalGasto = calculoPrecio.totalGasto ?? 0;
+                    const comisionRatio = configuracionPrecios ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta) : 0.05;
+                    const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
+                    const totalRecibirCond = Math.max(0, precioCierreBase - (precioCierreBase * descuentoPct) / 100);
+                    const utilidadCond = totalRecibirCond - totalCosto - totalGasto - totalRecibirCond * comisionRatio;
+                    const margenCond = totalRecibirCond > 0 ? (utilidadCond / totalRecibirCond) * 100 : 0;
+                    const saludCond = margenCond < 15 ? 'destructive' : margenCond < 25 ? 'amber' : 'emerald';
+                    return (
+                      <div
+                        className={cn(
+                          'rounded-lg border border-emerald-500/50 bg-emerald-500/10 transition-all duration-300 ease-out relative',
+                          isSimulacion && 'ring-2 ring-emerald-500/80',
+                          dobleBeneficio && 'ring-amber-500/50 border-amber-500/80 bg-amber-950/30'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-emerald-500/20">
+                          <div className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          </div>
+                          <span className="font-medium text-sm text-white min-w-0 truncate">{condicionNegociacion.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCondicionIdsVisibles((prev) => {
+                                const next = new Set(prev);
+                                if (isVisible) next.delete(condicionNegociacion.id); else next.add(condicionNegociacion.id);
+                                return next;
+                              });
+                            }}
+                            className={cn(
+                              'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
+                              isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                            )}
+                            aria-label={isVisible ? 'Ocultar para el prospecto' : 'Visible para el prospecto'}
+                          >
+                            {isVisible ? 'Visible' : 'Oculto'}
+                          </button>
+                          {isSimulacion && <span className="text-[10px] text-emerald-400 shrink-0">[Simulando]</span>}
+                          <span className="text-[10px] text-emerald-400/80 shrink-0">Condición especial</span>
+                          <span className="ml-auto" />
+                        </div>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id))}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id)); } }}
+                          className={cn('px-3 py-2.5 cursor-pointer transition-colors text-left', isSimulacion && 'bg-emerald-500/5')}
+                        >
+                          <div className="text-xs text-zinc-400">Descuento: {condicionNegociacion.discount_percentage ?? 0}%</div>
+                          <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-zinc-500">Utilidad real</span>
+                              <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
+                            </div>
+                            <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
+                              <div
+                                className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
+                                style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
+                          </div>
+                          {dobleBeneficio && (
+                            <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
+                              <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2 w-full">
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCreateCondicionEspecialMode(true);
+                      setEditingCondicionId(null);
+                      setShowCondicionesManager(true);
+                    }}
+                    className="w-full gap-2 py-3.5 border-zinc-700/50 bg-zinc-800/30 text-zinc-300 hover:bg-zinc-800/50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Crear condición comercial especial
+                  </ZenButton>
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={condicionIdsVisibles.size === 0}
+                    onClick={() => setAuditoriaRentabilidadOpen(true)}
+                    className="w-full gap-2 py-2.5 border-zinc-600/50 bg-zinc-800/20 text-zinc-300 hover:bg-zinc-800/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para comparar rentabilidades' : undefined}
+                  >
+                    <Info className="h-4 w-4" />
+                    Abrir Análisis de Rentabilidad
+                  </ZenButton>
+                </div>
+
+                {/* Resumen de Pago Simulado — animación entrada/salida y scroll suave */}
+                {condicionSimulacionId && (() => {
+                  const condSim = condicionesComerciales.find(c => c.id === condicionSimulacionId)
+                    ?? (condicionNegociacion?.id === condicionSimulacionId ? condicionNegociacion : null);
+                  const precioCierre = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
+                  const pct = (condSim as { discount_percentage?: number | null } | null)?.discount_percentage ?? 0;
+                  const descuentoMonto = (precioCierre * pct) / 100;
+                  const totalRecibir = Math.max(0, precioCierre - descuentoMonto);
+                  return (
+                    <div
+                      ref={simulacionBlockRef}
+                      className={cn(
+                        'overflow-hidden transition-all duration-300 ease-out',
+                        simulacionBlockExpanded ? 'mt-3 max-h-[400px] opacity-100' : 'max-h-0 opacity-0 mt-0'
+                      )}
+                    >
+                      <div className="rounded-lg border border-amber-500/40 bg-zinc-800/20 p-3 ring-1 ring-amber-500/30">
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">Simulación: El cliente pagará</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between text-zinc-300">
+                            <span>Precio de Cierre</span>
+                            <span className="tabular-nums">{formatearMoneda(precioCierre)}</span>
+                          </div>
+                          <div className="flex justify-between text-amber-400/90">
+                            <span>Descuento aplicado ({pct}%)</span>
+                            <span className="tabular-nums">-{formatearMoneda(descuentoMonto)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-white pt-1 border-t border-zinc-700/50">
+                            <span>Total real a recibir</span>
+                            <span className="tabular-nums">{formatearMoneda(totalRecibir)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Modal compartido: crear o editar condiciones comerciales (igual que en negociación) */}
+            <CondicionesComercialesManager
+              studioSlug={studioSlug}
+              isOpen={showCondicionesManager || !!editingCondicionId}
+              onClose={() => {
+                setShowCondicionesManager(false);
+                setEditingCondicionId(null);
+                setCreateCondicionEspecialMode(false);
+              }}
+              onRefresh={loadCondicionesComerciales}
+              onSelect={createCondicionEspecialMode ? (id) => {
+                setSelectedCondicionComercialId(id);
+                setCondicionNegociacion(null);
+                setShowCondicionesManager(false);
+                setCreateCondicionEspecialMode(false);
+                loadCondicionesComerciales();
+                toast.success('Condición especial creada y seleccionada');
+              } : undefined}
+              initialMode={createCondicionEspecialMode ? 'create' : undefined}
+              initialEditingId={editingCondicionId ?? undefined}
+              defaultIsPublic={createCondicionEspecialMode ? false : true}
+              customTitle={createCondicionEspecialMode ? 'Condición comercial especial' : undefined}
+              originContext={createCondicionEspecialMode ? 'negotiation' : undefined}
+            />
+
+            {/* 6. Utilidad proyectada — tarjeta minimalista + Sheet; CFO: con simulación usa TotalRecibir */}
             {(() => {
-              const precioNum = precioPersonalizado !== '' ? Number(precioPersonalizado) || 0 : 0;
-              const subtotal = calculoPrecio.subtotal;
-              const base = precioNum > 0 ? precioNum : subtotal;
               const comisionRatio = configuracionPrecios
                 ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
                 : 0.05;
-              // N% del simulador = sobreprecio de la configuración del estudio (descuento máximo sugerido)
-              const descuentoComercialPercent = configuracionPrecios
-                ? (configuracionPrecios.sobreprecio > 1 ? configuracionPrecios.sobreprecio : configuracionPrecios.sobreprecio * 100)
-                : (condicionComercialPreAutorizada?.discount_percentage ?? 10);
-
-              // Escenario A: utilidad sin descuento comercial (base - costos - gastos - comisión sobre base)
-              const utilidadSinDescuentoSim = base - calculoPrecio.totalCosto - calculoPrecio.totalGasto - (base * comisionRatio);
-
-              // Escenario B: ingreso proyectado si el cliente aplica el descuento comercial
-              const ingresoProyectado = base * (1 - descuentoComercialPercent / 100);
-              const utilidadConDescuentoSim = ingresoProyectado - calculoPrecio.totalCosto - calculoPrecio.totalGasto - (ingresoProyectado * comisionRatio);
-              const margenConDescuento = ingresoProyectado > 0 ? (utilidadConDescuentoSim / ingresoProyectado) * 100 : 0;
-              const margenCritico = 15;
-              const alertaMargenBajo = margenConDescuento < margenCritico;
+              const totalCosto = calculoPrecio.totalCosto ?? 0;
+              const totalGasto = calculoPrecio.totalGasto ?? 0;
+              const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
+              const condSim = condicionSimulacionId
+                ? (condicionesComerciales.find(c => c.id === condicionSimulacionId) ?? (condicionNegociacion?.id === condicionSimulacionId ? condicionNegociacion : null))
+                : null;
+              const totalRecibirSim = condSim
+                ? Math.max(0, precioCierreBase - (precioCierreBase * ((condSim as { discount_percentage?: number | null }).discount_percentage ?? 0)) / 100)
+                : null;
+              const utilidadProyectada = totalRecibirSim != null
+                ? totalRecibirSim - totalCosto - totalGasto - totalRecibirSim * comisionRatio
+                : calculoPrecio.utilidadNeta;
+              const utilidadOriginal = calculoPrecio.utilidadSinDescuento;
+              const perdidaMonto = utilidadOriginal - utilidadProyectada;
+              const ingresoParaMargen = totalRecibirSim ?? (calculoPrecio.total ?? 0);
+              const margenCierre = ingresoParaMargen > 0 ? (utilidadProyectada / ingresoParaMargen) * 100 : calculoPrecio.margenPorcentaje;
+              const pctComision = (comisionRatio * 100).toFixed(0);
+              const saludColor = margenCierre < 15 ? 'destructive' : margenCierre < 25 ? 'amber' : 'emerald';
+              const barWidth = Math.min(100, Math.max(0, margenCierre));
+              const tieneAjusteManual = Math.abs((calculoPrecio.total ?? 0) - (calculoPrecio.subtotalProyectado ?? 0)) > 0.005;
+              const diferenciaCierre = (calculoPrecio.total ?? 0) - (calculoPrecio.subtotalProyectado ?? 0);
+              const ingresoSugeridoConCondicion = (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
+              const comisionSugerido = ingresoSugeridoConCondicion * comisionRatio;
+              const comisionActual = (calculoPrecio.total ?? 0) * comisionRatio;
+              const ahorroGastoComision = comisionActual - comisionSugerido;
+              const metaServicio = configuracionPrecios
+                ? (configuracionPrecios.utilidad_servicio > 1 ? configuracionPrecios.utilidad_servicio / 100 : configuracionPrecios.utilidad_servicio)
+                : 0.4;
+              const metaProducto = configuracionPrecios
+                ? (configuracionPrecios.utilidad_producto > 1 ? configuracionPrecios.utilidad_producto / 100 : configuracionPrecios.utilidad_producto)
+                : 0.15;
+              const totalVentaServicios = configuracionPrecios && itemsParaDesglose.length > 0
+                ? itemsParaDesglose
+                    .filter((i) => (i.tipo_utilidad ?? 'service') === 'service')
+                    .reduce((sum, i) => {
+                      const q = i.cantidadEfectiva ?? i.cantidad;
+                      const r = calcularPrecio(i.costo || 0, i.gasto || 0, 'servicio', configuracionPrecios);
+                      return sum + r.precio_final * q;
+                    }, 0)
+                : 0;
+              const totalVentaProductos = configuracionPrecios && itemsParaDesglose.length > 0
+                ? itemsParaDesglose
+                    .filter((i) => (i.tipo_utilidad ?? 'service') === 'product')
+                    .reduce((sum, i) => {
+                      const q = i.cantidadEfectiva ?? i.cantidad;
+                      const r = calcularPrecio(i.costo || 0, i.gasto || 0, 'producto', configuracionPrecios);
+                      return sum + r.precio_final * q;
+                    }, 0)
+                : 0;
+              const precioParaMix = calculoPrecio.total && calculoPrecio.total > 0 ? calculoPrecio.total : calculoPrecio.subtotalProyectado ?? 0;
+              const margenObjetivoPct = precioParaMix > 0
+                ? ((totalVentaServicios * metaServicio) + (totalVentaProductos * metaProducto)) / precioParaMix * 100
+                : 0;
+              const ratioAlObjetivo = margenObjetivoPct > 0 ? margenCierre / margenObjetivoPct : 1;
+              const explicacionSalud = ratioAlObjetivo >= 0.9 ? 'Estás al 90% o más de tu meta de margen para este mix.' : ratioAlObjetivo >= 0.7 ? 'Estás entre 70% y 89% de tu meta; margen aceptable pero mejorable.' : 'El margen está por debajo del 70% de la meta para este mix de ítems.';
 
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
-                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad sin descuento</span>
-                    <span
-                      className={`mt-1.5 text-xl font-semibold tabular-nums ${
-                        utilidadSinDescuentoSim >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {formatearMoneda(utilidadSinDescuentoSim)}
-                    </span>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">
-                      {precioNum > 0 ? `Según precio ingresado (${formatearMoneda(base)})` : 'Basado en el precio de catálogo'}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-start rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4 w-full">
-                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Utilidad con descuento</span>
-                    <span
-                      className={`mt-1.5 text-xl font-semibold tabular-nums flex items-center gap-1.5 ${
-                        alertaMargenBajo ? 'text-red-500' : utilidadConDescuentoSim >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {formatearMoneda(utilidadConDescuentoSim)}
-                      {alertaMargenBajo && <AlertTriangle className="w-5 h-5 shrink-0 text-red-500" aria-hidden />}
-                    </span>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">
-                      Si el cliente aplica el {descuentoComercialPercent}% de descuento comercial, tu utilidad final será la mostrada arriba
-                    </p>
-                  </div>
-                </div>
+                <Sheet open={auditoriaRentabilidadOpen} onOpenChange={setAuditoriaRentabilidadOpen}>
+                  <SheetContent side="right" className="flex flex-col w-full max-w-md bg-zinc-900 border-zinc-800 overflow-y-auto">
+                    <SheetHeader className="border-b border-zinc-800/50 pb-4">
+                      <SheetTitle className="text-left text-white">Auditoría de Rentabilidad</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-6 py-4 space-y-6">
+                      {/* Bloque 1: Escenario del Sistema */}
+                      <div>
+                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Escenario del sistema</h3>
+                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-1.5 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">Ingreso sugerido</span>
+                            <span className="tabular-nums text-zinc-200">{formatearMoneda(calculoPrecio.subtotalProyectado ?? 0)}</span>
+                          </div>
+                          {(calculoPrecio.montoDescuentoCondicion ?? 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-zinc-500">(−) Descuento por Condición Comercial</span>
+                              <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.montoDescuentoCondicion ?? 0)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">(−) Costos de producción</span>
+                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalCosto)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">(−) Gastos</span>
+                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalGasto)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">(−) Comisión sugerida ({pctComision}%)</span>
+                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionSugerido)}</span>
+                          </div>
+                          <Separator className="bg-zinc-700/50 my-1.5" />
+                          <div className="flex justify-between font-medium">
+                            <span className="text-zinc-300">Utilidad sugerida</span>
+                            <span className="tabular-nums text-emerald-500/90">{formatearMoneda(calculoPrecio.utilidadSinDescuento)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* COMPARATIVA DE CIERRE: un bloque por cada condición visible */}
+                      {condicionIdsVisibles.size > 0 && (
+                        <div>
+                          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Comparativa de cierre</h3>
+                          <div className="space-y-3">
+                            {Array.from(condicionIdsVisibles).map((id) => {
+                              const c = condicionesComerciales.find((x) => x.id === id) ?? (condicionNegociacion?.id === id ? condicionNegociacion : null);
+                              if (!c) return null;
+                              const pct = (c as { discount_percentage?: number | null }).discount_percentage ?? 0;
+                              const descuentoMonto = (precioCierreBase * pct) / 100;
+                              const ingreso = Math.max(0, precioCierreBase - descuentoMonto);
+                              const comisionEsc = ingreso * comisionRatio;
+                              const utilidadNetaReal = ingreso - totalCosto - totalGasto - comisionEsc;
+                              const nombre = (c as { name?: string }).name ?? 'Condición';
+                              const esSimulando = id === condicionSimulacionId;
+                              return (
+                                <div
+                                  key={id}
+                                  className={cn(
+                                    'rounded-lg border p-3 space-y-1.5 text-sm',
+                                    esSimulando ? 'border-amber-500/40 bg-zinc-800/10 ring-1 ring-amber-500/30' : 'border-zinc-700/50 bg-zinc-800/10'
+                                  )}
+                                >
+                                  <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                                    Escenario: {nombre}
+                                    {esSimulando && <span className="ml-1.5 text-amber-400/90">(simulando)</span>}
+                                  </h4>
+                                  <div className="flex justify-between">
+                                    <span className="text-zinc-500">Ingreso (Precio cierre − Descuento)</span>
+                                    <span className="tabular-nums text-zinc-200">{formatearMoneda(ingreso)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-zinc-500">(−) Costos</span>
+                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalCosto)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-zinc-500">(−) Gastos</span>
+                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalGasto)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-zinc-500">(−) Comisión ({pctComision}%)</span>
+                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionEsc)}</span>
+                                  </div>
+                                  <Separator className="bg-zinc-700/50 my-1.5" />
+                                  <div className="flex justify-between font-medium">
+                                    <span className="text-zinc-300">Utilidad neta real</span>
+                                    <span className={cn(
+                                      'tabular-nums',
+                                      utilidadNetaReal >= 0 && (utilidadNetaReal / (ingreso || 1)) * 100 >= 25 ? 'text-emerald-400' : utilidadNetaReal >= 0 ? 'text-amber-400' : 'text-destructive'
+                                    )}>
+                                      {formatearMoneda(utilidadNetaReal)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Salud Financiera — usa margen de la simulación activa si hay condición simulada */}
+                      <div>
+                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Salud financiera</h3>
+                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-2 text-sm">
+                          <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            Meta de margen ponderada según tu mix de productos y servicios: <strong className="text-zinc-300">{margenObjetivoPct.toFixed(1)}%</strong>. (Servicios {(metaServicio * 100).toFixed(0)}%, productos {(metaProducto * 100).toFixed(0)}%.)
+                          </p>
+                          <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            {condicionSimulacionId ? (
+                              <>Tu margen con la simulación activa es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
+                            ) : (
+                              <>Tu margen de cierre es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
+                            )}
+                            <span className={cn(saludColor === 'destructive' && 'text-destructive', saludColor === 'amber' && 'text-amber-400', saludColor === 'emerald' && 'text-emerald-400')}>
+                              {saludColor === 'destructive' ? 'rojo' : saludColor === 'amber' ? 'ámbar' : 'verde'}
+                            </span>.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </SheetContent>
+                </Sheet>
               );
             })()}
-
-            {/* Desglose: construcción de precio (para revisar números) */}
-            <div className="border-t border-zinc-700 pt-3">
-              <button
-                type="button"
-                onClick={() => setSeccionesExpandidas(prev => {
-                  const newSet = new Set(prev);
-                  if (newSet.has('desglose-financiero')) {
-                    newSet.delete('desglose-financiero');
-                  } else {
-                    newSet.add('desglose-financiero');
-                  }
-                  return newSet;
-                })}
-                className="w-full flex items-center justify-between text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
-              >
-                <span>Desglose (construcción de precio)</span>
-                {seccionesExpandidas.has('desglose-financiero') ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
-              </button>
-              {seccionesExpandidas.has('desglose-financiero') && configuracionPrecios && (
-                <div className="mt-3 space-y-4">
-                  <div className="rounded-lg border border-zinc-700/30 bg-zinc-800/10 p-3 text-xs text-zinc-500">
-                    <span className="font-medium text-zinc-400">¿Cómo se calcula?</span>
-                    <p className="mt-1">
-                      Utilidad neta = Precio a cobrar − (Costos + Gastos + Comisión). La comisión se calcula sobre el precio que se va a cobrar (personalizado o calculado). No se aplica penalización por sobreprecio al bajar el precio.
-                    </p>
-                  </div>
-                  {itemsParaDesglose.length > 0 && (
-                    <PrecioDesglosePaquete
-                      items={itemsParaDesglose}
-                      configuracion={configuracionPrecios}
-                      precioPersonalizado={precioPersonalizado === '' ? undefined : Number(precioPersonalizado) || undefined}
-                      showCard={false}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Switch de visibilidad */}
@@ -1944,7 +2889,8 @@ export function CotizacionForm({
                   variant="primary"
                   loading={loading}
                   loadingText="Guardando..."
-                  disabled={loading || isDisabled}
+                  disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                  title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
                   className="flex-1"
                 >
                   {isEditMode ? 'Actualizar' : 'Crear'} Cotización

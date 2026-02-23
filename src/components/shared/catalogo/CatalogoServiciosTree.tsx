@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2, Plus, Trash2, Gift } from 'lucide-react';
 import { ZenBadge, ZenButton } from '@/components/ui/zen';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -49,6 +49,11 @@ interface CatalogoServiciosTreeProps {
     
     // Para cálculo dinámico
     baseHours?: number | null;
+
+    // Modo cortesía (La Bolsita)
+    isCourtesyMode?: boolean;
+    itemsCortesia?: Set<string>;
+    onToggleCortesia?: (itemId: string) => void;
 }
 
 export function CatalogoServiciosTree({
@@ -71,6 +76,9 @@ export function CatalogoServiciosTree({
     serviciosSeleccionados,
     configuracionPrecios,
     baseHours,
+    isCourtesyMode = false,
+    itemsCortesia,
+    onToggleCortesia,
 }: CatalogoServiciosTreeProps) {
     return (
         <div className="space-y-2">
@@ -326,6 +334,9 @@ export function CatalogoServiciosTree({
                                                                             : { precio_final: 0 };
                                                                         const cantidad = items[servicio.id] || 0;
                                                                         const isSelected = selectedServices.has(servicio.id);
+                                                                        const isInCortesiaSet = itemsCortesia?.has(servicio.id) ?? false;
+                                                                        const showCortesiaBadge = isInCortesiaSet && isSelected;
+                                                                        const showCourtesyHighlight = isCourtesyMode && showCortesiaBadge;
                                                                         
                                                                         const billingType = (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
                                                                         const durationHours = baseHours !== null && baseHours !== undefined ? Number(baseHours) : null;
@@ -342,23 +353,38 @@ export function CatalogoServiciosTree({
                                                                             }
                                                                         }
 
+                                                                        const inCourtesyModeNotSelected = isCourtesyMode && !isSelected;
                                                                         return (
                                                                             <div
                                                                                 key={servicio.id}
-                                                                                onClick={() => onToggleSelection(servicio.id)}
+                                                                                onClick={() => {
+                                                                                    if (isCourtesyMode) {
+                                                                                        if (!isSelected) return;
+                                                                                        onToggleCortesia?.(servicio.id);
+                                                                                    } else {
+                                                                                        onToggleSelection(servicio.id);
+                                                                                    }
+                                                                                }}
                                                                                 className={cn(
-                                                                                    'group flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors cursor-pointer',
+                                                                                    'group flex items-center justify-between py-3 px-2 pl-6 transition-colors',
                                                                                     'border-t border-b border-zinc-700/30',
                                                                                     servicioIndex === 0 && 'border-t-0',
-                                                                                    isSelected
-                                                                                        ? 'bg-emerald-900/10 border-l-2 border-l-emerald-500/50'
-                                                                                        : 'border-l-2 border-l-transparent'
+                                                                                    isSelected && !showCourtesyHighlight && 'bg-emerald-900/10 border-l-2 border-l-emerald-500/50',
+                                                                                    showCourtesyHighlight && 'bg-purple-900/20 border-l-2 border-l-purple-500/70',
+                                                                                    !isSelected && !showCourtesyHighlight && 'border-l-2 border-l-transparent',
+                                                                                    inCourtesyModeNotSelected && 'opacity-40 cursor-not-allowed',
+                                                                                    !inCourtesyModeNotSelected && 'hover:bg-zinc-700/20 cursor-pointer'
                                                                                 )}
                                                                             >
                                                                                 {/* Nivel 3: Servicio */}
                                                                                 <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light">
+                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5">
                                                                                         <span className="wrap-break-word">{servicio.nombre}</span>
+                                                                                        {showCortesiaBadge && (
+                                                                                            <ZenBadge variant="outline" size="sm" className="px-1 py-0 text-[10px] border-purple-500/70 text-purple-400 shrink-0">
+                                                                                                <Gift className="w-2.5 h-2.5 inline mr-0.5" /> Cortesía
+                                                                                            </ZenBadge>
+                                                                                        )}
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 mt-1">
                                                                                         {/* Badge de tipo (Servicio/Producto) */}
@@ -495,6 +521,9 @@ export function CatalogoServiciosTree({
                                                                     )
                                                                     .map(({ customItem, globalIndex }, customIndex) => {
                                                                         const customItemId = `custom-${globalIndex}`;
+                                                                        const isInCortesiaSet = itemsCortesia?.has(customItemId) ?? false;
+                                                                        const showCortesiaBadge = isInCortesiaSet;
+                                                                        const showCourtesyHighlight = isCourtesyMode && showCortesiaBadge;
                                                                         const safeDurationHours = baseHours !== null && baseHours !== undefined ? Number(baseHours) : null;
                                                                         const cantidadEfectiva = calcularCantidadEfectiva(
                                                                             customItem.billing_type,
@@ -509,16 +538,27 @@ export function CatalogoServiciosTree({
                                                                         return (
                                                                             <div
                                                                                 key={customItemId}
+                                                                                role={isCourtesyMode ? 'button' : undefined}
+                                                                                tabIndex={isCourtesyMode ? 0 : undefined}
+                                                                                onClick={isCourtesyMode && onToggleCortesia ? () => onToggleCortesia(customItemId) : undefined}
+                                                                                onKeyDown={isCourtesyMode && onToggleCortesia ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCortesia(customItemId); } } : undefined}
                                                                                 className={cn(
                                                                                     'group flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors',
                                                                                     'border-t border-b border-zinc-700/30',
                                                                                     isFirstCustomItem && hasCatalogItems && 'border-t-0',
-                                                                                    'bg-purple-900/10 border-l-2 border-l-purple-500/50'
+                                                                                    'bg-purple-900/10 border-l-2 border-l-purple-500/50',
+                                                                                    isCourtesyMode && onToggleCortesia && 'cursor-pointer',
+                                                                                    showCourtesyHighlight && 'bg-purple-900/25 border-l-purple-500/80'
                                                                                 )}
                                                                             >
                                                                                 <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light">
+                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5">
                                                                                         <span className="wrap-break-word">{customItem.name}</span>
+                                                                                        {showCortesiaBadge && (
+                                                                                            <ZenBadge variant="outline" size="sm" className="px-1 py-0 text-[10px] border-purple-500/70 text-purple-400 shrink-0">
+                                                                                                <Gift className="w-2.5 h-2.5 inline mr-0.5" /> Cortesía
+                                                                                            </ZenBadge>
+                                                                                        )}
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 mt-1">
                                                                                         <ZenBadge
@@ -637,7 +677,10 @@ export function CatalogoServiciosTree({
                                                                 {/* 3. Botón + Personalizado al final de cada categoría expandida */}
                                                                 {onCreateCustomItem && (
                                                                     <div
-                                                                        className="px-6 py-2 border-t border-zinc-700/30"
+                                                                        className={cn(
+                                                                            'px-6 py-2 border-t border-zinc-700/30',
+                                                                            isCourtesyMode && 'opacity-40 pointer-events-none'
+                                                                        )}
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         onPointerDown={(e) => e.stopPropagation()}
                                                                     >
@@ -648,6 +691,7 @@ export function CatalogoServiciosTree({
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 e.stopPropagation();
+                                                                                if (isCourtesyMode) return;
                                                                                 onCreateCustomItem(categoria.id);
                                                                             }}
                                                                             className="w-full justify-start gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/20"
