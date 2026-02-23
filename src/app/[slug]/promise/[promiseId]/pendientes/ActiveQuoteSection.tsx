@@ -129,16 +129,8 @@ export function ActiveQuoteSection({
     share_settings,
   } = result.data;
 
-  // Filtrar condiciones según settings
-  const condicionesFiltradas = condiciones_comerciales?.filter((condicion) => {
-    const tipo = condicion.type || 'standard';
-    if (tipo === 'standard') {
-      return share_settings.show_standard_conditions;
-    } else if (tipo === 'offer') {
-      return share_settings.show_offer_conditions;
-    }
-    return false;
-  });
+  // Pasar TODAS las condiciones; CotizacionDetailSheet aplica (condiciones_visibles por cotización O legacy por tipo)
+  const condicionesParaCliente = condiciones_comerciales ?? undefined;
 
   // Cotizaciones visibles al cliente (API puede enviar solo visibles o todas)
   const visibleQuotes = cotizaciones.filter(
@@ -156,7 +148,7 @@ export function ActiveQuoteSection({
           promiseId={promiseId}
           studioSlug={studioSlug}
           studioId={studio.id}
-          condicionesComerciales={condicionesFiltradas}
+          condicionesComerciales={condicionesParaCliente}
           terminosCondiciones={terminos_condiciones}
           showCategoriesSubtotals={share_settings.show_categories_subtotals}
           showItemsPrices={share_settings.show_items_prices}

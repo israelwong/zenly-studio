@@ -232,7 +232,7 @@ export function PromiseQuotesPanelCard({
     const qs = params.toString();
     const base = `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`;
     if (cotizacion.status === 'negociacion') {
-      return `${base}/negociacion`;
+      return `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`;
     }
     return qs ? `${base}?${qs}` : base;
   };
@@ -848,20 +848,6 @@ export function PromiseQuotesPanelCard({
                             </ZenDropdownMenuItem>
                           )}
                           <ZenDropdownMenuSeparator />
-                          {promiseId && (
-                            <ZenDropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
-                              }}
-                              disabled={loading || isDuplicating}
-                              className="text-amber-400 focus:text-amber-300"
-                            >
-                              <Handshake className="h-4 w-4 mr-2" />
-                              Negociar
-                            </ZenDropdownMenuItem>
-                          )}
-                          <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -912,20 +898,6 @@ export function PromiseQuotesPanelCard({
                             >
                               <CheckCircle className="h-4 w-4 mr-2" />
                               Pasar a Cierre
-                            </ZenDropdownMenuItem>
-                          )}
-                          <ZenDropdownMenuSeparator />
-                          {promiseId && (
-                            <ZenDropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
-                              }}
-                              disabled={loading || isDuplicating}
-                              className="text-amber-400 focus:text-amber-300"
-                            >
-                              <Handshake className="h-4 w-4 mr-2" />
-                              Editar negociación
                             </ZenDropdownMenuItem>
                           )}
                           <ZenDropdownMenuSeparator />

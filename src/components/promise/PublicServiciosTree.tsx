@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Image as ImageIcon, Video, Images } from 'lucide-react';
+import { ChevronDown, ChevronRight, Image as ImageIcon, Video, Images, Gift } from 'lucide-react';
 import type { PublicSeccionData, PublicServicioData } from '@/types/public-promise';
 import Lightbox from 'yet-another-react-lightbox';
 import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
@@ -279,6 +279,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                   const subtotal = esCotizacion
                                     ? (servicio.price || 0) * cantidad
                                     : 0;
+                                  const esCortesia = servicio.is_courtesy === true || (esCotizacion && (servicio.price === 0 || servicio.price === undefined));
                                   const mediaInfo = getServiceMediaInfo(servicio);
 
                                   return (
@@ -290,9 +291,15 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
-                                            <h6 className="text-sm text-zinc-300 leading-tight">
-                                              {servicioNombre}
-                                              <span className="ml-2 text-xs text-zinc-500">
+                                            <h6 className="text-sm text-zinc-300 leading-tight flex items-center gap-1.5 flex-wrap">
+                                              <span className="wrap-break-word">{servicioNombre}</span>
+                                              {esCortesia && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                  <Gift className="w-3 h-3" />
+                                                  CORTESÍA
+                                                </span>
+                                              )}
+                                              <span className="text-xs text-zinc-500 shrink-0">
                                                 x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
                                               </span>
                                             </h6>
@@ -349,10 +356,14 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                             </div>
                                           )}
                                         </div>
-                                        {/* Mostrar precio individual solo si showPrices está activo */}
-                                        {showPrices && esCotizacion && servicio.price !== undefined && (
-                                          <span className="text-sm font-medium text-blue-400 ml-4 shrink-0">
-                                            {formatPrice(subtotal)}
+                                        {/* Precio o Cortesía */}
+                                        {showPrices && esCotizacion && (
+                                          <span className="text-sm font-medium ml-4 shrink-0">
+                                            {esCortesia ? (
+                                              <span className="text-emerald-400/90">Incluido</span>
+                                            ) : servicio.price !== undefined ? (
+                                              formatPrice(subtotal)
+                                            ) : null}
                                           </span>
                                         )}
                                       </div>

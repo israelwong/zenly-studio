@@ -163,6 +163,7 @@ export async function createCotizacion(
         name: validatedData.nombre,
         description: validatedData.descripcion || null,
         price: validatedData.precio,
+        precio_calculado: validatedData.precio_calculado != null ? validatedData.precio_calculado : null,
         status: 'pendiente',
         visible_to_client: validatedData.visible_to_client ?? false,
         event_duration: validatedData.event_duration ?? durationHours,
@@ -1942,6 +1943,7 @@ export async function updateCotizacion(
         name: string;
         description: string | null;
         price: number;
+        precio_calculado?: number | null;
         visible_to_client?: boolean;
         event_duration?: number | null;
         updated_at: Date;
@@ -1957,6 +1959,9 @@ export async function updateCotizacion(
         items_cortesia: validatedData.items_cortesia ?? [],
         bono_especial: validatedData.bono_especial ?? 0,
       };
+      if (validatedData.precio_calculado !== undefined) {
+        updateData.precio_calculado = validatedData.precio_calculado;
+      }
 
       if (validatedData.condiciones_comerciales_id !== undefined) {
         updateData.condiciones_comerciales_id = validatedData.condiciones_comerciales_id ?? null;
@@ -2728,7 +2733,6 @@ export async function pasarACierre(
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`, 'layout');
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/pendientes`, 'layout');
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'layout');
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/negociacion`, 'layout');
       // Invalidar tag específico para forzar revalidación del estado de la promesa
       revalidateTag(`promise-state-${cotizacion.promise_id}`, 'max');
       revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');

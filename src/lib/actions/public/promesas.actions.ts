@@ -229,6 +229,7 @@ async function _obtenerCondicionesComercialesPublicasInternal(
       advance_amount: c.advance_amount,
       discount_percentage: c.discount_percentage,
       type: c.type,
+      is_public: true as const,
       metodos_pago: c.condiciones_comerciales_metodo_pago.map((mp) => ({
         id: mp.id,
         metodo_pago_id: mp.metodo_pago_id,
@@ -294,6 +295,80 @@ export async function obtenerCondicionesComercialesPublicas(
   );
 
   return getCachedCondiciones();
+}
+
+/** Tipo de condición comercial para vista pública (mismo shape que obtenerCondicionesComercialesPublicas). */
+type CondicionComercialPublicShape = {
+  id: string;
+  name: string;
+  description: string | null;
+  advance_percentage: number | null;
+  advance_type?: string | null;
+  advance_amount?: number | null;
+  discount_percentage: number | null;
+  type?: string;
+  /** false = solo visible vía condiciones_visibles (negociación); paquetes deben filtrar por is_public === true */
+  is_public?: boolean;
+  metodos_pago: Array<{
+    id: string;
+    metodo_pago_id: string;
+    metodo_pago_name: string;
+  }>;
+};
+
+/**
+ * Obtener condiciones comerciales por IDs (incl. is_public: false) para visibilidad por cotización.
+ * Usado cuando la cotización tiene condiciones_visibles que pueden ser de negociación (no públicas).
+ */
+async function obtenerCondicionesComercialesPorIds(
+  studioId: string,
+  ids: string[]
+): Promise<CondicionComercialPublicShape[]> {
+  if (ids.length === 0) return [];
+  const condiciones = await prisma.studio_condiciones_comerciales.findMany({
+    where: {
+      studio_id: studioId,
+      id: { in: ids },
+      status: 'active',
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      advance_percentage: true,
+      advance_type: true,
+      advance_amount: true,
+      discount_percentage: true,
+      type: true,
+      is_public: true,
+      order: true,
+      condiciones_comerciales_metodo_pago: {
+        where: { status: 'active' },
+        select: {
+          id: true,
+          metodo_pago_id: true,
+          metodos_pago: { select: { id: true, payment_method_name: true } },
+        },
+        orderBy: { orden: 'asc' },
+      },
+    },
+  });
+  return condiciones.map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description,
+    advance_percentage: c.advance_percentage,
+    advance_type: c.advance_type,
+    advance_amount: c.advance_amount,
+    discount_percentage: c.discount_percentage,
+    type: c.type ?? undefined,
+    is_public: c.is_public ?? false,
+    metodos_pago: c.condiciones_comerciales_metodo_pago.map((mp) => ({
+      id: mp.id,
+      metodo_pago_id: mp.metodo_pago_id,
+      metodo_pago_name: mp.metodos_pago.payment_method_name,
+    })),
+  }));
 }
 
 /**
@@ -1261,9 +1336,10 @@ export async function getPublicPromisePendientes(
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -1631,6 +1707,12 @@ export async function getPublicPromiseActiveQuote(
               status: true,
               selected_by_prospect: true,
               order: true,
+              condiciones_visibles: true,
+              bono_especial: true,
+              items_cortesia: true,
+              negociacion_precio_original: true,
+              negociacion_precio_personalizado: true,
+              precio_calculado: true,
               cotizacion_items: {
                 select: {
                   id: true,
@@ -1843,6 +1925,11 @@ export async function getPublicPromiseActiveQuote(
         }
       );
 
+      const itemsCortesiaRaw = (cot as { items_cortesia?: unknown }).items_cortesia;
+      const itemsCortesiaSet = new Set<string>(
+        Array.isArray(itemsCortesiaRaw) ? itemsCortesiaRaw.filter((x: unknown): x is string => typeof x === 'string') : []
+      );
+
       const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
         id: seccion.nombre,
         nombre: seccion.nombre,
@@ -1854,12 +1941,16 @@ export async function getPublicPromiseActiveQuote(
           servicios: categoria.items.map(item => {
             // ⚠️ TAREA 1: No incluir media en vista previa
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            const esCortesia = originalItem
+              ? (originalItem.is_courtesy === true || itemsCortesiaSet.has(originalItem.id) || (!!originalItem.item_id && itemsCortesiaSet.has(originalItem.item_id)))
+              : false;
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '', // Usar id del cotizacion_item si no hay item_id
               name: item.nombre,
@@ -1868,7 +1959,7 @@ export async function getPublicPromiseActiveQuote(
               description_snapshot: null,
               price: item.unit_price,
               quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
-              is_courtesy: originalItem?.is_courtesy || false,
+              is_courtesy: esCortesia,
               billing_type: billingType,
             };
           }),
@@ -1882,6 +1973,7 @@ export async function getPublicPromiseActiveQuote(
         name: cot.name,
         description: cot.description,
         price: cot.price,
+        precio_calculado: (cot as { precio_calculado?: unknown }).precio_calculado != null ? Number((cot as { precio_calculado: unknown }).precio_calculado) : null,
         discount: cot.discount,
         status: cot.status,
         order: cot.order ?? 0,
@@ -1901,21 +1993,44 @@ export async function getPublicPromiseActiveQuote(
           : null,
         selected_by_prospect: cot.selected_by_prospect || false,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+        condiciones_visibles: (() => {
+          const v = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
+          if (v == null) return null;
+          if (Array.isArray(v)) return v.filter((id: unknown): id is string => typeof id === 'string');
+          return null;
+        })(),
+        bono_especial: (cot as { bono_especial?: unknown }).bono_especial != null ? Number((cot as { bono_especial: unknown }).bono_especial) : null,
+        negociacion_precio_original: (cot as { negociacion_precio_original?: unknown }).negociacion_precio_original != null ? Number((cot as { negociacion_precio_original: unknown }).negociacion_precio_original) : null,
+        negociacion_precio_personalizado: (cot as { negociacion_precio_personalizado?: unknown }).negociacion_precio_personalizado != null ? Number((cot as { negociacion_precio_personalizado: unknown }).negociacion_precio_personalizado) : null,
+        totalAPagar: (() => {
+          const engineOut = calculateCotizacionTotals({
+            price: Number(cot.price),
+            discount: cot.discount != null ? Number(cot.discount) : null,
+            negociacion_precio_original: (cot as { negociacion_precio_original?: unknown }).negociacion_precio_original != null ? Number((cot as { negociacion_precio_original: unknown }).negociacion_precio_original) : null,
+            negociacion_precio_personalizado: (cot as { negociacion_precio_personalizado?: unknown }).negociacion_precio_personalizado != null ? Number((cot as { negociacion_precio_personalizado: unknown }).negociacion_precio_personalizado) : null,
+            condiciones_comerciales_discount_percentage_snapshot: null,
+            condiciones_comerciales_advance_percentage_snapshot: null,
+            condiciones_comerciales_advance_type_snapshot: null,
+            condiciones_comerciales_advance_amount_snapshot: null,
+            condiciones_comerciales: null,
+          });
+          return Math.round(engineOut.totalAPagar);
+        })(),
       };
     });
 
-    // Filtrar condiciones según settings
-    let condicionesFiltradas = (condicionesResult.success && 'data' in condicionesResult && condicionesResult.data) ? condicionesResult.data : [];
-    if (condicionesFiltradas.length > 0) {
-      condicionesFiltradas = condicionesFiltradas.filter((condicion: { type?: string }) => {
-        const tipo = condicion.type || 'standard';
-        if (tipo === 'standard') {
-          return shareSettings.show_standard_conditions;
-        } else if (tipo === 'offer') {
-          return shareSettings.show_offer_conditions;
-        }
-        return false;
-      });
+    // Condiciones públicas + las referenciadas en condiciones_visibles (negociación puede tener is_public: false)
+    let condicionesComerciales: CondicionComercialPublicShape[] = (condicionesResult.success && 'data' in condicionesResult && condicionesResult.data) ? condicionesResult.data : [];
+    const idsEnPublicas = new Set(condicionesComerciales.map((c) => c.id));
+    const idsEnVisibles = new Set<string>();
+    promise.quotes.forEach((q: { condiciones_visibles?: unknown }) => {
+      const v = q.condiciones_visibles;
+      if (Array.isArray(v)) v.forEach((id: unknown) => { if (typeof id === 'string') idsEnVisibles.add(id); });
+    });
+    const idsFaltantes = [...idsEnVisibles].filter((id) => !idsEnPublicas.has(id));
+    if (idsFaltantes.length > 0 && studio.id) {
+      const extras = await obtenerCondicionesComercialesPorIds(studio.id, idsFaltantes);
+      condicionesComerciales = [...condicionesComerciales, ...extras];
     }
 
     return {
@@ -1936,7 +2051,7 @@ export async function getPublicPromiseActiveQuote(
         },
         studio,
         cotizaciones: mappedCotizaciones,
-        condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
+        condiciones_comerciales: condicionesComerciales.length > 0 ? condicionesComerciales : undefined,
         terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
         share_settings: shareSettings,
       },
@@ -2713,9 +2828,10 @@ export async function getPublicPromiseNegociacion(
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -3312,9 +3428,10 @@ export async function getPublicPromiseCierre(
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -3650,6 +3767,9 @@ export async function getPublicPromiseData(
             visible_to_client: true,
             order: true,
             evento_id: true,
+            condiciones_visibles: true,
+            bono_especial: true,
+            items_cortesia: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
             cotizacion_items: {
@@ -3994,6 +4114,11 @@ export async function getPublicPromiseData(
         }
       );
 
+      const itemsCortesiaRaw = (cot as any).items_cortesia;
+      const itemsCortesiaSet = new Set<string>(
+        Array.isArray(itemsCortesiaRaw) ? itemsCortesiaRaw.filter((x: unknown): x is string => typeof x === 'string') : []
+      );
+
       // Convertir formato de EstructuraJerarquica a PublicSeccionData[]
       const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
         id: seccion.nombre,
@@ -4006,12 +4131,16 @@ export async function getPublicPromiseData(
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            const esCortesia = originalItem
+              ? (originalItem.is_courtesy === true || itemsCortesiaSet.has(originalItem.id) || (!!originalItem.item_id && itemsCortesiaSet.has(originalItem.item_id)))
+              : ((item as any).is_courtesy === true);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -4020,7 +4149,7 @@ export async function getPublicPromiseData(
               description_snapshot: item.descripcion || null, // Ya viene del snapshot
               price: item.unit_price,
               quantity: cantidadEfectiva,
-              is_courtesy: (item as any).is_courtesy || originalItem?.is_courtesy || false,
+              is_courtesy: esCortesia,
               billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
@@ -4069,6 +4198,13 @@ export async function getPublicPromiseData(
           ? Number((cot as any).negociacion_precio_personalizado)
           : null,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+        condiciones_visibles: (() => {
+          const v = (cot as any).condiciones_visibles;
+          if (v == null) return null;
+          if (Array.isArray(v)) return v.filter((id: unknown): id is string => typeof id === 'string');
+          return null;
+        })(),
+        bono_especial: (cot as any).bono_especial != null ? Number((cot as any).bono_especial) : null,
         // Información del contrato si está disponible
         // El contrato se almacena en studio_cotizaciones_cierre (tabla temporal)
         // Se muestra si hay contrato_definido y contract_template_id (igual que en el estudio)
@@ -4290,18 +4426,18 @@ export async function getPublicPromiseData(
       ? terminosSettled.value
       : { success: false, error: 'Error al obtener términos y condiciones' };
 
-    // Filtrar condiciones comerciales según preferencias
-    let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
-    if (condicionesFiltradas.length > 0) {
-      condicionesFiltradas = condicionesFiltradas.filter((condicion) => {
-        const tipo = condicion.type || 'standard';
-        if (tipo === 'standard') {
-          return shareSettings.show_standard_conditions;
-        } else if (tipo === 'offer') {
-          return shareSettings.show_offer_conditions;
-        }
-        return false; // Si no tiene tipo, no mostrar
-      });
+    // Condiciones públicas + las referenciadas en condiciones_visibles (negociación puede tener is_public: false)
+    let condicionesComerciales: CondicionComercialPublicShape[] = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
+    const idsEnPublicas = new Set(condicionesComerciales.map((c) => c.id));
+    const idsEnVisibles = new Set<string>();
+    promise.quotes.forEach((q: { condiciones_visibles?: unknown }) => {
+      const v = q.condiciones_visibles;
+      if (Array.isArray(v)) v.forEach((id: unknown) => { if (typeof id === 'string') idsEnVisibles.add(id); });
+    });
+    const idsFaltantes = [...idsEnVisibles].filter((id) => !idsEnPublicas.has(id));
+    if (idsFaltantes.length > 0 && studio.id) {
+      const extras = await obtenerCondicionesComercialesPorIds(studio.id, idsFaltantes);
+      condicionesComerciales = [...condicionesComerciales, ...extras];
     }
 
     // Crear objeto share_settings con tipo explícito usando valores directamente
@@ -4360,7 +4496,7 @@ export async function getPublicPromiseData(
         },
         cotizaciones: mappedCotizaciones,
         paquetes: mappedPaquetes,
-        condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
+        condiciones_comerciales: condicionesComerciales.length > 0 ? condicionesComerciales : undefined,
         terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
         share_settings: shareSettingsObj,
         portafolios: portafolios.length > 0 ? portafolios : undefined,
@@ -5315,9 +5451,10 @@ export async function getPublicPromiseUpdate(
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
-              : item.cantidad;
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,

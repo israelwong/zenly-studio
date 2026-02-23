@@ -378,7 +378,7 @@ export function CatalogoServiciosTree({
                                                                             >
                                                                                 {/* Nivel 3: Servicio */}
                                                                                 <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5">
+                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5 flex-wrap">
                                                                                         <span className="wrap-break-word">{servicio.nombre}</span>
                                                                                         {showCortesiaBadge && (
                                                                                             <ZenBadge variant="outline" size="sm" className="px-1 py-0 text-[10px] border-purple-500/70 text-purple-400 shrink-0">
@@ -552,7 +552,7 @@ export function CatalogoServiciosTree({
                                                                                 )}
                                                                             >
                                                                                 <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5">
+                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light flex items-center gap-1.5 flex-wrap">
                                                                                         <span className="wrap-break-word">{customItem.name}</span>
                                                                                         {showCortesiaBadge && (
                                                                                             <ZenBadge variant="outline" size="sm" className="px-1 py-0 text-[10px] border-purple-500/70 text-purple-400 shrink-0">

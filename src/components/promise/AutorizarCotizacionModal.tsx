@@ -13,6 +13,14 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import {
+  getPrecioListaStudio,
+  getMontoCortesiasFromServicios,
+  getBonoEspecialMonto,
+  getCortesiasCount,
+  getPrecioFinalCierre,
+  getAjusteCierre,
+} from '@/lib/utils/promise-public-financials';
 import { usePromisePageContext } from './PromisePageContext';
 import { cn } from '@/lib/utils';
 import { Step1Identity } from './Step1Identity';
@@ -39,6 +47,18 @@ interface AutorizarCotizacionModalProps {
   condicionesComercialesId?: string | null;
   condicionesComercialesMetodoPagoId?: string | null;
   precioCalculado?: PrecioCalculado | null;
+  /** Desglose paso 3: precio de lista (Studio) */
+  precioLista?: number;
+  /** Desglose paso 3: monto cortesías */
+  montoCortesias?: number;
+  /** Desglose paso 3: cantidad ítems cortesía */
+  cortesiasCount?: number;
+  /** Desglose paso 3: bono especial */
+  montoBono?: number;
+  /** Precio final de cierre (socio). Total a pagar exacto. */
+  precioFinalCierre?: number;
+  /** Ajuste por cierre para desglose (precioFinalCierre - (precioLista - cortesías - bono)). */
+  ajusteCierre?: number;
   showPackages?: boolean;
   autoGenerateContract?: boolean;
   onSuccess?: () => void;
@@ -178,6 +198,12 @@ export function AutorizarCotizacionModal({
   condicionesComercialesId,
   condicionesComercialesMetodoPagoId,
   precioCalculado,
+  precioLista,
+  montoCortesias,
+  cortesiasCount,
+  montoBono,
+  precioFinalCierre,
+  ajusteCierre,
   showPackages = false,
   autoGenerateContract = false,
   onSuccess,
@@ -423,12 +449,14 @@ export function AutorizarCotizacionModal({
   };
 
 
-  // Usar precio calculado si está disponible, sino calcular básico
-  const precioFinal = precioCalculado
+  const precioListaVal = precioLista ?? getPrecioListaStudio(cotizacion);
+  const montoCortesiasVal = montoCortesias ?? getMontoCortesiasFromServicios(cotizacion);
+  const montoBonoVal = montoBono ?? getBonoEspecialMonto(cotizacion);
+  const fallbackCalculado = precioCalculado
     ? precioCalculado.precioConDescuento
-    : (cotizacion.discount
-      ? cotizacion.price - (cotizacion.price * cotizacion.discount) / 100
-      : cotizacion.price);
+    : Math.max(0, precioListaVal - montoCortesiasVal - montoBonoVal);
+  const precioFinal = precioFinalCierre ?? getPrecioFinalCierre(cotizacion, fallbackCalculado);
+  const ajusteCierreVal = ajusteCierre ?? getAjusteCierre(precioFinal, precioListaVal, montoCortesiasVal, montoBonoVal);
 
 
   // Handler para actualizar términos aceptados
@@ -482,6 +510,12 @@ export function AutorizarCotizacionModal({
               precioCalculado={precioCalculado || null}
               precioFinal={precioFinal}
               isFromNegociacion={isFromNegociacion}
+              precioLista={precioListaVal}
+              montoCortesias={montoCortesiasVal}
+              cortesiasCount={cortesiasCount ?? getCortesiasCount(cotizacion)}
+              montoBono={montoBonoVal}
+              precioFinalCierre={precioFinal}
+              ajusteCierre={ajusteCierreVal}
               errors={errors}
               termsAccepted={termsAccepted}
               onAcceptTerms={handleAcceptTerms}

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Tag as TagIcon, Sparkles } from 'lucide-react';
+import { ChevronRight, Tag as TagIcon, Sparkles, Gift, Ticket } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
+import { getDiscountMontoEnPesos } from '@/lib/utils/promise-public-financials';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
 
 interface CondicionComercial {
@@ -112,11 +113,22 @@ export function CotizacionesSection({
   };
 
   const calculateFinalPrice = (cotizacion: PublicCotizacion) => {
-    if (!cotizacion.discount || cotizacion.discount <= 0) return cotizacion.price;
+    const discountMonto = getDiscountMontoEnPesos(cotizacion);
+    if (discountMonto <= 0) return cotizacion.price;
+    return cotizacion.price - discountMonto;
+  };
 
-    // El descuento viene como monto absoluto en $ (no como porcentaje ni factor)
-    // Total = precio - descuento
-    return cotizacion.price - cotizacion.discount;
+  /** Cuenta ítems marcados como cortesía en la estructura servicios (secciones → categorías → servicios). */
+  const countCortesias = (cotizacion: PublicCotizacion): number => {
+    let n = 0;
+    cotizacion.servicios?.forEach((seccion) => {
+      seccion.categorias?.forEach((cat) => {
+        cat.servicios?.forEach((s) => {
+          if (s.is_courtesy) n += 1;
+        });
+      });
+    });
+    return n;
   };
 
   return (
@@ -145,15 +157,15 @@ export function CotizacionesSection({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {cotizacionesOrdenadas.map((cotizacion) => {
               const finalPrice = calculateFinalPrice(cotizacion);
-
-              // El descuento viene como monto absoluto en $
-              const descuentoEnDolares = cotizacion.discount || 0;
-              // Calcular porcentaje para mostrar: (descuento / precio) * 100
-              const descuentoPorcentaje = cotizacion.discount && cotizacion.price > 0
-                ? (cotizacion.discount / cotizacion.price) * 100
+              const descuentoMonto = getDiscountMontoEnPesos(cotizacion);
+              const descuentoPorcentaje = cotizacion.price > 0
+                ? (descuentoMonto / cotizacion.price) * 100
                 : 0;
-
-              const hasDiscount = cotizacion.discount && cotizacion.discount > 0;
+              const hasDiscount = descuentoMonto > 0;
+              const bonoMonto = (cotizacion as { bono_especial?: number | null }).bono_especial ?? 0;
+              const tieneBono = bonoMonto > 0;
+              const numCortesias = countCortesias(cotizacion);
+              const tieneCortesias = numCortesias > 0;
 
               const isRecentlyUpdated = recentlyUpdated.has(cotizacion.id);
 
@@ -208,6 +220,28 @@ export function CotizacionesSection({
                       </p>
                     </div>
 
+                    {/* Beneficios de negociación: Bono y Cortesías */}
+                    {(tieneBono || tieneCortesias) && (
+                      <div className="mt-2 pt-2 border-t border-zinc-800 space-y-1.5">
+                        {tieneBono && (
+                          <div className="flex items-center gap-2">
+                            <Ticket className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                            <span className="text-xs font-medium text-amber-300/90">
+                              Bono de Descuento Especial: {formatPrice(bonoMonto)}
+                            </span>
+                          </div>
+                        )}
+                        {tieneCortesias && (
+                          <div className="flex items-center gap-2">
+                            <Gift className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                            <span className="text-xs font-medium text-emerald-300/90">
+                              {numCortesias} Servicio{numCortesias !== 1 ? 's' : ''} de Cortesía Incluido{numCortesias !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Badge si viene de paquete */}
                     {cotizacion.paquete_origen && (
                       <div className="mt-2 pt-2 border-t border-zinc-800">
@@ -246,6 +280,7 @@ export function CotizacionesSection({
           autoGenerateContract={autoGenerateContract}
           promiseData={promiseData}
           dateSoldOut={dateSoldOut}
+          condicionesVisiblesIds={selectedCotizacion.condiciones_visibles ?? undefined}
         />
       )}
     </>

@@ -745,7 +745,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     return newItems;
                 });
                 if (toAdd.length > 0) {
-                    toast.success('🔗 Smart Link: Servicios asociados agregados con éxito.', { id: 'paquete-smart-link' });
+                    toast.success('Servicios asociados agregados con éxito.', { id: 'paquete-servicios-asociados' });
                 } else if (servicio) {
                     toast.success(`${servicio.nombre} agregado al paquete`, { id: 'paquete-add' });
                 }

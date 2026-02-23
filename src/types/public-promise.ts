@@ -59,6 +59,8 @@ export interface PublicCotizacion {
   name: string;
   description: string | null;
   price: number;
+  /** Precio total calculado (suma ítems) antes de cortesías/bono. SSOT para "Precio de lista" en vista pública. */
+  precio_calculado?: number | null;
   discount: number | null;
   status?: string;
   order?: number;
@@ -80,10 +82,14 @@ export interface PublicCotizacion {
     id: string;
     name: string;
   } | null;
+  /** IDs de condiciones comerciales visibles para esta cotización (configuración del Studio). */
+  condiciones_visibles?: string[] | null;
   selected_by_prospect?: boolean;
   selected_at?: Date | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
+  /** Bono especial de descuento (negociación). */
+  bono_especial?: number | null;
   // Multimedia agregada de todos los items
   items_media?: Array<{
     id: string;

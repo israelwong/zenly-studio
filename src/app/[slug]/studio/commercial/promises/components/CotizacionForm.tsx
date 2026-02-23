@@ -940,7 +940,8 @@ export function CotizacionForm({
     }>);
   }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales]);
 
-  // Fase 7.2: sincronizar Precio Final de Cierre con Precio Sugerido cuando cambian cortesías o bono
+  // Fase 7.8: sincronización global — Precio Final de Cierre reacciona a catálogo (ítems/precio calculado) y ajustes (cortesías, bono)
+  // Fórmula: precioFinalCierre = precioCalculado - totalCortesías - bonoEspecial (= subtotalProyectado)
   useEffect(() => {
     if (isFirstMountAjustesSyncRef.current) {
       isFirstMountAjustesSyncRef.current = false;
@@ -954,7 +955,7 @@ export function CotizacionForm({
       clearTimeout(tBadge);
       clearTimeout(tPending);
     };
-  }, [itemsCortesia.size, Array.from(itemsCortesia).sort().join(','), bonoEspecial]);
+  }, [calculoPrecio.subtotalProyectado]);
 
   useEffect(() => {
     if (!pendingSyncFromAjustes) return;
@@ -1055,7 +1056,7 @@ export function CotizacionForm({
         return next;
       });
       if (toAdd.length > 0) {
-        toast.success('🔗 Smart Link: Servicios asociados agregados con éxito.', { id: 'cotizacion-smart-link' });
+        toast.success('Servicios asociados agregados con éxito.', { id: 'cotizacion-servicios-asociados' });
       }
     }
   };
@@ -1543,6 +1544,7 @@ export function CotizacionForm({
           nombre: nombre.trim(),
           descripcion: descripcion.trim() || undefined,
           precio: precioFinal,
+          precio_calculado: (calculoPrecio.subtotal ?? 0) > 0 ? calculoPrecio.subtotal : undefined,
           visible_to_client: visibleToClient,
           items: Object.fromEntries(
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
@@ -1597,7 +1599,7 @@ export function CotizacionForm({
             // Redirigir según el estado de la cotización
             const status = result.data.status || 'pendiente';
             if (status === 'negociacion') {
-              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cotizacion/${result.data.id}/negociacion`);
+              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
             } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
               router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
             } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
@@ -1660,6 +1662,7 @@ export function CotizacionForm({
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
         precio: precioFinal,
+        precio_calculado: (calculoPrecio.subtotal ?? 0) > 0 ? calculoPrecio.subtotal : undefined,
         visible_to_client: visibleToClient,
         items: Object.fromEntries(
           itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
@@ -1700,7 +1703,7 @@ export function CotizacionForm({
           // Redirigir según el estado de la cotización
           const status = result.data.status || 'pendiente';
           if (status === 'negociacion') {
-            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cotizacion/${result.data.id}/negociacion`);
+            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
           } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
             router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
           } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
@@ -2027,7 +2030,7 @@ export function CotizacionForm({
                         (e.currentTarget as HTMLElement).click();
                       }
                     }}
-                    className="cursor-pointer rounded-lg border border-emerald-800/40 bg-emerald-950/30 px-3 py-2.5 transition-colors hover:border-emerald-700/50 hover:bg-emerald-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 w-full flex items-center gap-3"
+                    className="cursor-pointer rounded-lg border-2 border-emerald-500/70 bg-emerald-950/50 px-3 py-2.5 transition-colors hover:border-emerald-400/80 hover:bg-emerald-950/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 w-full flex items-center gap-3"
                   >
                     <ListChecks className="h-4 w-4 shrink-0 text-emerald-400/80" />
                     <span className="text-sm text-zinc-500 shrink-0">Precio calculado</span>
@@ -2256,11 +2259,11 @@ export function CotizacionForm({
                 placeholder="0"
                 className={cn(
                   'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
-                  ringPrecioSincronizadoVisible && 'ring-1 ring-amber-500 animate-sugerido-shake'
+                  ringPrecioSincronizadoVisible && 'ring-2 ring-amber-500 animate-sugerido-shake'
                 )}
               />
               {(showPrecioSincronizadoBadge || ringPrecioSincronizadoVisible) && (
-                <p className="text-[11px] text-amber-500 mt-1.5 mb-0.5">Precio actualizado por ajustes de negociación</p>
+                <p className="text-[11px] text-amber-500 mt-1.5 mb-0.5">Precio actualizado por cambios en servicios o negociación.</p>
               )}
               <p className="text-[11px] text-zinc-500">Este es el monto real que se le cobrará al prospecto.</p>
             </div>

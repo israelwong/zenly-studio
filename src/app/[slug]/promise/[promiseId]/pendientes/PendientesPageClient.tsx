@@ -192,22 +192,8 @@ export function PendientesPageClient({
   // ⚠️ NOTA: La lógica de procesamiento de autorización está en ProgressOverlayWrapper.tsx
   // Este componente solo maneja la visualización de la página de pendientes
 
-  // Filtrar condiciones comerciales según settings en tiempo real
-  const condicionesFiltradas = useMemo(() => {
-    if (!condiciones_comerciales || condiciones_comerciales.length === 0) {
-      return undefined;
-    }
-
-    return condiciones_comerciales.filter((condicion) => {
-      const tipo = condicion.type || 'standard';
-      if (tipo === 'standard') {
-        return shareSettings.show_standard_conditions;
-      } else if (tipo === 'offer') {
-        return shareSettings.show_offer_conditions;
-      }
-      return false;
-    });
-  }, [condiciones_comerciales, shareSettings.show_standard_conditions, shareSettings.show_offer_conditions]);
+  // Pasar TODAS las condiciones; CotizacionDetailSheet aplica (condiciones_visibles por cotización O legacy por tipo)
+  const condicionesParaCliente = condiciones_comerciales ?? undefined;
 
   return (
     <>
@@ -249,7 +235,7 @@ export function PendientesPageClient({
           promiseId={promiseId}
           studioSlug={studioSlug}
           studioId={studio.id}
-          condicionesComerciales={condicionesFiltradas}
+          condicionesComerciales={condicionesParaCliente}
           terminosCondiciones={terminos_condiciones}
           showCategoriesSubtotals={shareSettings.show_categories_subtotals}
           showItemsPrices={shareSettings.show_items_prices}
@@ -280,7 +266,7 @@ export function PendientesPageClient({
           promiseId={promiseId}
           studioSlug={studioSlug}
           showAsAlternative={initialCotizaciones.length > 0}
-          condicionesComerciales={condicionesFiltradas}
+          condicionesComerciales={condicionesParaCliente}
           terminosCondiciones={terminos_condiciones}
           minDaysToHire={shareSettings.min_days_to_hire}
           showCategoriesSubtotals={shareSettings.show_categories_subtotals}

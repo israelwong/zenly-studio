@@ -35,6 +35,18 @@ interface Step3SummaryProps {
   precioCalculado?: PrecioCalculado | null;
   precioFinal?: number;
   isFromNegociacion?: boolean;
+  /** Precio de lista (Studio) */
+  precioLista?: number;
+  /** Monto cortesías */
+  montoCortesias?: number;
+  /** Cantidad ítems cortesía (para "Cortesías (N)") */
+  cortesiasCount?: number;
+  /** Bono especial */
+  montoBono?: number;
+  /** Precio final de cierre (total exacto a mostrar). */
+  precioFinalCierre?: number;
+  /** Ajuste por cierre para desglose (solo mostrar si !== 0). */
+  ajusteCierre?: number;
   errors: Record<string, string>;
   termsAccepted: boolean;
   onAcceptTerms: (accepted: boolean) => void;
@@ -49,6 +61,12 @@ export function Step3Summary({
   precioCalculado,
   precioFinal = 0,
   isFromNegociacion = false,
+  precioLista,
+  montoCortesias = 0,
+  cortesiasCount = 0,
+  montoBono = 0,
+  precioFinalCierre,
+  ajusteCierre = 0,
   errors,
   termsAccepted,
   onAcceptTerms,
@@ -75,13 +93,11 @@ export function Step3Summary({
     return formatDisplayDateLong(date);
   };
 
-  // Calcular precio final
-  const finalPrice = precioCalculado
-    ? precioCalculado.precioConDescuento
-    : precioFinal;
+  const finalPrice = precioFinalCierre ?? (precioCalculado ? precioCalculado.precioConDescuento : precioFinal);
 
-  const anticipo = precioCalculado?.anticipo || 0;
-  const diferido = precioCalculado?.diferido || 0;
+  const anticipo = Math.round(precioCalculado?.anticipo ?? 0);
+  const diferido = Math.round(finalPrice - anticipo);
+  const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
 
   return (
     <div className="space-y-4">
@@ -96,27 +112,47 @@ export function Step3Summary({
           </div>
 
           <div className="space-y-2">
-            {precioCalculado && !isFromNegociacion && (
+            {tieneConcesiones && (
               <>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Precio base</span>
-                  <span className="font-medium text-zinc-300">
-                    {formatPrice(precioCalculado.precioBase)}
+                  <span className="text-zinc-400">Precio de lista</span>
+                  <span className="font-medium text-zinc-500 line-through">
+                    {formatPrice(precioLista ?? precioCalculado?.precioBase ?? precioFinal)}
                   </span>
                 </div>
-                {precioCalculado.descuentoCondicion > 0 && (
+                {montoCortesias > 0 && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400">Descuento</span>
-                    <span className="font-medium text-red-400">
-                      -{precioCalculado.descuentoCondicion}%
+                    <span className="text-zinc-400">
+                      Cortesías{cortesiasCount > 0 ? ` (${cortesiasCount})` : ''}
+                    </span>
+                    <span className="font-medium text-violet-400">
+                      -{formatPrice(montoCortesias)}
+                    </span>
+                  </div>
+                )}
+                {montoBono > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-400">Bono Especial</span>
+                    <span className="font-medium text-amber-400">
+                      -{formatPrice(montoBono)}
+                    </span>
+                  </div>
+                )}
+                {ajusteCierre !== 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-400">
+                      {ajusteCierre < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
+                    </span>
+                    <span className="font-medium text-zinc-300">
+                      {ajusteCierre < 0 ? `-${formatPrice(Math.abs(ajusteCierre))}` : `+${formatPrice(ajusteCierre)}`}
                     </span>
                   </div>
                 )}
               </>
             )}
 
-            <div className="flex justify-between items-center pt-2 border-t border-zinc-800">
-              <span className="text-sm font-semibold text-white">Total</span>
+            <div className={`flex justify-between items-center ${tieneConcesiones ? 'pt-2 border-t border-zinc-800' : ''}`}>
+              <span className="text-sm font-semibold text-white">Total a pagar</span>
               <span className="text-base font-bold text-emerald-400">
                 {formatPrice(finalPrice)}
               </span>
@@ -127,7 +163,7 @@ export function Step3Summary({
                 <div className="flex justify-between items-center bg-blue-500/10 rounded p-2 border border-blue-500/20">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-blue-400">
-                      Anticipo
+                      Anticipo requerido
                     </p>
                     {precioCalculado?.advanceType === 'percentage' && precioCalculado.anticipoPorcentaje && (
                       <p className="text-xs text-zinc-500">

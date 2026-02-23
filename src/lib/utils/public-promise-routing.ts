@@ -86,9 +86,7 @@ export function determinePromiseRoute(
     return `/${slug}/promise/${promiseId}/cierre`;
   }
 
-  // PRIORIDAD 3: Buscar cotización en negociación
-  // Negociación: status === 'negociacion' y NO debe tener selected_by_prospect: true
-  // ✅ OPTIMIZACIÓN: Si selected_by_prospect es null/undefined, asumir false (no seleccionado)
+  // PRIORIDAD 3: Cotización en negociación → redirigir a cierre (ruta /negociacion obsoleta)
   const cotizacionNegociacion = visibleQuotes.find((cot) => {
     const normalizedStatus = normalizeStatus(cot.status);
     const selectedByProspect = cot.selected_by_prospect ?? false;
@@ -96,7 +94,7 @@ export function determinePromiseRoute(
   });
 
   if (cotizacionNegociacion) {
-    return `/${slug}/promise/${promiseId}/negociacion`;
+    return `/${slug}/promise/${promiseId}/cierre`;
   }
 
   // PRIORIDAD 4: Verificar si hay cotizaciones pendientes válidas
@@ -239,13 +237,13 @@ export function isRouteValid(
 
   switch (routeType) {
     case 'cierre': {
-      // ✅ Cierre es válido solo si hay cotización en cierre (mayor prioridad sobre negociación)
-      return hasCierre;
+      // Cierre válido si hay cotización en cierre o en negociación (ruta negociacion obsoleta)
+      return hasCierre || hasNegociacion;
     }
 
     case 'negociacion': {
-      // Negociación es válida solo si hay cotización en negociación Y no hay cierre (mayor prioridad)
-      return hasNegociacion && !hasCierre;
+      // Ruta /negociacion eliminada; siempre inválida para forzar redirect a /cierre
+      return false;
     }
 
     case 'pendientes': {

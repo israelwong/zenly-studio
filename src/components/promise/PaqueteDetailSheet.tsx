@@ -27,6 +27,8 @@ interface CondicionComercial {
   advance_amount?: number | null;
   discount_percentage: number | null;
   type?: string;
+  /** false = solo negociación (condiciones_visibles); en paquetes solo mostrar is_public === true */
+  is_public?: boolean;
   metodos_pago: Array<{
     id: string;
     metodo_pago_id: string;
@@ -115,21 +117,27 @@ export function PaqueteDetailSheet({
 
   useEffect(() => {
     if (isOpen) {
-      // Si ya tenemos los datos iniciales, usarlos directamente
       if (condicionesComercialesIniciales || terminosCondicionesIniciales) {
         if (condicionesComercialesIniciales) {
-          setCondicionesComerciales(condicionesComercialesIniciales);
+          // Paquetes: solo condiciones públicas (is_public !== false) y por tipo (standard/offer). Excluir "Clientes especiales" etc.
+          const soloGenerales = condicionesComercialesIniciales.filter((c) => {
+            if (c.is_public === false) return false;
+            const tipo = c.type || 'standard';
+            if (tipo === 'standard') return showStandardConditions;
+            if (tipo === 'offer') return showOfferConditions;
+            return false;
+          });
+          setCondicionesComerciales(soloGenerales);
         }
         if (terminosCondicionesIniciales) {
           setTerminosCondiciones(terminosCondicionesIniciales);
         }
         setLoadingCondiciones(false);
       } else {
-        // Si no, cargarlos
         loadCondicionesYTerminos();
       }
     }
-  }, [isOpen, studioSlug, condicionesComercialesIniciales, terminosCondicionesIniciales, loadCondicionesYTerminos]);
+  }, [isOpen, studioSlug, condicionesComercialesIniciales, terminosCondicionesIniciales, showStandardConditions, showOfferConditions, loadCondicionesYTerminos]);
 
   const handleSelectCondicion = (condicionId: string, metodoPagoId: string) => {
     setSelectedCondicionId(condicionId);

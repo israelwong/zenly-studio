@@ -42,6 +42,8 @@ export const createCotizacionSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional(),
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
+  /** Precio total calculado (suma ítems) antes de cortesías/bono. Para "Precio de lista" en vista pública. */
+  precio_calculado: z.number().min(0).optional().nullable(),
   visible_to_client: z.boolean().optional().default(false),
   items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
   customItems: z.array(customItemSchema).optional().default([]),
@@ -75,6 +77,8 @@ export const updateCotizacionSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional(),
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
+  /** Precio total calculado (suma ítems) antes de cortesías/bono. Para "Precio de lista" en vista pública. */
+  precio_calculado: z.number().min(0).optional().nullable(),
   items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
   customItems: z.array(customItemSchema).optional().default([]),
   itemOverrides: z.record(z.string(), itemOverrideSchema).optional().default({}),

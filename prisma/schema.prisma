@@ -2342,6 +2342,8 @@ model studio_cotizaciones {
   event_type_id                          String
   name                                   String
   price                                  Float
+  /** Precio total calculado por el motor (suma ítems) antes de cortesías/bono/cierre. SSOT para "Precio de lista" en vista pública. */
+  precio_calculado                       Decimal?                                     @db.Decimal(12, 2)
   visible_to_client                      Boolean?                                     @default(false)
   order                                  Int?                                         @default(0)
   paquete_id                             String?

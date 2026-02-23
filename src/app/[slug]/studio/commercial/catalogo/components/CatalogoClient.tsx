@@ -15,7 +15,6 @@ import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData } from './';
 import { ItemEditorModal, ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
 import { ItemLinksModal } from './ItemLinksModal';
-import { SmartLinkBar } from './SmartLinkBar';
 import { CatalogSortableItem } from './CatalogSortableItem';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
@@ -257,12 +256,7 @@ export function CatalogoClient({
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [linkModalItemId, setLinkModalItemId] = useState<Item | null>(null);
 
-    // Smart Link Bar: modo selección en canvas
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [hoverHighlightGroupIds, setHoverHighlightGroupIds] = useState<Set<string> | null>(null);
-    const [isSavingLinks, setIsSavingLinks] = useState(false);
 
     // Ítems que son "hijos" de algún padre (para badge y hover)
     const linkedIdsSet = React.useMemo(
@@ -306,46 +300,6 @@ export function CatalogoClient({
         [categoriasData]
     );
 
-    const handleToggleSmartLinkSelection = useCallback(
-        (item: Item) => {
-            const secId = getSeccionIdForItem(item);
-            const groupIds = getGroupIds(item.id);
-
-            setSelectedIds((prev) => {
-                const has = prev.includes(item.id);
-                if (has) {
-                    const next = prev.filter((id) => id !== item.id);
-                    if (next.length === 0) setSelectedSectionId(null);
-                    return next;
-                }
-                if (prev.length === 0) {
-                    setSelectedSectionId(secId ?? null);
-                    if (groupIds.length > 0) {
-                        const isParent = (serviceLinksMap[item.id]?.length ?? 0) > 0;
-                        const groupName = isParent ? item.name : (parentNameByLinkedId[item.id] ?? item.name);
-                        toast.info(`Editando grupo: ${groupName}`);
-                        return groupIds;
-                    }
-                    return [item.id];
-                }
-                if (secId !== selectedSectionId) return prev;
-                return [...prev, item.id];
-            });
-        },
-        [getSeccionIdForItem, selectedSectionId, getGroupIds, serviceLinksMap, parentNameByLinkedId]
-    );
-
-    // Si la selección actual coincide exactamente con un grupo existente, tenemos su sourceId para "Desvincular"
-    const existingGroupSourceId = React.useMemo(() => {
-        if (selectedIds.length === 0) return null;
-        const selectedSet = new Set(selectedIds);
-        for (const [sourceId, linkedIds] of Object.entries(serviceLinksMap)) {
-            const groupSet = new Set([sourceId, ...linkedIds]);
-            if (groupSet.size === selectedSet.size && [...groupSet].every((id) => selectedSet.has(id))) return sourceId;
-        }
-        return null;
-    }, [selectedIds, serviceLinksMap]);
-
     const router = useRouter();
     const handleClearLinksForItem = useCallback(
         async (itemId: string) => {
@@ -367,19 +321,19 @@ export function CatalogoClient({
         [studioSlug, router]
     );
 
-    /** Activa modo Smart Link y carga el grupo del ítem en selectedIds (desde el badge "Editar vínculo"). */
+    /** Abre el modal de vínculos con el ítem principal del grupo (desde el badge "Editar vínculo"). */
     const handleEditLinkFromBadge = useCallback(
         (item: Item) => {
             const groupIds = getGroupIds(item.id);
             if (groupIds.length === 0) return;
-            setIsSelectionMode(true);
-            setSelectedIds(groupIds);
-            setSelectedSectionId(getSeccionIdForItem(item) ?? null);
-            const isParent = (serviceLinksMap[item.id]?.length ?? 0) > 0;
-            const groupName = isParent ? item.name : (parentNameByLinkedId[item.id] ?? item.name);
-            toast.info(`Editando grupo: ${groupName}`);
+            const sourceId = groupIds[0];
+            const sourceItem = Object.values(itemsData).flat().find((i) => i.id === sourceId);
+            if (sourceItem) {
+                setLinkModalItemId(sourceItem);
+                setIsLinkModalOpen(true);
+            }
         },
-        [getGroupIds, getSeccionIdForItem, serviceLinksMap, parentNameByLinkedId]
+        [getGroupIds, itemsData]
     );
 
     // Función para cargar configuración de precios
@@ -1406,10 +1360,10 @@ export function CatalogoClient({
                                                 categoria={categoria}
                                                 categoriaIndex={categoriaIndex}
                                                 seccionId={seccion.id}
-                                                isSelectionMode={isSelectionMode}
-                                                selectedIds={selectedIds}
-                                                selectedSectionId={selectedSectionId}
-                                                onToggleSelect={handleToggleSmartLinkSelection}
+                                                isSelectionMode={false}
+                                                selectedIds={[]}
+                                                selectedSectionId={null}
+                                                onToggleSelect={() => {}}
                                                 hoverHighlightGroupIds={hoverHighlightGroupIds}
                                                 onHoverGroup={(ids) => {
                                                     setHoverHighlightGroupIds((prev) => {
@@ -1657,68 +1611,6 @@ export function CatalogoClient({
                 })()}
                 currentLinkedIds={linkModalItemId ? (serviceLinksMap[linkModalItemId.id] ?? []) : []}
                 onSaved={() => getServiceLinks(studioSlug).then(r => r.success && r.data && setServiceLinksMap(r.data))}
-            />
-
-            <SmartLinkBar
-                isSelectionMode={isSelectionMode}
-                onActivate={() => {
-                    setIsSelectionMode(true);
-                    setSelectedIds([]);
-                    setSelectedSectionId(null);
-                }}
-                selectedCount={selectedIds.length}
-                selectedItems={selectedIds.map((id) => {
-                    const it = Object.values(itemsData).flat().find((i) => i.id === id);
-                    return it ? { id: it.id, name: it.name } : { id, name: id };
-                })}
-                existingGroupSourceId={existingGroupSourceId}
-                onCancel={() => {
-                    setIsSelectionMode(false);
-                    setSelectedIds([]);
-                    setSelectedSectionId(null);
-                }}
-                    onConfirm={async (parentId) => {
-                        const linkedIds = selectedIds.filter((id) => id !== parentId);
-                        if (linkedIds.length === 0) return;
-                        setIsSavingLinks(true);
-                        try {
-                            const result = await updateServiceLinks(studioSlug, parentId, linkedIds);
-                            if (result.success) {
-                                const res = await getServiceLinks(studioSlug);
-                                if (res.success && res.data) setServiceLinksMap(res.data);
-                                setIsSelectionMode(false);
-                                setSelectedIds([]);
-                                setSelectedSectionId(null);
-                                toast.success('Smart Link guardado');
-                            } else {
-                                toast.error(result.error ?? 'Error al guardar vínculos');
-                            }
-                        } catch (e) {
-                            toast.error('Error al guardar vínculos');
-                        } finally {
-                            setIsSavingLinks(false);
-                        }
-                    }}
-                    onUnlink={async (sourceId) => {
-                        setIsSavingLinks(true);
-                        try {
-                            const result = await updateServiceLinks(studioSlug, sourceId, []);
-                            if (result.success) {
-                                const res = await getServiceLinks(studioSlug);
-                                if (res.success && res.data) setServiceLinksMap(res.data);
-                                setSelectedIds([]);
-                                setSelectedSectionId(null);
-                                toast.success('Grupo desvinculado');
-                            } else {
-                                toast.error(result.error ?? 'Error al desvincular');
-                            }
-                        } catch (e) {
-                            toast.error('Error al desvincular');
-                        } finally {
-                            setIsSavingLinks(false);
-                        }
-                    }}
-                isSaving={isSavingLinks}
             />
 
             <div className="space-y-4">

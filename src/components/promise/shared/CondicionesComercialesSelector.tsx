@@ -121,7 +121,9 @@ export function CondicionesComercialesSelector({
                       }
                       return null;
                     })()}
-                    <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
+                    {(condicion.discount_percentage ?? 0) > 0 && (
+                      <span>Descuento: {condicion.discount_percentage}%</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -193,7 +195,9 @@ export function CondicionesComercialesSelector({
                           }
                           return null;
                         })()}
-                        <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
+                        {(condicion.discount_percentage ?? 0) > 0 && (
+                          <span>Descuento: {condicion.discount_percentage}%</span>
+                        )}
                         <span className="text-emerald-400">Método: {metodo.metodo_pago_name}</span>
                       </div>
                     </div>

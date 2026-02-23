@@ -10,8 +10,16 @@ import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
 import { CondicionesComercialesSelector } from './shared/CondicionesComercialesSelector';
 import { PrecioDesglose } from './shared/PrecioDesglose';
 import { TerminosCondiciones } from './shared/TerminosCondiciones';
-import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos, filtrarCondicionesPorPreferencias } from '@/lib/actions/public/promesas.actions';
+import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
+import {
+  getPrecioListaStudio,
+  getMontoCortesiasFromServicios,
+  getBonoEspecialMonto,
+  getCortesiasCount,
+  getPrecioFinalCierre,
+  getAjusteCierre,
+} from '@/lib/utils/promise-public-financials';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import Lightbox, { type Slide } from 'yet-another-react-lightbox';
 import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
@@ -68,6 +76,8 @@ interface CotizacionDetailSheetProps {
     event_type_name: string | null;
   };
   dateSoldOut?: boolean;
+  /** IDs de condiciones visibles para esta cotización (si viene de la API). Si está definido, se filtra la lista por estos IDs. */
+  condicionesVisiblesIds?: string[] | null;
 }
 
 export function CotizacionDetailSheet({
@@ -87,6 +97,7 @@ export function CotizacionDetailSheet({
   autoGenerateContract = false,
   promiseData,
   dateSoldOut = false,
+  condicionesVisiblesIds,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -99,10 +110,49 @@ export function CotizacionDetailSheet({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // Exclusividad negociación: condiciones_visibles solo aplican a cotizaciones que las tienen.
+  // Si es paquete o cotización sin condiciones_visibles → solo standard/offer públicas.
+  const esCotizacionConNegociacion =
+    currentCotizacion.condiciones_visibles != null && currentCotizacion.condiciones_visibles.length > 0;
+
+  const condicionesAMostrar = useMemo(() => {
+    if (!condicionesComerciales.length) return [];
+    if (esCotizacionConNegociacion && condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
+      const setIds = new Set(condicionesVisiblesIds);
+      return condicionesComerciales.filter((c) => setIds.has(c.id));
+    }
+    return condicionesComerciales.filter((c) => {
+      const tipo = c.type || 'standard';
+      if (tipo === 'standard') return showStandardConditions;
+      if (tipo === 'offer') return showOfferConditions;
+      return false;
+    });
+  }, [
+    condicionesComerciales,
+    condicionesVisiblesIds,
+    showStandardConditions,
+    showOfferConditions,
+    esCotizacionConNegociacion,
+  ]);
+
   // Actualizar cotización cuando cambia la prop
   useEffect(() => {
     setCurrentCotizacion(cotizacion);
   }, [cotizacion]);
+
+  // Al cambiar de cotización, resetear selección para que auto-selección pueda aplicarse si aplica
+  useEffect(() => {
+    setSelectedCondicionId(null);
+    setSelectedMetodoPagoId(null);
+  }, [cotizacion.id]);
+
+  // Auto-selección: si el sheet está abierto y solo hay una condición visible y no hay selección, seleccionarla
+  useEffect(() => {
+    if (!isOpen || condicionesAMostrar.length !== 1 || selectedCondicionId !== null) return;
+    const only = condicionesAMostrar[0];
+    setSelectedCondicionId(only.id);
+    setSelectedMetodoPagoId(only.metodos_pago?.length ? only.metodos_pago[0].id : null);
+  }, [isOpen, condicionesAMostrar, selectedCondicionId]);
 
   const loadCondicionesYTerminos = useCallback(async () => {
     setLoadingCondiciones(true);
@@ -113,14 +163,8 @@ export function CotizacionDetailSheet({
       ]);
 
       if (condicionesResult.success && condicionesResult.data) {
-        // Filtrar condiciones según preferencias
-        const condicionesFiltradas = await filtrarCondicionesPorPreferencias(
-          studioSlug,
-          condicionesResult.data,
-          showStandardConditions,
-          showOfferConditions
-        );
-        setCondicionesComerciales(condicionesFiltradas);
+        // Guardar todas; condicionesAMostrar aplica (condiciones_visibles por cotización O legacy por tipo)
+        setCondicionesComerciales(condicionesResult.data);
       }
 
       if (terminosResult.success && terminosResult.data) {
@@ -167,24 +211,26 @@ export function CotizacionDetailSheet({
   };
 
 
-  const finalPrice = useMemo(() => {
-    if (!currentCotizacion.discount) return currentCotizacion.price;
-    return currentCotizacion.price - (currentCotizacion.price * currentCotizacion.discount) / 100;
-  }, [currentCotizacion]);
+  // Fase 9.3: precio lista = Studio; desglose cortesías + bono; total = lista - cortesías - bono
+  const precioLista = useMemo(() => getPrecioListaStudio(currentCotizacion), [currentCotizacion]);
+  const montoCortesias = useMemo(() => getMontoCortesiasFromServicios(currentCotizacion), [currentCotizacion]);
+  const montoBono = useMemo(() => getBonoEspecialMonto(currentCotizacion), [currentCotizacion]);
+  const cortesiasCount = useMemo(() => getCortesiasCount(currentCotizacion), [currentCotizacion]);
+  const precioBaseParaCondicion = useMemo(
+    () => Math.max(0, precioLista - montoCortesias - montoBono),
+    [precioLista, montoCortesias, montoBono]
+  );
 
-  const hasDiscount = useMemo(() => {
-    return currentCotizacion.discount && currentCotizacion.discount > 0;
-  }, [currentCotizacion]);
+  const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
 
-  // Calcular precio según condición comercial seleccionada
+  // Calcular precio según condición comercial seleccionada (precio base = precio lista menos bono/descuentos)
   const calculatePriceWithCondition = () => {
     if (!selectedCondicionId) return null;
 
     const condicion = condicionesComerciales.find(c => c.id === selectedCondicionId);
     if (!condicion) return null;
 
-    // Precio base (ya con descuento de cotización si aplica)
-    const precioBase = finalPrice;
+    const precioBase = precioBaseParaCondicion;
 
     // Aplicar descuento adicional de la condición comercial
     const descuentoCondicion = condicion.discount_percentage ?? 0;
@@ -220,6 +266,18 @@ export function CotizacionDetailSheet({
   };
 
   const precioCalculado = calculatePriceWithCondition();
+
+  // Fase 9.4: precio final = definido por socio (totalAPagar / negociacion_precio_personalizado) o calculado; ajuste para suma exacta
+  const subtotalSinAjuste = precioLista - montoCortesias - montoBono;
+  const precioFinal = useMemo(
+    () =>
+      getPrecioFinalCierre(currentCotizacion, precioCalculado ? precioCalculado.precioConDescuento : Math.max(0, subtotalSinAjuste)),
+    [currentCotizacion, precioCalculado, subtotalSinAjuste]
+  );
+  const ajusteCierre = useMemo(
+    () => getAjusteCierre(precioFinal, precioLista, montoCortesias, montoBono),
+    [precioFinal, precioLista, montoCortesias, montoBono]
+  );
 
   // Scroll automático al desglose cuando se selecciona una condición comercial
   useEffect(() => {
@@ -429,23 +487,21 @@ export function CotizacionDetailSheet({
 
         {/* Content */}
         <div className="p-4 sm:p-6 space-y-6">
-          {/* Precio principal */}
+          {/* Precio principal: precio de lista (calculado) + total a pagar (cierre) */}
           <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
             <div className="flex items-end justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-zinc-400 mb-2">Precio Total</p>
-                {hasDiscount && (
-                  <div className="flex items-center gap-3 mb-2 flex-wrap">
+                {tieneConcesiones && precioLista > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-zinc-400">Precio de lista</span>
                     <span className="text-lg text-zinc-500 line-through">
-                      {formatPrice(cotizacion.price)}
+                      {formatPrice(precioLista)}
                     </span>
-                    <ZenBadge className="bg-red-500/20 text-red-400 border-red-500/30">
-                      -{cotizacion.discount}% de descuento
-                    </ZenBadge>
                   </div>
                 )}
+                <p className="text-sm text-zinc-400 mb-2">Total a pagar</p>
                 <p className="text-4xl font-bold text-blue-400">
-                  {formatPrice(finalPrice)}
+                  {formatPrice(precioFinal)}
                 </p>
               </div>
 
@@ -508,7 +564,7 @@ export function CotizacionDetailSheet({
                   const condicion = currentCotizacion.condiciones_comerciales;
                   if (!condicion || !condicion.id) return null;
 
-                  const precioBase = finalPrice;
+                  const precioBase = precioBaseParaCondicion;
                   const descuentoCondicion = condicion.discount_percentage ?? 0;
                   const precioConDescuento = descuentoCondicion > 0
                     ? precioBase - (precioBase * descuentoCondicion) / 100
@@ -523,7 +579,8 @@ export function CotizacionDetailSheet({
                       ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
                       : 0;
                   const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
-                  const diferido = precioConDescuento - anticipo;
+                  const anticipoRedondo = Math.round(anticipo);
+                  const diferido = Math.round(precioFinal - anticipoRedondo);
 
                   return (
                     <PrecioDesglose
@@ -533,8 +590,15 @@ export function CotizacionDetailSheet({
                       precioConDescuento={precioConDescuento}
                       advanceType={advanceType}
                       anticipoPorcentaje={anticipoPorcentaje}
-                      anticipo={anticipo}
+                      anticipo={anticipoRedondo}
                       diferido={diferido}
+                      precioLista={precioLista}
+                      montoCortesias={montoCortesias}
+                      cortesiasCount={cortesiasCount}
+                      montoBono={montoBono}
+                      precioFinalCierre={precioFinal}
+                      ajusteCierre={ajusteCierre}
+                      tieneConcesiones={tieneConcesiones}
                     />
                   );
                 })()}
@@ -543,7 +607,7 @@ export function CotizacionDetailSheet({
               <>
                 {/* Mostrar selector de condiciones comerciales para cotizaciones pendientes */}
                 <CondicionesComercialesSelector
-                  condiciones={condicionesComerciales}
+                  condiciones={condicionesAMostrar}
                   selectedCondicionId={selectedCondicionId}
                   selectedMetodoPagoId={selectedMetodoPagoId}
                   onSelectCondicion={handleSelectCondicion}
@@ -559,8 +623,15 @@ export function CotizacionDetailSheet({
                     precioConDescuento={precioCalculado.precioConDescuento}
                     advanceType={precioCalculado.advanceType}
                     anticipoPorcentaje={precioCalculado.anticipoPorcentaje}
-                    anticipo={precioCalculado.anticipo}
-                    diferido={precioCalculado.diferido}
+                    anticipo={Math.round(precioCalculado.anticipo)}
+                    diferido={Math.round(precioFinal - Math.round(precioCalculado.anticipo))}
+                    precioLista={precioLista}
+                    montoCortesias={montoCortesias}
+                    cortesiasCount={cortesiasCount}
+                    montoBono={montoBono}
+                    precioFinalCierre={precioFinal}
+                    ajusteCierre={ajusteCierre}
+                    tieneConcesiones={tieneConcesiones}
                   />
                 )}
               </>
@@ -568,7 +639,7 @@ export function CotizacionDetailSheet({
           </div>
 
           {/* Términos y condiciones - Solo mostrar si hay condiciones comerciales activas */}
-          {condicionesComerciales.length > 0 && terminosCondiciones.length > 0 && (
+          {condicionesAMostrar.length > 0 && terminosCondiciones.length > 0 && (
             <TerminosCondiciones terminos={terminosCondiciones} />
           )}
 
@@ -621,6 +692,12 @@ export function CotizacionDetailSheet({
           studioSlug={studioSlug}
           promiseData={promiseData}
           dateSoldOut={dateSoldOut}
+          precioLista={precioLista}
+          montoCortesias={montoCortesias}
+          cortesiasCount={cortesiasCount}
+          montoBono={montoBono}
+          precioFinalCierre={precioFinal}
+          ajusteCierre={ajusteCierre}
           condicionesComercialesId={
             // Si está en negociación, usar la condición comercial definida
             currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id
@@ -635,7 +712,7 @@ export function CotizacionDetailSheet({
                 const condicion = currentCotizacion.condiciones_comerciales;
                 if (!condicion) return precioCalculado;
 
-                const precioBase = finalPrice;
+                const precioBase = precioBaseParaCondicion;
                 const descuentoCondicion = condicion.discount_percentage ?? 0;
                 const precioConDescuento = descuentoCondicion > 0
                   ? precioBase - (precioBase * descuentoCondicion) / 100
