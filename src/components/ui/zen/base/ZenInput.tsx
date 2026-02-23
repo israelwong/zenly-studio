@@ -91,7 +91,7 @@ const ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(
       // Estructura
       'w-full rounded-md border transition-all duration-200 outline-none',
       // Estados focus
-      'focus:ring-[3px]',
+      'focus:ring-2',
       ZEN_COLORS.input.focusBorder,
       ZEN_COLORS.input.focusRing,
       // Estados disabled

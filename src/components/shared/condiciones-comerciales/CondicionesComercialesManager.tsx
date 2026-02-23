@@ -155,9 +155,9 @@ function SortableCondicionItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 border rounded-lg w-full cursor-pointer transition-shadow duration-200 ${isActive
-        ? 'border-zinc-600 bg-zinc-800/50 hover:bg-zinc-800/70'
-        : 'border-zinc-700 bg-zinc-800/30 opacity-75'
+      className={`p-4 border border-zinc-700/50 rounded-lg w-full cursor-pointer transition-shadow duration-200 ${isActive
+        ? 'bg-zinc-800 hover:bg-zinc-700/50'
+        : 'bg-zinc-800 opacity-75'
         } ${isDragging ? 'ring-2 ring-emerald-500/40' : ''}`}
       onClick={() => {
         // Si hay onSelect, seleccionar en lugar de editar
@@ -1221,7 +1221,7 @@ export function CondicionesComercialesManager({
               </ZenButton>
             </div>
 
-            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg space-y-3">
+            <div className="p-4 bg-zinc-800 border border-zinc-700/50 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-zinc-400">Descuento</span>
                 <span className="text-sm font-medium text-white">
@@ -1465,7 +1465,7 @@ export function CondicionesComercialesManager({
                       return (
                         <li
                           key={o.id}
-                          className="p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 flex flex-wrap items-center justify-between gap-2"
+                          className="p-3 rounded-lg border border-zinc-700/50 bg-zinc-800 flex flex-wrap items-center justify-between gap-2"
                         >
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
                             <span className="font-medium text-white truncate">{o.name}</span>
@@ -1546,7 +1546,7 @@ export function CondicionesComercialesManager({
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="p-4 border border-zinc-700 rounded-lg bg-zinc-800/50 animate-pulse"
+                    className="p-4 border border-zinc-700/50 rounded-lg bg-zinc-800 animate-pulse"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 space-y-3">

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback, startTransiti
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
@@ -27,6 +27,9 @@ import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas'
 import { cn } from '@/lib/utils';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
+import { FormSection, type FormSectionId } from './FormSection';
+
+const DUPLICATE_NAME_ERROR = 'Ya existe una cotización con ese nombre en esta promesa';
 
 interface CotizacionFormProps {
   studioSlug: string;
@@ -87,6 +90,7 @@ export function CotizacionForm({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [savingIntent, setSavingIntent] = useState<'draft' | 'publish' | null>(null);
   const isSubmittingRef = useRef(false);
   const redirectingRef = useRef(false);
   const isEditMode = !!cotizacionId;
@@ -126,8 +130,10 @@ export function CotizacionForm({
   const [isCourtesyMode, setIsCourtesyMode] = useState(false);
   const [itemsCortesia, setItemsCortesia] = useState<Set<string>>(new Set());
   const [bonoEspecial, setBonoEspecial] = useState<number>(0);
-  const [ajustesNegociacionOpen, setAjustesNegociacionOpen] = useState(true);
-  const [condicionesCierreOpen, setCondicionesCierreOpen] = useState(true);
+  const [openSection, setOpenSection] = useState<FormSectionId | null>('base');
+  const sectionBaseRef = useRef<HTMLDivElement>(null);
+  const sectionNegociacionRef = useRef<HTMLDivElement>(null);
+  const sectionCondicionesRef = useRef<HTMLDivElement>(null);
   const [confirmClearCortesiasOpen, setConfirmClearCortesiasOpen] = useState(false);
   const [confirmClearDiscountMode, setConfirmClearDiscountMode] = useState<'cortesias' | 'all'>('cortesias');
   const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
@@ -196,6 +202,9 @@ export function CotizacionForm({
   const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showNameConflictModal, setShowNameConflictModal] = useState(false);
+  const [conflictSuggestedName, setConflictSuggestedName] = useState('');
+  const [conflictPublish, setConflictPublish] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
   const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
   
@@ -1484,15 +1493,13 @@ export function CotizacionForm({
     setShowConfirmDialog(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Prevenir doble submit: deshabilitar desde el primer clic
+  const handleSave = async (publish: boolean, nombreOverride?: string) => {
     if (isSubmittingRef.current || loading) {
       return;
     }
 
-    if (!nombre.trim()) {
+    const nombreToUse = (nombreOverride ?? nombre.trim()).trim();
+    if (!nombreToUse) {
       toast.error('El nombre de la cotización es requerido');
       return;
     }
@@ -1500,28 +1507,27 @@ export function CotizacionForm({
     const itemsSeleccionados = Object.entries(items).filter(([, cantidad]) => cantidad > 0);
     const hasCatalogItems = itemsSeleccionados.length > 0;
     const hasCustomItems = customItems.length > 0;
-    
+
     if (!hasCatalogItems && !hasCustomItems) {
       toast.error('Agrega al menos un servicio o item personalizado');
       return;
     }
 
-    // Validar que haya promiseId para crear la cotización
     if (!promiseId && !isEditMode) {
       toast.error('Se requiere una promise para crear la cotización');
       return;
     }
 
+    const intent = publish ? 'publish' : 'draft';
     isSubmittingRef.current = true;
+    setSavingIntent(intent);
     setLoading(true);
     try {
-      // Calcular precio final (usar precio personalizado si existe, sino el calculado)
       const precioFinal = precioPersonalizado === '' || precioPersonalizado === 0
         ? calculoPrecio.total
         : Number(precioPersonalizado);
 
       if (isEditMode) {
-        // Convertir Map de overrides a objeto plano
         const overridesObj: Record<string, {
           name?: string;
           description?: string | null;
@@ -1537,15 +1543,14 @@ export function CotizacionForm({
           };
         });
 
-        // Actualizar cotización
         const result = await updateCotizacion({
           studio_slug: studioSlug,
           cotizacion_id: cotizacionId!,
-          nombre: nombre.trim(),
+          nombre: nombreToUse,
           descripcion: descripcion.trim() || undefined,
           precio: precioFinal,
           precio_calculado: (calculoPrecio.subtotal ?? 0) > 0 ? calculoPrecio.subtotal : undefined,
-          visible_to_client: visibleToClient,
+          visible_to_client: publish,
           items: Object.fromEntries(
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
           ),
@@ -1559,7 +1564,16 @@ export function CotizacionForm({
         });
 
         if (!result.success) {
-          toast.error(result.error || 'Error al actualizar cotización');
+          if (result.error === DUPLICATE_NAME_ERROR) {
+            isSubmittingRef.current = false;
+            setSavingIntent(null);
+            setLoading(false);
+            setConflictSuggestedName(`${nombreToUse} (V2)`);
+            setConflictPublish(publish);
+            setShowNameConflictModal(true);
+          } else {
+            toast.error(result.error || 'Error al actualizar cotización');
+          }
           return;
         }
 
@@ -1577,11 +1591,17 @@ export function CotizacionForm({
           await deleteCondicionNegociacionCotizacion(studioSlug, cotizacionId);
         }
 
-        toast.success('Cotización actualizada exitosamente');
+        if (publish) {
+          toast.success(visibleToClient ? 'Publicación actualizada' : 'Cotización publicada exitosamente');
+          setVisibleToClient(true);
+        } else {
+          toast.success('Cotización guardada como borrador');
+          setVisibleToClient(false);
+        }
 
-        // Ejecutar callback si existe
         if (onAfterSave) {
           isSubmittingRef.current = false;
+          setSavingIntent(null);
           setLoading(false);
           onAfterSave();
           return;
@@ -1654,16 +1674,15 @@ export function CotizacionForm({
         return;
       }
 
-      // Crear cotización normal
       const result = await createCotizacion({
         studio_slug: studioSlug,
         promise_id: promiseId || null,
         contact_id: contactId || null,
-        nombre: nombre.trim(),
+        nombre: nombreToUse,
         descripcion: descripcion.trim() || undefined,
         precio: precioFinal,
         precio_calculado: (calculoPrecio.subtotal ?? 0) > 0 ? calculoPrecio.subtotal : undefined,
-        visible_to_client: visibleToClient,
+        visible_to_client: publish,
         items: Object.fromEntries(
           itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
         ),
@@ -1676,7 +1695,16 @@ export function CotizacionForm({
       });
 
       if (!result.success) {
-        toast.error(result.error || 'Error al crear cotización');
+        if (result.error === DUPLICATE_NAME_ERROR) {
+          isSubmittingRef.current = false;
+          setSavingIntent(null);
+          setLoading(false);
+          setConflictSuggestedName(`${nombreToUse} (V2)`);
+          setConflictPublish(publish);
+          setShowNameConflictModal(true);
+        } else {
+          toast.error(result.error || 'Error al crear cotización');
+        }
         return;
       }
 
@@ -1689,7 +1717,11 @@ export function CotizacionForm({
         );
       }
 
-      toast.success('Cotización creada exitosamente');
+      if (publish) {
+        toast.success('Cotización publicada exitosamente');
+      } else {
+        toast.success('Cotización guardada como borrador');
+      }
 
       window.dispatchEvent(new CustomEvent('close-overlays'));
       redirectingRef.current = true;
@@ -1723,10 +1755,10 @@ export function CotizacionForm({
       console.error('Error saving quote:', error);
       toast.error(`Error al ${isEditMode ? 'actualizar' : 'crear'} cotización`);
     } finally {
-      // No resetear loading si ya iniciamos redirección (evita re-render que bloquea router.push)
       if (redirectingRef.current) return;
       if (isSubmittingRef.current) {
         isSubmittingRef.current = false;
+        setSavingIntent(null);
         setLoading(false);
       }
     }
@@ -1973,46 +2005,55 @@ export function CotizacionForm({
             : 'lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2'
         }
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(false); }} className="space-y-4">
             <h3 className="text-lg font-semibold text-white mb-4">Configuración</h3>
 
-            <ZenInput
-              label="Nombre de la Cotización"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Cotización Boda Premium"
-              required
-              className="mb-4"
-            />
-
-            <ZenTextarea
-              label="Descripción (opcional)"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Describe los servicios incluidos..."
-              className="min-h-[80px]"
-            />
-
-            <ZenInput
-              label="Duración del Evento (Horas)"
-              type="number"
-              min="0"
-              step="0.5"
-              value={durationHours !== null ? durationHours.toString() : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === '') {
-                  setDurationHours(null);
-                } else {
-                  const numValue = Number(value);
-                  setDurationHours(numValue > 0 ? numValue : null);
-                }
+            <FormSection
+              id="base"
+              title="Información base"
+              summary={[nombre?.trim() || 'Sin nombre', durationHours != null ? ` · ${durationHours} h` : ''].filter(Boolean).join('') || undefined}
+              open={openSection === 'base'}
+              onOpenChange={(open) => {
+                setOpenSection(open ? 'base' : null);
+                if (open) requestAnimationFrame(() => sectionBaseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
               }}
-              placeholder="Ej: 8"
-              hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
-            />
-          </div>
+              headerRef={sectionBaseRef}
+              contentClassName="bg-zinc-900/30 p-3"
+            >
+              <ZenInput
+                label="Nombre de la Cotización"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Ej: Cotización Boda Premium"
+                required
+                className="mb-4"
+              />
+              <ZenTextarea
+                label="Descripción (opcional)"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                placeholder="Describe los servicios incluidos..."
+                className="min-h-[80px]"
+              />
+              <ZenInput
+                label="Duración del Evento (Horas)"
+                type="number"
+                min="0"
+                step="0.5"
+                value={durationHours !== null ? durationHours.toString() : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') {
+                    setDurationHours(null);
+                  } else {
+                    const numValue = Number(value);
+                    setDurationHours(numValue > 0 ? numValue : null);
+                  }
+                }}
+                placeholder="Ej: 8"
+                hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
+              />
+            </FormSection>
 
           {/* Cálculo Financiero — 3 columnas (homologado con Negociación) */}
           <div className="z-10">
@@ -2067,29 +2108,26 @@ export function CotizacionForm({
               </Sheet>
             </div>
 
-            {/* 2. Ajustes de Negociación — fondo sutilmente más claro, sin borde de color; acentos violetas */}
-            <Collapsible
-              open={ajustesNegociacionOpen}
+            {/* 2. Ajustes de Negociación */}
+            <FormSection
+              id="negociacion"
+              title="Ajustes de negociación"
+              summary={(() => {
+                const parts: string[] = [];
+                if (bonoEspecial > 0) parts.push(`Bono: ${formatearMoneda(bonoEspecial)}`);
+                if (itemsCortesia.size > 0) parts.push(`${itemsCortesia.size} Cortesía${itemsCortesia.size !== 1 ? 's' : ''}`);
+                return parts.length > 0 ? parts.join(' · ') : 'Cortesías y bono';
+              })()}
+              open={openSection === 'negociacion'}
               onOpenChange={(open) => {
-                setAjustesNegociacionOpen(open);
+                setOpenSection(open ? 'negociacion' : null);
                 if (!open) setIsCourtesyMode(false);
+                if (open) requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
               }}
-              className="mb-4"
+              headerRef={sectionNegociacionRef}
+              contentClassName="bg-zinc-800/30 p-3"
             >
-              <CollapsibleTrigger
-                className={cn(
-                  'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 transition-colors border border-zinc-700/50 bg-zinc-800/30 hover:bg-zinc-800/40',
-                  ajustesNegociacionOpen ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
-                )}
-              >
-                {ajustesNegociacionOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                <span>Ajustes de Negociación</span>
-                {(calculoPrecio.montoCortesias > 0 || bonoEspecial > 0) && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0 ml-auto" aria-hidden />
-                )}
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="rounded-b-lg border border-t-0 border-zinc-700/50 bg-zinc-800/30 p-3">
+                <div className="space-y-3">
                   <div className="grid grid-cols-[auto_1fr] gap-3">
                     <div>
                       <label className="text-[10px] text-zinc-500 mb-1 block">Cortesías</label>
@@ -2214,8 +2252,7 @@ export function CotizacionForm({
                     );
                   })()}
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
+            </FormSection>
 
             <ZenConfirmModal
               isOpen={confirmClearCortesiasOpen}
@@ -2268,26 +2305,25 @@ export function CotizacionForm({
               <p className="text-[11px] text-zinc-500">Este es el monto real que se le cobrará al prospecto.</p>
             </div>
 
-            {/* 3. Condiciones de cierre — mismo diseño que Ajustes de Negociación */}
-            <Collapsible
-              open={condicionesCierreOpen}
-              onOpenChange={setCondicionesCierreOpen}
-              className="mb-4"
-            >
-              <div
-                className={cn(
-                  'flex w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
-                  condicionesCierreOpen ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
-                )}
-              >
-                <CollapsibleTrigger
-                  className={cn(
-                    'flex flex-1 items-center gap-2 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 hover:bg-zinc-800/30 transition-colors min-w-0'
-                  )}
-                >
-                  {condicionesCierreOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                  <span>Condiciones de cierre</span>
-                </CollapsibleTrigger>
+            {/* 3. Condiciones de cierre */}
+            <FormSection
+              id="condiciones"
+              title="Condiciones de cierre"
+              summary={(() => {
+                const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find(c => c.id === selectedCondicionComercialId) ?? null : null);
+                if (!condicionActiva) return `${condicionIdsVisibles.size} ${condicionIdsVisibles.size === 1 ? 'visible' : 'visibles'} para cierre`;
+                const adv = condicionActiva.advance_type === 'fixed_amount' && condicionActiva.advance_amount != null
+                  ? formatearMoneda(condicionActiva.advance_amount)
+                  : `${condicionActiva.advance_percentage ?? 0}%`;
+                return `${condicionActiva.name} · Anticipo ${adv}`;
+              })()}
+              open={openSection === 'condiciones'}
+              onOpenChange={(open) => {
+                setOpenSection(open ? 'condiciones' : null);
+                if (open) requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+              }}
+              headerRef={sectionCondicionesRef}
+              headerAction={
                 <ZenButton
                   type="button"
                   variant="ghost"
@@ -2302,9 +2338,10 @@ export function CotizacionForm({
                   <Settings className="h-3 w-3" />
                   Gestionar
                 </ZenButton>
-              </div>
-              <CollapsibleContent>
-                <div className="rounded-b-lg border border-t-0 border-zinc-700/50 bg-zinc-800/10 p-3">
+              }
+              contentClassName="bg-zinc-900/50 p-3"
+            >
+                <div>
                   <p className="text-[11px] text-zinc-500 mb-3">
                     Puedes habilitar u ocultar las condiciones de contratación que el prospecto podrá elegir para esta cotización.
                   </p>
@@ -2313,7 +2350,7 @@ export function CotizacionForm({
                       Se ocultaron condiciones con descuento por los ajustes de negociación (cortesías/bono). Puedes activarlas si lo deseas.
                     </p>
                   )}
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-3">
                   {condicionesComerciales.map((cond) => {
                     const isVisible = condicionIdsVisibles.has(cond.id);
                     const isSimulacion = condicionSimulacionId === cond.id;
@@ -2331,14 +2368,15 @@ export function CotizacionForm({
                       <div
                         key={cond.id}
                         className={cn(
-                          'rounded-lg border transition-all duration-300 ease-out relative',
-                          isSimulacion && 'ring-2 ring-emerald-500/80 border-emerald-500/60 bg-emerald-950/20',
-                          !isSimulacion && 'border-zinc-700 bg-zinc-800/30',
-                          dobleBeneficio && 'ring-amber-500/50 border-amber-500/80 bg-amber-950/30'
+                          'rounded-lg border transition-all duration-200 ease-out relative',
+                          dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
+                          !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
+                          !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/5',
+                          !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
                         )}
                       >
                         {/* Cabecera: nombre + etiqueta Visible/Oculto + lápiz */}
-                        <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/50">
+                        <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/30' : 'border-zinc-700/50')}>
                           <span className={cn('font-medium text-sm min-w-0 truncate', isSimulacion ? 'text-white' : 'text-zinc-300')}>{cond.name}</span>
                           <button
                             type="button"
@@ -2358,7 +2396,7 @@ export function CotizacionForm({
                           >
                             {isVisible ? 'Visible' : 'Oculto'}
                           </button>
-                          {isSimulacion && <span className="text-[10px] text-emerald-400 shrink-0">[Simulando]</span>}
+                          {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
                           {cond.type === 'offer' && (
                             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full shrink-0">OFERTA</span>
                           )}
@@ -2383,8 +2421,10 @@ export function CotizacionForm({
                           onClick={() => setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id))}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id)); } }}
                           className={cn(
-                            'px-3 py-2.5 cursor-pointer transition-colors text-left',
-                            isSimulacion ? 'bg-emerald-500/5' : 'hover:bg-zinc-800/50'
+                            'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
+                            isSimulacion && 'bg-amber-500/5',
+                            isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
+                            !isVisible && 'hover:bg-zinc-800/30'
                           )}
                         >
                           {cond.description && <p className="text-xs text-zinc-500">{cond.description}</p>}
@@ -2392,7 +2432,7 @@ export function CotizacionForm({
                             <span>Anticipo: {cond.advance_type === 'fixed_amount' && cond.advance_amount != null ? formatearMoneda(cond.advance_amount) : `${cond.advance_percentage ?? 0}%`}</span>
                             <span>Descuento: {descuentoPct}%</span>
                           </div>
-                          <div className="mt-2 pt-2 border-t border-zinc-700/40">
+                          <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : 'border-zinc-700/40')}>
                             <div className="flex justify-between items-center text-[10px]">
                               <span className="text-zinc-500">Utilidad real</span>
                               <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
@@ -2430,12 +2470,14 @@ export function CotizacionForm({
                     return (
                       <div
                         className={cn(
-                          'rounded-lg border border-emerald-500/50 bg-emerald-500/10 transition-all duration-300 ease-out relative',
-                          isSimulacion && 'ring-2 ring-emerald-500/80',
-                          dobleBeneficio && 'ring-amber-500/50 border-amber-500/80 bg-amber-950/30'
+                          'rounded-lg border transition-all duration-200 ease-out relative',
+                          dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
+                          !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
+                          !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/10',
+                          !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
                         )}
                       >
-                        <div className="flex items-center gap-2 px-3 py-2 border-b border-emerald-500/20">
+                        <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/20' : 'border-zinc-700/50')}>
                           <div className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
                             <div className="w-1.5 h-1.5 rounded-full bg-white" />
                           </div>
@@ -2458,7 +2500,7 @@ export function CotizacionForm({
                           >
                             {isVisible ? 'Visible' : 'Oculto'}
                           </button>
-                          {isSimulacion && <span className="text-[10px] text-emerald-400 shrink-0">[Simulando]</span>}
+                          {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
                           <span className="text-[10px] text-emerald-400/80 shrink-0">Condición especial</span>
                           <span className="ml-auto" />
                         </div>
@@ -2467,10 +2509,15 @@ export function CotizacionForm({
                           tabIndex={0}
                           onClick={() => setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id))}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id)); } }}
-                          className={cn('px-3 py-2.5 cursor-pointer transition-colors text-left', isSimulacion && 'bg-emerald-500/5')}
+                          className={cn(
+                            'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
+                            isSimulacion && 'bg-amber-500/5',
+                            isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
+                            !isVisible && 'hover:bg-zinc-800/30'
+                          )}
                         >
                           <div className="text-xs text-zinc-400">Descuento: {condicionNegociacion.discount_percentage ?? 0}%</div>
-                          <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                          <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : isVisible ? 'border-emerald-500/20' : 'border-zinc-700/40')}>
                             <div className="flex justify-between items-center text-[10px]">
                               <span className="text-zinc-500">Utilidad real</span>
                               <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
@@ -2511,11 +2558,11 @@ export function CotizacionForm({
                   </ZenButton>
                   <ZenButton
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={condicionIdsVisibles.size === 0}
                     onClick={() => setAuditoriaRentabilidadOpen(true)}
-                    className="w-full gap-2 py-2.5 border-zinc-600/50 bg-zinc-800/20 text-zinc-300 hover:bg-zinc-800/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full gap-2 py-2.5 text-zinc-300 hover:bg-zinc-800/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para comparar rentabilidades' : undefined}
                   >
                     <Info className="h-4 w-4" />
@@ -2531,6 +2578,13 @@ export function CotizacionForm({
                   const pct = (condSim as { discount_percentage?: number | null } | null)?.discount_percentage ?? 0;
                   const descuentoMonto = (precioCierre * pct) / 100;
                   const totalRecibir = Math.max(0, precioCierre - descuentoMonto);
+                  const advanceType = (condSim as { advance_type?: string | null; advance_percentage?: number | null; advance_amount?: number | null } | null)?.advance_type ?? 'percentage';
+                  const advancePct = (condSim as { advance_percentage?: number | null } | null)?.advance_percentage ?? 0;
+                  const advanceFixed = (condSim as { advance_amount?: number | null } | null)?.advance_amount ?? 0;
+                  const anticipoBruto = advanceType === 'fixed_amount' && advanceFixed != null ? advanceFixed : (totalRecibir * (advancePct / 100));
+                  const anticipoRedondo = Math.round(anticipoBruto);
+                  const diferido = totalRecibir - anticipoRedondo;
+                  const anticipoLabel = advanceType === 'fixed_amount' && advanceFixed != null ? formatearMoneda(advanceFixed) : `${advancePct}%`;
                   return (
                     <div
                       ref={simulacionBlockRef}
@@ -2554,14 +2608,23 @@ export function CotizacionForm({
                             <span>Total real a recibir</span>
                             <span className="tabular-nums">{formatearMoneda(totalRecibir)}</span>
                           </div>
+                          <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 space-y-1">
+                            <div className="flex justify-between text-zinc-400 text-xs">
+                              <span>Anticipo requerido ({anticipoLabel})</span>
+                              <span className="tabular-nums">{formatearMoneda(anticipoRedondo)}</span>
+                            </div>
+                            <div className="flex justify-between text-zinc-400 text-xs">
+                              <span>Saldo diferido</span>
+                              <span className="tabular-nums">{formatearMoneda(diferido)}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
                 })()}
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
+            </FormSection>
 
             {/* Modal compartido: crear o editar condiciones comerciales (igual que en negociación) */}
             <CondicionesComercialesManager
@@ -2776,19 +2839,6 @@ export function CotizacionForm({
             })()}
           </div>
 
-          {/* Switch de visibilidad */}
-          {!hideVisibilityToggle && (
-            <div className="mt-4 p-4 border border-zinc-700 rounded-lg bg-zinc-800/30">
-              <ZenSwitch
-                checked={visibleToClient}
-                onCheckedChange={setVisibleToClient}
-                label="Visible para el cliente"
-                description="Si está activado, el prospecto podrá ver esta cotización en el portal público"
-                variant="green"
-              />
-            </div>
-          )}
-
           {/* Ficha de Condición Comercial Pre-Autorizada */}
           {isPreAutorizada && condicionComercialPreAutorizada && (
             <div className="mt-4">
@@ -2872,37 +2922,94 @@ export function CotizacionForm({
             </div>
           )}
 
-          {/* Botones fuera del card de Cálculo Financiero */}
+          {/* Botones de persistencia y publicación (1 por fila, ancho completo) */}
           {customActionButtons ? (
             customActionButtons
           ) : !hideActionButtons ? (
-            <div className="border-t border-zinc-700 pt-3 mt-4">
-              <div className="flex gap-2">
-                <ZenButton
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCancelClick}
-                  disabled={loading || isDisabled}
-                  className="flex-1"
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton
-                  type="submit"
-                  variant="primary"
-                  loading={loading}
-                  loadingText="Guardando..."
-                  disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                  title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                  className="flex-1"
-                >
-                  {isEditMode ? 'Actualizar' : 'Crear'} Cotización
-                </ZenButton>
-              </div>
+            <div className="border-t border-zinc-700 pt-3 mt-4 space-y-2">
+              <ZenButton
+                type="button"
+                variant="outline"
+                onClick={() => handleSave(false)}
+                loading={loading && savingIntent === 'draft'}
+                loadingText="Guardando..."
+                disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                className="w-full"
+              >
+                {isEditMode ? 'Guardar cambios' : 'Guardar borrador'}
+              </ZenButton>
+              <ZenButton
+                type="button"
+                variant="primary"
+                onClick={() => handleSave(true)}
+                loading={loading && savingIntent === 'publish'}
+                loadingText="Publicando..."
+                disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                className="w-full"
+              >
+                {isEditMode
+                  ? (visibleToClient ? 'Actualizar publicación' : 'Publicar ahora')
+                  : 'Crear y Publicar'}
+              </ZenButton>
+              <ZenButton
+                type="button"
+                variant="secondary"
+                onClick={handleCancelClick}
+                disabled={loading || isDisabled}
+                className="w-full"
+              >
+                Cancelar
+              </ZenButton>
             </div>
           ) : null}
         </form>
       </div>
+
+      {/* Modal de resolución de nombre duplicado (Fase 11.2) */}
+      <Dialog open={showNameConflictModal} onOpenChange={(open) => { setShowNameConflictModal(open); if (!open) setConflictSuggestedName(''); }}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Nombre duplicado</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Ya existe una cotización con este nombre en esta promesa. Elige otro nombre para guardar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3">
+            <ZenInput
+              label="Nombre de la cotización"
+              value={conflictSuggestedName}
+              onChange={(e) => setConflictSuggestedName(e.target.value)}
+              placeholder="Ej. Cotización Boda (V2)"
+              className="bg-zinc-800 border-zinc-600"
+            />
+          </div>
+          <DialogFooter className="flex gap-2">
+            <ZenButton variant="secondary" onClick={() => { setShowNameConflictModal(false); setConflictSuggestedName(''); }} className="flex-1">
+              Cancelar
+            </ZenButton>
+            <ZenButton
+              variant="primary"
+              onClick={() => {
+                const name = conflictSuggestedName.trim();
+                if (!name) {
+                  toast.error('El nombre no puede estar vacío');
+                  return;
+                }
+                setShowNameConflictModal(false);
+                setNombre(name);
+                setConflictSuggestedName('');
+                handleSave(conflictPublish, name);
+              }}
+              disabled={loading}
+              className="flex-1"
+            >
+              Confirmar y Guardar
+            </ZenButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de confirmación de cierre */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>

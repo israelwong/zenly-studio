@@ -1808,12 +1808,14 @@ export async function updateCotizacion(
       return { success: false, error: 'No se puede actualizar una cotizaciรณn autorizada o aprobada' };
     }
 
-    // Validar nombre único dentro de la promise (excluyendo la cotización actual)
-    if (validatedData.nombre.trim() !== cotizacion.name) {
+    // Validar nombre único dentro de la promise (excluyendo la cotización actual; comparar normalizado para no falsear al guardar sin cambiar nombre)
+    const nombreNormalizado = validatedData.nombre.trim();
+    const nombreActual = (cotizacion.name ?? '').trim();
+    if (nombreNormalizado !== nombreActual) {
       const nombreExistente = await prisma.studio_cotizaciones.findFirst({
         where: {
           promise_id: cotizacion.promise_id,
-          name: validatedData.nombre.trim(),
+          name: nombreNormalizado,
           archived: false,
           id: { not: validatedData.cotizacion_id },
         },
