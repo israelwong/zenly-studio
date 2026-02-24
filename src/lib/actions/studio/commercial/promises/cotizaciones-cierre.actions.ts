@@ -132,10 +132,40 @@ export async function obtenerRegistroCierre(
     } else if (cotizacion.condiciones_comerciales) {
       condicionesComercialesMapeado = mapCondicion(cotizacion.condiciones_comerciales);
     }
+    // Rescate: si hay ID pero la relación no vino (ej. condición privada/negociación no incluida en listados públicos), cargar por ID
+    const condicionIdParaRescate = condicionesComercialesMapeado
+      ? null
+      : (registro.condiciones_comerciales_id ?? cotizacion.condiciones_comerciales_id ?? null);
+    if (condicionIdParaRescate && studio.id) {
+      const condicionRescatada = await prisma.studio_condiciones_comerciales.findFirst({
+        where: { id: condicionIdParaRescate, studio_id: studio.id },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          discount_percentage: true,
+          advance_type: true,
+          advance_percentage: true,
+          advance_amount: true,
+        },
+      });
+      if (condicionRescatada) {
+        condicionesComercialesMapeado = mapCondicion({
+          id: condicionRescatada.id,
+          name: condicionRescatada.name,
+          description: condicionRescatada.description ?? null,
+          discount_percentage: condicionRescatada.discount_percentage ?? null,
+          advance_type: condicionRescatada.advance_type ?? null,
+          advance_percentage: condicionRescatada.advance_percentage ?? null,
+          advance_amount: condicionRescatada.advance_amount ?? null,
+        });
+      }
+    }
     const condicionesDefinidas =
       registro.condiciones_comerciales_definidas ||
       !!cotizacion.condicion_comercial_negociacion ||
-      !!cotizacion.condiciones_comerciales;
+      !!cotizacion.condiciones_comerciales ||
+      !!condicionesComercialesMapeado;
 
     // Convertir Decimal a number para serialización
     return {

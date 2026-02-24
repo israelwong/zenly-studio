@@ -6,8 +6,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, Trash2, CheckCircle } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
-import { archiveCotizacion, deleteCotizacion, pasarACierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
+import { archiveCotizacion, deleteCotizacion, pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { toast } from 'sonner';
 import { startTransition } from 'react';
 import { getStudioPageTitle, STUDIO_PAGE_NAMES } from '@/lib/utils/studio-page-title';
@@ -97,7 +97,7 @@ export function EditarCotizacionClient({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
-  const [showClosingProcessInfoModal, setShowClosingProcessInfoModal] = useState(false);
+  const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
   const [isPassingToCierre, setIsPassingToCierre] = useState(false);
 
   React.useEffect(() => {
@@ -115,19 +115,15 @@ export function EditarCotizacionClient({
       toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
     }
-    setShowClosingProcessInfoModal(true);
+    setShowConfirmarCierreModal(true);
   };
 
-  const handlePasarACierre = async () => {
-    if (!promiseId) {
-      toast.error('No se puede pasar a cierre sin una promesa asociada');
-      return;
-    }
-
-    setShowClosingProcessInfoModal(false);
+  const handleConfirmarCierreConfirm = async (payload: PasarACierreOptions) => {
+    if (!promiseId) return;
+    setShowConfirmarCierreModal(false);
     setIsPassingToCierre(true);
     try {
-      const result = await pasarACierre(studioSlug, cotizacionId);
+      const result = await pasarACierre(studioSlug, cotizacionId, payload);
       if (result.success) {
         toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} pasada a proceso de cierre`);
         window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -135,11 +131,11 @@ export function EditarCotizacionClient({
           router.push(backHref);
         });
       } else {
-        toast.error(result.error || 'Error al pasar cotizaciรณn a cierre');
+        toast.error(result.error || 'Error al pasar cotización a cierre');
       }
     } catch (error) {
       console.error('[handlePasarACierre] Error:', error);
-      toast.error('Error al pasar cotizaciรณn a cierre');
+      toast.error('Error al pasar cotización a cierre');
     } finally {
       setIsPassingToCierre(false);
     }
@@ -340,11 +336,13 @@ export function EditarCotizacionClient({
         loading={isActionLoading}
       />
 
-      <ClosingProcessInfoModal
-        isOpen={showClosingProcessInfoModal}
-        onClose={() => setShowClosingProcessInfoModal(false)}
-        onConfirm={handlePasarACierre}
-        onCancel={() => setShowClosingProcessInfoModal(false)}
+      <ConfirmarCierreModal
+        isOpen={showConfirmarCierreModal}
+        onClose={() => setShowConfirmarCierreModal(false)}
+        onConfirm={handleConfirmarCierreConfirm}
+        studioSlug={studioSlug}
+        cotizacionId={cotizacionId}
+        promiseId={promiseId}
         cotizacionName={cotizacionName}
         isLoading={isPassingToCierre}
       />

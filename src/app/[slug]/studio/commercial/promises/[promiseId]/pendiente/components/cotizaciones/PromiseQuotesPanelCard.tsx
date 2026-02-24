@@ -34,8 +34,10 @@ import {
   cancelarCotizacionYEvento,
   pasarACierre,
   type CotizacionListItem,
+  type PasarACierreOptions,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
+import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { getReminderByPromise, deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 
 interface PromiseQuotesPanelCardProps {
@@ -92,6 +94,8 @@ export function PromiseQuotesPanelCard({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showEditNameModal, setShowEditNameModal] = useState(false);
   const [showClosingProcessInfoModal, setShowClosingProcessInfoModal] = useState(false);
+  const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
+  const cierrePayloadRef = useRef<PasarACierreOptions | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [editingName, setEditingName] = useState(cotizacion.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -484,8 +488,7 @@ export function PromiseQuotesPanelCard({
       toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
     }
-
-    // Cargar recordatorio asociado a la promesa
+    setShowConfirmarCierreModal(true);
     setLoadingReminder(true);
     try {
       const reminderResult = await getReminderByPromise(studioSlug, promiseId);
@@ -504,12 +507,20 @@ export function PromiseQuotesPanelCard({
       setReminder(null);
     } finally {
       setLoadingReminder(false);
-      // Mostrar modal informativo después de cargar el recordatorio
-      setShowClosingProcessInfoModal(true);
     }
   };
 
-  const handlePasarACierre = async (shouldDeleteReminder: boolean = false) => {
+  const handleConfirmarCierreConfirm = (payload: PasarACierreOptions) => {
+    cierrePayloadRef.current = payload;
+    setShowConfirmarCierreModal(false);
+    if (reminder) {
+      setShowClosingProcessInfoModal(true);
+    } else {
+      handlePasarACierreWithPayload(false);
+    }
+  };
+
+  const handlePasarACierreWithPayload = async (shouldDeleteReminder: boolean = false) => {
     if (!promiseId) {
       toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
@@ -517,7 +528,6 @@ export function PromiseQuotesPanelCard({
 
     setLoading(true);
     try {
-      // Eliminar recordatorio si el usuario lo solicitó
       if (shouldDeleteReminder && reminder) {
         try {
           const deleteResult = await deleteReminder(studioSlug, reminder.id);
@@ -525,28 +535,25 @@ export function PromiseQuotesPanelCard({
             toast.success('Recordatorio eliminado');
           } else {
             console.warn('[handlePasarACierre] Error eliminando recordatorio:', deleteResult.error);
-            // Continuar con el proceso aunque falle la eliminación del recordatorio
           }
         } catch (error) {
           console.error('[handlePasarACierre] Error eliminando recordatorio:', error);
-          // Continuar con el proceso aunque falle la eliminación del recordatorio
         }
       }
 
-      const result = await pasarACierre(studioSlug, cotizacion.id);
+      const payload = cierrePayloadRef.current;
+      const result = await pasarACierre(studioSlug, cotizacion.id, payload);
       if (result.success) {
         toast.success('Cotización pasada a proceso de cierre');
-        // Usar callback específico si existe, sino usar onUpdate como fallback
         if (onPasarACierre) {
           onPasarACierre(cotizacion.id);
         } else {
           onUpdate?.(cotizacion.id);
         }
-        // Cerrar modal y navegar usando metodología ZEN
         setShowClosingProcessInfoModal(false);
-        setReminder(null); // Limpiar recordatorio
+        setReminder(null);
+        cierrePayloadRef.current = undefined;
         window.dispatchEvent(new CustomEvent('close-overlays'));
-        // Forzar refresh del router para asegurar que determinePromiseState obtenga datos actualizados
         router.refresh();
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
@@ -562,6 +569,10 @@ export function PromiseQuotesPanelCard({
       setShowClosingProcessInfoModal(false);
       setLoading(false);
     }
+  };
+
+  const handlePasarACierre = (shouldDeleteReminder: boolean) => {
+    handlePasarACierreWithPayload(shouldDeleteReminder);
   };
 
   const handleCancelOnly = async () => {
@@ -1108,7 +1119,18 @@ export function PromiseQuotesPanelCard({
         </div>
       </ZenDialog>
 
-      {/* Modal informativo de proceso de cierre */}
+      {/* Pasaporte al Cierre: selección de condición comercial (Fase 11.4) */}
+      <ConfirmarCierreModal
+        isOpen={showConfirmarCierreModal}
+        onClose={() => setShowConfirmarCierreModal(false)}
+        onConfirm={handleConfirmarCierreConfirm}
+        studioSlug={studioSlug}
+        cotizacionId={cotizacion.id}
+        promiseId={promiseId ?? ''}
+        cotizacionName={cotizacion.name}
+      />
+
+      {/* Modal informativo de proceso de cierre (recordatorio) */}
       <ClosingProcessInfoModal
         isOpen={showClosingProcessInfoModal}
         onClose={() => {

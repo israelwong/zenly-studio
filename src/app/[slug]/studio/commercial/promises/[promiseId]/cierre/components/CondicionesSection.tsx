@@ -76,6 +76,9 @@ export const CondicionesSection = memo(function CondicionesSection({
     );
   }
 
+  const tieneCondicionAsignada = condicionesData?.condiciones_comerciales_definidas === true || !!condicionesData?.condiciones_comerciales_id;
+  const labelAccion = tieneCondicionAsignada ? 'Editar' : 'Definir';
+
   return (
     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
       <div className="flex items-start gap-2">
@@ -93,7 +96,7 @@ export const CondicionesSection = memo(function CondicionesSection({
               onClick={onDefinirClick}
               className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
             >
-              Definir
+              {labelAccion}
             </button>
           </div>
           <span className="text-sm text-zinc-300">

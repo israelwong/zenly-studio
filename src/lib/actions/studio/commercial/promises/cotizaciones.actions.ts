@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { CotizacionItemType, OperationalCategory } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { withRetry } from '@/lib/database/retry-helper';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
@@ -2607,14 +2608,219 @@ export async function cancelarCotizacionYEvento(
 }
 
 /**
+ * Datos para el modal Confirmar Cierre: condiciones disponibles + cotización (negociación, precio).
+ */
+export async function getDatosConfirmarCierre(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    cotizacion: {
+      id: string;
+      name: string;
+      price: number;
+      promise_id: string | null;
+      /** Precio de lista (antes de descuentos de negociación). */
+      precio_calculado: number | null;
+      /** Descuento en monto por negociación (bono + cortesías). */
+      bono_especial: number | null;
+      /** Monto total de ítems marcados como cortesía. */
+      cortesias_monto: number;
+      /** Cantidad de ítems cortesía. */
+      cortesias_count: number;
+      /** IDs de condiciones visibles para esta cotización (relevancia). */
+      condiciones_visibles: string[] | null;
+      condicion_comercial_negociacion?: {
+        id: string;
+        name: string;
+        advance_type: string | null;
+        advance_percentage: number | null;
+        advance_amount: number | null;
+        discount_percentage: number | null;
+      } | null;
+      condiciones_comerciales_id: string | null;
+      condiciones_comerciales?: { id: string; name: string; advance_type: string | null; advance_percentage: number | null; advance_amount: number | null; discount_percentage: number | null } | null;
+    };
+    condiciones: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      advance_type: string | null;
+      advance_percentage: number | null;
+      advance_amount: number | null;
+      discount_percentage: number | null;
+      type: string | null;
+      is_public: boolean;
+    }>;
+  };
+  error?: string;
+}> {
+  try {
+    const { obtenerCondicionesComerciales } = await import('@/lib/actions/studio/config/condiciones-comerciales.actions');
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const [cotizacionRow, condResult] = await Promise.all([
+      prisma.studio_cotizaciones.findFirst({
+        where: { id: cotizacionId, studio_id: studio.id },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          promise_id: true,
+          precio_calculado: true,
+          bono_especial: true,
+          condiciones_visibles: true,
+          items_cortesia: true,
+          condiciones_comerciales_id: true,
+          cotizacion_items: {
+            select: {
+              id: true,
+              item_id: true,
+              subtotal: true,
+              unit_price: true,
+              quantity: true,
+              is_courtesy: true,
+              unit_price_snapshot: true,
+              public_price_snapshot: true,
+            },
+          },
+          condicion_comercial_negociacion: {
+            select: {
+              id: true,
+              name: true,
+              advance_type: true,
+              advance_percentage: true,
+              advance_amount: true,
+              discount_percentage: true,
+            },
+          },
+          condiciones_comerciales: {
+            select: {
+              id: true,
+              name: true,
+              advance_type: true,
+              advance_percentage: true,
+              advance_amount: true,
+              discount_percentage: true,
+            },
+          },
+        },
+      }),
+      obtenerCondicionesComerciales(studioSlug),
+    ]);
+
+    if (!cotizacionRow) return { success: false, error: 'Cotización no encontrada' };
+    if (!condResult.success || !condResult.data) return { success: false, error: condResult.error || 'Error al cargar condiciones' };
+
+    const condiciones = condResult.data.map((c: { id: string; name: string; description?: string | null; advance_type?: string | null; advance_percentage?: number | null; advance_amount?: unknown; discount_percentage?: number | null; type?: string | null; is_public?: boolean }) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description ?? null,
+      advance_type: c.advance_type ?? null,
+      advance_percentage: c.advance_percentage ?? null,
+      advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+      discount_percentage: c.discount_percentage ?? null,
+      type: c.type ?? null,
+      is_public: c.is_public !== false,
+    }));
+
+    const condicionesVisibles = Array.isArray(cotizacionRow.condiciones_visibles)
+      ? (cotizacionRow.condiciones_visibles as string[])
+      : null;
+
+    const itemsCortesiaArr = Array.isArray(cotizacionRow.items_cortesia) ? (cotizacionRow.items_cortesia as string[]) : [];
+    const itemsCortesiaIds = new Set(itemsCortesiaArr);
+    const allItems = cotizacionRow.cotizacion_items ?? [];
+    let cortesias_monto = 0;
+    let cortesias_count = 0;
+    for (const i of allItems) {
+      const esCortesia = i.is_courtesy === true || itemsCortesiaIds.has(i.id) || (i.item_id != null && itemsCortesiaIds.has(i.item_id));
+      if (!esCortesia) continue;
+      cortesias_count += 1;
+      const qty = i.quantity ?? 1;
+      const precioUnit = Number(i.unit_price ?? 0);
+      const snapshot = Number((i as { unit_price_snapshot?: number }).unit_price_snapshot ?? 0);
+      const publicSnapshot = Number((i as { public_price_snapshot?: number }).public_price_snapshot ?? 0);
+      const valorComercial = precioUnit > 0 ? precioUnit * qty : (snapshot > 0 ? snapshot : publicSnapshot) * qty;
+      cortesias_monto += valorComercial > 0 ? valorComercial : Number(i.subtotal ?? 0);
+    }
+
+    return {
+      success: true,
+      data: {
+        cotizacion: {
+          id: cotizacionRow.id,
+          name: cotizacionRow.name,
+          price: Number(cotizacionRow.price),
+          promise_id: cotizacionRow.promise_id,
+          precio_calculado: cotizacionRow.precio_calculado != null ? Number(cotizacionRow.precio_calculado) : null,
+          bono_especial: cotizacionRow.bono_especial != null ? Number(cotizacionRow.bono_especial) : null,
+          cortesias_monto,
+          cortesias_count,
+          condiciones_visibles: condicionesVisibles?.length ? condicionesVisibles : null,
+          condicion_comercial_negociacion: cotizacionRow.condicion_comercial_negociacion
+            ? {
+                id: cotizacionRow.condicion_comercial_negociacion.id,
+                name: cotizacionRow.condicion_comercial_negociacion.name,
+                advance_type: cotizacionRow.condicion_comercial_negociacion.advance_type,
+                advance_percentage: cotizacionRow.condicion_comercial_negociacion.advance_percentage,
+                advance_amount: cotizacionRow.condicion_comercial_negociacion.advance_amount != null ? Number(cotizacionRow.condicion_comercial_negociacion.advance_amount) : null,
+                discount_percentage: cotizacionRow.condicion_comercial_negociacion.discount_percentage,
+              }
+            : null,
+          condiciones_comerciales_id: cotizacionRow.condiciones_comerciales_id,
+          condiciones_comerciales: cotizacionRow.condiciones_comerciales
+            ? {
+                id: cotizacionRow.condiciones_comerciales.id,
+                name: cotizacionRow.condiciones_comerciales.name,
+                advance_type: cotizacionRow.condiciones_comerciales.advance_type,
+                advance_percentage: cotizacionRow.condiciones_comerciales.advance_percentage,
+                advance_amount: cotizacionRow.condiciones_comerciales.advance_amount != null ? Number(cotizacionRow.condiciones_comerciales.advance_amount) : null,
+                discount_percentage: cotizacionRow.condiciones_comerciales.discount_percentage,
+              }
+            : null,
+        },
+        condiciones,
+      },
+    };
+  } catch (error) {
+    console.error('[getDatosConfirmarCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cargar datos',
+    };
+  }
+}
+
+/** Opciones al pasar a cierre: condición estándar y/o ajuste de negociación (Fase 11.4) */
+export interface PasarACierreOptions {
+  condiciones_comerciales_id?: string | null;
+  condicion_negociacion_ajuste?: {
+    name: string;
+    advance_type: 'percentage' | 'fixed_amount';
+    advance_percentage?: number | null;
+    advance_amount?: number | null;
+    discount_percentage?: number | null;
+  };
+}
+
+/**
  * Pasa una cotizaciรณn al estado "en_cierre"
  * - Cambia el status a 'en_cierre'
  * - Guarda el estado anterior (pendiente o negociacion) para poder restaurarlo al cancelar
  * - Solo puede haber una cotizaciรณn en cierre a la vez por promesa
+ * - Si options.condiciones_comerciales_id: vincula esa condición al registro de cierre.
+ * - Si options.condicion_negociacion_ajuste: crea/actualiza condición de negociación para la cotización y no vincula condición estándar.
  */
 export async function pasarACierre(
   studioSlug: string,
-  cotizacionId: string
+  cotizacionId: string,
+  options?: PasarACierreOptions
 ): Promise<CotizacionResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -2668,36 +2874,65 @@ export async function pasarACierre(
       };
     }
 
+    const condicionId = options?.condiciones_comerciales_id ?? null;
+    const ajuste = options?.condicion_negociacion_ajuste;
+
     await prisma.$transaction(async (tx) => {
+      // 0. Si hay ajuste de negociación: crear/actualizar condición de negociación para esta cotización
+      if (ajuste && cotizacion.promise_id) {
+        await tx.studio_condiciones_comerciales_negociacion.deleteMany({
+          where: { cotizacion_id: cotizacionId },
+        });
+        await tx.studio_condiciones_comerciales_negociacion.create({
+          data: {
+            cotizacion_id: cotizacionId,
+            promise_id: cotizacion.promise_id,
+            studio_id: studio.id,
+            name: ajuste.name.trim(),
+            description: null,
+            discount_percentage: ajuste.discount_percentage ?? null,
+            advance_type: ajuste.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage',
+            advance_percentage: ajuste.advance_type === 'percentage' && ajuste.advance_percentage != null ? ajuste.advance_percentage : null,
+            advance_amount: ajuste.advance_type === 'fixed_amount' && ajuste.advance_amount != null ? new Prisma.Decimal(ajuste.advance_amount) : null,
+            metodo_pago_id: null,
+            is_temporary: true,
+          },
+        });
+        await tx.studio_cotizaciones.update({
+          where: { id: cotizacionId },
+          data: { condiciones_comerciales_id: null, updated_at: new Date() },
+        });
+      }
+
       // 1. Pasar cotizaciรณn a cierre
-      // Si se pasa manualmente desde el panel, es cliente creado manualmente (selected_by_prospect: false)
-      // Si viene del flujo pรบblico, ya tiene selected_by_prospect: true
-      // Guardar el estado anterior antes de cambiarlo
       const previousStatus = cotizacion.status;
       
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'en_cierre',
-          selected_by_prospect: false, // Cliente creado manualmente, no requiere firma de contrato
+          selected_by_prospect: false,
           selected_at: new Date(),
           updated_at: new Date(),
         },
       });
 
-      // 2. Crear registro de cierre limpio (resetear si ya existe)
-      // Guardar el estado anterior para poder restaurarlo al cancelar
+      // 2. Crear/actualizar registro de cierre con condición si se proporcionó (y no es ajuste negociación)
+      const registroCondicionId = ajuste ? null : condicionId;
+      const registroCondicionDefinidas = !!registroCondicionId || !!ajuste;
+
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
         create: {
           cotizacion_id: cotizacionId,
           previous_status: previousStatus,
+          condiciones_comerciales_id: registroCondicionId,
+          condiciones_comerciales_definidas: registroCondicionDefinidas,
         },
         update: {
-          // Limpiar todos los campos si el registro ya existía
-          previous_status: previousStatus, // Actualizar también el estado anterior
-          condiciones_comerciales_id: null,
-          condiciones_comerciales_definidas: false,
+          previous_status: previousStatus,
+          condiciones_comerciales_id: registroCondicionId,
+          condiciones_comerciales_definidas: registroCondicionDefinidas,
           contract_template_id: null,
           contract_content: null,
           contrato_definido: false,
