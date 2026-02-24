@@ -72,6 +72,12 @@ interface ResumenCotizacionProps {
   hideSubtotals?: boolean;
   negociacionPrecioOriginal?: number | null;
   negociacionPrecioPersonalizado?: number | null;
+  /** En contexto cierre: permite editar anticipo (el padre debe pasar renderAnticipoActions con el popover). */
+  canEditAnticipo?: boolean;
+  /** Anticipo guardado en registro (p. ej. pago_monto); si difiere del de la condición, se muestra en ámbar. */
+  anticipoOverride?: number | null;
+  /** Contenido a la izquierda de la fila Anticipo (ej. botón Editar que abre popover). */
+  renderAnticipoActions?: () => React.ReactNode;
 }
 
 /**
@@ -82,7 +88,7 @@ interface ResumenCotizacionProps {
  * cotizaciones asociadas a la misma promesa para mantener solo una cotización activa.
  */
 
-export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationHours, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado }: ResumenCotizacionProps) {
+export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationHours, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado, canEditAnticipo, anticipoOverride, renderAnticipoActions }: ResumenCotizacionProps) {
   const effectiveDuration = event_duration ?? promiseDurationHours ?? null;
   const params = useParams();
   const router = useRouter();
@@ -396,8 +402,8 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
               precioConDescuento={cotizacion.price}
               advanceType={desglose.advanceType}
               anticipoPorcentaje={desglose.anticipoPorcentaje}
-              anticipo={desglose.anticipo}
-              diferido={desglose.diferido}
+              anticipo={anticipoOverride ?? desglose.anticipo}
+              diferido={Math.max(0, cotizacion.price - (anticipoOverride ?? desglose.anticipo))}
               precioLista={desglose.precioLista}
               montoCortesias={desglose.cortesias_monto}
               cortesiasCount={desglose.cortesias_count}
@@ -405,6 +411,8 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
               precioFinalCierre={cotizacion.price}
               ajusteCierre={desglose.ajusteCierre}
               tieneConcesiones={desglose.tieneConcesiones}
+              anticipoModificado={anticipoOverride != null && Math.abs(anticipoOverride - desglose.anticipo) >= 0.01}
+              renderAnticipoActions={canEditAnticipo ? renderAnticipoActions : undefined}
             />
           </div>
         )}

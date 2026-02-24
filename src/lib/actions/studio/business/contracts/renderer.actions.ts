@@ -190,6 +190,7 @@ export async function getPromiseContractData(
         cotizacion_cierre: {
           select: {
             contract_signed_at: true,
+            pago_monto: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -425,8 +426,11 @@ export async function getPromiseContractData(
     }
 
     // Calcular anticipo basado en totalFinal (ya sea negociado o normal)
-    // El anticipo se calcula ANTES de aplicar charm
-    if (condiciones) {
+    // Herencia contractual: si el registro de cierre tiene pago_monto (ajuste manual), usarlo como monto_anticipo
+    const registroCierre = cotizacion.cotizacion_cierre as { pago_monto?: unknown } | null;
+    if (registroCierre?.pago_monto != null && Number(registroCierre.pago_monto) > 0) {
+      montoAnticipo = Number(registroCierre.pago_monto);
+    } else if (condiciones) {
       if (condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
         montoAnticipo = (totalFinal * condiciones.advance_percentage) / 100;
       } else if (condiciones.advance_type === "fixed_amount" && condiciones.advance_amount) {

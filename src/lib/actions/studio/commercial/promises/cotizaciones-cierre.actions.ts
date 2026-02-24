@@ -1424,6 +1424,46 @@ export async function actualizarPagoCierre(
 }
 
 /**
+ * Actualiza solo el monto de anticipo en el registro de cierre (SSOT para el resumen unificado).
+ * No modifica fecha ni método de pago; el contrato y autorización leen este valor.
+ */
+export async function actualizarAnticipoCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  monto: number
+): Promise<CierreResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: {
+        pago_concepto: 'Anticipo',
+        pago_monto: new Prisma.Decimal(monto),
+        updated_at: new Date(),
+      },
+    });
+
+    return { success: true, data: { cotizacion_id: cotizacionId } };
+  } catch (error) {
+    console.error('[actualizarAnticipoCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar anticipo',
+    };
+  }
+}
+
+/**
  * Elimina el registro de cierre de una cotizaci?n
  * Se llama al cancelar el cierre
  */
@@ -1720,7 +1760,7 @@ export async function autorizarYCrearEvento(
       };
     }
 
-    // 6.5. Comprobar capacidad del d?a (max_events_per_day) antes de la transacci?n
+    // 6.5. Validación de capacidad: checkDateConflict respeta max_events_per_day del Studio; forceBooking omite el límite
     let eventDateForConflict: Date;
     if (cotizacion.promise.event_date) {
       const ed = cotizacion.promise.event_date instanceof Date
@@ -1743,6 +1783,9 @@ export async function autorizarYCrearEvento(
         conflictingPromises: conflictResult.data.conflictingPromises,
       };
     }
+
+    // Utilidad final: el evento no almacena utilidad_neta; se obtiene vía cotización autorizada (evento.cotizacion_id)
+    // usando getAuditoriaRentabilidadCierre / calcularRentabilidadGlobal (precio final = cotización.price, items con cost/expense).
 
     // Resolver etiqueta "Aprobado" fuera de la transacción para evitar "Transaction not found" en transacciones largas
     let tagAprobadoId: string;
@@ -1907,19 +1950,29 @@ export async function autorizarYCrearEvento(
       // Esto evita timeouts en la transacción principal
       // Los items se actualizarán fuera de la transacción después de que se complete
 
-      // 7.5. Actualizar cotizaci?n con snapshots (inmutables) y establecer relaci?n con evento
-      // IMPORTANTE: Usar la relaci?n 'eventos' con connect para establecer evento_id
+      // 7.5. Actualizar cotización con snapshots (inmutables) y establecer relación con evento
+      // Snapshot de negociación (Ecuación Financiera Maestra): precio_calculado, bono_especial, items_cortesia
+      // persisten en la cotización autorizada para que el evento herede el histórico vía cotizacion_id.
+      const snapshotPrecioCalculado = cotizacion.precio_calculado != null
+        ? new Prisma.Decimal(Number(cotizacion.precio_calculado))
+        : null;
+      const snapshotBonoEspecial = cotizacion.bono_especial != null
+        ? new Prisma.Decimal(Number(cotizacion.bono_especial))
+        : null;
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'autorizada',
           eventos: {
-            connect: { id: evento.id }, // Establecer relaci?n bidireccional con el evento creado
+            connect: { id: evento.id },
           },
-          // Desconectar relaci?n de condiciones comerciales (usar snapshots en su lugar)
           condiciones_comerciales: {
             disconnect: true,
           },
+          // Snapshots de negociación (cortesías, bono, ajuste) para dashboard y reportes
+          precio_calculado: snapshotPrecioCalculado,
+          bono_especial: snapshotBonoEspecial,
+          items_cortesia: cotizacion.items_cortesia ?? null,
           // Snapshots de condiciones comerciales
           condiciones_comerciales_name_snapshot:
             condicionSnapshot?.name || null,
@@ -2016,7 +2069,7 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.8. Archivar otras cotizaciones de la promesa
+      // 8.8. Cierre de ciclo: archivar otras cotizaciones (status + archived para listados/pipeline)
       await tx.studio_cotizaciones.updateMany({
         where: {
           promise_id: promiseId,
@@ -2025,6 +2078,7 @@ export async function autorizarYCrearEvento(
         },
         data: {
           status: 'archivada',
+          archived: true,
           updated_at: new Date(),
         },
       });

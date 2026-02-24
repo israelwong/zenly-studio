@@ -2,7 +2,7 @@
 
 import React, { memo, useState } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal } from '@/components/ui/zen';
-import { CheckCircle2, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Trash2, Pencil } from 'lucide-react';
 
 interface PagoInicialCardProps {
   pagoData: {
@@ -32,17 +32,21 @@ function PagoInicialCardInner({
     setShowEliminarPagoConfirm(false);
   };
 
+  const btnSubtle = 'shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/50 transition-colors';
+
   return (
     <ZenCard className="h-auto">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
         <div className="flex items-center justify-between">
           <ZenCardTitle className="text-sm">Pago Inicial</ZenCardTitle>
-          <button
-            onClick={onRegistrarPagoClick}
-            className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-          >
-            {tienePagoRegistrado ? 'Editar' : 'Agregar'}
-          </button>
+          {!tienePagoRegistrado && (
+            <button
+              onClick={onRegistrarPagoClick}
+              className={`text-xs ${btnSubtle}`}
+            >
+              Agregar
+            </button>
+          )}
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4">
@@ -68,17 +72,28 @@ function PagoInicialCardInner({
                       </div>
                     )}
                   </div>
-                  {onEliminarPago && (
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setShowEliminarPagoConfirm(true)}
-                      className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="Eliminar pago"
-                      aria-label="Eliminar pago"
+                      onClick={onRegistrarPagoClick}
+                      className={btnSubtle}
+                      title="Editar"
+                      aria-label="Editar pago"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </button>
-                  )}
+                    {onEliminarPago && (
+                      <button
+                        type="button"
+                        onClick={() => setShowEliminarPagoConfirm(true)}
+                        className={btnSubtle}
+                        title="Eliminar pago"
+                        aria-label="Eliminar pago"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="text-xs text-blue-400">

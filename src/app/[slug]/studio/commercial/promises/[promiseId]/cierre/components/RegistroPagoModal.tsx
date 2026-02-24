@@ -22,6 +22,8 @@ interface RegistroPagoModalProps {
     fecha: Date | null;
     metodo_id: string | null;
   } | null;
+  /** Monto de anticipo pactado (condición comercial); pre-llena el campo Monto si no hay pago registrado */
+  anticipoMontoDefault?: number | null;
   onSuccess?: () => void;
 }
 
@@ -31,6 +33,7 @@ export function RegistroPagoModal({
   studioSlug,
   cotizacionId,
   pagoData,
+  anticipoMontoDefault,
   onSuccess,
 }: RegistroPagoModalProps) {
   const [registrarPago, setRegistrarPago] = useState(false);
@@ -68,27 +71,28 @@ export function RegistroPagoModal({
 
   useEffect(() => {
     if (isOpen) {
-      // Si hay datos previos, activar el switch y cargar datos
       const hayDatosPrevios = pagoData?.concepto || pagoData?.monto;
       const metodoIdInicial = pagoData?.metodo_id || '';
-      
-      setRegistrarPago(!!hayDatosPrevios);
+      // Pre-llenar monto: pago registrado > anticipo pactado por defecto
+      const montoStr = hayDatosPrevios && pagoData?.monto != null
+        ? pagoData.monto.toString()
+        : (anticipoMontoDefault != null ? String(anticipoMontoDefault) : '');
+
+      setRegistrarPago(!!hayDatosPrevios || (anticipoMontoDefault != null && anticipoMontoDefault > 0));
       setConcepto(pagoData?.concepto || 'Anticipo');
-      setMonto(pagoData?.monto?.toString() || '');
+      setMonto(montoStr);
       setFecha(pagoData?.fecha ? new Date(pagoData.fecha) : new Date());
       setMetodoId(metodoIdInicial);
-      
-      // Cargar métodos de pago (pasar el método inicial para evitar selección automática si ya hay uno)
+
       loadMetodos(metodoIdInicial);
     } else {
-      // Resetear estado cuando se cierra el modal
       setRegistrarPago(false);
       setConcepto('');
       setMonto('');
       setFecha(undefined);
       setMetodoId('');
     }
-  }, [isOpen, pagoData, loadMetodos]);
+  }, [isOpen, pagoData, anticipoMontoDefault, loadMetodos]);
 
   const handleConfirm = async () => {
     // Si no se va a registrar pago, guardar como promesa de pago

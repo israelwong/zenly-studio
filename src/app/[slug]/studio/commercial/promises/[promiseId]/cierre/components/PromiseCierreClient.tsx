@@ -17,12 +17,10 @@ import { ContratoDigitalCard } from './ContratoDigitalCard';
 import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
-import { PagoInicialCard } from './PagoInicialCard';
-import { RegistroPagoModal } from './RegistroPagoModal';
 import { CierreActionButtons } from './CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
-import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, PagoInicialCardSkeleton } from './PromiseCierreSkeleton';
+import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
@@ -36,12 +34,10 @@ function useShowSkeletons(
     contract_content?: string | null;
     contrato_definido?: boolean;
   } | null,
-  pagoData: unknown,
   hasLoadedRegistroOnce: boolean
 ) {
   return useMemo(() => {
     const showCotizacionSkeleton = !hasLoadedRegistroOnce && loadingRegistro && condicionesData == null;
-    const showPagoSkeleton = !hasLoadedRegistroOnce && loadingRegistro && pagoData == null;
     const showContratoSkeleton =
       !hasLoadedRegistroOnce &&
       ((loadingRegistro && contractData == null) ||
@@ -49,9 +45,8 @@ function useShowSkeletons(
     return {
       showCotizacionSkeleton,
       showContratoSkeleton,
-      showPagoSkeleton,
     };
-  }, [loadingRegistro, condicionesData, contractData, pagoData, hasLoadedRegistroOnce]);
+  }, [loadingRegistro, condicionesData, contractData, hasLoadedRegistroOnce]);
 }
 
 type CotizacionListItemType = CotizacionListItem;
@@ -65,6 +60,8 @@ interface CierreColumn2Props {
   loadingRegistro: boolean;
   negociacionData: { negociacion_precio_original?: number | null; negociacion_precio_personalizado?: number | null };
   desgloseCierre: { precio_calculado: number | null; bono_especial: number | null; cortesias_monto: number; cortesias_count: number } | null;
+  pagoData: { pago_monto?: number | null } | null;
+  onAnticipoUpdated: () => void;
   onPreviewClick: () => void;
   loadingCotizacion: boolean;
   onDefinirCondiciones: () => void;
@@ -81,6 +78,8 @@ const CierreColumn2 = memo(function CierreColumn2({
   loadingRegistro,
   negociacionData,
   desgloseCierre,
+  pagoData,
+  onAnticipoUpdated,
   onPreviewClick,
   loadingCotizacion,
   onDefinirCondiciones,
@@ -100,6 +99,8 @@ const CierreColumn2 = memo(function CierreColumn2({
           loadingRegistro={loadingRegistro}
           negociacionData={negociacionData}
           desgloseCierre={desgloseCierre}
+          pagoData={pagoData}
+          onAnticipoUpdated={onAnticipoUpdated}
           onPreviewClick={onPreviewClick}
           loadingCotizacion={loadingCotizacion}
           onDefinirCondiciones={onDefinirCondiciones}
@@ -116,7 +117,6 @@ interface CierreColumn3Props {
   studioSlug: string;
   promiseId: string;
   showContratoSkeleton: boolean;
-  showPagoSkeleton: boolean;
   eventTypeId: string | null;
   contractData: {
     contract_template_id?: string | null;
@@ -136,9 +136,6 @@ interface CierreColumn3Props {
   onCancelarContrato: () => void | Promise<void>;
   onRegenerateContract: () => void | Promise<void>;
   onEditarDatosClick: () => void;
-  pagoData: { pago_registrado?: boolean; pago_concepto?: string | null; pago_monto?: number | null; pago_fecha?: Date | null; pago_metodo_id?: string | null; pago_metodo_nombre?: string | null } | null;
-  onRegistrarPagoClick: () => void;
-  onEliminarPago?: () => void | Promise<void>;
   onAutorizar: () => void;
   onCancelarCierre: () => void;
   isAuthorizing: boolean;
@@ -150,7 +147,6 @@ const CierreColumn3 = memo(function CierreColumn3({
   studioSlug,
   promiseId,
   showContratoSkeleton,
-  showPagoSkeleton,
   eventTypeId,
   contractData,
   loadingRegistro,
@@ -163,9 +159,6 @@ const CierreColumn3 = memo(function CierreColumn3({
   onCancelarContrato,
   onRegenerateContract,
   onEditarDatosClick,
-  pagoData,
-  onRegistrarPagoClick,
-  onEliminarPago,
   onAutorizar,
   onCancelarCierre,
   isAuthorizing,
@@ -192,16 +185,6 @@ const CierreColumn3 = memo(function CierreColumn3({
             onCancelarContrato={onCancelarContrato}
             onRegenerateContract={async () => { await onRegenerateContract(); }}
             onEditarDatosClick={onEditarDatosClick}
-          />
-        )}
-      {showPagoSkeleton ? (
-        <PagoInicialCardSkeleton />
-      ) : (
-        <PagoInicialCard
-            pagoData={pagoData}
-            loadingRegistro={loadingRegistro}
-            onRegistrarPagoClick={onRegistrarPagoClick}
-            onEliminarPago={onEliminarPago}
           />
         )}
       <CierreActionButtons
@@ -346,7 +329,6 @@ export function PromiseCierreClient({
     cierreLogic.loadingRegistro,
     cierreLogic.condicionesData,
     cierreLogic.contractData,
-    cierreLogic.pagoData,
     cierreLogic.hasLoadedRegistroOnce
   );
 
@@ -418,6 +400,8 @@ export function PromiseCierreClient({
               loadingRegistro={cierreLogic.loadingRegistro}
               negociacionData={cierreLogic.negociacionData}
               desgloseCierre={cierreLogic.desgloseCierre ?? null}
+              pagoData={cierreLogic.pagoData}
+              onAnticipoUpdated={cierreLogic.handlePagoSuccess}
               onPreviewClick={cierreLogic.handleOpenPreview}
               loadingCotizacion={cierreLogic.loadingCotizacion}
               onDefinirCondiciones={cierreLogic.handleDefinirCondiciones}
@@ -432,7 +416,6 @@ export function PromiseCierreClient({
             studioSlug={studioSlug}
             promiseId={promiseId}
             showContratoSkeleton={showSkeletons.showContratoSkeleton}
-            showPagoSkeleton={showSkeletons.showPagoSkeleton}
             eventTypeId={contextPromiseData.event_type_id || null}
             contractData={cierreLogic.contractData}
             loadingRegistro={cierreLogic.loadingRegistro}
@@ -445,9 +428,6 @@ export function PromiseCierreClient({
             onCancelarContrato={cierreLogic.handleCancelarContrato}
             onRegenerateContract={cierreLogic.handleRegenerateContract}
             onEditarDatosClick={cierreLogic.handleEditarDatosClick}
-            pagoData={cierreLogic.pagoData}
-            onRegistrarPagoClick={cierreLogic.handleRegistrarPagoClick}
-            onEliminarPago={cierreLogic.handleEliminarPago}
             onAutorizar={cierreLogic.handleAutorizar}
             onCancelarCierre={cierreLogic.handleOpenCancelModal}
             isAuthorizing={cierreLogic.isAuthorizing}
@@ -609,21 +589,6 @@ export function PromiseCierreClient({
               zIndex={10090}
             />
           )}
-
-          {/* Modal Registro de Pago */}
-          <RegistroPagoModal
-            isOpen={cierreLogic.showPagoModal}
-            onClose={() => cierreLogic.setShowPagoModal(false)}
-            studioSlug={studioSlug}
-            cotizacionId={cotizacionEnCierre.id}
-            pagoData={cierreLogic.pagoData?.pago_concepto || cierreLogic.pagoData?.pago_monto ? {
-              concepto: cierreLogic.pagoData.pago_concepto || null,
-              monto: cierreLogic.pagoData.pago_monto || null,
-              fecha: cierreLogic.pagoData.pago_fecha || null,
-              metodo_id: cierreLogic.pagoData.pago_metodo_id || null,
-            } : null}
-            onSuccess={cierreLogic.handlePagoSuccess}
-          />
 
           {/* Modal Confirmar Cancelar Cierre */}
           <ZenConfirmModal

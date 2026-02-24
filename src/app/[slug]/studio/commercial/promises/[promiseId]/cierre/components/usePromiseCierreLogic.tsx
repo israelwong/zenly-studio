@@ -584,6 +584,22 @@ export function usePromiseCierreLogic({
 
   const STEP_DELAY_MS = 350;
 
+  const anticipoMontoDefault = useMemo(() => {
+    const c = condicionesData?.condiciones_comerciales;
+    if (!c) return null;
+    const isMonto = c.advance_type === 'fixed_amount' || c.advance_type === 'amount';
+    if (isMonto && c.advance_amount != null) {
+      return Number(c.advance_amount);
+    }
+    if ((c.advance_type === 'percentage' || !isMonto) && c.advance_percentage != null) {
+      const total = cotizacion.price;
+      if (total != null && Number(total) > 0) {
+        return Math.round((Number(total) * c.advance_percentage) / 100 * 100) / 100;
+      }
+    }
+    return null;
+  }, [condicionesData?.condiciones_comerciales, cotizacion.price]);
+
   const handleConfirmAutorizar = useCallback(async () => {
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
@@ -616,14 +632,15 @@ export function usePromiseCierreLogic({
 
     try {
       if (cotizacion.status === 'en_cierre') {
-        // Solo registrar pago si el usuario abrió el modal y guardó un monto > 0 en esta sesión (nunca usar registro cargado)
-        const usuarioConfirmoPagoEnSesion = userConfirmedPagoInSessionRef.current;
-        const tienePagoExplicito =
-          usuarioConfirmoPagoEnSesion &&
-          !!(pagoData?.pago_concepto?.trim() && pagoData?.pago_monto != null && Number(pagoData.pago_monto) > 0);
+        // Anticipo del resumen unificado (SSOT): pago_monto en registro cierre o anticipo de la condición
+        const anticipoResumen =
+          pagoData?.pago_monto != null
+            ? Number(pagoData.pago_monto)
+            : (anticipoMontoDefault ?? 0);
+        const registrarPago = anticipoResumen > 0;
         const serverPromise = autorizarYCrearEvento(studioSlug, promiseId, cotizacion.id, {
-          registrarPago: tienePagoExplicito,
-          montoInicial: tienePagoExplicito ? Number(pagoData!.pago_monto) : 0,
+          registrarPago,
+          montoInicial: anticipoResumen,
         });
         const animationPromise = runProgressAnimation();
 
@@ -649,7 +666,7 @@ export function usePromiseCierreLogic({
       setCurrentTask('');
       setCompletedTasks(TASKS_AUTORIZAR);
     }
-  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData]);
+  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault]);
 
   // Validar si se puede autorizar
   const puedeAutorizar = useMemo(() => {
@@ -709,6 +726,7 @@ export function usePromiseCierreLogic({
     condicionesData,
     contractData,
     pagoData,
+    anticipoMontoDefault,
     desgloseCierre,
     loadingRegistro,
     hasLoadedRegistroOnce,

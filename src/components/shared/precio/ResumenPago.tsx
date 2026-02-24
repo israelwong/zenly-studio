@@ -29,6 +29,8 @@ export interface ResumenPagoProps {
   title?: string;
   /** En contexto de autorización manual (Pasaporte al Cierre): contenido al inicio (izquierda) de la fila Anticipo (ej. botón Editar que abre popover). */
   renderAnticipoActions?: () => React.ReactNode;
+  /** Si true, el monto de anticipo se muestra en ámbar (ajuste manual respecto a la condición). */
+  anticipoModificado?: boolean;
 }
 
 const formatPrice = (price: number) => formatPackagePriceSimple(price);
@@ -59,6 +61,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
       compact = false,
       title = 'Resumen de Pago',
       renderAnticipoActions,
+      anticipoModificado = false,
     },
     ref
   ) => {
@@ -193,7 +196,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                       ? 'Anticipo'
                       : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
                   </span>
-                  <span className="text-sm font-medium text-blue-400 shrink-0 ml-2">
+                  <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
                     {formatPrice(anticipo)}
                   </span>
                 </div>
