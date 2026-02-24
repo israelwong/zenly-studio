@@ -44,7 +44,51 @@ Documentos de flujos operativos (UI → acciones → servidor) para cierre, auto
 
 ---
 
-### 3. Panel de Gestión Logística (Scheduler)
+### 3. Arquitectura Promesa Cierre
+**Archivo:** [promesa-cierre.md](promesa-cierre.md)  
+**Estado:** ✅ Referencia
+
+**Contenido:**
+- Resumen del flujo de cierre (entrada, salida normal, cancelar cierre)
+- Rutas y cadenero de la página cierre
+- Modelo de datos: `studio_cotizaciones_cierre`, versiones de contrato
+- Flujo de datos: `obtenerRegistroCierre`, `usePromiseCierreLogic`, desglose y auditoría
+- Componentes principales (CotizacionCard, columnas, CierreActionButtons)
+- Server Actions en cotizaciones-cierre.actions y cotizaciones.actions
+- Coherencia financiera (Resumen de Cierre, calcularRentabilidadGlobal)
+- Realtime y actualización local
+- Referencia rápida de archivos
+
+**Cuándo consultar:**
+- Mantener o extender la página de cierre
+- Depurar condiciones, contrato, pago o desglose
+- Recuperar comportamiento tras cambios
+- Onboarding en el flujo estudio → cierre → autorización
+
+---
+
+### 4. Arquitectura Promesa Pendiente
+**Archivo:** [promesa-pendiente.md](promesa-pendiente.md)  
+**Estado:** ✅ Referencia
+
+**Contenido:**
+- Resumen del estado pendiente (entrada, pasar a cierre, autorizar)
+- Cadenero y criterio `determinePromiseState` para pendiente
+- Carga de datos en servidor (Protocolo Zenly): condiciones, cotizaciones, share, logs, agendamiento, recordatorio
+- Layout 3 columnas: EventInfoCard, PromiseQuotesPanel (cotizaciones + Pasar a cierre), Seguimiento/Cita/Bitácora
+- Modales: EventFormModal, AuthorizeCotizacionModal, ConfirmarCierreModal
+- Flujos Pasar a cierre y Autorizar desde pendiente
+- Server Actions y referencia de archivos
+
+**Cuándo consultar:**
+- Mantener o extender la página pendiente
+- Entender lista de cotizaciones, DnD, archivar, pasar a cierre
+- Depurar redirecciones entre pendiente / cierre / autorizada
+- Onboarding en el flujo promesa detalle
+
+---
+
+### 5. Panel de Gestión Logística (Scheduler)
 **Archivo:** `panel-gestion-logistica.md`  
 **Estado:** ✅ Producción
 

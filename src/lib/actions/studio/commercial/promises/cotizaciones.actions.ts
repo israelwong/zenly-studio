@@ -37,6 +37,8 @@ import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utili
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 import { getPromiseRouteStateFromSlug, type PromiseRouteState } from '@/lib/utils/promise-navigation';
+import { calcularRentabilidadGlobal } from '@/lib/utils/negociacion-calc';
+import type { CotizacionItem } from '@/lib/utils/negociacion-calc';
 
 export interface CotizacionListItem {
   id: string;
@@ -2793,6 +2795,191 @@ export async function getDatosConfirmarCierre(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al cargar datos',
+    };
+  }
+}
+
+/**
+ * Elimina la condición pactada (studio_condiciones_comerciales_negociacion) de esta cotización
+ * cuando el usuario cierra el modal de confirmación de cierre sin confirmar (Cancelar / cerrar).
+ * Evita condiciones huérfanas en el flujo de cierre.
+ */
+export async function limpiarCondicionPactadaAlCancelarCierre(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    await prisma.studio_condiciones_comerciales_negociacion.deleteMany({
+      where: {
+        cotizacion_id: cotizacionId,
+        studio_id: studio.id,
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[limpiarCondicionPactadaAlCancelarCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al limpiar condición',
+    };
+  }
+}
+
+/**
+ * Actualiza el anticipo (advance_type, advance_percentage, advance_amount) en la condición de
+ * negociación asociada a la cotización. Si no existe fila, crea una (nombre desde condición estándar o "Ajuste cierre").
+ * Usado al confirmar el ajuste de anticipo en ConfirmarCierreModal.
+ */
+export async function actualizarAnticipoCondicionNegociacionCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  payload: { advance_type: 'percentage' | 'fixed_amount'; advance_percentage: number | null; advance_amount: number | null },
+  nombreCondicion?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, promise: { studio_id: studio.id } },
+      select: { promise_id: true },
+    });
+    if (!cotizacion?.promise_id) return { success: false, error: 'Cotización no encontrada' };
+
+    const existing = await prisma.studio_condiciones_comerciales_negociacion.findUnique({
+      where: { cotizacion_id: cotizacionId },
+    });
+
+    const advanceType = payload.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage';
+    const advancePercentage = payload.advance_type === 'percentage' && payload.advance_percentage != null ? payload.advance_percentage : null;
+    const advanceAmount = payload.advance_type === 'fixed_amount' && payload.advance_amount != null ? new Prisma.Decimal(payload.advance_amount) : null;
+
+    if (existing) {
+      await prisma.studio_condiciones_comerciales_negociacion.update({
+        where: { id: existing.id },
+        data: {
+          advance_type: advanceType,
+          advance_percentage: advancePercentage,
+          advance_amount: advanceAmount,
+          updated_at: new Date(),
+        },
+      });
+    } else {
+      await prisma.studio_condiciones_comerciales_negociacion.create({
+        data: {
+          cotizacion_id: cotizacionId,
+          promise_id: cotizacion.promise_id,
+          studio_id: studio.id,
+          name: nombreCondicion ?? 'Ajuste cierre',
+          advance_type: advanceType,
+          advance_percentage: advancePercentage,
+          advance_amount: advanceAmount,
+          is_temporary: true,
+        },
+      });
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[actualizarAnticipoCondicionNegociacionCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar anticipo',
+    };
+  }
+}
+
+/**
+ * Auditoría de rentabilidad para el modal Confirmar Cierre (Solo Studio).
+ * Pasamanos a calcularRentabilidadGlobal (SSOT); sin lógica de cálculo propia.
+ */
+export async function getAuditoriaRentabilidadCierre(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{
+  success: boolean;
+  data?: { utilidadNeta: number; margenPorcentaje: number };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const [cotizacionRow, configRow] = await Promise.all([
+      prisma.studio_cotizaciones.findFirst({
+        where: { id: cotizacionId, promise: { studio_id: studio.id } },
+        select: {
+          price: true,
+          event_duration: true,
+          cotizacion_items: {
+            select: {
+              id: true,
+              item_id: true,
+              quantity: true,
+              unit_price: true,
+              subtotal: true,
+              cost: true,
+              expense: true,
+              billing_type: true,
+            },
+          },
+        },
+      }),
+      prisma.studio_configuraciones.findFirst({
+        where: { studio_id: studio.id, status: 'active' },
+        orderBy: { updated_at: 'desc' },
+        select: { sales_commission: true },
+      }),
+    ]);
+
+    if (!cotizacionRow) return { success: false, error: 'Cotización no encontrada' };
+
+    const items: CotizacionItem[] = (cotizacionRow.cotizacion_items ?? []).map((i) => ({
+      id: i.id,
+      item_id: i.item_id,
+      quantity: i.quantity ?? 1,
+      unit_price: Number(i.unit_price ?? 0),
+      subtotal: Number(i.subtotal ?? 0),
+      cost: i.cost != null ? Number(i.cost) : null,
+      expense: i.expense != null ? Number(i.expense) : null,
+      billing_type: (i.billing_type as 'HOUR' | 'SERVICE' | 'UNIT') ?? 'SERVICE',
+    }));
+
+    const comisionRaw = configRow?.sales_commission ?? 0;
+    const comisionVentaRatio = comisionRaw > 1 ? comisionRaw / 100 : comisionRaw;
+    const precioFinalCierre = Number(cotizacionRow.price);
+    const eventDuration = cotizacionRow.event_duration != null ? Number(cotizacionRow.event_duration) : null;
+
+    const resultado = calcularRentabilidadGlobal({
+      items,
+      event_duration: eventDuration,
+      precioFinalCierre,
+      comisionVentaRatio,
+    });
+
+    return {
+      success: true,
+      data: {
+        utilidadNeta: resultado.utilidadNeta,
+        margenPorcentaje: resultado.margenPorcentaje,
+      },
+    };
+  } catch (error) {
+    console.error('[getAuditoriaRentabilidadCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al calcular auditoría',
     };
   }
 }

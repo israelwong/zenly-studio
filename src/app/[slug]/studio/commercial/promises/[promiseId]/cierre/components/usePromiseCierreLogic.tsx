@@ -43,6 +43,12 @@ interface RegistroCierreLoadData {
   pago_metodo_nombre?: string | null;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
+  desglose_cierre?: {
+    precio_calculado: number | null;
+    bono_especial: number | null;
+    cortesias_monto: number;
+    cortesias_count: number;
+  } | null;
 }
 
 type CotizacionByIdData = NonNullable<Awaited<ReturnType<typeof getCotizacionById>>['data']>;
@@ -149,6 +155,13 @@ export function usePromiseCierreLogic({
     pago_metodo_nombre?: string | null;
   } | null>(null);
 
+  const [desgloseCierre, setDesgloseCierre] = useState<{
+    precio_calculado: number | null;
+    bono_especial: number | null;
+    cortesias_monto: number;
+    cortesias_count: number;
+  } | null>(null);
+
   const [loadingRegistro, setLoadingRegistro] = useState(true);
   const [hasLoadedRegistroOnce, setHasLoadedRegistroOnce] = useState(false);
   const initialLoadDoneRef = useRef(false);
@@ -229,6 +242,8 @@ export function usePromiseCierreLogic({
           negociacion_precio_original: data.negociacion_precio_original ?? null,
           negociacion_precio_personalizado: data.negociacion_precio_personalizado ?? null,
         });
+
+        setDesgloseCierre(data.desglose_cierre ?? null);
       }
     } catch (error) {
       console.error('[loadRegistroCierre] Error:', error);
@@ -694,6 +709,7 @@ export function usePromiseCierreLogic({
     condicionesData,
     contractData,
     pagoData,
+    desgloseCierre,
     loadingRegistro,
     hasLoadedRegistroOnce,
     loadingCondiciones,

@@ -53,7 +53,7 @@ export async function obtenerRegistroCierre(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Verificar que la cotizaci?n pertenece al studio e incluir AMBAS relaciones de condiciones (negociación + catálogo/privada)
+    // Verificar que la cotizaci?n pertenece al studio e incluir AMBAS relaciones de condiciones (negociación + catálogo/privada) + items para desglose
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
@@ -62,6 +62,18 @@ export async function obtenerRegistroCierre(
       include: {
         condicion_comercial_negociacion: true,
         condiciones_comerciales: true,
+        cotizacion_items: {
+          select: {
+            id: true,
+            item_id: true,
+            quantity: true,
+            unit_price: true,
+            subtotal: true,
+            is_courtesy: true,
+            unit_price_snapshot: true,
+            public_price_snapshot: true,
+          },
+        },
       },
     });
 
@@ -167,6 +179,30 @@ export async function obtenerRegistroCierre(
       !!cotizacion.condiciones_comerciales ||
       !!condicionesComercialesMapeado;
 
+    // Desglose para tarjeta de cierre (precio lista, bono, cortesías) — misma lógica que getDatosConfirmarCierre
+    const itemsCortesiaArr = Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [];
+    const itemsCortesiaIds = new Set(itemsCortesiaArr);
+    const allItems = cotizacion.cotizacion_items ?? [];
+    let cortesias_monto = 0;
+    let cortesias_count = 0;
+    for (const i of allItems) {
+      const esCortesia = (i as { is_courtesy?: boolean }).is_courtesy === true || itemsCortesiaIds.has(i.id) || (i.item_id != null && itemsCortesiaIds.has(i.item_id));
+      if (!esCortesia) continue;
+      cortesias_count += 1;
+      const qty = (i as { quantity?: number }).quantity ?? 1;
+      const precioUnit = Number((i as { unit_price?: unknown }).unit_price ?? 0);
+      const snapshot = Number((i as { unit_price_snapshot?: number }).unit_price_snapshot ?? 0);
+      const publicSnapshot = Number((i as { public_price_snapshot?: number }).public_price_snapshot ?? 0);
+      const valorComercial = precioUnit > 0 ? precioUnit * qty : (snapshot > 0 ? snapshot : publicSnapshot) * qty;
+      cortesias_monto += valorComercial > 0 ? valorComercial : Number((i as { subtotal?: unknown }).subtotal ?? 0);
+    }
+    const desglose_cierre = {
+      precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
+      bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
+      cortesias_monto,
+      cortesias_count,
+    };
+
     // Convertir Decimal a number para serialización
     return {
       success: true,
@@ -200,6 +236,7 @@ export async function obtenerRegistroCierre(
         negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado !== null && cotizacion.negociacion_precio_personalizado !== undefined
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
+        desglose_cierre,
       } as any,
     };
   } catch (error) {

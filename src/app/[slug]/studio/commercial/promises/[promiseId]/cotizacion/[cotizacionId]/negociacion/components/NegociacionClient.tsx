@@ -232,7 +232,7 @@ export function NegociacionClient({
           ? (configPrecios.comision_venta ?? 0) / 100
           : (configPrecios.comision_venta ?? 0);
         const montoComision = precioParaCalcular * comisionRatio;
-        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal - montoComision - bonoEspecial;
+        const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal - montoComision;
         const margenPorcentaje =
           precioParaCalcular > 0 ? (utilidadNeta / precioParaCalcular) * 100 : 0;
 
@@ -245,7 +245,8 @@ export function NegociacionClient({
           0
         );
         const montoComisionOriginal = precioOriginalReferencia * comisionRatio;
-        const utilidadNetaOriginal = precioOriginalReferencia - costoTotalOriginal - gastoTotalOriginal - montoComisionOriginal;
+        const utilidadNetaOriginal =
+          precioOriginalReferencia - costoTotalOriginal - gastoTotalOriginal - montoComisionOriginal;
         const impactoUtilidad = utilidadNeta - utilidadNetaOriginal;
 
         const descuentoComercialPercent = (configPrecios.sobreprecio ?? 0) > 1

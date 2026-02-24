@@ -25,6 +25,10 @@ export interface ResumenPagoProps {
   tieneConcesiones?: boolean;
   /** Si true, no aplica margen superior (mt-4). Útil dentro de modales. */
   compact?: boolean;
+  /** Título del bloque. Por defecto "Resumen de Pago"; en contexto cierre usar "Resumen de Cierre". */
+  title?: string;
+  /** En contexto de autorización manual (Pasaporte al Cierre): contenido al inicio (izquierda) de la fila Anticipo (ej. botón Editar que abre popover). */
+  renderAnticipoActions?: () => React.ReactNode;
 }
 
 const formatPrice = (price: number) => formatPackagePriceSimple(price);
@@ -53,6 +57,8 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
       ajusteCierre = 0,
       tieneConcesiones = true,
       compact = false,
+      title = 'Resumen de Pago',
+      renderAnticipoActions,
     },
     ref
   ) => {
@@ -87,7 +93,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
         ref={ref}
         className={`bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 ${compact ? '' : 'mt-4'}`}
       >
-        <h4 className="text-sm font-semibold text-white mb-3">Resumen de Pago</h4>
+        <h4 className="text-sm font-semibold text-white mb-3">{title}</h4>
         <div className="space-y-2">
           {tieneConcesiones && (
             <>
@@ -179,15 +185,18 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
           </div>
           {anticipo > 0 && (
             <>
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-sm text-zinc-400">
-                  {advanceType === 'fixed_amount'
-                    ? 'Anticipo'
-                    : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
-                </span>
-                <span className="text-sm font-medium text-blue-400">
-                  {formatPrice(anticipo)}
-                </span>
+              <div className="flex justify-between items-center pt-2 gap-2">
+                {renderAnticipoActions?.()}
+                <div className="flex justify-between items-center flex-1 min-w-0">
+                  <span className="text-sm text-zinc-400">
+                    {advanceType === 'fixed_amount'
+                      ? 'Anticipo'
+                      : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
+                  </span>
+                  <span className="text-sm font-medium text-blue-400 shrink-0 ml-2">
+                    {formatPrice(anticipo)}
+                  </span>
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-400">

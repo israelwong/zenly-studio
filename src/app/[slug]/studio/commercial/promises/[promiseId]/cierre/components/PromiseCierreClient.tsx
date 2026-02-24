@@ -64,6 +64,7 @@ interface CierreColumn2Props {
   condicionesData: { condiciones_comerciales_id?: string | null; condiciones_comerciales_definidas?: boolean; condiciones_comerciales?: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_type?: string; advance_percentage?: number | null; advance_amount?: number | null } | null } | null;
   loadingRegistro: boolean;
   negociacionData: { negociacion_precio_original?: number | null; negociacion_precio_personalizado?: number | null };
+  desgloseCierre: { precio_calculado: number | null; bono_especial: number | null; cortesias_monto: number; cortesias_count: number } | null;
   onPreviewClick: () => void;
   loadingCotizacion: boolean;
   onDefinirCondiciones: () => void;
@@ -79,6 +80,7 @@ const CierreColumn2 = memo(function CierreColumn2({
   condicionesData,
   loadingRegistro,
   negociacionData,
+  desgloseCierre,
   onPreviewClick,
   loadingCotizacion,
   onDefinirCondiciones,
@@ -97,6 +99,7 @@ const CierreColumn2 = memo(function CierreColumn2({
           condicionesData={condicionesData}
           loadingRegistro={loadingRegistro}
           negociacionData={negociacionData}
+          desgloseCierre={desgloseCierre}
           onPreviewClick={onPreviewClick}
           loadingCotizacion={loadingCotizacion}
           onDefinirCondiciones={onDefinirCondiciones}
@@ -414,6 +417,7 @@ export function PromiseCierreClient({
               condicionesData={cierreLogic.condicionesData}
               loadingRegistro={cierreLogic.loadingRegistro}
               negociacionData={cierreLogic.negociacionData}
+              desgloseCierre={cierreLogic.desgloseCierre ?? null}
               onPreviewClick={cierreLogic.handleOpenPreview}
               loadingCotizacion={cierreLogic.loadingCotizacion}
               onDefinirCondiciones={cierreLogic.handleDefinirCondiciones}

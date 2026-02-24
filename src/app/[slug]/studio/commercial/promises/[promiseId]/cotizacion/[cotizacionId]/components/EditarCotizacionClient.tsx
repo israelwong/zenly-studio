@@ -120,11 +120,11 @@ export function EditarCotizacionClient({
 
   const handleConfirmarCierreConfirm = async (payload: PasarACierreOptions) => {
     if (!promiseId) return;
-    setShowConfirmarCierreModal(false);
     setIsPassingToCierre(true);
     try {
       const result = await pasarACierre(studioSlug, cotizacionId, payload);
       if (result.success) {
+        setShowConfirmarCierreModal(false);
         toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} pasada a proceso de cierre`);
         window.dispatchEvent(new CustomEvent('close-overlays'));
         startTransition(() => {
@@ -132,10 +132,14 @@ export function EditarCotizacionClient({
         });
       } else {
         toast.error(result.error || 'Error al pasar cotización a cierre');
+        throw new Error(result.error ?? 'Error al pasar cotización a cierre');
       }
     } catch (error) {
       console.error('[handlePasarACierre] Error:', error);
-      toast.error('Error al pasar cotización a cierre');
+      if (!(error instanceof Error) || !error.message?.includes('Error al pasar')) {
+        toast.error('Error al pasar cotización a cierre');
+      }
+      throw error;
     } finally {
       setIsPassingToCierre(false);
     }

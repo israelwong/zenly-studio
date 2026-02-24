@@ -510,14 +510,14 @@ export function PromiseQuotesPanelCard({
     }
   };
 
-  const handleConfirmarCierreConfirm = (payload: PasarACierreOptions) => {
+  const handleConfirmarCierreConfirm = (payload: PasarACierreOptions): void | Promise<void> => {
     cierrePayloadRef.current = payload;
-    setShowConfirmarCierreModal(false);
     if (reminder) {
+      setShowConfirmarCierreModal(false);
       setShowClosingProcessInfoModal(true);
-    } else {
-      handlePasarACierreWithPayload(false);
+      return;
     }
+    return handlePasarACierreWithPayload(false);
   };
 
   const handlePasarACierreWithPayload = async (shouldDeleteReminder: boolean = false) => {
@@ -544,6 +544,7 @@ export function PromiseQuotesPanelCard({
       const payload = cierrePayloadRef.current;
       const result = await pasarACierre(studioSlug, cotizacion.id, payload);
       if (result.success) {
+        setShowConfirmarCierreModal(false);
         toast.success('Cotización pasada a proceso de cierre');
         if (onPasarACierre) {
           onPasarACierre(cotizacion.id);
@@ -562,12 +563,16 @@ export function PromiseQuotesPanelCard({
         toast.error(result.error || 'Error al pasar cotización a cierre');
         setShowClosingProcessInfoModal(false);
         setLoading(false);
+        throw new Error(result.error ?? 'Error al pasar cotización a cierre');
       }
     } catch (error) {
       console.error('[handlePasarACierre] Error:', error);
-      toast.error('Error al pasar cotización a cierre');
+      if (!(error instanceof Error) || !error.message?.includes('Error al pasar')) {
+        toast.error('Error al pasar cotización a cierre');
+      }
       setShowClosingProcessInfoModal(false);
       setLoading(false);
+      throw error;
     }
   };
 

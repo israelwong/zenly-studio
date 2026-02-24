@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ZenDialog, ZenButton, ZenInput } from '@/components/ui/zen';
-import { Loader2, Info, Lock, Globe } from 'lucide-react';
-import { getDatosConfirmarCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { Loader2, Lock, Globe, Pencil } from 'lucide-react';
+import { getDatosConfirmarCierre, getAuditoriaRentabilidadCierre, limpiarCondicionPactadaAlCancelarCierre, actualizarAnticipoCondicionNegociacionCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { ResumenPago } from '@/components/shared/precio';
+import { SeparadorZen } from '@/components/ui/zen';
+import { toast } from 'sonner';
 
 const NEGOCIACION_ID = '__negociacion__';
 const BADGE_BASE = 'inline-flex items-center gap-1 min-h-[20px] px-2 py-1 text-[10px] font-medium rounded-full';
@@ -33,7 +36,8 @@ function subtextoCondicion(c: CondicionItem): string {
 interface ConfirmarCierreModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (payload: PasarACierreOptions) => void;
+  /** Debe devolver Promise cuando ejecute la Server Action; el modal no se cierra hasta que resuelva con éxito. */
+  onConfirm: (payload: PasarACierreOptions) => void | Promise<void>;
   studioSlug: string;
   cotizacionId: string;
   promiseId: string;
@@ -73,6 +77,18 @@ export function ConfirmarCierreModal({
     advance_amount: number | null;
     editing: boolean;
   } | null>(null);
+  const [ajusteFinoPopoverOpen, setAjusteFinoPopoverOpen] = useState(false);
+  /** Congelar valores mostrados en ResumenPago mientras el popover está abierto para que el trigger no se mueva al cambiar tipo/valor. */
+  const [popoverDisplaySnapshot, setPopoverDisplaySnapshot] = useState<{
+    anticipo: number;
+    anticipoPct: number | null;
+    advanceType: 'percentage' | 'fixed_amount';
+  } | null>(null);
+  const [auditoria, setAuditoria] = useState<{ utilidadNeta: number; margenPorcentaje: number } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const confirmadoRef = useRef(false);
+  /** Snapshot de ajusteFino al abrir el popover; Cancelar restaura este valor sin persistir. */
+  const popoverAjusteSnapshotRef = useRef<{ advance_type: 'percentage' | 'fixed_amount'; advance_percentage: number | null; advance_amount: number | null; editing: boolean } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -82,6 +98,10 @@ export function ConfirmarCierreModal({
           if (res.success && res.data) {
             setCotizacion(res.data.cotizacion);
             setCondiciones(res.data.condiciones);
+            getAuditoriaRentabilidadCierre(studioSlug, cotizacionId).then((r) => {
+              if (r.success && r.data) setAuditoria(r.data);
+              else setAuditoria(null);
+            });
             const neg = res.data.cotizacion.condicion_comercial_negociacion;
             const stdId = res.data.cotizacion.condiciones_comerciales_id;
             if (neg) {
@@ -131,12 +151,12 @@ export function ConfirmarCierreModal({
     : 0;
   const diferido = Math.max(0, precioBase - anticipo);
 
-  const handleConfirm = () => {
+  const buildPayload = (): PasarACierreOptions => {
     if (selectedId === NEGOCIACION_ID) {
       const neg = cotizacion?.condicion_comercial_negociacion;
       const name = neg?.name ?? 'Condición Pactada';
       if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
-        onConfirm({
+        return {
           condicion_negociacion_ajuste: {
             name,
             advance_type: ajusteFino.advance_type,
@@ -144,25 +164,35 @@ export function ConfirmarCierreModal({
             advance_amount: ajusteFino.advance_amount ?? null,
             discount_percentage: neg?.discount_percentage ?? null,
           },
-        });
-      } else {
-        onConfirm({});
+        };
       }
-    } else {
-      if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
-        const c = condiciones.find((x) => x.id === selectedId);
-        onConfirm({
-          condicion_negociacion_ajuste: {
-            name: c?.name ?? 'Ajuste personalizado',
-            advance_type: ajusteFino.advance_type,
-            advance_percentage: ajusteFino.advance_percentage ?? null,
-            advance_amount: ajusteFino.advance_amount ?? null,
-            discount_percentage: c?.discount_percentage ?? null,
-          },
-        });
-      } else {
-        onConfirm({ condiciones_comerciales_id: selectedId });
-      }
+      return {};
+    }
+    if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
+      const c = condiciones.find((x) => x.id === selectedId);
+      return {
+        condicion_negociacion_ajuste: {
+          name: c?.name ?? 'Ajuste personalizado',
+          advance_type: ajusteFino.advance_type,
+          advance_percentage: ajusteFino.advance_percentage ?? null,
+          advance_amount: ajusteFino.advance_amount ?? null,
+          discount_percentage: c?.discount_percentage ?? null,
+        },
+      };
+    }
+    return { condiciones_comerciales_id: selectedId };
+  };
+
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await Promise.resolve(onConfirm(buildPayload()));
+      confirmadoRef.current = true;
+      onClose();
+    } catch (err) {
+      toast.error('Error al pasar a cierre. Intenta de nuevo.');
+      setIsSubmitting(false);
     }
   };
 
@@ -179,25 +209,73 @@ export function ConfirmarCierreModal({
   const montoCortesias = cotizacion?.cortesias_monto ?? 0;
   const cortesiasCount = cotizacion?.cortesias_count ?? 0;
   const montoBono = cotizacion?.bono_especial ?? 0;
+  // Ecuación financiera: Total = PrecioLista - Cortesías - Bono + AjusteCierre → ajusteCierre = Total - (PrecioLista - Cortesías - Bono)
   const baseDescuentos = precioLista != null ? precioLista - montoCortesias - montoBono : precioBase;
   const ajustePorCierre = precioLista != null && Math.abs(precioBase - baseDescuentos) >= 0.01 ? precioBase - baseDescuentos : 0;
   const tieneConcesiones = (precioLista != null && precioLista > 0) || montoCortesias > 0 || montoBono > 0 || Math.abs(ajustePorCierre) >= 0.01;
   const anticipoPct = usarAjuste?.advance_type === 'percentage' || usarAjuste?.advance_type !== 'fixed_amount' ? (usarAjuste?.advance_percentage ?? 0) : null;
 
+  const displayAnticipo = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.anticipo : anticipo;
+  const displayAnticipoPct = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.anticipoPct : anticipoPct;
+  const displayAdvanceType = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.advanceType : (usarAjuste?.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage');
+  const displayDiferido = Math.max(0, precioBase - displayAnticipo);
+
+  const handleAjustePopoverOpenChange = (open: boolean) => {
+    if (open) {
+      setPopoverDisplaySnapshot({
+        anticipo,
+        anticipoPct,
+        advanceType: usarAjuste?.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage',
+      });
+      popoverAjusteSnapshotRef.current = ajusteFino ? { ...ajusteFino } : null;
+    } else {
+      setPopoverDisplaySnapshot(null);
+    }
+    setAjusteFinoPopoverOpen(open);
+  };
+
+  const handleCancelarAjuste = () => {
+    setAjusteFinoPopoverOpen(false);
+  };
+
+  const handleConfirmarAjuste = async () => {
+    if (!ajusteFino) return;
+    const nombreCondicion = selectedId === NEGOCIACION_ID
+      ? (cotizacion?.condicion_comercial_negociacion?.name ?? 'Condición Pactada')
+      : (condiciones.find((c) => c.id === selectedId)?.name ?? 'Ajuste cierre');
+    const res = await actualizarAnticipoCondicionNegociacionCierre(studioSlug, cotizacionId, {
+      advance_type: ajusteFino.advance_type,
+      advance_percentage: ajusteFino.advance_percentage,
+      advance_amount: ajusteFino.advance_amount,
+    }, nombreCondicion);
+    if (res.success) {
+      setAjusteFino((a) => a ? { ...a, editing: true } : null);
+      setAjusteFinoPopoverOpen(false);
+    }
+  };
+
+  const handleClose = async () => {
+    if (!confirmadoRef.current) {
+      await limpiarCondicionPactadaAlCancelarCierre(studioSlug, cotizacionId).catch(() => {});
+    }
+    confirmadoRef.current = false;
+    onClose();
+  };
+
   return (
     <ZenDialog
       isOpen={isOpen}
-      onClose={onClose}
-      title="Pasaporte al Cierre"
-      description={cotizacionName ? `Condición comercial para "${cotizacionName}"` : 'Elige la condición comercial con la que pasas a cierre'}
+      onClose={isSubmitting ? () => {} : handleClose}
+      title="Confirmación de Cierre"
+      description={cotizacionName ? `Cotización: ${cotizacionName}` : undefined}
       maxWidth="lg"
-      onSave={handleConfirm}
-      onCancel={onClose}
-      saveLabel={isLoading ? 'Procesando...' : 'Pasar a Cierre'}
+      onSave={() => void handleConfirm()}
+      onCancel={isSubmitting ? () => {} : handleClose}
+      saveLabel={isSubmitting ? 'Confirmando cierre...' : (isLoading ? 'Procesando...' : 'Pasar a Cierre')}
       cancelLabel="Cancelar"
       closeOnClickOutside={false}
-      isLoading={isLoading}
-      saveDisabled={loading || !canConfirm}
+      isLoading={isLoading || isSubmitting}
+      saveDisabled={loading || !canConfirm || isSubmitting}
     >
       <div className="space-y-6">
         {loading ? (
@@ -265,70 +343,122 @@ export function ConfirmarCierreModal({
               </div>
             </div>
 
-            <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
-              <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-2">Ajuste fino (opcional)</p>
-              <p className="text-xs text-zinc-500 mb-3 flex items-start gap-1.5">
-                <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
-                <span>Este ajuste es privado y solo se aplicará a este cierre. No afectará a tus condiciones generales del catálogo.</span>
-              </p>
-              {ajusteFino !== null && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">Tipo</label>
-                    <select
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-200"
-                      value={ajusteFino.advance_type}
-                      onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_type: e.target.value as 'percentage' | 'fixed_amount', editing: true } : null)}
-                    >
-                      <option value="percentage">Porcentaje</option>
-                      <option value="fixed_amount">Monto fijo</option>
-                    </select>
+            <Popover open={ajusteFinoPopoverOpen} onOpenChange={handleAjustePopoverOpenChange}>
+              <ResumenPago
+                compact
+                precioBase={precioBase}
+                descuentoCondicion={0}
+                precioConDescuento={precioBase}
+                advanceType={displayAdvanceType}
+                anticipoPorcentaje={displayAnticipoPct}
+                anticipo={displayAnticipo}
+                diferido={displayDiferido}
+                precioLista={precioLista}
+                montoCortesias={montoCortesias}
+                cortesiasCount={cortesiasCount}
+                montoBono={montoBono}
+                precioFinalCierre={precioBase}
+                ajusteCierre={ajustePorCierre}
+                tieneConcesiones={tieneConcesiones}
+                renderAnticipoActions={
+                  ajusteFino !== null
+                    ? () => (
+                        <PopoverTrigger asChild>
+                          <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-8 w-8 text-zinc-400 hover:text-zinc-200" aria-label="Editar anticipo">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </ZenButton>
+                        </PopoverTrigger>
+                      )
+                    : undefined
+                }
+              />
+              <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] max-w-md bg-zinc-900 border-zinc-700 p-4"
+                align="end"
+                side="right"
+              >
+                <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-2">Ajustar anticipo</p>
+                <p className="text-xs text-zinc-500 mb-3">
+                  El nuevo valor solo afecta a la cotización actual.
+                </p>
+                {ajusteFino !== null && (
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-1">Tipo</label>
+                      <div className="flex gap-2 w-full">
+                        <ZenButton
+                          type="button"
+                          variant={ajusteFino.advance_type === 'percentage' ? 'primary' : 'outline'}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAjusteFino((a) => a ? { ...a, advance_type: 'percentage', editing: true } : null)}
+                        >
+                          Porcentaje
+                        </ZenButton>
+                        <ZenButton
+                          type="button"
+                          variant={ajusteFino.advance_type === 'fixed_amount' ? 'primary' : 'outline'}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAjusteFino((a) => a ? { ...a, advance_type: 'fixed_amount', editing: true } : null)}
+                        >
+                          Monto fijo
+                        </ZenButton>
+                      </div>
+                    </div>
+                    {ajusteFino.advance_type === 'percentage' ? (
+                      <div>
+                        <label className="text-xs text-zinc-500 block mb-1">Anticipo %</label>
+                        <ZenInput
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.5}
+                          value={ajusteFino.advance_percentage ?? ''}
+                          onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_percentage: e.target.value === '' ? null : parseFloat(e.target.value), editing: true } : null)}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs text-zinc-500 block mb-1">Anticipo ($)</label>
+                        <ZenInput
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={ajusteFino.advance_amount ?? ''}
+                          onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_amount: e.target.value === '' ? null : parseInt(e.target.value, 10) || 0, editing: true } : null)}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {ajusteFino.advance_type === 'percentage' ? (
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Anticipo %</label>
-                      <ZenInput
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.5}
-                        value={ajusteFino.advance_percentage ?? ''}
-                        onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_percentage: e.target.value === '' ? null : parseFloat(e.target.value), editing: true } : null)}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Anticipo ($)</label>
-                      <ZenInput
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={ajusteFino.advance_amount ?? ''}
-                        onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_amount: e.target.value === '' ? null : parseInt(e.target.value, 10) || 0, editing: true } : null)}
-                      />
-                    </div>
-                  )}
+                )}
+                <div className="flex gap-2 justify-end mt-4 pt-3 border-t border-zinc-700">
+                  <ZenButton type="button" variant="ghost" size="sm" onClick={handleCancelarAjuste}>
+                    Cancelar
+                  </ZenButton>
+                  <ZenButton type="button" variant="primary" size="sm" onClick={() => void handleConfirmarAjuste()}>
+                    Confirmar ajuste
+                  </ZenButton>
                 </div>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
 
-            <ResumenPago
-              compact
-              precioBase={precioBase}
-              descuentoCondicion={0}
-              precioConDescuento={precioBase}
-              advanceType={usarAjuste?.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage'}
-              anticipoPorcentaje={anticipoPct}
-              anticipo={anticipo}
-              diferido={diferido}
-              precioLista={precioLista}
-              montoCortesias={montoCortesias}
-              cortesiasCount={cortesiasCount}
-              montoBono={montoBono}
-              precioFinalCierre={precioBase}
-              ajusteCierre={ajustePorCierre}
-              tieneConcesiones={tieneConcesiones}
-            />
+            {auditoria != null && (
+              <>
+                <SeparadorZen variant="subtle" spacing="md" />
+                <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 p-3 ring-2 ring-amber-500/30">
+                  <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">
+                    AUDITORÍA DE RENTABILIDAD (VISIBLE PARA STUDIO)
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-400">
+                    <span>Utilidad Neta</span>
+                    <span className="text-right font-medium text-zinc-300">{formatearMoneda(auditoria.utilidadNeta)}</span>
+                    <span>Margen %</span>
+                    <span className="text-right font-medium text-zinc-300">{auditoria.margenPorcentaje.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

@@ -53,7 +53,7 @@ export interface CotizacionCompleta {
   negociacion_notas?: string | null;
   condiciones_comerciales_id?: string | null;
   condicion_comercial_temporal?: CondicionComercialTemporal | null;
-  /** Fase 11: bono especial en $ para restar de utilidad neta. */
+  /** Fase 11: bono especial en $ (informacional / impactoNegociacion; no se resta de utilidad neta). */
   bono_especial?: number | null;
 }
 
@@ -150,12 +150,67 @@ function comisionRatio(config: { comision_venta?: number | null }): number {
 }
 
 // ============================================================================
+// FUNCIÓN MAESTRA SSOT - RENTABILIDAD GLOBAL
+// ============================================================================
+
+export interface CalcularRentabilidadGlobalParams {
+  items: CotizacionItem[];
+  event_duration?: number | null;
+  /** Precio final de cierre (lo que paga el cliente). Cortesías y bono ya están reflejados en la reducción del ingreso. */
+  precioFinalCierre: number;
+  /** Comisión de venta 0-1 (ej. 0.10 = 10%). */
+  comisionVentaRatio: number;
+}
+
+export interface CalcularRentabilidadGlobalResult {
+  utilidadNeta: number;
+  margenPorcentaje: number;
+  costoTotal: number;
+  gastoTotal: number;
+  montoComision: number;
+}
+
+/**
+ * Fuente única de verdad (SSOT) para utilidad neta y margen.
+ * Regla invariante: Utilidad Neta = Precio Final de Cierre - costos - gastos - comisión.
+ * No se resta bono_especial ni cortesías de la utilidad; ya están reflejados en el precio final.
+ */
+export function calcularRentabilidadGlobal(
+  params: CalcularRentabilidadGlobalParams
+): CalcularRentabilidadGlobalResult {
+  const { items, event_duration, precioFinalCierre, comisionVentaRatio } = params;
+  const durationHours = event_duration ?? null;
+
+  let costoTotal = 0;
+  let gastoTotal = 0;
+  items.forEach((item) => {
+    const qtyEfectiva = cantidadEfectiva(item, durationHours);
+    costoTotal += (item.cost || 0) * qtyEfectiva;
+    gastoTotal += (item.expense || 0) * qtyEfectiva;
+  });
+
+  const montoComision = precioFinalCierre * comisionVentaRatio;
+  const utilidadNeta = precioFinalCierre - costoTotal - gastoTotal - montoComision;
+  const margenPorcentaje =
+    precioFinalCierre > 0 ? (utilidadNeta / precioFinalCierre) * 100 : 0;
+
+  return {
+    utilidadNeta: Number(utilidadNeta.toFixed(2)),
+    margenPorcentaje: Number(margenPorcentaje.toFixed(2)),
+    costoTotal: Number(costoTotal.toFixed(2)),
+    gastoTotal: Number(gastoTotal.toFixed(2)),
+    montoComision: Number(montoComision.toFixed(2)),
+  };
+}
+
+// ============================================================================
 // FUNCIONES PRINCIPALES
 // ============================================================================
 
 /**
  * Calcula el precio negociado y el impacto en utilidad
  * Usa cantidad efectiva (HOUR × event_duration) para costo/gasto y normaliza comisión.
+ * Utilidad/margen alineados con calcularRentabilidadGlobal (no restar bono del ingreso).
  */
 export function calcularPrecioNegociado(
   params: CalculoNegociacionParams
@@ -217,10 +272,10 @@ export function calcularPrecioNegociado(
     return null;
   }
 
-  // 7. Comisión normalizada (misma regla que CotizacionForm: 5 → 0.05)
+  // 7. Utilidad sobre precio final (SSOT: no restar bono/cortesías; ya están en el ingreso)
   const ratioComision = comisionRatio(configPrecios);
   const montoComision = precioFinal * ratioComision;
-  const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision - bonoEspecial;
+  const utilidadNeta = precioFinal - costoTotal - gastoTotal - montoComision;
   const margenPorcentaje =
     precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
 
