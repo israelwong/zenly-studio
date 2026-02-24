@@ -622,6 +622,7 @@ export async function getCotizacionById(
     negociacion_precio_original?: number | null;
     negociacion_precio_personalizado?: number | null;
     event_duration?: number | null;
+    precio_calculado?: number | null;
     promise_route_state?: PromiseRouteState | null;
     items_cortesia?: string[];
     bono_especial?: number;
@@ -693,6 +694,7 @@ export async function getCotizacionById(
         negociacion_precio_original: true,
         negociacion_precio_personalizado: true,
         event_duration: true,
+        precio_calculado: true,
         items_cortesia: true,
         bono_especial: true,
         condiciones_visibles: true,
@@ -832,6 +834,7 @@ export async function getCotizacionById(
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
         event_duration: cotizacion.event_duration ?? null,
+        precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
         items_cortesia: Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [],

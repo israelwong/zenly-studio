@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExternalLink, Copy, Check } from 'lucide-react';
+import { ExternalLink, Copy, Check, Zap } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { logProfileShared } from '@/lib/actions/studio/commercial/promises';
@@ -23,6 +23,8 @@ interface PromiseDetailToolbarProps {
   eventDate?: Date | null;
   onCopyLink?: () => void;
   onPreview: () => void;
+  /** Si se define, se muestra el botón "Opciones de automatización" después de Vista previa */
+  onAutomateClick?: () => void;
 }
 
 export function PromiseDetailToolbar({
@@ -33,6 +35,7 @@ export function PromiseDetailToolbar({
   eventDate = null,
   onCopyLink,
   onPreview,
+  onAutomateClick,
 }: PromiseDetailToolbarProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
@@ -140,6 +143,22 @@ export function PromiseDetailToolbar({
             <ExternalLink className="h-3.5 w-3.5" />
             <span>Vista previa</span>
           </ZenButton>
+
+          {onAutomateClick && (
+            <>
+              <div className="h-4 w-px bg-zinc-700" />
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={onAutomateClick}
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                title="Opciones de automatización"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>Opciones de automatización</span>
+              </ZenButton>
+            </>
+          )}
         </div>
       </div>
 

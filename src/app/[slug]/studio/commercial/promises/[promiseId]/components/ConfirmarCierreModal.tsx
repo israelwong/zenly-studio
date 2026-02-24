@@ -33,6 +33,43 @@ function subtextoCondicion(c: CondicionItem): string {
   return `Anticipo: ${anticipoStr} | Descuento: ${descStr}`;
 }
 
+function ConfirmarCierreModalSkeleton() {
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+        <div className="h-3 w-32 bg-zinc-700/80 rounded mb-1 animate-pulse" />
+        <div className="h-3 w-full max-w-sm bg-zinc-700/50 rounded mb-3 animate-pulse" />
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-lg border border-zinc-700 p-3 flex items-center gap-2">
+              <div className="h-4 w-4 rounded-full bg-zinc-700 shrink-0 animate-pulse" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-4 w-24 bg-zinc-700/80 rounded animate-pulse" />
+                <div className="h-3 w-40 bg-zinc-700/50 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
+        <div className="h-4 w-28 bg-zinc-700/80 rounded mb-3 animate-pulse" />
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex justify-between items-center">
+              <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-16 bg-zinc-700/60 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-zinc-700 pt-2 mt-2 flex justify-between items-center">
+          <div className="h-4 w-24 bg-zinc-700/80 rounded animate-pulse" />
+          <div className="h-5 w-20 bg-zinc-600 rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ConfirmarCierreModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -279,9 +316,7 @@ export function ConfirmarCierreModal({
     >
       <div className="space-y-6">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
-          </div>
+          <ConfirmarCierreModalSkeleton />
         ) : (
           <>
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">

@@ -288,7 +288,6 @@ export function PromiseLayoutClient({
             contactData={contactDataForHeader}
             isArchived={isArchived}
             onPipelineStageChange={handlePipelineStageChange}
-            onAutomateClick={() => setIsShareModalOpen(true)}
             onConfigClick={promisesConfig?.openConfigCatalog}
             onArchive={() => setShowArchiveModal(true)}
             onUnarchive={handleUnarchive}
@@ -313,6 +312,7 @@ export function PromiseLayoutClient({
               const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
               window.open(previewUrl, '_blank');
             }}
+            onAutomateClick={() => setIsShareModalOpen(true)}
           />
           )}
           <ZenCardContent

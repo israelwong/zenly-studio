@@ -6,7 +6,8 @@ import { Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { useParams, useRouter } from 'next/navigation';
 import { construirEstructuraJerarquicaCotizacion } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
-import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
+import { ResumenPago } from '@/components/shared/precio';
+import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { formatItemQuantity } from '@/lib/utils/contract-item-formatter';
 
 interface ResumenCotizacionProps {
@@ -16,8 +17,14 @@ interface ResumenCotizacionProps {
     description: string | null;
     price: number;
     status: string;
+    /** Precio de lista (suma ítems). Si no viene, se usa suma de items o price. */
+    precio_calculado?: number | null;
+    /** Bono especial en $ */
+    bono_especial?: number | null;
+    /** IDs de ítems marcados como cortesía para calcular monto y count */
+    items_cortesia?: string[];
     items: Array<{
-      item_id: string;
+      item_id: string | null;
       quantity: number;
       unit_price: number;
       subtotal: number;
@@ -27,6 +34,7 @@ interface ResumenCotizacionProps {
       id?: string;
       billing_type?: 'HOUR' | 'SERVICE' | 'UNIT' | null;
       profit_type_snapshot?: string | null;
+      is_courtesy?: boolean;
       // Campos operacionales (para compatibilidad)
       name: string | null;
       description: string | null;
@@ -173,6 +181,52 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
   // Calcular total desde estructura (ya calculado por función centralizada)
   const totalCalculado = estructura.total;
 
+  // Desglose de negociación (alineado con cierre): precio lista, cortesías, bono, ajuste, total, anticipo, diferido
+  const desglose = useMemo(() => {
+    const itemsCortesia = cotizacion.items_cortesia ?? [];
+    const idsCortesia = new Set(itemsCortesia);
+    let cortesias_monto = 0;
+    let cortesias_count = 0;
+    (cotizacion.items ?? []).forEach((item) => {
+      const esCortesia = (item as { is_courtesy?: boolean }).is_courtesy === true || (item.id && idsCortesia.has(item.id));
+      if (!esCortesia) return;
+      cortesias_count += 1;
+      const qty = item.quantity ?? 1;
+      const unit = Number(item.unit_price ?? 0);
+      cortesias_monto += unit > 0 ? unit * qty : Number(item.subtotal ?? 0);
+    });
+    const montoBono = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
+    const precioLista = getPrecioListaStudio({
+      price: cotizacion.price,
+      precio_calculado: cotizacion.precio_calculado ?? (totalCalculado > 0 ? totalCalculado : undefined),
+    });
+    const total = cotizacion.price;
+    const ajusteCierre = getAjusteCierre(total, precioLista, cortesias_monto, montoBono);
+    const tieneConcesiones = cortesias_monto > 0 || montoBono > 0;
+
+    const cond = condicionesComerciales;
+    const isFixed = cond?.advance_type === 'fixed_amount' || cond?.advance_type === 'amount';
+    const anticipo = cond
+      ? (isFixed && cond.advance_amount != null
+        ? Number(cond.advance_amount)
+        : (cond.advance_percentage != null ? Math.round(total * (Number(cond.advance_percentage) / 100)) : 0))
+      : 0;
+    const diferido = Math.max(0, total - anticipo);
+
+    return {
+      precioLista,
+      cortesias_monto,
+      cortesias_count,
+      montoBono,
+      ajusteCierre,
+      tieneConcesiones,
+      anticipo,
+      diferido,
+      advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
+      anticipoPorcentaje: cond?.advance_percentage ?? null,
+    };
+  }, [cotizacion.price, cotizacion.precio_calculado, cotizacion.bono_especial, cotizacion.items_cortesia, cotizacion.items, totalCalculado, condicionesComerciales]);
+
   return (
     <ZenCard variant="outlined">
       <ZenCardHeader>
@@ -315,7 +369,7 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
           <p className="text-base text-zinc-400">No hay items en esta cotización</p>
         )}
 
-        {/* Resumen de precios - Solo si NO hay condiciones comerciales */}
+        {/* Resumen de precios - Sin condiciones: subtotal + total */}
         {!condicionesComerciales && (
           <div className="pt-4 border-t border-zinc-700 space-y-2">
             <div className="flex items-center justify-between text-base">
@@ -331,22 +385,26 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
           </div>
         )}
 
-        {/* Resumen Financiero con Condiciones Comerciales */}
+        {/* Desglose de negociación (mismo que cierre): Precio lista → Cortesías → Bono → Ajuste → Total → Anticipo → Diferido. Sin auditoría. */}
         {condicionesComerciales && (
           <div className="pt-4 border-t border-zinc-700">
-            <CondicionesComercialesDesglose
+            <ResumenPago
+              title="Resumen de pago"
+              compact
               precioBase={cotizacion.price}
-              condicion={{
-                id: condicionesComerciales.id,
-                name: condicionesComerciales.name,
-                description: condicionesComerciales.description ?? null,
-                discount_percentage: condicionesComerciales.discount_percentage ?? null,
-                advance_type: condicionesComerciales.advance_type || 'percentage',
-                advance_percentage: condicionesComerciales.advance_percentage ?? null,
-                advance_amount: condicionesComerciales.advance_amount ?? null,
-              }}
-              negociacionPrecioOriginal={negociacionPrecioOriginal}
-              negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
+              descuentoCondicion={0}
+              precioConDescuento={cotizacion.price}
+              advanceType={desglose.advanceType}
+              anticipoPorcentaje={desglose.anticipoPorcentaje}
+              anticipo={desglose.anticipo}
+              diferido={desglose.diferido}
+              precioLista={desglose.precioLista}
+              montoCortesias={desglose.cortesias_monto}
+              cortesiasCount={desglose.cortesias_count}
+              montoBono={desglose.montoBono}
+              precioFinalCierre={cotizacion.price}
+              ajusteCierre={desglose.ajusteCierre}
+              tieneConcesiones={desglose.tieneConcesiones}
             />
           </div>
         )}

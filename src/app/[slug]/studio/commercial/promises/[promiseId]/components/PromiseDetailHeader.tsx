@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Zap } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -24,7 +24,6 @@ interface PromiseDetailHeaderProps {
     } | null;
     isArchived: boolean;
     onPipelineStageChange: (stageId: string, stageName?: string) => void;
-    onAutomateClick: () => void;
     onConfigClick?: () => void;
     onArchive: () => void;
     onUnarchive: () => void;
@@ -47,7 +46,6 @@ export function PromiseDetailHeader({
     contactData,
     isArchived,
     onPipelineStageChange,
-    onAutomateClick,
     onConfigClick,
     onArchive,
     onUnarchive,
@@ -149,39 +147,6 @@ export function PromiseDetailHeader({
                         }
 
                         return null;
-                    })()}
-                    {/* Botones de plantillas y automatizar: solo si no es modo foco */}
-                    {!focusMode && (() => {
-                        if (loading || !promiseData) {
-                            return null;
-                        }
-
-                        const eventoId = promiseData.evento_id;
-                        const eventoStatus = promiseData.evento_status;
-                        
-                        // Solo ocultar si evento_id es un string no vacío Y el evento está activo (ACTIVE o IN_PROGRESS)
-                        // No ocultar si el evento está CANCELLED o ARCHIVED
-                        const eventoActivo = eventoStatus === 'ACTIVE' || eventoStatus === 'IN_PROGRESS';
-                        
-                        if (typeof eventoId === 'string' && eventoId.trim() !== '' && eventoActivo) {
-                            return null; // Evento contratado y activo: ocultar botones
-                        }
-
-                        // No hay evento: mostrar botones
-                        return (
-                            <>
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={onAutomateClick}
-                                    className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
-                                    title="Opciones de automatización"
-                                >
-                                    <Zap className="h-3.5 w-3.5" />
-                                    <span>Opciones de automatización</span>
-                                </ZenButton>
-                            </>
-                        );
                     })()}
                     {/* Dropdown menu: solo si no es modo foco */}
                     {!focusMode && (() => {

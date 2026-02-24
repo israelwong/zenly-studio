@@ -118,11 +118,12 @@ function CotizacionCardInner({
               size="sm"
               onClick={onPreviewClick}
               disabled={loadingCotizacion}
-              className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-7 min-w-0 gap-1 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Vista previa de cotización"
               aria-label="Vista previa de cotización"
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-3 w-3 shrink-0" />
+              <span className="text-xs font-medium">Ver cotización</span>
             </ZenButton>
           )}
         </div>
