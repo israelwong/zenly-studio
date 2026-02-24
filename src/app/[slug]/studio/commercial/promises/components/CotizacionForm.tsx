@@ -160,7 +160,13 @@ export function CotizacionForm({
   const [showPrecioSincronizadoBadge, setShowPrecioSincronizadoBadge] = useState(false);
   const [ringPrecioSincronizadoVisible, setRingPrecioSincronizadoVisible] = useState(false);
   const [pendingSyncFromAjustes, setPendingSyncFromAjustes] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(() => !!cotizacionId);
   const isFirstMountAjustesSyncRef = useRef(true);
+  const userHasChangedServicesOrAjustesRef = useRef(false);
+  // Destino de retorno según status de la cotización (evita fallos con router.back() en nueva pestaña)
+  const [returnPath, setReturnPath] = useState<string | null>(() =>
+    promiseId && studioSlug ? `/${studioSlug}/studio/commercial/promises/${promiseId}` : null
+  );
   const triggerShake = useCallback(() => {
     setFlashSugerido(true);
     const t = setTimeout(() => setFlashSugerido(false), 500);
@@ -329,7 +335,9 @@ export function CotizacionForm({
           // Cargar datos de la cotización existente (ya validada y cargada arriba)
           setNombre(cotizacionData.name);
           setDescripcion(cotizacionData.description || '');
-          setPrecioPersonalizado(cotizacionData.price);
+          const precioCierreInicial = (cotizacionData as { negociacion_precio_personalizado?: number | null }).negociacion_precio_personalizado;
+          const precioInicial = precioCierreInicial != null && Number(precioCierreInicial) > 0 ? Number(precioCierreInicial) : cotizacionData.price;
+          setPrecioPersonalizado(precioInicial);
           setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? false);
           setItemsCortesia(new Set(cotizacionData.items_cortesia ?? []));
           setBonoEspecial(Number(cotizacionData.bono_especial) || 0);
@@ -465,6 +473,12 @@ export function CotizacionForm({
             categoriasConItems.forEach(categoriaId => newSet.add(categoriaId));
             return newSet;
           });
+          if (promiseId && studioSlug) {
+            setReturnPath((cotizacionData.status === 'en_cierre' || cotizacionData.status === 'cierre')
+              ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
+              : `/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          }
+          setIsInitializing(false);
         } else if (revisionOriginalId && originalResult.success && originalResult.data) {
           // Si estamos creando una revisión, pre-poblar con datos de la original
           const originalData = originalResult.data;
@@ -523,7 +537,7 @@ export function CotizacionForm({
       } catch (error) {
         console.error('[CotizacionForm] Error cargando datos:', error);
         toast.error('Error al cargar los datos');
-        // Asegurar que el estado de carga se actualice incluso en caso de error
+        if (cotizacionId) setIsInitializing(false);
         setCargandoCatalogo(false);
       } finally {
         setCargandoCatalogo(false);
@@ -950,12 +964,13 @@ export function CotizacionForm({
   }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales]);
 
   // Fase 7.8: sincronización global — Precio Final de Cierre reacciona a catálogo (ítems/precio calculado) y ajustes (cortesías, bono)
-  // Fórmula: precioFinalCierre = precioCalculado - totalCortesías - bonoEspecial (= subtotalProyectado)
+  // Solo mostrar badge "Precio actualizado" cuando el usuario haya modificado servicios o ajustes en esta sesión.
   useEffect(() => {
     if (isFirstMountAjustesSyncRef.current) {
       isFirstMountAjustesSyncRef.current = false;
       return;
     }
+    if (!userHasChangedServicesOrAjustesRef.current) return;
     setPendingSyncFromAjustes(true);
     setShowPrecioSincronizadoBadge(true);
     const tBadge = setTimeout(() => setShowPrecioSincronizadoBadge(false), 4000);
@@ -1022,6 +1037,7 @@ export function CotizacionForm({
   };
 
   const toggleCortesia = (itemId: string) => {
+    userHasChangedServicesOrAjustesRef.current = true;
     setItemsCortesia(prev => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
@@ -1035,7 +1051,7 @@ export function CotizacionForm({
   const onToggleSelection = (servicioId: string) => {
     const servicio = servicioMap.get(servicioId);
     if (!servicio) return;
-
+    userHasChangedServicesOrAjustesRef.current = true;
     const currentQuantity = items[servicioId] || 0;
 
     if (isCourtesyMode && currentQuantity > 0) {
@@ -1072,6 +1088,7 @@ export function CotizacionForm({
 
   // Handlers
   const updateQuantity = (servicioId: string, cantidad: number) => {
+    userHasChangedServicesOrAjustesRef.current = true;
     const servicio = servicioMap.get(servicioId);
     const prevCantidad = items[servicioId] || 0;
 
@@ -1216,6 +1233,7 @@ export function CotizacionForm({
           }
 
           // 6. Agregar como custom item
+          userHasChangedServicesOrAjustesRef.current = true;
           setCustomItems(prev => [...prev, customItemData]);
 
           // 7. Eliminar override si existía (ya no es necesario)
@@ -1330,6 +1348,7 @@ export function CotizacionForm({
         // Actualizar item existente usando el índice guardado en el id
         const index = parseInt(itemToEdit.id.replace('custom-', ''), 10);
         if (!isNaN(index) && index >= 0 && index < customItems.length) {
+          userHasChangedServicesOrAjustesRef.current = true;
           setCustomItems(prev => {
             const updated = [...prev];
             // Mantener la categoriaId y originalItemId originales del item existente
@@ -1346,6 +1365,7 @@ export function CotizacionForm({
         }
       } else {
         // Agregar nuevo item
+        userHasChangedServicesOrAjustesRef.current = true;
         setCustomItems(prev => [...prev, customItemData]);
         toast.success('Item personalizado agregado');
       }
@@ -1456,13 +1476,14 @@ export function CotizacionForm({
     } else {
       toast.success('Item personalizado eliminado');
     }
-    
+    userHasChangedServicesOrAjustesRef.current = true;
     setCustomItems(prev => prev.filter((_, i) => i !== index));
   };
 
   // Manejar actualización de cantidad de item personalizado
   const handleUpdateCustomItemQuantity = (index: number, quantity: number) => {
     if (quantity < 1) return;
+    userHasChangedServicesOrAjustesRef.current = true;
     setCustomItems(prev => {
       const updated = [...prev];
       updated[index] = {
@@ -1473,19 +1494,30 @@ export function CotizacionForm({
     });
   };
 
+  // Redirigir a returnPath (cierre o detalle de promesa) para evitar fallos con historial vacío en nueva pestaña
+  const goToPromiseDetailOrBack = () => {
+    if (returnPath) {
+      router.push(returnPath);
+    } else if (promiseId && studioSlug) {
+      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    } else {
+      router.back();
+    }
+  };
+
   // Manejar intento de cierre
   const handleCancelClick = () => {
     if (hasSelectedItems) {
       setShowConfirmDialog(true);
     } else {
-      router.back();
+      goToPromiseDetailOrBack();
     }
   };
 
   // Confirmar cierre
   const handleConfirmClose = () => {
     setShowConfirmDialog(false);
-    router.back();
+    goToPromiseDetailOrBack();
   };
 
   // Cancelar cierre
@@ -1595,8 +1627,16 @@ export function CotizacionForm({
           toast.success(visibleToClient ? 'Publicación actualizada' : 'Cotización publicada exitosamente');
           setVisibleToClient(true);
         } else {
-          toast.success('Cotización guardada como borrador');
+          toast.success(visibleToClient ? 'La cotización ahora es privada (borrador)' : 'Cotización guardada como borrador');
           setVisibleToClient(false);
+        }
+
+        // Guardar cambios (sin publicar): permanecer en la página de edición
+        if (!publish) {
+          isSubmittingRef.current = false;
+          setSavingIntent(null);
+          setLoading(false);
+          return;
         }
 
         if (onAfterSave) {
@@ -1611,21 +1651,17 @@ export function CotizacionForm({
         redirectingRef.current = true;
         router.refresh();
         startTransition(() => {
-          // Priorizar redirectOnSuccess solo si no hay promise_id en el resultado
-          // Si hay promise_id, usar lógica de estado para redirección
-          if (redirectOnSuccess && !result.data?.promise_id) {
+          if (returnPath) {
+            router.push(returnPath);
+          } else if (redirectOnSuccess && !result.data?.promise_id) {
             router.push(redirectOnSuccess);
           } else if (result.data?.promise_id) {
-            // Redirigir según el estado de la cotización
             const status = result.data.status || 'pendiente';
-            if (status === 'negociacion') {
-              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
-            } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
+            if (status === 'negociacion' || status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
               router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
             } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
               router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
             } else {
-              // Estado pendiente por defecto
               router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
             }
           } else if (promiseId) {
@@ -2154,6 +2190,7 @@ export function CotizacionForm({
                         step="0.01"
                         value={bonoEspecial === 0 ? '' : bonoEspecial}
                         onChange={(e) => {
+                          userHasChangedServicesOrAjustesRef.current = true;
                           const v = e.target.value;
                           if (v === '') { setBonoEspecial(0); return; }
                           const n = parseFloat(v);
@@ -2258,6 +2295,7 @@ export function CotizacionForm({
               isOpen={confirmClearCortesiasOpen}
               onClose={() => setConfirmClearCortesiasOpen(false)}
               onConfirm={() => {
+                userHasChangedServicesOrAjustesRef.current = true;
                 setItemsCortesia(new Set());
                 if (confirmClearDiscountMode === 'all') setBonoEspecial(0);
                 setConfirmClearCortesiasOpen(false);
@@ -2274,32 +2312,38 @@ export function CotizacionForm({
             {/* Precio Final de Cierre — Fase 7.2: se sincroniza con sugerido al cambiar cortesías/bono */}
             <div className="mb-4">
               <label className="text-xs text-zinc-500 mb-1 block">Precio Final de Cierre</label>
-              <ZenInput
-                type="number"
-                min="0"
-                step="0.01"
-                value={precioPersonalizado}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setRingPrecioSincronizadoVisible(false);
-                  if (value === '') { setPrecioPersonalizado(''); return; }
-                  const numValue = parseFloat(value);
-                  if (isNaN(numValue) || numValue < 0) return;
-                  setPrecioPersonalizado(value);
-                }}
-                onBlur={(e) => {
-                  const value = e.target.value;
-                  if (value === '') return;
-                  const numValue = parseFloat(value);
-                  if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
-                }}
-                placeholder="0"
-                className={cn(
-                  'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
-                  ringPrecioSincronizadoVisible && 'ring-2 ring-amber-500 animate-sugerido-shake'
-                )}
-              />
-              {(showPrecioSincronizadoBadge || ringPrecioSincronizadoVisible) && (
+              {isInitializing ? (
+                <div className="h-10 rounded-lg bg-zinc-800/40 animate-pulse flex items-center justify-center">
+                  <span className="text-xs text-zinc-500">Cargando...</span>
+                </div>
+              ) : (
+                <ZenInput
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={precioPersonalizado}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setRingPrecioSincronizadoVisible(false);
+                    if (value === '') { setPrecioPersonalizado(''); return; }
+                    const numValue = parseFloat(value);
+                    if (isNaN(numValue) || numValue < 0) return;
+                    setPrecioPersonalizado(value);
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    if (value === '') return;
+                    const numValue = parseFloat(value);
+                    if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
+                  }}
+                  placeholder="0"
+                  className={cn(
+                    'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
+                    ringPrecioSincronizadoVisible && 'ring-2 ring-amber-500 animate-sugerido-shake'
+                  )}
+                />
+              )}
+              {!isInitializing && (showPrecioSincronizadoBadge || ringPrecioSincronizadoVisible) && (
                 <p className="text-[11px] text-amber-500 mt-1.5 mb-0.5">Precio actualizado por cambios en servicios o negociación.</p>
               )}
               <p className="text-[11px] text-zinc-500">Este es el monto real que se le cobrará al prospecto.</p>
@@ -2926,43 +2970,77 @@ export function CotizacionForm({
           {customActionButtons ? (
             customActionButtons
           ) : !hideActionButtons ? (
-            <div className="border-t border-zinc-700 pt-3 mt-4 space-y-2">
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={() => handleSave(false)}
-                loading={loading && savingIntent === 'draft'}
-                loadingText="Guardando..."
-                disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                className="w-full"
-              >
-                {isEditMode ? 'Guardar cambios' : 'Guardar borrador'}
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="primary"
-                onClick={() => handleSave(true)}
-                loading={loading && savingIntent === 'publish'}
-                loadingText="Publicando..."
-                disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                className="w-full"
-              >
-                {isEditMode
-                  ? (visibleToClient ? 'Actualizar publicación' : 'Publicar ahora')
-                  : 'Crear y Publicar'}
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="secondary"
-                onClick={handleCancelClick}
-                disabled={loading || isDisabled}
-                className="w-full"
-              >
-                Cancelar
-              </ZenButton>
-            </div>
+            (() => {
+              const isCurrentlyVisible = visibleToClient;
+              return (
+                <div className="border-t border-zinc-700 pt-3 mt-4 space-y-2">
+                  {isEditMode ? (
+                    <>
+                      <ZenButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSave(false)}
+                        loading={loading && savingIntent === 'draft'}
+                        loadingText="Guardando..."
+                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                        className="w-full"
+                      >
+                        {isCurrentlyVisible ? 'Cambiar a borrador' : 'Guardar cambios'}
+                      </ZenButton>
+                      <ZenButton
+                        type="button"
+                        variant="primary"
+                        onClick={() => handleSave(true)}
+                        loading={loading && savingIntent === 'publish'}
+                        loadingText={isCurrentlyVisible ? 'Guardando...' : 'Publicando...'}
+                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                        className="w-full"
+                      >
+                        {isCurrentlyVisible ? 'Guardar cambios' : 'Publicar ahora'}
+                      </ZenButton>
+                    </>
+                  ) : (
+                    <>
+                      <ZenButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSave(false)}
+                        loading={loading && savingIntent === 'draft'}
+                        loadingText="Guardando..."
+                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                        className="w-full"
+                      >
+                        Guardar borrador
+                      </ZenButton>
+                      <ZenButton
+                        type="button"
+                        variant="primary"
+                        onClick={() => handleSave(true)}
+                        loading={loading && savingIntent === 'publish'}
+                        loadingText="Publicando..."
+                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+                        className="w-full"
+                      >
+                        Crear y Publicar
+                      </ZenButton>
+                    </>
+                  )}
+                  <ZenButton
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCancelClick}
+                    disabled={loading || isDisabled}
+                    className="w-full"
+                  >
+                    Cancelar
+                  </ZenButton>
+                </div>
+              );
+            })()
           ) : null}
         </form>
       </div>

@@ -86,11 +86,11 @@ export function EditarCotizacionClient({
   const fromCierre = searchParams.get('from') === 'cierre';
   const focusMode = usePromiseFocusMode();
 
-  // Fallback: si no llega promiseState (ej. cache antiguo), ir a pendiente en lugar de raíz para evitar redirect
-  const effectiveState = promiseState ?? 'pendiente';
-  const backHref = fromCierre
+  // Destino de retorno: cierre si la cotización está en cierre (o from=cierre), sino detalle de promesa
+  const isFromCierreFlow = fromCierre || initialCotizacion?.status === 'en_cierre' || initialCotizacion?.status === 'cierre';
+  const backHref = isFromCierreFlow
     ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
-    : `/${studioSlug}/studio/commercial/promises/${promiseId}/${effectiveState}`;
+    : `/${studioSlug}/studio/commercial/promises/${promiseId}`;
 
   const [isMounted, setIsMounted] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
