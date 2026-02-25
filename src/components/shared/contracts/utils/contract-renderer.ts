@@ -8,32 +8,52 @@ export interface ContractRendererOptions {
   isForPdf?: boolean;
 }
 
-// Estilos inline para que la tabla se vea siempre (Tailwind no incluye clases dinámicas).
-// Pantalla = emerald; PDF = zinc/negro.
+// Estilos inline: Dark Mode ZEN (pantalla) o zinc/negro (PDF). Tabla condiciones sin fondos verdes.
+const ZINC_800 = "rgb(39, 39, 42)";
+const ZINC_500 = "rgb(113, 113, 122)";
+const ZINC_400 = "rgb(161, 161, 170)";
+const ZINC_300 = "rgb(212, 212, 216)";
+const PURPLE_400 = "rgb(192, 132, 252)";
+const AMBER_400 = "rgb(251, 191, 36)";
+const EMERALD_400 = "rgb(52, 211, 153)";
+const EMERALD_500_20 = "rgba(16, 185, 129, 0.2)";
+
 function getContractTableTheme(isForPdf: boolean) {
   if (isForPdf) {
     return {
       border: "rgb(212, 212, 216)",
-      textHeader: "rgb(0, 0, 0)",
+      textHeader: "rgb(113, 113, 122)",
       textPrimary: "rgb(39, 39, 42)",
-      textAccent: "rgb(0, 0, 0)",
-      bgHeader: "rgb(244, 244, 245)",
-      bgRowHighlight: "rgb(244, 244, 245)",
-      bgTotal: "rgb(228, 228, 231)",
+      textCortesias: "rgb(192, 132, 252)",
+      textBono: "rgb(251, 191, 36)",
+      textAjuste: "rgb(113, 113, 122)",
+      textAnticipoSaldo: "rgb(212, 212, 216)",
+      textTotal: "rgb(52, 211, 153)",
+      bgHeader: "transparent",
+      bgRowHighlight: "transparent",
+      bgTotal: "transparent",
+      borderTotal: "rgb(16, 185, 129)",
       bgNoteBox: "rgb(244, 244, 245)",
       borderNoteBox: "rgb(212, 212, 216)",
+      paddingAmount: "12px 20px",
     };
   }
   return {
-    border: "rgba(167, 243, 208, 0.5)",
-    textHeader: "rgb(52, 211, 153)",
-    textPrimary: "rgb(161, 161, 170)",
-    textAccent: "rgb(52, 211, 153)",
-    bgHeader: "rgba(6, 78, 59, 0.5)",
-    bgRowHighlight: "rgba(6, 78, 59, 0.35)",
-    bgTotal: "rgba(6, 78, 59, 0.6)",
+    border: ZINC_800,
+    textHeader: ZINC_500,
+    textPrimary: ZINC_400,
+    textCortesias: PURPLE_400,
+    textBono: AMBER_400,
+    textAjuste: ZINC_500,
+    textAnticipoSaldo: ZINC_300,
+    textTotal: EMERALD_400,
+    bgHeader: "transparent",
+    bgRowHighlight: "transparent",
+    bgTotal: "transparent",
+    borderTotal: EMERALD_500_20,
     bgNoteBox: "rgba(250, 204, 21, 0.12)",
     borderNoteBox: "rgba(250, 204, 21, 0.4)",
+    paddingAmount: "12px 20px",
   };
 }
 
@@ -120,7 +140,7 @@ export function renderCondicionesComercialesBlock(
   const isForPdf = options?.isForPdf === true;
   const t = getContractTableTheme(isForPdf);
 
-  let html = '<div class="condiciones-comerciales space-y-4 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg">';
+  let html = '<div class="condiciones-comerciales space-y-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg">';
 
   html += `<h3 class="text-lg font-semibold text-zinc-200 mb-3">${condiciones.nombre}</h3>`;
 
@@ -144,13 +164,14 @@ export function renderCondicionesComercialesBlock(
   const debeMostrarTabla = condiciones.total_final !== undefined;
 
   if (debeMostrarTabla) {
+    const pad = (t as { paddingAmount?: string }).paddingAmount ?? "12px 16px";
     html += `
       <div class="calculo-total mb-4 pt-3">
         <table style="width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid ${t.border}; border-radius: 8px; overflow: hidden;">
           <thead>
-            <tr style="background: ${t.bgHeader}; border-bottom: 2px solid ${t.border};">
-              <th style="text-align: left; padding: 12px 16px; color: ${t.textHeader}; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Concepto</th>
-              <th style="text-align: right; padding: 12px 16px; color: ${t.textHeader}; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Monto</th>
+            <tr style="background: ${t.bgHeader}; border-bottom: 1px solid ${t.border};">
+              <th style="text-align: left; padding: 12px 16px; color: ${t.textHeader}; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Concepto</th>
+              <th style="text-align: right; padding: ${pad}; color: ${t.textHeader}; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Monto</th>
             </tr>
           </thead>
           <tbody>
@@ -158,25 +179,28 @@ export function renderCondicionesComercialesBlock(
 
     if (tieneConcesiones) {
       const fmt = (n: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
+      const textCortesias = (t as { textCortesias?: string }).textCortesias ?? t.textPrimary;
+      const textBono = (t as { textBono?: string }).textBono ?? t.textPrimary;
+      const textAjuste = (t as { textAjuste?: string }).textAjuste ?? t.textPrimary;
       if (condiciones.precio_lista !== undefined && condiciones.precio_lista > 0) {
         html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio de lista</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${fmt(condiciones.precio_lista)}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${fmt(condiciones.precio_lista)}</td>
         </tr>`;
       }
       if ((condiciones.monto_cortesias ?? 0) > 0) {
         html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Cortesías</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_cortesias!)}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${textCortesias}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_cortesias!)}</td>
         </tr>`;
       }
       if ((condiciones.monto_bono ?? 0) > 0) {
         html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Bono especial</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_bono!)}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${textBono}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_bono!)}</td>
         </tr>`;
       }
       const ajuste = condiciones.ajuste_cierre ?? 0;
@@ -186,7 +210,7 @@ export function renderCondicionesComercialesBlock(
         html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">${label}</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${valor}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${textAjuste}; font-weight: 500; font-size: 14px;">${valor}</td>
         </tr>`;
       }
     } else if (!tieneConcesiones && esNegociacion) {
@@ -198,7 +222,7 @@ export function renderCondicionesComercialesBlock(
       html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio original</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${precioOriginalFormateado}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${precioOriginalFormateado}</td>
         </tr>
       `;
 
@@ -210,7 +234,7 @@ export function renderCondicionesComercialesBlock(
       html += `
         <tr style="border-bottom: 1px solid ${t.border};">
           <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Precio especial</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">${precioNegociadoFormateado}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${t.textPrimary}; font-weight: 600; font-size: 14px;">${precioNegociadoFormateado}</td>
         </tr>
       `;
 
@@ -223,7 +247,7 @@ export function renderCondicionesComercialesBlock(
         html += `
           <tr style="border-bottom: 1px solid ${t.border};">
             <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px; font-weight: 500;">Ahorro total</td>
-            <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 14px;">${ahorroFormateado}</td>
+            <td style="padding: ${pad}; text-align: right; color: ${t.textPrimary}; font-weight: 600; font-size: 14px;">${ahorroFormateado}</td>
           </tr>
         `;
       }
@@ -231,48 +255,9 @@ export function renderCondicionesComercialesBlock(
       // Sin concesiones ni negociación: no mostrar filas intermedias; el resumen va directo a TOTAL A PAGAR (y plan de pagos).
     }
 
-    if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
-      const isFullPayment = condiciones.porcentaje_anticipo === 100;
-
-      const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", {
-        style: "currency",
-        currency: "MXN",
-      }).format(condiciones.monto_anticipo);
-
-      let anticipoLabel = isFullPayment
-        ? "Monto para reservar"
-        : "Anticipo mínimo";
-
-      if (!isFullPayment && condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
-        anticipoLabel += ` (${condiciones.porcentaje_anticipo}%)`;
-      }
-
-      html += `
-        <tr style="border-bottom: 1px solid ${t.border}; background: ${t.bgRowHighlight};">
-          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px; font-weight: 500;">${anticipoLabel}</td>
-          <td style="padding: 12px 16px; text-align: right; color: ${t.textAccent}; font-weight: 600; font-size: 15px;">${montoAnticipoFormateado}</td>
-        </tr>
-      `;
-
-      if (!isFullPayment) {
-        const baseParaDiferido = condiciones.total_final ?? 0;
-        const diferido = baseParaDiferido - condiciones.monto_anticipo;
-
-        if (diferido > 0) {
-          const diferidoFormateado = new Intl.NumberFormat("es-MX", {
-            style: "currency",
-            currency: "MXN",
-          }).format(diferido);
-
-          html += `
-            <tr style="border-bottom: 1px solid ${t.border};">
-              <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">Saldo pendiente (Diferido)</td>
-              <td style="padding: 12px 16px; text-align: right; color: ${t.textPrimary}; font-weight: 500; font-size: 14px;">${diferidoFormateado}</td>
-            </tr>
-          `;
-        }
-      }
-    }
+    const textAnticipoSaldo = (t as { textAnticipoSaldo?: string }).textAnticipoSaldo ?? t.textPrimary;
+    const textTotal = (t as { textTotal?: string }).textTotal ?? t.textPrimary;
+    const borderTotal = (t as { borderTotal?: string }).borderTotal ?? t.border;
 
     const totalFinalFormateado = new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -280,9 +265,9 @@ export function renderCondicionesComercialesBlock(
     }).format(condiciones.total_final);
 
     html += `
-          <tr style="border-top: 2px solid ${t.border}; background: ${t.bgTotal};">
-            <td style="padding: 14px 16px; color: ${t.textAccent}; font-weight: 700; font-size: 15px;">TOTAL A PAGAR</td>
-            <td style="padding: 14px 16px; text-align: right; color: ${t.textAccent}; font-weight: 700; font-size: 18px;">${totalFinalFormateado}</td>
+          <tr style="border-top: 1px solid ${borderTotal}; border-bottom: 1px solid ${t.border};">
+            <td style="padding: 14px 16px; color: ${textTotal}; font-weight: 700; font-size: 15px;">TOTAL A PAGAR</td>
+            <td style="padding: 14px 20px; text-align: right; color: ${textTotal}; font-weight: 700; font-size: 17px;">${totalFinalFormateado}</td>
           </tr>
         </tbody>
       </table>
@@ -290,23 +275,32 @@ export function renderCondicionesComercialesBlock(
 
     if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
       const isFullPayment = condiciones.porcentaje_anticipo === 100;
-
-      if (!isFullPayment) {
-        html += `
-          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgNoteBox}; border-left: 4px solid ${t.borderNoteBox}; border-radius: 4px;">
-            <p style="font-size: 12px; color: ${t.textPrimary}; line-height: 1.6;">
-              💡 <span style="font-weight: 600;">Flexibilidad de pago:</span> Este es el monto mínimo para formalizar tu fecha.
-              Si prefieres abonar una cantidad mayor, puedes hacerlo y se acreditará a tu saldo pendiente.
-            </p>
-          </div>
-        `;
-      } else {
-        html += `
-          <div class="contract-note-anticipo" style="margin-top: 16px; padding: 12px; background: ${t.bgNoteBox}; border-left: 4px solid ${t.borderNoteBox}; border-radius: 4px;">
-            <p style="font-size: 12px; color: ${t.textPrimary}; line-height: 1.6;">Este contrato requiere liquidación total para confirmar tu reserva.</p>
-          </div>
-        `;
+      const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(condiciones.monto_anticipo);
+      let anticipoLabel = isFullPayment ? "Monto para reservar" : "Anticipo mínimo";
+      if (!isFullPayment && condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
+        anticipoLabel += ` (${condiciones.porcentaje_anticipo}%)`;
       }
+      const baseParaDiferido = condiciones.total_final ?? 0;
+      const diferido = baseParaDiferido - condiciones.monto_anticipo;
+      const diferidoFormateado = diferido > 0
+        ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(diferido)
+        : null;
+
+      html += `
+      <div class="plan-de-pagos-contract" style="margin-top: 12px; border: 1px solid ${t.border}; border-radius: 8px; padding: 14px 16px; background: transparent;">
+        <p style="font-size: 11px; color: ${t.textHeader}; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 10px 0; font-weight: 600;">Distribución de pagos</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 6px;">
+          <span style="color: ${ZINC_500};">${anticipoLabel}</span>
+          <span style="color: ${ZINC_300}; font-weight: 500;">${montoAnticipoFormateado}</span>
+        </div>
+        ${diferidoFormateado != null ? `
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+          <span style="color: ${ZINC_500};">Saldo pendiente (Diferido)</span>
+          <span style="color: ${ZINC_400}; font-weight: 500;">${diferidoFormateado}</span>
+        </div>
+        ` : ""}
+      </div>
+    `;
     }
 
     html += "</div>";

@@ -30,17 +30,17 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 2. Flujos (paso a paso)
-**Carpeta:** [flujos/](flujos/)
+### 2. Flows (flujos paso a paso)
+**Carpeta:** [flows/](flows/)
 
-Documentos de flujos operativos (UI → acciones → servidor) para cierre, autorización, etc. Índice en `flujos/README.md`.
+Documentos de flujos operativos explícitos (UI → componentes → Server Actions → servidor) para cierre, autorización, etc. Índice en `flows/README.md`.
 
 | Documento | Descripción |
 |-----------|-------------|
-| [flujo-cierre-cotizacion.md](flujos/flujo-cierre-cotizacion.md) | Pasar a cierre (público y estudio), archivado, cancelar cierre. |
+| [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md) | Cierre de cotización: pasar a cierre (público y estudio), pantalla de cierre, cancelar/autorizar; componentes y actions con rutas. |
 | [contracts-flow.md](contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio). |
 
-**Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio). Índice completo y referencias a analysis en [flujos/README.md](flujos/README.md).
+**Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio). Índice en [flows/README.md](flows/README.md).
 
 ---
 
@@ -111,7 +111,7 @@ Documentos de flujos operativos (UI → acciones → servidor) para cierre, auto
 .cursor/docs/
 ├── architecture/           # ← ESTÁS AQUÍ
 │   ├── README.md          # Este archivo
-│   ├── flujos/            # Flujos paso a paso (cierre, autorización, etc.)
+│   ├── flows/             # Flujos paso a paso (cierre, autorización, etc.)
 │   │   ├── README.md
 │   │   └── flujo-cierre-cotizacion.md
 │   └── ... (contracts-flow, promise-detalle, etc.)

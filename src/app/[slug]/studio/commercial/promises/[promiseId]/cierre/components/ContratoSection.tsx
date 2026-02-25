@@ -260,7 +260,7 @@ export const ContratoSection = memo(function ContratoSection({
           {contratoBoton && contratoBoton !== 'Definir' && !contratoFirmado && (
             <button
               onClick={onContratoButtonClick}
-              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+              className="h-7 min-w-[2.5rem] flex items-center justify-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
             >
               {contratoBoton}
             </button>
@@ -277,7 +277,7 @@ export const ContratoSection = memo(function ContratoSection({
                 }
               }}
               disabled={isRegenerating}
-              className="text-xs text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
+              className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               title="Regenerar contrato"
               aria-label="Regenerar contrato"
             >
