@@ -646,6 +646,108 @@ export async function checkCondicionComercialAssociations(
     }
 }
 
+/** Lista de cotizaciones que usan una condición (id, name, contact_name) para el modal de migración y reporte de éxito. */
+export async function obtenerCotizacionesPorCondicion(studioSlug: string, condicionId: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) {
+            return { success: false, data: [], error: "Studio no encontrado" };
+        }
+        const condicion = await prisma.studio_condiciones_comerciales.findFirst({
+            where: { id: condicionId, studio_id: studio.id },
+        });
+        if (!condicion) {
+            return { success: false, data: [], error: "Condición no encontrada" };
+        }
+        const cotizaciones = await prisma.studio_cotizaciones.findMany({
+            where: { studio_id: studio.id, condiciones_comerciales_id: condicionId },
+            select: {
+                id: true,
+                name: true,
+                contact_id: true,
+                promise_id: true,
+                contact: { select: { name: true } },
+                promise: { select: { contact: { select: { name: true } } } },
+            },
+            orderBy: { name: 'asc' },
+        });
+        return {
+            success: true,
+            data: cotizaciones.map((c) => {
+                const contactName =
+                    c.contact?.name
+                    ?? c.promise?.contact?.name
+                    ?? null;
+                return {
+                    id: c.id,
+                    name: c.name || `Cotización ${c.id.slice(-6)}`,
+                    contact_name: contactName,
+                };
+            }),
+        };
+    } catch (error) {
+        console.error("Error al obtener cotizaciones por condición:", error);
+        return { success: false, data: [], error: "Error al obtener cotizaciones" };
+    }
+}
+
+/** Elimina la condición idAEliminar migrando todas las cotizaciones que la usan a idDestino. Tras la migración, el plan de pagos (anticipo/diferido) se recalcula al cargar cada cotización con la nueva condición. */
+export async function eliminarYMigrarCondicion(studioSlug: string, idAEliminar: string, idDestino: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+        const [condicionOrigen, condicionDestino] = await Promise.all([
+            prisma.studio_condiciones_comerciales.findFirst({
+                where: { id: idAEliminar, studio_id: studio.id },
+            }),
+            prisma.studio_condiciones_comerciales.findFirst({
+                where: { id: idDestino, studio_id: studio.id },
+            }),
+        ]);
+        if (!condicionOrigen) {
+            return { success: false, error: "Condición a eliminar no encontrada" };
+        }
+        if (!condicionDestino) {
+            return { success: false, error: "Condición de destino no encontrada" };
+        }
+        if (idAEliminar === idDestino) {
+            return { success: false, error: "La condición de destino debe ser distinta" };
+        }
+
+        await prisma.$transaction([
+            prisma.studio_cotizaciones.updateMany({
+                where: { studio_id: studio.id, condiciones_comerciales_id: idAEliminar },
+                data: { condiciones_comerciales_id: idDestino },
+            }),
+            prisma.studio_condiciones_comerciales.delete({
+                where: { id: idAEliminar },
+            }),
+        ]);
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/comercial/condiciones-comerciales`);
+        revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+        return {
+            success: true,
+            message: "Condición eliminada. Las cotizaciones se migraron a la condición seleccionada.",
+        };
+    } catch (error) {
+        console.error("Error al eliminar y migrar condición:", error);
+        return {
+            success: false,
+            error: "Error al eliminar y migrar condición",
+        };
+    }
+}
+
 // Eliminar condición comercial
 export async function eliminarCondicionComercial(studioSlug: string, condicionId: string) {
     try {

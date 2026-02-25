@@ -5,6 +5,5 @@ export { PromisesKanban } from './PromisesKanban';
 export { ArchivePromiseModal } from './ArchivePromiseModal';
 export { PromiseKanbanCard } from './PromiseKanbanCard';
 export { PipelineConfigModal } from './PipelineConfigModal';
-export { PromisesSkeleton } from './PromisesSkeleton';
 export { CotizacionForm } from './CotizacionForm';
 

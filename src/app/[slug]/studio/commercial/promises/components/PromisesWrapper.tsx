@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { PromisesKanban, PromisesSkeleton } from './';
+import { PromisesKanban } from './PromisesKanban';
+import { PromisesSkeleton } from './PromisesSkeleton';
 import { getPromises, getPipelineStages, getPromiseByIdAsPromiseWithContact } from '@/lib/actions/studio/commercial/promises';
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';

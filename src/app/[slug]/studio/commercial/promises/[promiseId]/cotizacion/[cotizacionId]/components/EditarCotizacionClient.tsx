@@ -3,10 +3,10 @@
 import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, Trash2, CheckCircle } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenBadge } from '@/components/ui/zen';
+import { ArrowLeft, Eye, CheckCircle } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
-import { archiveCotizacion, deleteCotizacion, pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { toast } from 'sonner';
 import { startTransition } from 'react';
@@ -93,10 +93,7 @@ export function EditarCotizacionClient({
     : `/${studioSlug}/studio/commercial/promises/${promiseId}`;
 
   const [isMounted, setIsMounted] = useState(false);
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(false);
-  const [isActionLoading, setIsActionLoading] = useState(false);
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
   const [isPassingToCierre, setIsPassingToCierre] = useState(false);
 
@@ -197,7 +194,7 @@ export function EditarCotizacionClient({
             variant="primary"
             size="md"
             onClick={handlePasarACierreClick}
-            disabled={isFormLoading || isActionLoading || isPassingToCierre}
+            disabled={isFormLoading || isPassingToCierre}
             loading={isPassingToCierre}
             className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -205,37 +202,19 @@ export function EditarCotizacionClient({
             Pasar a Cierre
           </ZenButton>
         )}
-        {!isInCierre && isMounted && (
-          <ZenDropdownMenu>
-            <ZenDropdownMenuTrigger asChild>
-              <ZenButton
-                variant="ghost"
-                size="md"
-                disabled={isFormLoading || isActionLoading || isPassingToCierre}
-                className="h-9 w-9 p-0"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </ZenButton>
-            </ZenDropdownMenuTrigger>
-            <ZenDropdownMenuContent align="end">
-              <ZenDropdownMenuItem
-                onClick={() => setShowArchiveModal(true)}
-                disabled={isActionLoading || isPassingToCierre}
-              >
-                <Archive className="h-4 w-4 mr-2" />
-                Archivar
-              </ZenDropdownMenuItem>
-              <ZenDropdownMenuSeparator />
-              <ZenDropdownMenuItem
-                onClick={() => setShowDeleteModal(true)}
-                disabled={isActionLoading || isPassingToCierre}
-                className="text-red-400 focus:text-red-300"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </ZenDropdownMenuItem>
-            </ZenDropdownMenuContent>
-          </ZenDropdownMenu>
+        {isMounted && (
+          <ZenButton
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+            className="gap-1.5 h-8 px-2.5 text-xs border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/70"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Vista previa
+          </ZenButton>
         )}
       </div>
     </div>
@@ -277,68 +256,6 @@ export function EditarCotizacionClient({
           </ZenCardContent>
         </ZenCard>
       )}
-
-      <ZenConfirmModal
-        isOpen={showArchiveModal}
-        onClose={() => setShowArchiveModal(false)}
-        onConfirm={async () => {
-          setIsActionLoading(true);
-          try {
-            const result = await archiveCotizacion(cotizacionId, studioSlug);
-            if (result.success) {
-              toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} archivada exitosamente`);
-              setShowArchiveModal(false);
-              window.dispatchEvent(new CustomEvent('close-overlays'));
-              startTransition(() => {
-                router.push(backHref);
-              });
-            } else {
-              toast.error(result.error || 'Error al archivar cotizaciรณn');
-            }
-          } catch {
-            toast.error('Error al archivar cotizaciรณn');
-          } finally {
-            setIsActionLoading(false);
-          }
-        }}
-        title={`Archivar ${STUDIO_PAGE_NAMES.COTIZACION}`}
-        description="¿Estás seguro de archivar esta cotización? Podrás desarchivarla más tarde."
-        confirmText="Archivar"
-        cancelText="Cancelar"
-        variant="default"
-        loading={isActionLoading}
-      />
-
-      <ZenConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={async () => {
-          setIsActionLoading(true);
-          try {
-            const result = await deleteCotizacion(cotizacionId, studioSlug);
-            if (result.success) {
-              toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} eliminada exitosamente`);
-              setShowDeleteModal(false);
-              window.dispatchEvent(new CustomEvent('close-overlays'));
-              startTransition(() => {
-                router.push(backHref);
-              });
-            } else {
-              toast.error(result.error || 'Error al eliminar cotizaciรณn');
-            }
-          } catch {
-            toast.error('Error al eliminar cotizaciรณn');
-          } finally {
-            setIsActionLoading(false);
-          }
-        }}
-        title={`Eliminar ${STUDIO_PAGE_NAMES.COTIZACION}`}
-        description="¿Estás seguro de eliminar esta cotización? Esta acción no se puede deshacer."
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        variant="destructive"
-        loading={isActionLoading}
-      />
 
       <ConfirmarCierreModal
         isOpen={showConfirmarCierreModal}

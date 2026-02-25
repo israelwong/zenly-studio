@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical, X, Lock, Globe, Info, AlertCircle, Unlink, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, GripVertical, X, Lock, Globe, Info, AlertCircle, Unlink, ExternalLink, ArrowRight } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
-import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenTextarea, ZenSwitch, ZenSelect } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import {
@@ -11,9 +11,10 @@ import {
   crearCondicionComercial,
   actualizarCondicionComercial,
   eliminarCondicionComercial,
-  eliminarCondicionComercialDesvinculando,
+  eliminarYMigrarCondicion,
   actualizarOrdenCondicionesComerciales,
   checkCondicionComercialAssociations,
+  obtenerCotizacionesPorCondicion,
   obtenerConfiguracionPrecios,
   obtenerOfertasParaVincular,
   desvincularOfertaCondicionComercial,
@@ -369,6 +370,16 @@ export function CondicionesComercialesManager({
   const [showConfirmDesvincularEliminar, setShowConfirmDesvincularEliminar] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingDeleteCotizacionesCount, setPendingDeleteCotizacionesCount] = useState(0);
+  const [pendingDeleteCotizacionesList, setPendingDeleteCotizacionesList] = useState<{ id: string; name: string; contact_name?: string | null }[]>([]);
+  const [condicionDestinoId, setCondicionDestinoId] = useState<string | null>(null);
+  const [loadingCotizacionesList, setLoadingCotizacionesList] = useState(false);
+  const [loadingMigrar, setLoadingMigrar] = useState(false);
+  /** Tras migración exitosa: vista de éxito y listado Contacto — Cotización para confirmar. */
+  const [migracionExitosaView, setMigracionExitosaView] = useState<{
+    origenName: string;
+    destinoName: string;
+    movidas: { contact_name: string; cotizacion_name: string }[];
+  } | null>(null);
   const [showUtilidadModal, setShowUtilidadModal] = useState(false);
   const [viewingOfferCondition, setViewingOfferCondition] = useState<CondicionComercial | null>(null);
   const [formData, setFormData] = useState({
@@ -693,7 +704,21 @@ export function CondicionesComercialesManager({
       if (checkResult.hasCotizaciones) {
         setPendingDeleteId(id);
         setPendingDeleteCotizacionesCount(checkResult.cotizacionesCount);
+        setCondicionDestinoId(null);
+        setLoadingCotizacionesList(true);
         setShowConfirmDesvincularEliminar(true);
+        try {
+          const listResult = await obtenerCotizacionesPorCondicion(studioSlug, id);
+          if (listResult.success && listResult.data) {
+            setPendingDeleteCotizacionesList(listResult.data);
+          } else {
+            setPendingDeleteCotizacionesList([]);
+          }
+        } catch {
+          setPendingDeleteCotizacionesList([]);
+        } finally {
+          setLoadingCotizacionesList(false);
+        }
         return;
       }
 
@@ -723,8 +748,14 @@ export function CondicionesComercialesManager({
         const cotizacionMatch = err.match(/tiene (\d+) cotización/);
         if (cotizacionMatch) {
           setPendingDeleteCotizacionesCount(parseInt(cotizacionMatch[1], 10));
+          setCondicionDestinoId(null);
           setShowConfirmDelete(false);
           setShowConfirmDesvincularEliminar(true);
+          setLoadingCotizacionesList(true);
+          obtenerCotizacionesPorCondicion(studioSlug, idToDelete).then((listResult) => {
+            if (listResult.success && listResult.data) setPendingDeleteCotizacionesList(listResult.data);
+            else setPendingDeleteCotizacionesList([]);
+          }).finally(() => setLoadingCotizacionesList(false));
           return;
         }
         toast.error(err || 'Error al eliminar condición');
@@ -739,29 +770,52 @@ export function CondicionesComercialesManager({
     }
   };
 
-  const handleConfirmDesvincularEliminar = async () => {
-    if (!pendingDeleteId) return;
+  const handleConfirmMigrarEliminar = async () => {
+    if (!pendingDeleteId || !condicionDestinoId) return;
     const idToDelete = pendingDeleteId;
+    const idDestino = condicionDestinoId;
     const wasEditingDeleted = idToDelete === editingId;
+    const condicionOrigen = condiciones.find(c => c.id === idToDelete);
+    const condicionDestino = condiciones.find(c => c.id === idDestino);
 
+    setLoadingMigrar(true);
     try {
-      const result = await eliminarCondicionComercialDesvinculando(studioSlug, idToDelete);
+      const result = await eliminarYMigrarCondicion(studioSlug, idToDelete, idDestino);
       if (result.success) {
         setCondiciones(prev => sortCondiciones(prev.filter(c => c.id !== idToDelete)));
-        toast.success(result.message ?? 'Condición eliminada');
+        toast.success(result.message ?? 'Condición eliminada y cotizaciones migradas');
         onRefresh?.();
         if (wasEditingDeleted) resetFormState();
+        setMigracionExitosaView({
+          origenName: condicionOrigen?.name ?? 'Condición',
+          destinoName: condicionDestino?.name ?? 'Condición destino',
+          movidas: pendingDeleteCotizacionesList.map((c) => ({
+            contact_name: c.contact_name ?? '—',
+            cotizacion_name: c.name,
+          })),
+        });
+        setPendingDeleteId(null);
+        setPendingDeleteCotizacionesCount(0);
+        setPendingDeleteCotizacionesList([]);
+        setCondicionDestinoId(null);
       } else {
-        toast.error(result.error ?? 'Error al eliminar condición');
+        toast.error(result.error ?? 'Error al eliminar y migrar');
       }
     } catch (error) {
-      console.error('Error eliminando condición (desvinculando):', error);
-      toast.error('Error al eliminar condición');
+      console.error('Error eliminando y migrando condición:', error);
+      toast.error('Error al eliminar y migrar condición');
     } finally {
-      setShowConfirmDesvincularEliminar(false);
-      setPendingDeleteId(null);
-      setPendingDeleteCotizacionesCount(0);
+      setLoadingMigrar(false);
     }
+  };
+
+  const handleCerrarMigracionExitosa = () => {
+    setMigracionExitosaView(null);
+    setShowConfirmDesvincularEliminar(false);
+    setPendingDeleteId(null);
+    setPendingDeleteCotizacionesCount(0);
+    setPendingDeleteCotizacionesList([]);
+    setCondicionDestinoId(null);
   };
 
   const handleCancelDelete = () => {
@@ -770,10 +824,20 @@ export function CondicionesComercialesManager({
   };
 
   const handleCancelDesvincularEliminar = () => {
+    setMigracionExitosaView(null);
     setShowConfirmDesvincularEliminar(false);
     setPendingDeleteId(null);
     setPendingDeleteCotizacionesCount(0);
+    setPendingDeleteCotizacionesList([]);
+    setCondicionDestinoId(null);
   };
+
+  const opcionesCondicionDestino =
+    pendingDeleteId && condiciones.length > 0
+      ? condiciones
+          .filter(c => c.status === 'active' && c.id !== pendingDeleteId)
+          .map(c => ({ value: c.id, label: c.name }))
+      : [];
 
   const handleConvertToStandard = async () => {
     if (!viewingOfferCondition) return;
@@ -1636,18 +1700,137 @@ export function CondicionesComercialesManager({
 
       <ZenConfirmModal
         isOpen={showConfirmDesvincularEliminar}
-        onClose={handleCancelDesvincularEliminar}
-        onConfirm={handleConfirmDesvincularEliminar}
-        title="Condición usada en cotizaciones"
+        onClose={migracionExitosaView ? handleCerrarMigracionExitosa : handleCancelDesvincularEliminar}
+        onConfirm={migracionExitosaView ? handleCerrarMigracionExitosa : handleConfirmMigrarEliminar}
+        title={migracionExitosaView ? '' : 'Transferencia de condiciones'}
         description={
-          pendingDeleteCotizacionesCount > 0
-            ? `Hay ${pendingDeleteCotizacionesCount} cotización${pendingDeleteCotizacionesCount > 1 ? 'es' : ''} que usan esta condición. ¿Desvincular esta condición de esas cotizaciones y eliminarla? Las cotizaciones quedarán sin condición comercial asignada.`
-            : 'Hay cotizaciones que usan esta condición. ¿Desvincular y eliminar?'
+          <div className="text-left transition-opacity duration-200 ease-out" key={migracionExitosaView ? 'success' : 'form'}>
+            {migracionExitosaView ? (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-emerald-400">¡Migración exitosa!</h3>
+                <p className="text-sm text-zinc-300 leading-relaxed">
+                  La condición <span className="font-medium text-zinc-200">{migracionExitosaView.origenName}</span> ha sido eliminada y sus cotizaciones asociadas se han movido a <span className="font-medium text-zinc-200">{migracionExitosaView.destinoName}</span>.
+                </p>
+                {migracionExitosaView.movidas.length > 0 && (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2 border-b border-zinc-800">
+                      Movidas correctamente ({migracionExitosaView.movidas.length})
+                    </p>
+                    <div className="max-h-[120px] overflow-y-auto p-2 space-y-1.5">
+                      {migracionExitosaView.movidas.map((m, i) => (
+                        <div key={i} className="flex items-baseline gap-2 text-xs">
+                          <span className="text-zinc-300 truncate shrink-0 max-w-[45%]">{m.contact_name}</span>
+                          <span className="text-zinc-500 shrink-0">—</span>
+                          <span className="text-zinc-500 truncate">{m.cotizacion_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-zinc-500 mb-3">
+                  Esta condición está asignada a {pendingDeleteCotizacionesCount} cotización{pendingDeleteCotizacionesCount !== 1 ? 'es' : ''}. Elige a qué condición migrarlas.
+                </p>
+                {/* Layout: Origen → Flecha → Destinos (mismo diseño: borde zinc-800, fondo sutil) */}
+                <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
+                  {/* Origen */}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Origen</p>
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                      <p className="text-sm font-medium text-zinc-200 truncate">
+                        {condiciones.find(c => c.id === pendingDeleteId)?.name ?? '—'}
+                      </p>
+                      {(() => {
+                        const orig = condiciones.find(c => c.id === pendingDeleteId);
+                        if (!orig) return null;
+                        const ant = orig.advance_type === 'fixed_amount' && orig.advance_amount != null
+                          ? `Anticipo: $${Number(orig.advance_amount).toFixed(0)}`
+                          : `Anticipo: ${orig.advance_percentage ?? 0}%`;
+                        const desc = `Descuento: ${orig.discount_percentage ?? 0}%`;
+                        return <p className="text-xs text-zinc-500 mt-1">{ant} • {desc}</p>;
+                      })()}
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex shrink-0 items-center text-zinc-500" aria-hidden>
+                    <ArrowRight className="h-5 w-5" />
+                  </div>
+                  <div className="sm:hidden flex justify-center text-zinc-500" aria-hidden>
+                    <ArrowRight className="h-5 w-5 rotate-90" />
+                  </div>
+                  {/* Lista de destinos (tarjetas con misma caja + label de referencia) */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Destino</p>
+                    {loadingCotizacionesList ? (
+                      <p className="text-xs text-zinc-500">Cargando...</p>
+                    ) : opcionesCondicionDestino.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2 max-h-[160px] overflow-y-auto pr-1">
+                        {opcionesCondicionDestino.map((opt) => {
+                          const destCond = condiciones.find(c => c.id === opt.value);
+                          const origCond = condiciones.find(c => c.id === pendingDeleteId);
+                          const cambioDrastico = origCond && destCond && (origCond.advance_type ?? 'percentage') !== (destCond.advance_type ?? 'percentage');
+                          const antStr = destCond
+                            ? (destCond.advance_type === 'fixed_amount' && destCond.advance_amount != null
+                              ? `Anticipo: $${Number(destCond.advance_amount).toFixed(0)}`
+                              : `Anticipo: ${destCond.advance_percentage ?? 0}%`)
+                            : '';
+                          const descStr = destCond ? `Descuento: ${destCond.discount_percentage ?? 0}%` : '';
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setCondicionDestinoId(opt.value)}
+                              className={`text-left rounded-lg border bg-zinc-900/50 px-4 py-3 min-w-0 w-full transition-colors ${
+                                condicionDestinoId === opt.value
+                                  ? 'border-emerald-500/70 bg-emerald-500/15 text-emerald-200'
+                                  : 'border-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50'
+                              }`}
+                            >
+                              <p className="text-sm font-medium truncate">{opt.label}</p>
+                              {destCond && (
+                                <p className={`text-xs mt-1 ${cambioDrastico ? 'text-amber-400' : 'text-zinc-500'}`}>
+                                  {antStr} • {descStr}
+                                </p>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-400">No hay otras condiciones activas. Activa otra o crea una nueva.</p>
+                    )}
+                  </div>
+                </div>
+                {/* Lista informativa de cotizaciones afectadas (máx 3 visibles, scroll) */}
+                {pendingDeleteCotizacionesList.length > 0 && (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2 border-b border-zinc-800">
+                      Cotizaciones afectadas ({pendingDeleteCotizacionesList.length})
+                    </p>
+                    <div className="max-h-[88px] overflow-y-auto p-2 space-y-1.5">
+                      {pendingDeleteCotizacionesList.map((c) => (
+                        <div key={c.id} className="flex items-baseline gap-2 text-xs">
+                          <span className="text-zinc-300 truncate shrink-0 max-w-[45%]">{c.contact_name ?? '—'}</span>
+                          <span className="text-zinc-500 shrink-0">—</span>
+                          <span className="text-zinc-500 truncate">{c.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         }
-        confirmText="Desvincular y eliminar"
-        cancelText="Cancelar"
-        variant="destructive"
+        confirmText="Migrar y eliminar"
+        cancelText={migracionExitosaView ? 'Entendido' : 'Cancelar'}
+        hideConfirmButton={!!migracionExitosaView}
+        variant={migracionExitosaView ? 'default' : 'destructive'}
         zIndex={10300}
+        disabled={!migracionExitosaView && (!condicionDestinoId || opcionesCondicionDestino.length === 0)}
+        loading={loadingMigrar}
+        contentClassName="sm:max-w-xl"
       />
 
       <ZenConfirmModal
