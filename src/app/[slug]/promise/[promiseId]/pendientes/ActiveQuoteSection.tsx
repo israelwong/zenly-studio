@@ -157,6 +157,7 @@ export function ActiveQuoteSection({
           showPackages={share_settings.show_packages}
           paquetes={[]}
           autoGenerateContract={share_settings.auto_generate_contract}
+          mostrarBotonAutorizar={share_settings.allow_online_authorization}
           durationHours={promise.duration_hours ?? null}
           dateSoldOut={dateSoldOut}
           promiseData={{

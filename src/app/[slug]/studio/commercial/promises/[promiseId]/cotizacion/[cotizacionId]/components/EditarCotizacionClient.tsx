@@ -222,7 +222,7 @@ export function EditarCotizacionClient({
           variant="ghost"
           size="sm"
           onClick={() => setShowShareOptionsModal(true)}
-          className="gap-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50"
+          className="gap-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
         >
           <Settings2 className="h-4 w-4" />
           Visualización y automatización

@@ -41,6 +41,8 @@ interface CotizacionesSectionRealtimeProps {
   showPackages?: boolean;
   paquetes?: PublicPaquete[];
   autoGenerateContract?: boolean;
+  /** Mostrar botón Autorizar en el detalle de cotización (share_settings.allow_online_authorization). */
+  mostrarBotonAutorizar?: boolean;
   durationHours?: number | null;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
   promiseData?: {
@@ -71,6 +73,7 @@ export function CotizacionesSectionRealtime({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  mostrarBotonAutorizar = true,
   durationHours,
   promiseData,
   dateSoldOut = false,
@@ -236,6 +239,7 @@ export function CotizacionesSectionRealtime({
         showPackages={showPackages}
         paquetes={paquetes.map(p => ({ id: p.id, cover_url: p.cover_url }))}
         autoGenerateContract={autoGenerateContract}
+        mostrarBotonAutorizar={mostrarBotonAutorizar}
         recentlyUpdated={recentlyUpdated}
         durationHours={durationHours}
         promiseData={promiseData}

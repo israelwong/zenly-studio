@@ -132,31 +132,50 @@ export function PromiseDetailToolbar({
       {/* Izquierda: Previsualizar + WhatsApp (separado sin divisor) */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (basePublicUrl) window.open(basePublicUrl, '_blank');
-              if (promiseId && contactData) {
-                logProfileShared(studioSlug, promiseId, contactData.contactName, basePublicUrl).catch(() => {});
-              }
-            }}
-            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span>Ver como prospecto</span>
-          </ZenButton>
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (basePublicUrl) window.open(`${basePublicUrl}?preview=studio`, '_blank');
-            }}
-            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span>Ver como estudio</span>
-          </ZenButton>
+          {isPublished ? (
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (basePublicUrl) window.open(basePublicUrl, '_blank');
+                if (promiseId && contactData) {
+                  logProfileShared(studioSlug, promiseId, contactData.contactName, basePublicUrl).catch(() => {});
+                }
+              }}
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>Ver promesa</span>
+            </ZenButton>
+          ) : (
+            <>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (basePublicUrl) window.open(basePublicUrl, '_blank');
+                  if (promiseId && contactData) {
+                    logProfileShared(studioSlug, promiseId, contactData.contactName, basePublicUrl).catch(() => {});
+                  }
+                }}
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Ver como prospecto</span>
+              </ZenButton>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (basePublicUrl) window.open(`${basePublicUrl}?preview=studio`, '_blank');
+                }}
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Ver como estudio</span>
+              </ZenButton>
+            </>
+          )}
         </div>
         {contactData.phone && (
           <>
@@ -195,7 +214,7 @@ export function PromiseDetailToolbar({
               variant="ghost"
               size="sm"
               onClick={onOpenAutomationOptions}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
             >
               Visualización y automatización
             </ZenButton>
@@ -208,7 +227,7 @@ export function PromiseDetailToolbar({
               variant="ghost"
               size="sm"
               onClick={copyUrlHandler}
-              className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
+              className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs opacity-100 ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-300 hover:text-zinc-100 bg-zinc-800/50 hover:bg-zinc-700/50'}`}
             >
               {linkCopied ? (
                 <>
@@ -229,7 +248,8 @@ export function PromiseDetailToolbar({
           checked={isPublished}
           onCheckedChange={handleTogglePublish}
           variant="emerald"
-          label={isPublished ? 'Despublicar' : 'Publicar'}
+          label={isPublished ? 'Publicada' : 'No publicada'}
+          labelClassName={isPublished ? 'text-emerald-500' : 'text-zinc-400'}
           className="mb-0 scale-90 origin-center"
         />
       </div>

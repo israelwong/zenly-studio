@@ -40,6 +40,8 @@ export interface ZenDialogProps {
   cancelAlignRight?: boolean;
   /** Variante del botón Cancelar (default: ghost) */
   cancelVariant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+  /** Clases adicionales para el área de contenido (ej. px-4 py-3 para compactar) */
+  contentClassName?: string;
 }
 
 const maxWidthClasses = {
@@ -82,6 +84,7 @@ export function ZenDialog({
   allowOverflow = false,
   cancelAlignRight = false,
   cancelVariant = 'ghost',
+  contentClassName,
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
   const [isAnimating, setIsAnimating] = React.useState(false);
@@ -203,7 +206,7 @@ export function ZenDialog({
           <ZenCardContent className={cn(
             allowOverflow ? 'overflow-visible' : 'overflow-y-auto',
             'flex-1 min-h-0',
-            title ? 'px-6 py-4' : 'px-6 py-4',
+            contentClassName ?? (title ? 'px-6 py-4' : 'px-6 py-4'),
             title ? '' : 'border-0'
           )} style={{
             maxHeight: fullScreen

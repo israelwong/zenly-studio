@@ -41,6 +41,8 @@ interface CotizacionesSectionProps {
   showPackages?: boolean;
   paquetes?: Array<{ id: string; cover_url: string | null }>;
   autoGenerateContract?: boolean;
+  /** Mostrar botón Autorizar en el sheet de detalle (share_settings.allow_online_authorization). */
+  mostrarBotonAutorizar?: boolean;
   recentlyUpdated?: Set<string>;
   durationHours?: number | null;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
@@ -71,6 +73,7 @@ export function CotizacionesSection({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  mostrarBotonAutorizar = true,
   recentlyUpdated = new Set(),
   durationHours,
   promiseData,
@@ -278,6 +281,7 @@ export function CotizacionesSection({
           showPackages={showPackages}
           paquetes={paquetes}
           autoGenerateContract={autoGenerateContract}
+          mostrarBotonAutorizar={mostrarBotonAutorizar}
           promiseData={promiseData}
           dateSoldOut={dateSoldOut}
           condicionesVisiblesIds={selectedCotizacion.condiciones_visibles ?? undefined}

@@ -2477,7 +2477,7 @@ export function CotizacionForm({
               variant="destructive"
             />
 
-            {/* Precio Final de Cierre — Fase 7.2: se sincroniza con sugerido al cambiar cortesías/bono */}
+            {/* Precio Final de Cierre — editable libre; placeholder = sugerido; onBlur formatea a 2 decimales */}
             <div className="mb-4">
               <label className="text-xs text-zinc-500 mb-1 block">Precio Final de Cierre</label>
               {isInitializing ? (
@@ -2487,36 +2487,30 @@ export function CotizacionForm({
               ) : (
                 <ZenInput
                   type="number"
-                  min={Math.max(0, (calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0))}
                   step="0.01"
                   value={precioPersonalizado}
                   onChange={(e) => {
-                    const value = e.target.value;
                     setRingPrecioSincronizadoVisible(false);
-                    const base = Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
+                    const value = e.target.value;
                     if (value === '') {
-                      setPrecioPersonalizado(base);
+                      setPrecioPersonalizado('');
                       return;
                     }
                     const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) return;
-                    setPrecioPersonalizado(numValue < base ? base : value);
+                    if (!Number.isNaN(numValue) && numValue < 0) return;
+                    setPrecioPersonalizado(value);
                   }}
                   onBlur={(e) => {
-                    const value = e.target.value;
-                    const base = Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
-                    if (value === '') {
-                      setPrecioPersonalizado(base);
-                      return;
-                    }
+                    const value = e.target.value.trim();
+                    if (value === '') return;
                     const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) {
-                      setPrecioPersonalizado(base);
+                    if (Number.isNaN(numValue) || numValue < 0) {
+                      setPrecioPersonalizado('');
                       return;
                     }
-                    if (numValue < base) setPrecioPersonalizado(base);
+                    setPrecioPersonalizado(Number(numValue.toFixed(2)));
                   }}
-                  placeholder={String(Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0))}
+                  placeholder={String(calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0)}
                   className={cn(
                     'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
                     ringPrecioSincronizadoVisible && 'ring-2 ring-amber-500 animate-sugerido-shake'

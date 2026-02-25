@@ -774,6 +774,7 @@ model studios {
   promise_share_default_show_offer_conditions     Boolean                          @default(false)
   promise_share_default_portafolios               Boolean                          @default(true)
   promise_share_default_auto_generate_contract     Boolean                          @default(false)
+  promise_share_default_allow_online_authorization  Boolean                          @default(true)
   promise_share_default_allow_recalc               Boolean                          @default(true)
   promise_share_default_rounding_mode              String                           @default("charm")
   max_events_per_day                               Int                              @default(1)
@@ -1390,6 +1391,7 @@ model studio_promises {
   share_show_offer_conditions     Boolean?
   share_portafolios               Boolean?
   share_auto_generate_contract    Boolean?
+  share_allow_online_authorization Boolean?
   share_allow_recalc             Boolean?
   share_rounding_mode            String?
   published_at                   DateTime?                       // NULL = borrador; con valor = publicada (en línea)

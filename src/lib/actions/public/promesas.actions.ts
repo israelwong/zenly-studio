@@ -981,6 +981,7 @@ export async function getPublicPromisePendientes(
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
+      allow_online_authorization: promiseBasic.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
       allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
@@ -1678,6 +1679,7 @@ export async function getPublicPromiseActiveQuote(
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
+      allow_online_authorization: promiseBasic.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -2586,6 +2588,7 @@ export async function getPublicPromiseNegociacion(
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
+      allow_online_authorization: promiseBasic.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -3112,6 +3115,7 @@ export async function getPublicPromiseCierre(
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions ?? true,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions ?? false,
       portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios ?? true,
+      allow_online_authorization: promiseBasic.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract ?? false,
       allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
@@ -3911,6 +3915,7 @@ export async function getPublicPromiseData(
       show_standard_conditions: promise.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promise.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: studio.promise_share_default_portafolios,
+      allow_online_authorization: promise.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
       allow_recalc: promise.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promise.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
@@ -4466,6 +4471,7 @@ export async function getPublicPromiseData(
       show_standard_conditions: promise.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promise.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: promise.share_portafolios ?? studio.promise_share_default_portafolios,
+      allow_online_authorization: promise.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -5564,6 +5570,7 @@ const getStudioBySlug = cache(async (studioSlug: string) => {
       promise_share_default_show_offer_conditions: true,
       promise_share_default_portafolios: true,
       promise_share_default_auto_generate_contract: true,
+      promise_share_default_allow_online_authorization: true,
       promise_share_default_allow_recalc: true,
       promise_share_default_rounding_mode: true,
     },
@@ -5610,6 +5617,7 @@ export async function getPublicPromiseBasicData(
       share_show_offer_conditions: boolean | null;
       share_portafolios: boolean | null;
       share_auto_generate_contract: boolean | null;
+      share_allow_online_authorization: boolean | null;
       share_allow_recalc: boolean | null;
       share_rounding_mode: string | null;
     };
@@ -5633,6 +5641,7 @@ export async function getPublicPromiseBasicData(
       promise_share_default_show_offer_conditions: boolean;
       promise_share_default_portafolios: boolean;
       promise_share_default_auto_generate_contract: boolean;
+      promise_share_default_allow_online_authorization: boolean;
       promise_share_default_allow_recalc: boolean;
       promise_share_default_rounding_mode: string;
     };
@@ -5691,6 +5700,7 @@ export async function getPublicPromiseBasicData(
           share_show_offer_conditions: true,
           share_portafolios: true,
           share_auto_generate_contract: true,
+          share_allow_online_authorization: true,
           share_allow_recalc: true,
           share_rounding_mode: true,
           contact: {
@@ -5798,6 +5808,7 @@ export async function getPublicPromiseBasicData(
           share_show_offer_conditions: promise.share_show_offer_conditions,
           share_portafolios: promise.share_portafolios,
           share_auto_generate_contract: promise.share_auto_generate_contract,
+          share_allow_online_authorization: promise.share_allow_online_authorization,
           share_allow_recalc: promise.share_allow_recalc,
           share_rounding_mode: promise.share_rounding_mode,
         },
@@ -5820,6 +5831,7 @@ export async function getPublicPromiseBasicData(
           promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
           promise_share_default_portafolios: studio.promise_share_default_portafolios,
           promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract,
+          promise_share_default_allow_online_authorization: studio.promise_share_default_allow_online_authorization ?? true,
           promise_share_default_allow_recalc: studio.promise_share_default_allow_recalc ?? true,
           promise_share_default_rounding_mode: studio.promise_share_default_rounding_mode ?? 'charm',
         },

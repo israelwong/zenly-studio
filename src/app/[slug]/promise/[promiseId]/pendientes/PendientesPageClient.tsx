@@ -50,6 +50,7 @@ interface PendientesPageClientProps {
     promise_share_default_show_offer_conditions: boolean;
     promise_share_default_portafolios: boolean;
     promise_share_default_auto_generate_contract: boolean;
+    promise_share_default_allow_online_authorization?: boolean;
   };
   cotizaciones: PublicCotizacion[];
   paquetes: PublicPaquete[];
@@ -183,6 +184,7 @@ export function PendientesPageClient({
       promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
       promise_share_default_portafolios: studio.promise_share_default_portafolios,
       promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract,
+      promise_share_default_allow_online_authorization: studio.promise_share_default_allow_online_authorization ?? true,
     },
     onSettingsUpdated: handleSettingsUpdated,
   });
@@ -244,6 +246,7 @@ export function PendientesPageClient({
           showPackages={shareSettings.show_packages}
           paquetes={paquetes}
           autoGenerateContract={shareSettings.auto_generate_contract}
+          mostrarBotonAutorizar={shareSettings.allow_online_authorization}
           durationHours={promise.duration_hours}
           promiseData={{
             contact_name: promise.contact_name,

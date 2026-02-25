@@ -64,6 +64,8 @@ interface CotizacionDetailSheetProps {
   showPackages?: boolean;
   paquetes?: Array<{ id: string; cover_url: string | null }>;
   autoGenerateContract?: boolean;
+  /** Si true, se muestra el botón "Autorizar" en el footer (vista pública). Depende de share_settings.allow_online_authorization. */
+  mostrarBotonAutorizar?: boolean;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
   promiseData?: {
     contact_name: string;
@@ -97,6 +99,7 @@ export function CotizacionDetailSheet({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  mostrarBotonAutorizar = true,
   promiseData,
   dateSoldOut = false,
   condicionesVisiblesIds,
@@ -673,7 +676,7 @@ export function CotizacionDetailSheet({
               <X className="h-4 w-4 mr-1.5" />
               Cerrar
             </ZenButton>
-            {!isPreviewMode && (
+            {!isPreviewMode && mostrarBotonAutorizar && (
               <ZenButton
                 onClick={() => setShowAutorizarModal(true)}
                 className="flex-1"

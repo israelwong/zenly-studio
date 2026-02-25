@@ -19,6 +19,7 @@ interface StudioDefaults {
   promise_share_default_show_offer_conditions: boolean;
   promise_share_default_portafolios: boolean;
   promise_share_default_auto_generate_contract: boolean;
+  promise_share_default_allow_online_authorization: boolean;
 }
 
 interface UsePromiseSettingsRealtimeProps {
@@ -76,6 +77,7 @@ export function usePromiseSettingsRealtime({
       show_standard_conditions: record.share_show_standard_conditions ?? studioDefaults.promise_share_default_show_standard_conditions,
       show_offer_conditions: record.share_show_offer_conditions ?? studioDefaults.promise_share_default_show_offer_conditions,
       portafolios: record.share_portafolios ?? studioDefaults.promise_share_default_portafolios,
+      allow_online_authorization: record.share_allow_online_authorization ?? studioDefaults.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: record.share_auto_generate_contract ?? studioDefaults.promise_share_default_auto_generate_contract,
     };
   }, [promiseId, studioDefaults]);
@@ -101,7 +103,8 @@ export function usePromiseSettingsRealtime({
           record.share_show_standard_conditions !== oldRecord.share_show_standard_conditions ||
           record.share_show_offer_conditions !== oldRecord.share_show_offer_conditions ||
           record.share_portafolios !== oldRecord.share_portafolios ||
-          record.share_auto_generate_contract !== oldRecord.share_auto_generate_contract;
+          record.share_auto_generate_contract !== oldRecord.share_auto_generate_contract ||
+          record.share_allow_online_authorization !== oldRecord.share_allow_online_authorization;
 
         if (!shareFieldsChanged) {
           return;

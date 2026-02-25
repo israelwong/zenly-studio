@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Package } from 'lucide-react';
+import { Package, AlertTriangle } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/shadcn/hover-card';
 import {
   getPromiseShareSettings,
   getStudioShareDefaults,
@@ -54,6 +59,7 @@ export function PromiseShareOptionsModal({
   const [showStandardConditions, setShowStandardConditions] = useState(true);
   const [showOfferConditions, setShowOfferConditions] = useState(false);
   const [showPortafolios, setShowPortafolios] = useState(true);
+  const [allowOnlineAuthorization, setAllowOnlineAuthorization] = useState(true);
   const [autoGenerateContract, setAutoGenerateContract] = useState(false);
   const [allowRecalc, setAllowRecalc] = useState(true);
   const [roundingMode, setRoundingMode] = useState<'exact' | 'charm'>('charm');
@@ -95,6 +101,7 @@ export function PromiseShareOptionsModal({
         setShowStandardConditions(d.show_standard_conditions ?? true);
         setShowOfferConditions(d.show_offer_conditions ?? false);
         setShowPortafolios(d.portafolios ?? true);
+        setAllowOnlineAuthorization(d.allow_online_authorization ?? true);
         setAutoGenerateContract(d.auto_generate_contract ?? false);
         setAllowRecalc(d.allow_recalc ?? true);
         setRoundingMode(d.rounding_mode === 'exact' ? 'exact' : 'charm');
@@ -125,6 +132,7 @@ export function PromiseShareOptionsModal({
         setShowStandardConditions(result.data.show_standard_conditions ?? true);
         setShowOfferConditions(result.data.show_offer_conditions ?? false);
         setShowPortafolios(result.data.portafolios ?? true);
+        setAllowOnlineAuthorization(result.data.allow_online_authorization ?? true);
         setAutoGenerateContract(result.data.auto_generate_contract ?? false);
         setAllowRecalc(result.data.allow_recalc ?? true);
         setRoundingMode(result.data.rounding_mode === 'exact' ? 'exact' : 'charm');
@@ -197,7 +205,8 @@ export function PromiseShareOptionsModal({
           show_standard_conditions: showStandardConditions,
           show_offer_conditions: showOfferConditions,
           portafolios: showPortafolios,
-          auto_generate_contract: autoGenerateContract,
+          allow_online_authorization: allowOnlineAuthorization,
+          auto_generate_contract: allowOnlineAuthorization ? autoGenerateContract : false,
           allow_recalc: allowRecalc,
           rounding_mode: roundingMode,
           max_events_per_day: maxEvents,
@@ -218,7 +227,8 @@ export function PromiseShareOptionsModal({
           show_standard_conditions: showStandardConditions,
           show_offer_conditions: showOfferConditions,
           portafolios: showPortafolios,
-          auto_generate_contract: autoGenerateContract,
+          allow_online_authorization: allowOnlineAuthorization,
+          auto_generate_contract: allowOnlineAuthorization ? autoGenerateContract : false,
           allow_recalc: allowRecalc,
           rounding_mode: roundingMode,
           remember_preferences: rememberPreferences,
@@ -272,6 +282,7 @@ export function PromiseShareOptionsModal({
       description="Define que información verá el prospecto de manera automatica en la pagina de promesa"
       maxWidth="2xl"
       zIndex={10080}
+      contentClassName="px-4 py-3"
       onSave={undefined}
       onCancel={onClose}
       footerLeftContent={
@@ -314,7 +325,7 @@ export function PromiseShareOptionsModal({
             type="button"
             variant="primary"
             size="sm"
-            className="w-full"
+            className="w-full h-10"
             onClick={() => handleSave(isGlobal ? true : saveScope === 'all')}
             loading={saving}
             disabled={
@@ -328,13 +339,13 @@ export function PromiseShareOptionsModal({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-4 overflow-y-auto max-h-[min(70vh,600px)] scroll-smooth">
         {loading ? (
-          <div className="space-y-4 animate-pulse">
+          <div className="space-y-3 animate-pulse">
             {/* Skeleton: Mostrar en vista general de promesas */}
             <div className="space-y-3">
               <div className="h-5 bg-zinc-800 rounded w-64" />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 {[1, 2].map((j) => (
                   <div key={j} className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                     <div className="w-11 h-6 bg-zinc-800 rounded-full mt-0.5" />
@@ -361,9 +372,9 @@ export function PromiseShareOptionsModal({
             {/* Skeleton: Mostrar información en cotización y paquetes */}
             <div className="space-y-3">
               <div className="h-5 bg-zinc-800 rounded w-72" />
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* Primera fila */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {[1, 2].map((j) => (
                     <div key={j} className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                       <div className="w-11 h-6 bg-zinc-800 rounded-full mt-0.5" />
@@ -375,7 +386,7 @@ export function PromiseShareOptionsModal({
                   ))}
                 </div>
                 {/* Segunda fila */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {[1, 2].map((j) => (
                     <div key={j} className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                       <div className="w-11 h-6 bg-zinc-800 rounded-full mt-0.5" />
@@ -450,7 +461,7 @@ export function PromiseShareOptionsModal({
             {/* Sección: Vista general — Portafolios (izq) y Paquetes (der) misma altura */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200">Mostrar en vista general de promesas</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                   <ZenSwitch
                     checked={showPortafolios}
@@ -489,8 +500,8 @@ export function PromiseShareOptionsModal({
             {/* Sección: Precios de paquetes (revelación progresiva) */}
             <ZenCard
               variant="outlined"
-              padding="sm"
-              className={`transition-opacity duration-200 ease-out ${!showPackages ? 'opacity-60' : 'opacity-100'}`}
+              padding="none"
+              className={`!border-0 !shadow-none !p-0 transition-opacity duration-200 ease-out ${!showPackages ? 'opacity-60' : 'opacity-100'}`}
             >
               <ZenCardContent className="p-0 pt-0">
                 <h3 className="text-sm font-semibold text-zinc-200 mb-3">Precios de paquetes</h3>
@@ -509,10 +520,10 @@ export function PromiseShareOptionsModal({
                   </div>
                 )}
 
-                {/* Nivel 2: Paquetes activados — toggle recálculo */}
+                {/* Nivel 2 y 3: Recálculo + Estilo de redondeo en un solo bloque */}
                 {showPackages && (
-                  <div className="space-y-4 animate-in fade-in duration-200">
-                    <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                  <div className="flex flex-col gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-3">
                       <ZenSwitch
                         checked={allowRecalc}
                         onCheckedChange={setAllowRecalc}
@@ -528,16 +539,12 @@ export function PromiseShareOptionsModal({
                       </div>
                     </div>
 
-                    {/* Nivel 3: Recálculo activado — Radio Cards estilo de redondeo */}
                     {allowRecalc && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-200">
-                        <p className="text-xs font-medium text-zinc-400 col-span-full mb-0.5">
-                          Estilo de redondeo
-                        </p>
                         <button
                           type="button"
                           onClick={() => setRoundingMode('exact')}
-                          className={`text-left p-4 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                          className={`text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                             roundingMode === 'exact'
                               ? 'border-emerald-500/50 bg-emerald-500/10'
                               : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
@@ -545,18 +552,20 @@ export function PromiseShareOptionsModal({
                           aria-pressed={roundingMode === 'exact'}
                           aria-label="Estilo Exacto"
                         >
-                          <span className="text-sm font-medium text-zinc-200 block">Exacto</span>
-                          <span className="text-lg font-semibold text-emerald-400/90 mt-1 block tabular-nums">
-                            $18,452.12
-                          </span>
-                          <p className="text-xs text-zinc-500 mt-1.5">
+                          <div className="flex items-center gap-2 text-left">
+                            <span className="text-sm font-medium text-zinc-200">Exacto</span>
+                            <span className="text-base font-bold text-emerald-400 tabular-nums">
+                              $18,452.12
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 mt-1">
                             Muestra el cálculo técnico exacto.
                           </p>
                         </button>
                         <button
                           type="button"
                           onClick={() => setRoundingMode('charm')}
-                          className={`text-left p-4 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                          className={`text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                             roundingMode === 'charm'
                               ? 'border-emerald-500/50 bg-emerald-500/10'
                               : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
@@ -564,11 +573,13 @@ export function PromiseShareOptionsModal({
                           aria-pressed={roundingMode === 'charm'}
                           aria-label="Estilo Mágico (Charm)"
                         >
-                          <span className="text-sm font-medium text-zinc-200 block">Mágico (Charm)</span>
-                          <span className="text-lg font-semibold text-emerald-400/90 mt-1 block tabular-nums">
-                            $18,499
-                          </span>
-                          <p className="text-xs text-zinc-500 mt-1.5">
+                          <div className="flex items-center gap-2 text-left">
+                            <span className="text-sm font-medium text-zinc-200">Mágico (Charm)</span>
+                            <span className="text-base font-bold text-emerald-400 tabular-nums">
+                              $18,499
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 mt-1">
                             Aplica redondeo comercial estratégico.
                           </p>
                         </button>
@@ -582,9 +593,9 @@ export function PromiseShareOptionsModal({
             {/* Sección: Información en cotización y paquetes */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200">Mostrar información en cotización y paquetes</h3>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* Primera fila: Subtotales y precios (arriba) */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
                     showCategoriesSubtotals 
                       ? 'border-amber-500/50 bg-amber-500/5' 
@@ -600,12 +611,16 @@ export function PromiseShareOptionsModal({
                         <label className="text-sm font-medium text-zinc-200">
                           Subtotal por categoría
                         </label>
-                        {showCategoriesSubtotals && (
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400">
-                            <AlertTriangle className="h-2.5 w-2.5" />
-                            <span>Información sensible</span>
-                          </div>
-                        )}
+                        <HoverCard openDelay={200} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help">
+                              Sensible
+                            </span>
+                          </HoverCardTrigger>
+                          <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
+                            El prospecto podrá ver los montos de cada categoría. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
+                          </HoverCardContent>
+                        </HoverCard>
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         El prospecto verá el monto del subtotal por categoría
@@ -628,12 +643,16 @@ export function PromiseShareOptionsModal({
                         <label className="text-sm font-medium text-zinc-200">
                           Precio por item
                         </label>
-                        {showItemsPrices && (
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400">
-                            <AlertTriangle className="h-2.5 w-2.5" />
-                            <span>Información sensible</span>
-                          </div>
-                        )}
+                        <HoverCard openDelay={200} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help">
+                              Sensible
+                            </span>
+                          </HoverCardTrigger>
+                          <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
+                            El prospecto podrá ver el precio individual de cada servicio o producto. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
+                          </HoverCardContent>
+                        </HoverCard>
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         El prospecto verá el precio individual de cada item
@@ -642,19 +661,21 @@ export function PromiseShareOptionsModal({
                   </div>
                 </div>
 
-                {/* Segunda fila: Condiciones comerciales (abajo) */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                    <ZenSwitch
-                      checked={showStandardConditions}
-                      onCheckedChange={() => { }}
-                      disabled
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <label className="text-sm font-medium text-zinc-200">
-                        Condiciones comerciales estándar
-                      </label>
+                {/* Sección: Condiciones comerciales */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-zinc-200">Condiciones comerciales</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                      <ZenSwitch
+                        checked={showStandardConditions}
+                        onCheckedChange={() => { }}
+                        disabled
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-zinc-200">
+                          Estándar
+                        </label>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         El prospecto verá las condiciones comerciales estándar
                       </p>
@@ -669,20 +690,58 @@ export function PromiseShareOptionsModal({
                     />
                     <div className="flex-1">
                       <label className="text-sm font-medium text-zinc-200">
-                        Condiciones comerciales especiales
+                        Especiales
                       </label>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         El prospecto verá las condiciones comerciales de tipo oferta
                       </p>
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Contratación (arriba de Después de confirmar interés) */}
-            <div className="space-y-3">
+            {/* Contratación */}
+            <div className="space-y-2">
               <h3 className="text-sm font-semibold text-zinc-200">Contratación</h3>
+              <div className="border border-zinc-800 rounded-lg bg-zinc-900/50 p-3 space-y-3">
+                <div className="flex items-start gap-3">
+                  <ZenSwitch
+                    checked={allowOnlineAuthorization}
+                    onCheckedChange={setAllowOnlineAuthorization}
+                    variant="emerald"
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-zinc-200">
+                      Permitir autorización en línea
+                    </label>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      El prospecto podrá autorizar y completar sus datos automáticamente.
+                    </p>
+                  </div>
+                </div>
+                {allowOnlineAuthorization && (
+                  <div className="border border-zinc-800 rounded-lg bg-zinc-800/50 p-3">
+                    <div className="flex items-start gap-3">
+                      <ZenSwitch
+                        checked={autoGenerateContract}
+                        onCheckedChange={setAutoGenerateContract}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-zinc-200">
+                          Generar contrato automáticamente al autorizar
+                        </label>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          Si está activado, el contrato se generará automáticamente usando la plantilla por defecto cuando el prospecto autorice la cotización
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                 <ZenSwitch
                   checked={showMinDaysToHire}
@@ -721,70 +780,6 @@ export function PromiseShareOptionsModal({
                       placeholder="30"
                     />
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Opciones post-confirmación (sin label) */}
-            <div className="space-y-3">
-              {/* TODO: Próxima implementación */}
-              {/* <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                  <ZenSwitch
-                    checked={weContactYou}
-                    onCheckedChange={(checked) => {
-                      setWeContactYou(checked);
-                      if (checked) {
-                        setSendToContractProcess(false);
-                      }
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-zinc-200">
-                      Nosotros te contactamos
-                    </label>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      El prospecto recibirá un mensaje indicando que serás contactado
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                  <ZenSwitch
-                    checked={sendToContractProcess}
-                    onCheckedChange={(checked) => {
-                      setSendToContractProcess(checked);
-                      if (checked) {
-                        setWeContactYou(false);
-                      }
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-zinc-200">
-                      Enviarlo a página de proceso de contratación
-                    </label>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      Redirigir al prospecto al proceso de contratación automáticamente
-                    </p>
-                  </div>
-                </div>
-              </div> */}
-
-              <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                <ZenSwitch
-                  checked={autoGenerateContract}
-                  onCheckedChange={setAutoGenerateContract}
-                  className="mt-0.5"
-                />
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-zinc-200">
-                    Generar contrato automáticamente al autorizar
-                  </label>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Si está activado, el contrato se generará automáticamente usando la plantilla por defecto cuando el prospecto autorice la cotización
-                  </p>
                 </div>
               </div>
             </div>
@@ -874,11 +869,11 @@ export function PromiseShareOptionsModal({
             </p>
           </div>
         }
-        confirmText={pendingSaveScope === 'all' ? 'Sí, guardar para todas' : 'Sí, guardar para esta promesa'}
+        confirmText={pendingSaveScope === 'all' ? 'Guardar para todas' : 'Guardar ajustes'}
         cancelText="Cancelar"
         variant="default"
         loading={saving}
-        loadingText={pendingSaveScope === 'all' ? 'Guardando para todas las promesas...' : 'Guardando para esta promesa...'}
+        loadingText="Guardando…"
         zIndex={10090}
       />
     </ZenDialog>

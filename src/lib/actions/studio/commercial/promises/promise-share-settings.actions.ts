@@ -11,6 +11,7 @@ export interface PromiseShareSettings {
   show_standard_conditions: boolean;
   show_offer_conditions: boolean;
   portafolios: boolean;
+  allow_online_authorization: boolean;
   auto_generate_contract: boolean;
   allow_recalc: boolean;
   rounding_mode: 'exact' | 'charm';
@@ -49,6 +50,7 @@ export async function getPromiseShareSettings(
         promise_share_default_show_offer_conditions: true,
         promise_share_default_portafolios: true,
         promise_share_default_auto_generate_contract: true,
+        promise_share_default_allow_online_authorization: true,
         promise_share_default_allow_recalc: true,
         promise_share_default_rounding_mode: true,
         max_events_per_day: true,
@@ -73,6 +75,7 @@ export async function getPromiseShareSettings(
         share_show_offer_conditions: true,
         share_portafolios: true,
         share_auto_generate_contract: true,
+        share_allow_online_authorization: true,
         share_allow_recalc: true,
         share_rounding_mode: true,
         quotes: {
@@ -101,6 +104,7 @@ export async function getPromiseShareSettings(
       promise.share_show_offer_conditions === null &&
       promise.share_portafolios === null &&
       promise.share_auto_generate_contract === null &&
+      promise.share_allow_online_authorization === null &&
       promise.share_allow_recalc === null &&
       promise.share_rounding_mode === null;
 
@@ -113,6 +117,7 @@ export async function getPromiseShareSettings(
       show_standard_conditions: promise.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promise.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: promise.share_portafolios ?? studio.promise_share_default_portafolios,
+      allow_online_authorization: promise.share_allow_online_authorization ?? studio.promise_share_default_allow_online_authorization,
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
       allow_recalc: promise.share_allow_recalc ?? studio.promise_share_default_allow_recalc,
       rounding_mode: (promise.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm',
@@ -149,6 +154,7 @@ export async function updatePromiseShareSettings(
     show_standard_conditions: boolean;
     show_offer_conditions: boolean;
     portafolios: boolean;
+    allow_online_authorization: boolean;
     auto_generate_contract: boolean;
     allow_recalc: boolean;
     rounding_mode: 'exact' | 'charm';
@@ -193,6 +199,7 @@ export async function updatePromiseShareSettings(
           promise_share_default_show_offer_conditions: settings.show_offer_conditions,
           promise_share_default_portafolios: settings.portafolios,
           promise_share_default_auto_generate_contract: settings.auto_generate_contract,
+          promise_share_default_allow_online_authorization: settings.allow_online_authorization,
           promise_share_default_allow_recalc: settings.allow_recalc,
           promise_share_default_rounding_mode: settings.rounding_mode,
         },
@@ -209,6 +216,7 @@ export async function updatePromiseShareSettings(
           share_show_offer_conditions: null,
           share_portafolios: null,
           share_auto_generate_contract: null,
+          share_allow_online_authorization: null,
           share_allow_recalc: null,
           share_rounding_mode: null,
         },
@@ -226,6 +234,7 @@ export async function updatePromiseShareSettings(
           share_show_offer_conditions: settings.show_offer_conditions,
           share_portafolios: settings.portafolios,
           share_auto_generate_contract: settings.auto_generate_contract,
+          share_allow_online_authorization: settings.allow_online_authorization,
           share_allow_recalc: settings.allow_recalc,
           share_rounding_mode: settings.rounding_mode,
         },
@@ -268,6 +277,7 @@ export async function getStudioShareDefaults(studioSlug: string): Promise<{
         promise_share_default_show_offer_conditions: true,
         promise_share_default_portafolios: true,
         promise_share_default_auto_generate_contract: true,
+        promise_share_default_allow_online_authorization: true,
         promise_share_default_allow_recalc: true,
         promise_share_default_rounding_mode: true,
         max_events_per_day: true,
@@ -286,6 +296,7 @@ export async function getStudioShareDefaults(studioSlug: string): Promise<{
       show_standard_conditions: studio.promise_share_default_show_standard_conditions ?? true,
       show_offer_conditions: studio.promise_share_default_show_offer_conditions ?? false,
       portafolios: studio.promise_share_default_portafolios ?? true,
+      allow_online_authorization: studio.promise_share_default_allow_online_authorization ?? true,
       auto_generate_contract: studio.promise_share_default_auto_generate_contract ?? false,
       allow_recalc: studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: studio.promise_share_default_rounding_mode === "exact" ? "exact" : "charm",
@@ -336,6 +347,7 @@ export async function updateStudioGlobalSettings(
         promise_share_default_show_offer_conditions: settings.show_offer_conditions,
         promise_share_default_portafolios: settings.portafolios,
         promise_share_default_auto_generate_contract: settings.auto_generate_contract,
+        promise_share_default_allow_online_authorization: settings.allow_online_authorization,
         promise_share_default_allow_recalc: settings.allow_recalc,
         promise_share_default_rounding_mode: settings.rounding_mode,
         max_events_per_day: maxEvents,

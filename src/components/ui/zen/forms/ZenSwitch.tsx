@@ -16,6 +16,8 @@ export interface ZenSwitchProps {
     label?: string;
     description?: string;
     className?: string;
+    /** Clase aplicada al label (ej. text-emerald-500 o text-zinc-400) */
+    labelClassName?: string;
     id?: string;
     variant?: "default" | "amber" | "green" | "emerald"; // Variante de color cuando está activo
 }
@@ -37,6 +39,7 @@ export function ZenSwitch({
     label,
     description,
     className,
+    labelClassName,
     id,
     variant = "default"
 }: ZenSwitchProps) {
@@ -90,7 +93,8 @@ export function ZenSwitch({
                             htmlFor={switchId}
                             className={cn(
                                 "text-sm font-medium cursor-pointer",
-                                disabled ? "text-zinc-500" : "text-zinc-300"
+                                disabled ? "text-zinc-500" : "text-zinc-300",
+                                labelClassName
                             )}
                             suppressHydrationWarning
                         >
