@@ -1862,6 +1862,53 @@ export async function archivePromise(
 }
 
 /**
+ * Activar o desactivar publicación de la promesa (kill switch).
+ * published === true → published_at = now(); published === false → published_at = null (borrador).
+ */
+export async function setPromisePublished(
+  studioSlug: string,
+  promiseId: string,
+  published: boolean
+): Promise<ActionResponse<{ published_at: Date | null }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { studio_id: true },
+    });
+
+    if (!promise || promise.studio_id !== studio.id) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    const updated = await prisma.studio_promises.update({
+      where: { id: promiseId },
+      data: { published_at: published ? new Date() : null },
+      select: { published_at: true },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidateTag(`promises-list-${studioSlug}`);
+    return { success: true, data: { published_at: updated.published_at } };
+  } catch (error) {
+    console.error('[PROMISES] Error actualizando published_at:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar publicación',
+    };
+  }
+}
+
+/**
  * Desarchivar promesa (mover a primera etapa activa)
  */
 export async function unarchivePromise(

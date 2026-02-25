@@ -8,6 +8,7 @@ export {
   unarchivePromise,
   deletePromise,
   getPromiseDeletionInfo,
+  setPromisePublished,
 } from './promises.actions';
 
 export {

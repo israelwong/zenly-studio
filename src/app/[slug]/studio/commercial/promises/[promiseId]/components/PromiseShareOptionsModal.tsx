@@ -9,6 +9,7 @@ import {
   updatePromiseShareSettings,
   updateStudioGlobalSettings,
 } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { setPromisePublished } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -20,8 +21,12 @@ interface PromiseShareOptionsModalProps {
   promiseId?: string;
   /** global = configuración del estudio (Kanban); single = esta promesa (detalle) */
   scope?: 'global' | 'single';
+  /** Modo "Confirmar y Publicar": botón principal publica la promesa tras guardar opciones */
+  mode?: 'default' | 'publish';
   /** Llamado tras guardar (esta promesa o global) para refrescar la vista */
   onSuccess?: () => void;
+  /** Llamado tras publicar con éxito (solo cuando mode === 'publish'); ej. copiar URL + toast en el padre */
+  onPublishSuccess?: () => void;
 }
 
 export function PromiseShareOptionsModal({
@@ -30,7 +35,9 @@ export function PromiseShareOptionsModal({
   studioSlug,
   promiseId,
   scope = 'single',
+  mode = 'default',
   onSuccess,
+  onPublishSuccess,
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -214,10 +221,20 @@ export function PromiseShareOptionsModal({
           remember_preferences: rememberPreferences,
         });
         if (result.success) {
-          if (rememberPreferences) {
-            toast.success('Preferencias guardadas para todas las promesas');
+          if (mode === 'publish' && promiseId) {
+            const publishResult = await setPromisePublished(studioSlug, promiseId, true);
+            if (publishResult.success) {
+              onPublishSuccess?.();
+              toast.success('¡Promesa en línea! Link copiado al portapapeles');
+            } else {
+              toast.error(publishResult.error || 'Error al publicar');
+            }
           } else {
-            toast.success('Preferencias guardadas solo para esta promesa');
+            if (rememberPreferences) {
+              toast.success('Preferencias guardadas para todas las promesas');
+            } else {
+              toast.success('Preferencias guardadas solo para esta promesa');
+            }
           }
           onSuccess?.();
           onClose();
@@ -303,7 +320,7 @@ export function PromiseShareOptionsModal({
               (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)))
             }
           >
-            {saving ? 'Guardando…' : 'Guardar cambios'}
+            {saving ? (mode === 'publish' ? 'Publicando…' : 'Guardando…') : (mode === 'publish' && !isGlobal ? 'Confirmar y Publicar' : 'Guardar cambios')}
           </ZenButton>
         </div>
       }

@@ -35,6 +35,7 @@ export interface PromiseStateData {
     referrer_type: string | null;
     pipeline_stage_slug: string | null;
     pipeline_stage_id: string | null;
+    published_at: Date | null;
     // ⚠️ DEPRECATED: status removido - usar pipeline_stage_slug en su lugar
     has_event: boolean;
     evento_id: string | null;
@@ -58,6 +59,7 @@ export async function determinePromiseState(
         id: true,
         studio_id: true,
         contact_id: true,
+        published_at: true,
         referrer_id: true,
         referrer_type: true,
         event_type_id: true,
@@ -274,6 +276,7 @@ export async function determinePromiseState(
           referrer_type: promise.referrer_type || null,
           pipeline_stage_slug: promise.pipeline_stage?.slug || null,
           pipeline_stage_id: promise.pipeline_stage_id || null,
+          published_at: promise.published_at ?? null,
           // ⚠️ DEPRECATED: status removido - usar pipeline_stage_slug en su lugar
           has_event: !!promise.event,
           evento_id: eventoIdFinal,

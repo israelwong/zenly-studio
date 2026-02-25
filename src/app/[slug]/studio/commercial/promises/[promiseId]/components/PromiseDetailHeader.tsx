@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Zap } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -33,6 +33,8 @@ interface PromiseDetailHeaderProps {
     isDeleting: boolean;
     /** Modo foco (edición/negociación): ocultar Regresar al Kanban y controles derecha */
     focusMode?: boolean;
+    /** Abrir modal de opciones de automatización (se muestra a la izquierda del badge de etapa) */
+    onAutomateClick?: () => void;
 }
 
 export function PromiseDetailHeader({
@@ -54,6 +56,7 @@ export function PromiseDetailHeader({
     isUnarchiving,
     isDeleting,
     focusMode = false,
+    onAutomateClick,
 }: PromiseDetailHeaderProps) {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
@@ -103,7 +106,7 @@ export function PromiseDetailHeader({
                         )}
                     </div>
                 </div>
-                {/* Derecha: badge siempre (esquina superior derecha); resto solo si no es modo foco */}
+                {/* Derecha: badge de etapa, Gestionar Evento, dropdown (Opciones de automatización dentro del menú) */}
                 <div className="flex items-center gap-3 ml-auto">
                     {/* Badge de Seguimiento (estado) */}
                     {!loading && pipelineStages.length > 0 && currentPipelineStageId && (() => {
@@ -191,6 +194,15 @@ export function PromiseDetailHeader({
                                     </ZenButton>
                                 </ZenDropdownMenuTrigger>
                                 <ZenDropdownMenuContent align="end">
+                                    {onAutomateClick && (
+                                        <>
+                                            <ZenDropdownMenuItem onClick={onAutomateClick}>
+                                                <Zap className="h-4 w-4 mr-2" />
+                                                Opciones de automatización
+                                            </ZenDropdownMenuItem>
+                                            <ZenDropdownMenuSeparator />
+                                        </>
+                                    )}
                                     {isArchived ? (
                                         <ZenDropdownMenuItem
                                             onClick={onUnarchive}

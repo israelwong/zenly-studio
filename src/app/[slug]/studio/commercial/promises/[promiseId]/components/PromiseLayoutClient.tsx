@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, startTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { PromiseDetailHeader } from './PromiseDetailHeader';
 import { PromiseDetailToolbar } from './PromiseDetailToolbar';
@@ -42,6 +42,7 @@ export function PromiseLayoutClient({
   const isFocusMode = pathname?.includes('/cotizacion/') === true;
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalMode, setShareModalMode] = useState<'default' | 'publish'>('default');
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -296,6 +297,14 @@ export function PromiseLayoutClient({
             isUnarchiving={false}
             isDeleting={false}
             focusMode={isFocusMode}
+            onAutomateClick={
+              !isFocusMode
+                ? () => {
+                    setShareModalMode('default');
+                    setIsShareModalOpen(true);
+                  }
+                : undefined
+            }
           />
           {!isFocusMode && (
           <PromiseDetailToolbar
@@ -306,13 +315,16 @@ export function PromiseLayoutClient({
               contactName: promiseDataForHeader.name,
               phone: promiseDataForHeader.phone,
             }}
+            isPublished={!!stateData.promiseData.published_at}
+            onRequestPublish={() => {
+              setShareModalMode('publish');
+              setIsShareModalOpen(true);
+            }}
+            onUnpublishSuccess={() => {
+              startTransition(() => router.refresh());
+            }}
             eventName={stateData.promiseData.event_type_name}
             eventDate={stateData.promiseData.event_date}
-            onPreview={() => {
-              const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
-              window.open(previewUrl, '_blank');
-            }}
-            onAutomateClick={() => setIsShareModalOpen(true)}
           />
           )}
           <ZenCardContent
@@ -335,10 +347,38 @@ export function PromiseLayoutClient({
           <>
             <PromiseShareOptionsModal
               isOpen={isShareModalOpen}
-              onClose={() => setIsShareModalOpen(false)}
+              onClose={() => {
+                setIsShareModalOpen(false);
+                setShareModalMode('default');
+              }}
               studioSlug={studioSlug}
               promiseId={promiseId}
-              onSuccess={() => router.refresh()}
+              mode={shareModalMode}
+              onPublishSuccess={async () => {
+                const { getOrCreateShortUrl } = await import('@/lib/actions/studio/commercial/promises/promise-short-url.actions');
+                const result = await getOrCreateShortUrl(studioSlug, promiseId);
+                if (result.success && result.data && typeof window !== 'undefined') {
+                  const url = `${window.location.origin}/s/${result.data.shortCode}`;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {
+                    // Fallback
+                    const ta = document.createElement('textarea');
+                    ta.value = url;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try {
+                      document.execCommand('copy');
+                    } finally {
+                      document.body.removeChild(ta);
+                    }
+                  }
+                }
+              }}
+              onSuccess={() => startTransition(() => router.refresh())}
             />
             <BitacoraSheet
               open={logsSheetOpen}

@@ -7,6 +7,8 @@ import { PromiseProfileLink } from '@/components/promise/PromiseProfileLink';
 import { PromiseSessionRegistration } from '@/components/promise/PromiseSessionRegistration';
 import { PromiseRouteGuard } from '@/components/promise/PromiseRouteGuard';
 import { PromiseNotFoundView } from '@/components/promise/PromiseNotFoundView';
+import { PromiseMantenimientoView } from '@/components/promise/PromiseMantenimientoView';
+import { PromiseDraftGate } from '@/components/promise/PromiseDraftGate';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { prisma } from '@/lib/prisma';
 import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
@@ -23,6 +25,7 @@ async function getServerSideRouteState(
   promiseId: string
 ): Promise<
   | { promiseNotFound: true; targetRoute: ''; quotes: [] }
+  | { draft: true; contactName: string | null; eventTypeName: string | null; eventName: string | null }
   | {
       promiseNotFound?: false;
       targetRoute: string;
@@ -48,17 +51,31 @@ async function getServerSideRouteState(
     throw new Error('Studio no encontrado');
   }
 
-  // Verificar que la promesa exista y obtener estado (pipeline_stage) para archivada → no-disponible
+  // Verificar que la promesa exista, estado (pipeline_stage) y published_at (borrador vs publicada)
   const promise = await prisma.studio_promises.findFirst({
     where: { id: promiseId, studio_id: studio.id },
     select: {
       id: true,
+      published_at: true,
+      name: true,
       pipeline_stage: { select: { slug: true } },
+      event_type: { select: { name: true } },
+      contact: { select: { name: true } },
     },
   });
 
   if (!promise) {
     return { promiseNotFound: true, targetRoute: '', quotes: [] };
+  }
+
+  // Si está en borrador (no publicada), mostrar vista de mantenimiento
+  if (!promise.published_at) {
+    return {
+      draft: true,
+      contactName: promise.contact?.name ?? null,
+      eventTypeName: promise.event_type?.name ?? null,
+      eventName: promise.name ?? null,
+    };
   }
 
   const stageSlug = (promise.pipeline_stage?.slug ?? '').toLowerCase().trim();
@@ -223,6 +240,78 @@ export default async function PromiseLayout({
     // Si hay error crítico, redirigir a la página del studio
     // redirect() debe estar fuera de try/catch para que Next.js lo maneje correctamente
     redirect(`/${slug}`);
+  }
+
+  // Si la promesa está en borrador (no publicada), mostrar vista de mantenimiento
+  if ('draft' in routeState && routeState.draft) {
+    const [studioDataDraft, platformConfigDraft] = await Promise.allSettled([
+      prisma.studios.findUnique({
+        where: { slug },
+        select: { studio_name: true, slogan: true, logo_url: true },
+      }),
+      getPlatformConfigCached(),
+    ]);
+    const studioInfoDraft = studioDataDraft.status === 'fulfilled' ? studioDataDraft.value : null;
+    const platformConfigDataDraft = platformConfigDraft.status === 'fulfilled' ? platformConfigDraft.value : null;
+    const contactName = routeState.contactName ?? '';
+    const eventTypeName = routeState.eventTypeName ?? 'Evento';
+    const eventName = routeState.eventName ?? '';
+
+    return (
+      <div className="min-h-screen bg-zinc-950">
+        {studioInfoDraft && (
+          <header className="fixed top-0 left-0 right-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
+            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+              <PromiseProfileLink
+                href={`/${slug}`}
+                className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+              >
+                {studioInfoDraft.logo_url && (
+                  <img
+                    src={studioInfoDraft.logo_url}
+                    alt={studioInfoDraft.studio_name}
+                    className="h-9 w-9 object-contain rounded-full"
+                  />
+                )}
+                <div>
+                  <h1 className="text-sm font-semibold text-white">{studioInfoDraft.studio_name}</h1>
+                  {studioInfoDraft.slogan && (
+                    <p className="text-[10px] text-zinc-400">{studioInfoDraft.slogan}</p>
+                  )}
+                </div>
+              </PromiseProfileLink>
+              <PromiseProfileLink
+                href={`/${slug}`}
+                className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
+              >
+                Ver perfil
+              </PromiseProfileLink>
+            </div>
+          </header>
+        )}
+        <PromiseSessionRegistration studioSlug={slug} promiseId={promiseId} />
+        <PromisePageProvider>
+          <div className="pt-[65px] pb-[10px]">
+            <Suspense fallback={<div className="min-h-[40vh]" />}>
+              <PromiseDraftGate
+                draft
+                studioSlug={slug}
+                contactName={contactName}
+                eventTypeName={eventTypeName}
+                eventName={eventName}
+              >
+                {children}
+              </PromiseDraftGate>
+            </Suspense>
+          </div>
+        </PromisePageProvider>
+        <PublicPageFooterServer
+          companyName={platformConfigDataDraft?.company_name || 'Zenly México'}
+          commercialName={platformConfigDataDraft?.commercial_name || platformConfigDataDraft?.company_name || 'Zenly Studio'}
+          domain={platformConfigDataDraft?.domain || 'zenly.mx'}
+        />
+      </div>
+    );
   }
 
   // Si la promesa fue eliminada, mostrar vista de "no disponible" sin guard ni hijos
