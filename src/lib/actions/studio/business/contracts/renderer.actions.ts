@@ -165,6 +165,7 @@ export async function getPromiseContractData(
         paquete_id: true, // ✅ Para identificar si viene de paquete y aplicar precio charm
         precio_calculado: true,
         bono_especial: true,
+        items_cortesia: true,
         cotizacion_items: {
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -448,13 +449,24 @@ export async function getPromiseContractData(
       }
     }
 
-    // Fase 10.3: Desglose de negociación (precio lista, cortesías, bono, ajuste). Total contrato = precio_final_cierre (congruencia de firma).
+    // Fase 10.3: Desglose alineado con Resumen de Cierre (precio_calculado, monto_cortesias, bono_especial, ajuste_cierre).
     const precioCalculadoNum = cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null;
     const bonoEspecialNum = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
     const precioListaContrato = precioCalculadoNum != null && precioCalculadoNum > 0 ? precioCalculadoNum : precioBaseReal;
+    const itemsCortesiaArr = Array.isArray((cotizacion as { items_cortesia?: unknown }).items_cortesia)
+      ? ((cotizacion as { items_cortesia: string[] }).items_cortesia)
+      : [];
+    const itemsCortesiaIds = new Set(itemsCortesiaArr);
     const montoCortesiasContrato = cotizacion.cotizacion_items
-      .filter((it: { is_courtesy?: boolean }) => it.is_courtesy === true)
-      .reduce((sum: number, it: { subtotal?: number }) => sum + Number(it.subtotal ?? 0), 0);
+      .filter((it: { id?: string; item_id?: string | null; is_courtesy?: boolean }) => {
+        const esCortesia = it.is_courtesy === true || (it.id && itemsCortesiaIds.has(it.id)) || (it.item_id && itemsCortesiaIds.has(it.item_id));
+        return esCortesia;
+      })
+      .reduce((sum: number, it: { subtotal?: number; unit_price?: number; quantity?: number }) => {
+        const subtotal = Number(it.subtotal ?? 0);
+        const fallback = (Number(it.unit_price ?? 0) * (it.quantity ?? 1));
+        return sum + (subtotal > 0 ? subtotal : fallback);
+      }, 0);
     const precioFinalCierreContrato = Number(cotizacion.price);
     const ajusteCierreContrato = precioFinalCierreContrato - Math.max(0, precioListaContrato - montoCortesiasContrato - bonoEspecialNum);
     const tieneConcesionesContrato = precioListaContrato > 0 && (montoCortesiasContrato > 0 || bonoEspecialNum > 0 || Math.abs(ajusteCierreContrato) >= 0.01);

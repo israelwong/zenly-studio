@@ -12,6 +12,7 @@ import { CotizacionCard } from './CotizacionCard';
 import { CondicionesComercialeSelectorSimpleModal } from '../../components/condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
 import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { ZenDialog } from '@/components/ui/zen';
+import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { Loader2 } from 'lucide-react';
 import { ContratoDigitalCard } from './ContratoDigitalCard';
 import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
@@ -332,6 +333,39 @@ export function PromiseCierreClient({
     cierreLogic.hasLoadedRegistroOnce
   );
 
+  // Desglose idéntico al de la tarjeta (SSOT servidor) para el modal "Ver cotización" — paridad total con Resumen de Cierre.
+  const resumenCierreOverride = useMemo(() => {
+    const dc = cierreLogic.desgloseCierre;
+    const cond = cierreLogic.condicionesData?.condiciones_comerciales;
+    const precioBase = cotizacionEnCierre?.price ?? 0;
+    if (!dc || !cond) return null;
+    const montoCortesias = dc.cortesias_monto ?? 0;
+    const montoBono = dc.bono_especial ?? 0;
+    const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
+    const precioLista = getPrecioListaStudio({ price: precioBase, precio_calculado: dc.precio_calculado });
+    const ajusteCierre = getAjusteCierre(precioBase, precioLista, montoCortesias, montoBono);
+    const isFixed = cond.advance_type === 'fixed_amount' || cond.advance_type === 'amount';
+    const anticipoFromCondition = isFixed && cond.advance_amount != null
+      ? Number(cond.advance_amount)
+      : (cond.advance_percentage != null ? Math.round(precioBase * (Number(cond.advance_percentage) / 100)) : 0);
+    const anticipoOverride = cierreLogic.pagoData?.pago_monto != null ? Number(cierreLogic.pagoData.pago_monto) : null;
+    const anticipo = anticipoOverride ?? anticipoFromCondition;
+    const diferido = Math.max(0, precioBase - anticipo);
+    return {
+      precioLista,
+      montoCortesias,
+      cortesiasCount: dc.cortesias_count ?? 0,
+      montoBono,
+      ajusteCierre,
+      tieneConcesiones,
+      advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
+      anticipoPorcentaje: cond.advance_percentage ?? null,
+      anticipo,
+      diferido,
+      anticipoModificado: anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01,
+    };
+  }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.pagoData?.pago_monto, cotizacionEnCierre?.price]);
+
   return (
     <>
       <div className="space-y-6">
@@ -540,6 +574,8 @@ export function PromiseCierreClient({
                 condicionesComerciales={(cierreLogic.condicionesData?.condiciones_comerciales ?? null) as React.ComponentProps<typeof ResumenCotizacion>['condicionesComerciales']}
                 negociacionPrecioOriginal={cierreLogic.negociacionData.negociacion_precio_original}
                 negociacionPrecioPersonalizado={cierreLogic.negociacionData.negociacion_precio_personalizado}
+                anticipoOverride={cierreLogic.pagoData?.pago_monto != null ? Number(cierreLogic.pagoData.pago_monto) : null}
+                resumenCierreOverride={resumenCierreOverride}
               />
             ) : (
               <div className="text-center py-8 text-zinc-400">

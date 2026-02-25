@@ -1,7 +1,7 @@
 'use client';
 
 import React, { forwardRef, useMemo } from 'react';
-import { formatPackagePriceSimple } from '@/lib/utils/package-price-formatter';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 
 export interface ResumenPagoProps {
   precioBase: number;
@@ -33,7 +33,8 @@ export interface ResumenPagoProps {
   anticipoModificado?: boolean;
 }
 
-const formatPrice = (price: number) => formatPackagePriceSimple(price);
+/** Formateador SSOT: 2 decimales, mismo que contrato digital (evita discrepancia Resumen vs Contrato). */
+const formatPrecioCierre = (price: number) => formatMoney(price);
 
 /**
  * Resumen de Pago unificado: Precio de lista → Cortesías (n) → Bono → Ajuste por cierre → Total a pagar → Anticipo → Diferido.
@@ -104,7 +105,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">Precio de lista</span>
                   <span className="text-sm font-medium text-zinc-500 line-through">
-                    {formatPrice(precioLista)}
+                    {formatPrecioCierre(precioLista)}
                   </span>
                 </div>
               )}
@@ -114,7 +115,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                     Cortesías{cortesiasCount > 0 ? ` (${cortesiasCount})` : ''}
                   </span>
                   <span className="text-sm font-medium text-violet-400">
-                    -{formatPrice(montoCortesias)}
+                    -{formatPrecioCierre(montoCortesias)}
                   </span>
                 </div>
               )}
@@ -122,7 +123,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">Bono Especial</span>
                   <span className="text-sm font-medium text-amber-400">
-                    -{formatPrice(montoBono)}
+                    -{formatPrecioCierre(montoBono)}
                   </span>
                 </div>
               )}
@@ -132,7 +133,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                     {(ajusteCierre ?? 0) < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
                   </span>
                   <span className="text-sm font-medium text-zinc-300">
-                    {(ajusteCierre ?? 0) < 0 ? `-${formatPrice(Math.abs(ajusteCierre ?? 0))}` : `+${formatPrice(ajusteCierre ?? 0)}`}
+                    {(ajusteCierre ?? 0) < 0 ? `-${formatPrecioCierre(Math.abs(ajusteCierre ?? 0))}` : `+${formatPrecioCierre(ajusteCierre ?? 0)}`}
                   </span>
                 </div>
               )}
@@ -140,7 +141,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">Precio original</span>
                   <span className="text-sm font-medium text-zinc-300">
-                    {formatPrice(precioBase)}
+                    {formatPrecioCierre(precioBase)}
                   </span>
                 </div>
               )}
@@ -151,14 +152,14 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-400">Precio negociado</span>
                 <span className="text-sm font-medium text-blue-400">
-                  {formatPrice(precioNegociadoNormalizado)}
+                  {formatPrecioCierre(precioNegociadoNormalizado)}
                 </span>
               </div>
               {ahorroTotal > 0 && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">Ahorro total</span>
                   <span className="text-sm font-medium text-emerald-400">
-                    {formatPrice(ahorroTotal)}
+                    {formatPrecioCierre(ahorroTotal)}
                   </span>
                 </div>
               )}
@@ -176,14 +177,14 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
             <div className="flex justify-between items-center">
               <span className="text-sm text-zinc-400">Cortesías</span>
               <span className="text-sm font-medium text-emerald-400">
-                -{formatPrice(cortesias)}
+                -{formatPrecioCierre(cortesias)}
               </span>
             </div>
           )}
           <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
             <span className="text-sm font-semibold text-white">Total a pagar</span>
             <span className="text-lg font-bold text-emerald-400">
-              {formatPrice(precioFinalAPagar)}
+              {formatPrecioCierre(precioFinalAPagar)}
             </span>
           </div>
           {anticipo > 0 && (
@@ -197,7 +198,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                       : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
                   </span>
                   <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
-                    {formatPrice(anticipo)}
+                    {formatPrecioCierre(anticipo)}
                   </span>
                 </div>
               </div>
@@ -211,7 +212,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                   )}
                 </span>
                 <span className="text-sm font-medium text-zinc-300">
-                  {formatPrice(diferido)}
+                  {formatPrecioCierre(diferido)}
                 </span>
               </div>
             </>

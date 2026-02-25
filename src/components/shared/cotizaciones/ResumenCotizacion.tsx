@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge } from '@/components/ui/zen';
-import { Pencil, ChevronDown, ChevronRight } from 'lucide-react';
+import { Pencil, ChevronDown, ChevronRight, Gift } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { useParams, useRouter } from 'next/navigation';
 import { construirEstructuraJerarquicaCotizacion } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
@@ -70,6 +70,8 @@ interface ResumenCotizacionProps {
     advance_amount: number | null;
   } | null;
   hideSubtotals?: boolean;
+  /** Si false, no se muestran subtotales por categoría (solo precios por ítem y total general). Default true en legacy; para vista cierre usar false. */
+  showCategorySubtotals?: boolean;
   negociacionPrecioOriginal?: number | null;
   negociacionPrecioPersonalizado?: number | null;
   /** En contexto cierre: permite editar anticipo (el padre debe pasar renderAnticipoActions con el popover). */
@@ -78,6 +80,20 @@ interface ResumenCotizacionProps {
   anticipoOverride?: number | null;
   /** Contenido a la izquierda de la fila Anticipo (ej. botón Editar que abre popover). */
   renderAnticipoActions?: () => React.ReactNode;
+  /** Cuando se abre desde cierre: desglose idéntico al de la tarjeta (SSOT servidor). Si se pasa, se usa en lugar del desglose calculado localmente. */
+  resumenCierreOverride?: {
+    precioLista: number;
+    montoCortesias: number;
+    cortesiasCount: number;
+    montoBono: number;
+    ajusteCierre: number;
+    tieneConcesiones: boolean;
+    advanceType: 'percentage' | 'fixed_amount';
+    anticipoPorcentaje: number | null;
+    anticipo: number;
+    diferido: number;
+    anticipoModificado: boolean;
+  } | null;
 }
 
 /**
@@ -88,7 +104,7 @@ interface ResumenCotizacionProps {
  * cotizaciones asociadas a la misma promesa para mantener solo una cotización activa.
  */
 
-export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationHours, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado, canEditAnticipo, anticipoOverride, renderAnticipoActions }: ResumenCotizacionProps) {
+export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationHours, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, showCategorySubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado, canEditAnticipo, anticipoOverride, renderAnticipoActions, resumenCierreOverride }: ResumenCotizacionProps) {
   const effectiveDuration = event_duration ?? promiseDurationHours ?? null;
   const params = useParams();
   const router = useRouter();
@@ -187,7 +203,7 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
   // Calcular total desde estructura (ya calculado por función centralizada)
   const totalCalculado = estructura.total;
 
-  // Desglose de negociación (alineado con cierre): precio lista, cortesías, bono, ajuste, total, anticipo, diferido
+  // Función maestra: desglose invariante para resumen unificado (tarjeta cierre + modal Ver cotización). precioLista, montoCortesias (valor de lista), montoBono, ajusteCierre, anticipo, diferido = Total − Anticipo.
   const desglose = useMemo(() => {
     const itemsCortesia = cotizacion.items_cortesia ?? [];
     const idsCortesia = new Set(itemsCortesia);
@@ -199,7 +215,8 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
       cortesias_count += 1;
       const qty = item.quantity ?? 1;
       const unit = Number(item.unit_price ?? 0);
-      cortesias_monto += unit > 0 ? unit * qty : Number(item.subtotal ?? 0);
+      // Valor de lista (precio × cantidad) para SSOT con cierre y contrato; no usar subtotal que puede ser 0 en cortesía
+      cortesias_monto += unit * qty;
     });
     const montoBono = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
     const precioLista = getPrecioListaStudio({
@@ -232,6 +249,18 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
       anticipoPorcentaje: cond?.advance_percentage ?? null,
     };
   }, [cotizacion.price, cotizacion.precio_calculado, cotizacion.bono_especial, cotizacion.items_cortesia, cotizacion.items, totalCalculado, condicionesComerciales]);
+
+  // Lookup: id de ítem → es cortesía (para mostrar Gift, badge y $0.00 en subtotal)
+  const idsCortesiaLookup = useMemo(() => {
+    const set = new Set<string>();
+    const fromIds = new Set(cotizacion.items_cortesia ?? []);
+    (cotizacion.items ?? []).forEach((item) => {
+      if ((item as { is_courtesy?: boolean }).is_courtesy === true) set.add(item.id ?? '');
+      if (item.id && fromIds.has(item.id)) set.add(item.id);
+      if (item.item_id && fromIds.has(item.item_id)) set.add(item.item_id);
+    });
+    return set;
+  }, [cotizacion.items, cotizacion.items_cortesia]);
 
   return (
     <ZenCard variant="outlined">
@@ -310,8 +339,8 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
                                   )}
                                   <span className="text-sm font-medium text-zinc-400">{categoria.nombre}</span>
                                 </div>
-                                {/* Mostrar subtotal por categoría */}
-                                {!hideSubtotals && (
+                                {/* Mostrar subtotal por categoría solo si showCategorySubtotals */}
+                                {showCategorySubtotals && !hideSubtotals && (
                                   <span className="text-sm font-semibold text-blue-400 ml-auto pl-4">
                                     {formatearMoneda(subtotalCategoria)}
                                   </span>
@@ -332,19 +361,43 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
                                       });
                                       const cantidadDisplay = formatted.displayText || `x${item.cantidad ?? 1}`;
                                       const profitTypeSnapshot = (item as { profit_type_snapshot?: string | null }).profit_type_snapshot;
-                                      const tipoLabel = profitTypeSnapshot?.toLowerCase() === 'producto' || profitTypeSnapshot?.toLowerCase() === 'product' ? 'Producto' : profitTypeSnapshot ? 'Servicio' : null;
+                                      const esProducto = profitTypeSnapshot?.toLowerCase() === 'producto' || profitTypeSnapshot?.toLowerCase() === 'product';
+                                      const tipoLabel = esProducto ? 'Producto' : profitTypeSnapshot ? 'Servicio' : null;
+                                      const esCortesia = (item.id && idsCortesiaLookup.has(item.id)) || (item.item_id && idsCortesiaLookup.has(item.item_id));
+                                      const unitPrice = (item as { unit_price?: number }).unit_price;
+                                      const valorListaCortesia = unitPrice != null ? unitPrice * (item.cantidad ?? 1) : item.subtotal;
+                                      const subtotalAMostrar = esCortesia ? valorListaCortesia : item.subtotal;
 
                                       return (
                                         <div
                                           key={item.id || item.item_id || `item-${item.nombre}`}
                                           className={`grid gap-2 items-baseline py-1.5 px-2 text-sm text-zinc-300 rounded hover:bg-zinc-800/30 transition-colors ${hideSubtotals ? 'grid-cols-[1fr_60px]' : 'grid-cols-[1fr_60px_100px]'}`}
                                         >
-                                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                            <span className="wrap-break-word text-zinc-300">{nombre}</span>
+                                          <div className="min-w-0">
+                                            <span className="text-zinc-300 break-words">{nombre}</span>
                                             {tipoLabel && (
-                                              <ZenBadge variant="outline" size="sm" className="shrink-0 text-[10px] px-1 py-0 border-zinc-600 text-zinc-400">
-                                                {tipoLabel}
-                                              </ZenBadge>
+                                              <>
+                                                {' '}
+                                                <ZenBadge
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className={`inline-flex align-middle text-[9px] px-1 py-0.5 gap-0.5 ${esProducto ? 'bg-slate-500/20 text-slate-300 border-slate-500/40' : 'bg-blue-500/20 text-blue-400 border-blue-500/40'}`}
+                                                >
+                                                  {tipoLabel}
+                                                </ZenBadge>
+                                              </>
+                                            )}
+                                            {esCortesia && (
+                                              <>
+                                                {' '}
+                                                <ZenBadge
+                                                  size="sm"
+                                                  className="inline-flex align-middle text-[9px] px-1 py-0.5 gap-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/40"
+                                                >
+                                                  <Gift className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                                                  Cortesía
+                                                </ZenBadge>
+                                              </>
                                             )}
                                           </div>
                                           <span className="text-emerald-400 font-medium whitespace-nowrap text-right">
@@ -352,7 +405,7 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
                                           </span>
                                           {!hideSubtotals && (
                                             <span className="text-zinc-400 whitespace-nowrap text-right">
-                                              {formatearMoneda(item.subtotal)}
+                                              {formatearMoneda(subtotalAMostrar)}
                                             </span>
                                           )}
                                         </div>
@@ -375,47 +428,29 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
           <p className="text-base text-zinc-400">No hay items en esta cotización</p>
         )}
 
-        {/* Resumen de precios - Sin condiciones: subtotal + total */}
-        {!condicionesComerciales && (
-          <div className="pt-4 border-t border-zinc-700 space-y-2">
-            <div className="flex items-center justify-between text-base">
-              <span className="text-zinc-400">Subtotal:</span>
-              <span className="text-zinc-300 font-medium">{formatearMoneda(totalCalculado)}</span>
-            </div>
-            <div className="flex items-center justify-between text-lg pt-2 border-t border-zinc-800">
-              <span className="text-zinc-200 font-semibold">Total:</span>
-              <span className="text-emerald-400 font-bold">
-                {formatearMoneda(cotizacion.price)}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Desglose de negociación (mismo que cierre): Precio lista → Cortesías → Bono → Ajuste → Total → Anticipo → Diferido. Sin auditoría. */}
-        {condicionesComerciales && (
-          <div className="pt-4 border-t border-zinc-700">
-            <ResumenPago
-              title="Resumen de pago"
-              compact
-              precioBase={cotizacion.price}
-              descuentoCondicion={0}
-              precioConDescuento={cotizacion.price}
-              advanceType={desglose.advanceType}
-              anticipoPorcentaje={desglose.anticipoPorcentaje}
-              anticipo={anticipoOverride ?? desglose.anticipo}
-              diferido={Math.max(0, cotizacion.price - (anticipoOverride ?? desglose.anticipo))}
-              precioLista={desglose.precioLista}
-              montoCortesias={desglose.cortesias_monto}
-              cortesiasCount={desglose.cortesias_count}
-              montoBono={desglose.montoBono}
-              precioFinalCierre={cotizacion.price}
-              ajusteCierre={desglose.ajusteCierre}
-              tieneConcesiones={desglose.tieneConcesiones}
-              anticipoModificado={anticipoOverride != null && Math.abs(anticipoOverride - desglose.anticipo) >= 0.01}
-              renderAnticipoActions={canEditAnticipo ? renderAnticipoActions : undefined}
-            />
-          </div>
-        )}
+        {/* Bloque unificado idéntico a tarjeta de cierre. Si resumenCierreOverride (desde cierre), usarlo para paridad total; si no, desglose local. */}
+        <div className="pt-4 border-t border-zinc-800">
+          <ResumenPago
+            title={condicionesComerciales ? 'Resumen de Cierre' : 'Resumen'}
+            compact
+            precioBase={cotizacion.price}
+            descuentoCondicion={0}
+            precioConDescuento={cotizacion.price}
+            advanceType={condicionesComerciales ? (resumenCierreOverride?.advanceType ?? desglose.advanceType) : 'percentage'}
+            anticipoPorcentaje={condicionesComerciales ? (resumenCierreOverride?.anticipoPorcentaje ?? desglose.anticipoPorcentaje) : null}
+            anticipo={condicionesComerciales ? (resumenCierreOverride?.anticipo ?? anticipoOverride ?? desglose.anticipo) : 0}
+            diferido={condicionesComerciales ? (resumenCierreOverride?.diferido ?? Math.max(0, cotizacion.price - (anticipoOverride ?? desglose.anticipo))) : cotizacion.price}
+            precioLista={resumenCierreOverride?.precioLista ?? desglose.precioLista}
+            montoCortesias={resumenCierreOverride?.montoCortesias ?? desglose.cortesias_monto}
+            cortesiasCount={resumenCierreOverride?.cortesiasCount ?? desglose.cortesias_count}
+            montoBono={resumenCierreOverride?.montoBono ?? desglose.montoBono}
+            precioFinalCierre={cotizacion.price}
+            ajusteCierre={resumenCierreOverride?.ajusteCierre ?? desglose.ajusteCierre}
+            tieneConcesiones={resumenCierreOverride?.tieneConcesiones ?? desglose.tieneConcesiones}
+            anticipoModificado={resumenCierreOverride?.anticipoModificado ?? (condicionesComerciales && anticipoOverride != null && Math.abs(anticipoOverride - desglose.anticipo) >= 0.01)}
+            renderAnticipoActions={canEditAnticipo ? renderAnticipoActions : undefined}
+          />
+        </div>
       </ZenCardContent>
     </ZenCard>
   );
