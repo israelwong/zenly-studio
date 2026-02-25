@@ -1,19 +1,17 @@
 'use client';
 
 /**
- * Banner fijo superior cuando se accede a la vista pública con ?preview=studio.
- * Advierte que la información aún no es pública para el cliente.
+ * Banner ultra-simple cuando se accede con ?preview=studio.
+ * Advierte que se está previsualizando antes de publicar.
  */
 export function StudioPreviewBanner() {
   return (
     <div
-      className="sticky top-0 z-[100] w-full border-b border-amber-500 bg-amber-500/20 px-4 py-2.5 text-center"
+      className="bg-amber-500/10 border-b border-amber-500/20 py-2 text-center text-amber-500 text-xs font-medium sticky top-0 z-50 backdrop-blur-md"
       role="status"
       aria-live="polite"
     >
-      <p className="text-sm font-medium text-amber-200">
-        ⚠️ VISTA PREVIA DE ESTUDIO — Esta información aún no es pública para el cliente.
-      </p>
+      ⚠️ MODO ESTUDIO: Estás previsualizando la propuesta antes de publicarla.
     </div>
   );
 }

@@ -1837,6 +1837,8 @@ export async function getPublicPromiseActiveQuote(
     // ⚠️ HIGIENE DE DATOS: Crear mapa de orden de sección y categoría desde catálogo
     const seccionOrdenMap = new Map<string, number>();
     const categoriaOrdenMap = new Map<string, number>();
+    // Orden de cada item_id dentro de (sección, categoría) para que la vista pública coincida con Studio
+    const catalogItemOrderWithinCategory = new Map<string, number>();
     catalogo.forEach(seccion => {
       seccionOrdenMap.set(seccion.nombre.toLowerCase().trim(), seccion.orden);
       seccion.categorias.forEach(categoria => {
@@ -1844,6 +1846,9 @@ export async function getPublicPromiseActiveQuote(
           `${seccion.nombre.toLowerCase().trim()}::${categoria.nombre.toLowerCase().trim()}`,
           categoria.orden
         );
+        (categoria.servicios ?? []).forEach((servicio, idx) => {
+          catalogItemOrderWithinCategory.set(servicio.id, servicio.orden ?? idx);
+        });
       });
     });
 
@@ -1860,35 +1865,34 @@ export async function getPublicPromiseActiveQuote(
         return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
       });
 
-      // ⚠️ HIGIENE DE DATOS: Ordenar items por sección, categoría e item antes de construir estructura
+      // ⚠️ HIGIENE DE DATOS: Ordenar por sección, categoría y orden en catálogo (igual que Studio)
       const itemsOrdenados = itemsFiltrados
         .map((item: CotizacionItem) => {
           const seccionNombre = (item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim();
           const categoriaNombre = (item.category_name_snapshot || item.category_name || '').toLowerCase().trim();
           const seccionOrden = seccionOrdenMap.get(seccionNombre) ?? 999;
           const categoriaOrden = categoriaOrdenMap.get(`${seccionNombre}::${categoriaNombre}`) ?? 999;
+          const orderInCategory = item.item_id != null
+            ? (catalogItemOrderWithinCategory.get(item.item_id) ?? item.order ?? 999)
+            : (item.order ?? 999);
           return {
             item,
             seccionOrden,
             categoriaOrden,
-            itemOrder: item.order ?? 999,
+            orderInCategory,
           };
         })
         .sort((a, b) => {
-          // Ordenar por: sección → categoría → item
           if (a.seccionOrden !== b.seccionOrden) return a.seccionOrden - b.seccionOrden;
           if (a.categoriaOrden !== b.categoriaOrden) return a.categoriaOrden - b.categoriaOrden;
-          return a.itemOrder - b.itemOrder;
+          return a.orderInCategory - b.orderInCategory;
         })
         .map(({ item }) => item);
 
       const estructura = construirEstructuraJerarquicaCotizacion(
         itemsOrdenados.map((item: CotizacionItem) => {
-          // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
           let categoryName = item.category_name_snapshot || item.category_name;
           let sectionName = item.seccion_name_snapshot || item.seccion_name;
-          
-          // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
           if ((!categoryName || !sectionName) && item.service_category_id && (item as any).service_categories) {
             const categoria = (item as any).service_categories;
             if (categoria) {
@@ -1896,13 +1900,17 @@ export async function getPublicPromiseActiveQuote(
               sectionName = sectionName || categoria.section_categories?.service_sections?.name || null;
             }
           }
-          
+          const seccionNombre = (sectionName || '').toLowerCase().trim();
+          const categoriaNombre = (categoryName || '').toLowerCase().trim();
+          const orderForStructure = item.item_id != null
+            ? (catalogItemOrderWithinCategory.get(item.item_id) ?? item.order ?? 999)
+            : (item.order ?? 999);
           return {
-            item_id: item.item_id, // Puede ser null para custom items
+            item_id: item.item_id,
             quantity: item.quantity,
             unit_price: item.unit_price,
             subtotal: item.subtotal,
-            order: item.order,
+            order: orderForStructure,
             name_snapshot: item.name_snapshot,
             description_snapshot: item.description_snapshot,
             category_name_snapshot: categoryName,

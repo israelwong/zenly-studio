@@ -325,6 +325,10 @@ export function PromiseLayoutClient({
             }}
             eventName={stateData.promiseData.event_type_name}
             eventDate={stateData.promiseData.event_date}
+            onOpenAutomationOptions={() => {
+              setShareModalMode('default');
+              setIsShareModalOpen(true);
+            }}
           />
           )}
           <ZenCardContent

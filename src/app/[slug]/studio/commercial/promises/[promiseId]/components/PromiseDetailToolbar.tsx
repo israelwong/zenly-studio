@@ -29,6 +29,8 @@ interface PromiseDetailToolbarProps {
   /** Fecha del evento para [[fecha_evento]] */
   eventDate?: Date | null;
   onCopyLink?: () => void;
+  /** Si está publicada, botón a la derecha de Previsualizar que abre el modal de opciones de automatización */
+  onOpenAutomationOptions?: () => void;
 }
 
 export function PromiseDetailToolbar({
@@ -41,6 +43,7 @@ export function PromiseDetailToolbar({
   eventName = null,
   eventDate = null,
   onCopyLink,
+  onOpenAutomationOptions,
 }: PromiseDetailToolbarProps) {
   const basePublicUrl = typeof window !== 'undefined' ? `${window.location.origin}/${studioSlug}/promise/${promiseId}` : '';
   const [linkCopied, setLinkCopied] = useState(false);
@@ -129,7 +132,6 @@ export function PromiseDetailToolbar({
       {/* Izquierda: Previsualizar + WhatsApp (separado sin divisor) */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-zinc-500 font-medium">Previsualizar</span>
           <ZenButton
             variant="ghost"
             size="sm"
@@ -142,7 +144,7 @@ export function PromiseDetailToolbar({
             className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>Como prospecto</span>
+            <span>Ver como prospecto</span>
           </ZenButton>
           <ZenButton
             variant="ghost"
@@ -153,81 +155,81 @@ export function PromiseDetailToolbar({
             className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>Como estudio</span>
+            <span>Ver como estudio</span>
           </ZenButton>
         </div>
         {contactData.phone && (
           <>
             <div className="h-4 w-px bg-zinc-700" />
             <div className="flex items-center gap-1.5 ml-2">
-              <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-              <span className="text-xs text-zinc-500 font-medium">WhatsApp</span>
+              <WhatsAppIcon className="h-4 w-4 text-emerald-400 shrink-0" size={16} />
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setWhatsappModalOpen(true)}
+                className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300"
+              >
+                Enviar plantilla
+              </ZenButton>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const cleanPhone = contactData.phone.replace(/[\s\-\(\)\+]/g, '');
+                  window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                }}
+                className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300"
+              >
+                Abrir chat
+              </ZenButton>
             </div>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => setWhatsappModalOpen(true)}
-              className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300"
-            >
-              Enviar plantilla
-            </ZenButton>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const cleanPhone = contactData.phone.replace(/[\s\-\(\)\+]/g, '');
-                window.open(`https://wa.me/${cleanPhone}`, '_blank');
-              }}
-              className="px-2.5 py-1.5 h-7 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300"
-            >
-              Abrir chat
-            </ZenButton>
           </>
         )}
       </div>
 
-      {/* Derecha: Copiar URL → Publicar (toggle) */}
+      {/* Derecha: Opciones de automatización → [Copiar URL solo si publicado] → Publicar (toggle) */}
       <div className="flex items-center gap-3">
-        {isPublished ? (
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={copyUrlHandler}
-            className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
-          >
-            {linkCopied ? (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                <span>Copiado</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span>Copiar URL</span>
-              </>
-            )}
-          </ZenButton>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <ZenButton variant="ghost" size="sm" disabled className="gap-1.5 px-2.5 py-1.5 h-7 text-xs opacity-50 cursor-not-allowed">
+        {onOpenAutomationOptions && (
+          <>
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={onOpenAutomationOptions}
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
+            >
+              Opciones de automatización
+            </ZenButton>
+            <div className="h-4 w-px bg-zinc-700" />
+          </>
+        )}
+        {isPublished && (
+          <>
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={copyUrlHandler}
+              className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
+            >
+              {linkCopied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Copiado</span>
+                </>
+              ) : (
+                <>
                   <Copy className="h-3.5 w-3.5" />
                   <span>Copiar URL</span>
-                </ZenButton>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px]">
-              Publica la promesa para habilitar el link
-            </TooltipContent>
-          </Tooltip>
+                </>
+              )}
+            </ZenButton>
+            <div className="h-4 w-px bg-zinc-700" />
+          </>
         )}
-        <div className="h-4 w-px bg-zinc-700" />
         <ZenSwitch
           checked={isPublished}
           onCheckedChange={handleTogglePublish}
           variant="emerald"
-          label="Publicar"
+          label={isPublished ? 'Despublicar' : 'Publicar'}
           className="mb-0 scale-90 origin-center"
         />
       </div>

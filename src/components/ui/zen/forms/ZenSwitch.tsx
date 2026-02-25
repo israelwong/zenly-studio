@@ -54,6 +54,7 @@ export function ZenSwitch({
         <div className={cn("flex items-start space-x-3", className)}>
             {/* Switch */}
             <button
+                id={switchId}
                 type="button"
                 role="switch"
                 aria-checked={checked}

@@ -69,12 +69,12 @@ export function ZenConfirmModal({
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent
-                className={`sm:max-w-md bg-zinc-900 border border-zinc-700/80 shadow-xl shadow-black/30 rounded-xl overflow-hidden ${contentClassName ?? ''}`}
+                className={`sm:max-w-md bg-zinc-900 border border-zinc-700/80 shadow-xl shadow-black/30 overflow-hidden ${contentClassName ?? ''}`}
                 overlayZIndex={zIndex - 1}
             >
                 <DialogHeader className="space-y-0">
-                    <div className={`flex items-start gap-4 p-4 rounded-t-xl border-l-4 ${variant === 'destructive' ? 'border-red-500/60 bg-red-950/20' : 'border-blue-500/60 bg-blue-950/20'}`}>
-                        <div className={`shrink-0 p-2.5 rounded-lg border ${iconBg}`}>
+                    <div className={`flex items-start gap-4 p-4 border-l-4 ${variant === 'destructive' ? 'border-red-500/60 bg-red-950/20' : 'border-blue-500/60 bg-blue-950/20'}`}>
+                        <div className={`shrink-0 p-2.5 border ${iconBg}`}>
                             <AlertTriangle className="h-5 w-5" strokeWidth={2} />
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
