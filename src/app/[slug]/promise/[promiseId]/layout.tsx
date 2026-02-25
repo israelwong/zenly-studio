@@ -25,7 +25,7 @@ async function getServerSideRouteState(
   promiseId: string
 ): Promise<
   | { promiseNotFound: true; targetRoute: ''; quotes: [] }
-  | { draft: true; contactName: string | null; eventTypeName: string | null; eventName: string | null }
+  | { draft: true; contactName: string | null; eventTypeName: string | null; eventName: string | null; eventDate: Date | null; locacionNombre: string | null }
   | {
       promiseNotFound?: false;
       targetRoute: string;
@@ -58,9 +58,12 @@ async function getServerSideRouteState(
       id: true,
       published_at: true,
       name: true,
+      event_date: true,
+      event_location: true,
       pipeline_stage: { select: { slug: true } },
       event_type: { select: { name: true } },
       contact: { select: { name: true } },
+      event_location_ref: { select: { name: true } },
     },
   });
 
@@ -68,13 +71,15 @@ async function getServerSideRouteState(
     return { promiseNotFound: true, targetRoute: '', quotes: [] };
   }
 
-  // Si está en borrador (no publicada), mostrar vista de mantenimiento
   if (!promise.published_at) {
+    const locacionNombre = promise.event_location?.trim() || promise.event_location_ref?.name || null;
     return {
       draft: true,
       contactName: promise.contact?.name ?? null,
       eventTypeName: promise.event_type?.name ?? null,
       eventName: promise.name ?? null,
+      eventDate: promise.event_date ?? null,
+      locacionNombre,
     };
   }
 
@@ -256,6 +261,8 @@ export default async function PromiseLayout({
     const contactName = routeState.contactName ?? '';
     const eventTypeName = routeState.eventTypeName ?? 'Evento';
     const eventName = routeState.eventName ?? '';
+    const eventDate = 'eventDate' in routeState ? routeState.eventDate ?? null : null;
+    const locacionNombre = 'locacionNombre' in routeState ? routeState.locacionNombre ?? null : null;
 
     return (
       <div className="min-h-screen bg-zinc-950">
@@ -299,6 +306,8 @@ export default async function PromiseLayout({
                 contactName={contactName}
                 eventTypeName={eventTypeName}
                 eventName={eventName}
+                eventDate={eventDate}
+                locacionNombre={locacionNombre}
               >
                 {children}
               </PromiseDraftGate>

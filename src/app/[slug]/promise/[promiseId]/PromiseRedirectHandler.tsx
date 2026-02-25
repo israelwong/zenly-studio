@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { syncPromiseRoute } from '@/lib/utils/public-promise-routing';
 import { PromiseRedirectSkeleton } from './PromiseRedirectSkeleton';
@@ -12,35 +13,31 @@ interface PromiseRedirectHandlerProps {
 }
 
 export function PromiseRedirectHandler({ slug, promiseId }: PromiseRedirectHandlerProps) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const hasRedirectedRef = useRef(false);
   const currentPath = `/${slug}/promise/${promiseId}`;
-  
-  // ⚠️ AUTHORIZATION LOCK: Prevenir redirecciones durante autorización
+
   const { isAuthorizationInProgress } = usePromisePageContext();
   const isAuthorizationInProgressRef = useRef(isAuthorizationInProgress);
   isAuthorizationInProgressRef.current = isAuthorizationInProgress;
-  
-  // Global lock check
+
   const isGlobalLockActive = () => {
-    return isAuthorizationInProgressRef.current || (window as any).__IS_AUTHORIZING === true;
+    return isAuthorizationInProgressRef.current || (typeof window !== 'undefined' && (window as Window & { __IS_AUTHORIZING?: boolean }).__IS_AUTHORIZING === true);
   };
 
-  // Función para sincronizar ruta con el servidor
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current) return;
-    
-    // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
-    if (isGlobalLockActive()) {
-      return;
-    }
-    
+    if (isGlobalLockActive()) return;
+
     try {
-      const redirected = await syncPromiseRoute(promiseId, window.location.pathname, slug);
-      if (redirected) {
+      const result = await syncPromiseRoute(promiseId, window.location.pathname, slug);
+      if (result.redirected && result.targetRoute) {
         hasRedirectedRef.current = true;
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(result.targetRoute + search);
       }
-    } catch (error) {
+    } catch {
       // Error silenciado
     }
   };

@@ -37,7 +37,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 
-  // ✅ Protocolo Zenly: select atómico + paralelismo (Promise.all); fallo → redirect
+  // ✅ Datos críticos en Promise.all; agendamiento y reminder con fallback (evitan timeout de conexión DB)
   let condicionesResult;
   let paymentMethodsResult;
   let cotizacionesResult;
@@ -60,8 +60,14 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       getCotizacionesByPromiseId(promiseId),
       getPromiseShareSettings(studioSlug, promiseId),
       getLastPromiseLogs(promiseId, 3),
-      obtenerAgendamientoPorPromise(studioSlug, promiseId),
-      getReminderByPromise(studioSlug, promiseId),
+      obtenerAgendamientoPorPromise(studioSlug, promiseId).catch((err) => {
+        console.warn('[PromisePendientePage] obtenerAgendamientoPorPromise timeout/error:', err?.message ?? err);
+        return { success: true as const, data: undefined };
+      }),
+      getReminderByPromise(studioSlug, promiseId).catch((err) => {
+        console.warn('[PromisePendientePage] getReminderByPromise timeout/error:', err?.message ?? err);
+        return { success: true as const, data: null };
+      }),
     ]);
   } catch (error) {
     console.error('[PromisePendientePage] Error cargando datos (cotizaciones/condiciones/etc.):', error);

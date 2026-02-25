@@ -11,18 +11,26 @@ interface PromiseDraftGateProps {
   contactName: string;
   eventTypeName: string;
   eventName: string;
+  eventDate?: Date | null;
+  locacionNombre?: string | null;
   children: React.ReactNode;
 }
 
 /**
- * Cuando la promesa está en borrador: si la URL tiene ?preview=studio, muestra
- * el contenido completo con banner de advertencia; si no, muestra la vista de mantenimiento.
+ * Bypass de borrador: cuando la promesa no está publicada (published_at null),
+ * el layout de promise/[promiseId] renderiza este gate. Aquí se decide si mostrar
+ * mantenimiento o la propuesta real:
+ * - ?preview=studio → bypass: se muestra el contenido real + StudioPreviewBanner.
+ * - Sin el param → vista de mantenimiento ("Estamos preparando todo").
+ * La redirección a /pendientes (u otra subruta) preserva ?preview=studio vía router.replace.
  */
 export function PromiseDraftGate({
   studioSlug,
   contactName,
   eventTypeName,
   eventName,
+  eventDate,
+  locacionNombre,
   children,
 }: PromiseDraftGateProps) {
   const searchParams = useSearchParams();
@@ -30,8 +38,9 @@ export function PromiseDraftGate({
     () => searchParams.get('preview') === 'studio',
     [searchParams]
   );
+  const shouldShowMaintenance = !isStudioPreview;
 
-  if (isStudioPreview) {
+  if (!shouldShowMaintenance) {
     return (
       <>
         <StudioPreviewBanner />
@@ -46,6 +55,8 @@ export function PromiseDraftGate({
       contactName={contactName}
       eventTypeName={eventTypeName}
       eventName={eventName}
+      eventDate={eventDate}
+      locacionNombre={locacionNombre}
     />
   );
 }

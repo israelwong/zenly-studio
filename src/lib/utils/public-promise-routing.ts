@@ -123,68 +123,53 @@ export function determinePromiseRoute(
  * @param promiseId - ID de la promesa
  * @param currentPath - Ruta actual del navegador
  * @param slug - Slug del estudio
- * @returns true si hubo redirección, false si ya está en la ruta correcta
- * 
+ * @returns { redirected: boolean, targetRoute?: string } para permitir navegación cliente con query preservada (ej. ?preview=studio)
+ *
  * @example
- * ```typescript
- * const redirected = await syncPromiseRoute(promiseId, pathname, studioSlug);
- * if (!redirected) {
- *   // Ruta válida, continuar renderizado
+ * const result = await syncPromiseRoute(promiseId, pathname, studioSlug);
+ * if (result.redirected && result.targetRoute) {
+ *   router.replace(result.targetRoute + window.location.search);
  * }
- * ```
  */
 export async function syncPromiseRoute(
   promiseId: string,
   currentPath: string,
   slug: string
-): Promise<boolean> {
+): Promise<{ redirected: boolean; targetRoute?: string }> {
   try {
-    // Obtener la verdad del servidor (bypass cache con timestamp)
-    // Mejora Técnica: Parámetro de cache-busting automático (?t=${Date.now()}) para ignorar
-    // cualquier caché intermedio del navegador o de Next.js
     const response = await fetch(
       `/api/promise/${slug}/${promiseId}/redirect?t=${Date.now()}`,
       {
         cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       }
     );
 
     if (!response.ok) {
       console.error('[syncPromiseRoute] Error en respuesta del servidor:', response.status);
-      return false;
+      return { redirected: false };
     }
 
     const { redirect: targetRoute } = await response.json();
-
     if (!targetRoute) {
       console.error('[syncPromiseRoute] No se recibió targetRoute del servidor');
-      return false;
+      return { redirected: false };
     }
 
-    // Comparación robusta de rutas: limpiar espacios, trailing slashes y query params
     const clean = (path: string): string => {
       if (!path) return '';
-      return path
-        .split('?')[0] // Sin query params
-        .trim() // Sin espacios
-        .replace(/\/$/, ''); // Sin trailing slash
+      return path.split('?')[0].trim().replace(/\/$/, '');
     };
-    
     const cleanCurrent = clean(currentPath);
     const cleanTarget = clean(targetRoute);
 
     if (cleanCurrent !== cleanTarget) {
-      window.location.replace(targetRoute);
-      return true; // Hubo redirección
+      return { redirected: true, targetRoute };
     }
-
-    return false; // Ya está en la ruta correcta
+    return { redirected: false };
   } catch (error) {
     console.error('[syncPromiseRoute] Error:', error);
-    return false;
+    return { redirected: false };
   }
 }
 

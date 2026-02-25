@@ -89,29 +89,27 @@ export function PromiseRouteGuard({
     if (Array.isArray(initialQuotes) && initialQuotes.length === 0 && serverTargetRoute) {
       // Validación ya en destino hecha arriba; aquí solo redirigir si estamos en ruta distinta y no /cliente
       if (!pathname.includes('/cliente')) {
-        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
         if (isAuthorizationInProgress) {
           setIsReady(true);
           return;
         }
         hasRedirectedRef.current = true;
-        router.replace(serverTargetRoute);
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(serverTargetRoute + search);
       }
       return;
     }
-    
-    // Si tenemos datos del servidor, hacer validación inmediata sin fetch
+
     if (initialQuotes && initialQuotes.length > 0 && serverTargetRoute) {
-      // Redirigir solo si la ruta actual no coincide con el target (ya en destino se cubrió arriba)
       if (currentNorm !== targetNorm && !pathname.includes('/cliente')) {
-        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
         if (isAuthorizationInProgress) {
           setIsReady(true);
           serverValidatedRef.current = true;
           return;
         }
         hasRedirectedRef.current = true;
-        router.replace(serverTargetRoute);
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(serverTargetRoute + search);
         return;
       }
       setIsReady(true);
@@ -128,12 +126,12 @@ export function PromiseRouteGuard({
       if (normalize(pathname) === normalize(serverTargetRoute)) {
         setIsReady(true);
       } else if (!pathname.includes('/cliente')) {
-        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
         if (isAuthorizationInProgress) {
           setIsReady(true);
           return;
         }
-        router.replace(serverTargetRoute);
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(serverTargetRoute + search);
       }
     }
   }, [pathname, serverTargetRoute, isReady, router, isAuthorizationInProgress]);
@@ -159,11 +157,13 @@ export function PromiseRouteGuard({
     }
     
     try {
-      const redirected = await syncPromiseRoute(promiseId, pathname, studioSlug);
-      if (redirected) {
+      const result = await syncPromiseRoute(promiseId, pathname, studioSlug);
+      if (result.redirected && result.targetRoute) {
         hasRedirectedRef.current = true;
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(result.targetRoute + search);
       }
-    } catch (error) {
+    } catch {
       // Error silenciado
     }
   };
@@ -217,7 +217,8 @@ export function PromiseRouteGuard({
         const { redirect: targetRoute } = await res.json();
         if (targetRoute && !targetRoute.includes('no-disponible')) {
           hasRedirectedRef.current = true;
-          router.replace(targetRoute);
+          const search = typeof window !== 'undefined' ? window.location.search : '';
+          router.replace(targetRoute + search);
         }
       } catch {
         // silenciar
@@ -285,12 +286,10 @@ export function PromiseRouteGuard({
       
       const newTargetRoute = determinePromiseRoute(updatedQuotes, studioSlug, promiseId);
       if (normalize(pathname) !== normalize(newTargetRoute) && !pathname.includes('/cliente')) {
-        // ⚠️ AUTHORIZATION LOCK: No redirigir si overlay está activo
-        if (isGlobalLockActive()) {
-          return;
-        }
+        if (isGlobalLockActive()) return;
         hasRedirectedRef.current = true;
-        router.replace(newTargetRoute);
+        const search = typeof window !== 'undefined' ? window.location.search : '';
+        router.replace(newTargetRoute + search);
       }
     },
     onCotizacionInserted: () => {

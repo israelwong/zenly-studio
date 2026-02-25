@@ -292,16 +292,18 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <h6 className="text-sm text-zinc-300 leading-tight flex items-center gap-1.5 flex-wrap">
-                                              <span className="wrap-break-word">{servicioNombre}</span>
+                                              <span className="inline">
+                                                <span className="wrap-break-word">{servicioNombre}</span>
+                                                <span className="text-xs text-zinc-500 whitespace-nowrap">
+                                                  {' '}x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
+                                                </span>
+                                              </span>
                                               {esCortesia && (
                                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full text-[9px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
                                                   <Gift className="w-2.5 h-2.5" />
                                                   CORTESÍA
                                                 </span>
                                               )}
-                                              <span className="text-xs text-zinc-500 shrink-0">
-                                                x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
-                                              </span>
                                             </h6>
                                           </div>
                                           {servicioDescripcion && (
@@ -356,14 +358,10 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                             </div>
                                           )}
                                         </div>
-                                        {/* Precio o Cortesía */}
-                                        {showPrices && esCotizacion && (
-                                          <span className="text-sm font-medium ml-4 shrink-0">
-                                            {esCortesia ? (
-                                              <span className="text-emerald-400/90">Incluido</span>
-                                            ) : servicio.price !== undefined ? (
-                                              formatPrice(subtotal)
-                                            ) : null}
+                                        {/* Precio por ítem cuando showPrices */}
+                                        {showPrices && esCotizacion && servicio.price !== undefined && (
+                                          <span className="text-sm font-medium ml-4 shrink-0 text-zinc-300">
+                                            {formatPrice(subtotal)}
                                           </span>
                                         )}
                                       </div>
