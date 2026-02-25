@@ -228,7 +228,7 @@ export const ContratoSection = memo(function ContratoSection({
       contratoBoton = 'Editar';
     } else {
       contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-      contratoEstado = 'No definido. Clic en Definir para seleccionar plantilla.';
+      contratoEstado = 'Clic aquí para seleccionar una plantilla de contrato';
       contratoColor = 'text-amber-400';
       contratoBoton = 'Definir';
     }
@@ -257,7 +257,7 @@ export const ContratoSection = memo(function ContratoSection({
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {contratoBoton && !contratoFirmado && (
+          {contratoBoton && contratoBoton !== 'Definir' && !contratoFirmado && (
             <button
               onClick={onContratoButtonClick}
               className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -339,7 +339,17 @@ export const ContratoSection = memo(function ContratoSection({
         )}
         {contratoEstado && !contratoFirmado && (
           <div className={`text-xs ${contratoColor}`}>
-            <p>{contratoEstado}</p>
+            {contratoBoton === 'Definir' ? (
+              <button
+                type="button"
+                onClick={onContratoButtonClick}
+                className="text-left w-full text-emerald-400 hover:text-emerald-300 transition-colors font-medium cursor-pointer"
+              >
+                {contratoEstado}
+              </button>
+            ) : (
+              <p>{contratoEstado}</p>
+            )}
             {contractData?.contrato_definido && contractData?.contract_version && (
               <p className="text-zinc-500 mt-0.5">
                 Versión {contractData.contract_version}

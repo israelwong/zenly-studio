@@ -247,8 +247,8 @@ function CotizacionCardInner({
                       ajusteFino !== null
                         ? () => (
                             <PopoverTrigger asChild>
-                              <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-8 w-8 text-zinc-400 hover:text-zinc-200" aria-label="Ajustar anticipo">
-                                <Pencil className="h-3.5 w-3.5" />
+                              <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-zinc-400 hover:text-zinc-200" aria-label="Ajustar anticipo">
+                                <Pencil className="h-3 w-3" />
                               </ZenButton>
                             </PopoverTrigger>
                           )

@@ -189,18 +189,18 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
           </div>
           {anticipo > 0 && (
             <>
-              <div className="flex justify-between items-center pt-2 gap-2">
-                {renderAnticipoActions?.()}
-                <div className="flex justify-between items-center flex-1 min-w-0">
+              <div className="flex justify-between items-center pt-2 gap-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {renderAnticipoActions?.()}
                   <span className="text-sm text-zinc-400">
                     {advanceType === 'fixed_amount'
                       ? 'Anticipo'
                       : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
                   </span>
-                  <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
-                    {formatPrecioCierre(anticipo)}
-                  </span>
                 </div>
+                <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
+                  {formatPrecioCierre(anticipo)}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-400">
