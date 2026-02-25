@@ -624,6 +624,7 @@ export async function getCotizacionById(
     event_duration?: number | null;
     precio_calculado?: number | null;
     promise_route_state?: PromiseRouteState | null;
+    contact_name?: string | null;
     items_cortesia?: string[];
     bono_especial?: number;
     items: Array<{
@@ -713,6 +714,7 @@ export async function getCotizacionById(
         promise: {
           select: {
             pipeline_stage: { select: { slug: true } },
+            contact: { select: { name: true } },
           },
         },
         cotizacion_items: {
@@ -837,6 +839,7 @@ export async function getCotizacionById(
         precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
+        contact_name: cotizacion.promise?.contact?.name ?? null,
         items_cortesia: Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [],
         bono_especial: cotizacion.bono_especial !== null && cotizacion.bono_especial !== undefined ? Number(cotizacion.bono_especial) : 0,
         condiciones_visibles: Array.isArray(cotizacion.condiciones_visibles) ? (cotizacion.condiciones_visibles as string[]) : null,

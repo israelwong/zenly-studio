@@ -116,7 +116,7 @@ export function PromisePublicConfigCard({
             size="sm"
             onClick={openConfigModal}
             className="gap-1 px-1.5 py-0.5 h-6 text-[11px] border-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 shrink-0"
-            title="Opciones de automatización"
+            title="Visualización y automatización"
           >
             <Zap className="h-3 w-3" />
           </ZenButton>

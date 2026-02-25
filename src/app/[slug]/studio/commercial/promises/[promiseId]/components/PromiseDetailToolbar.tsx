@@ -187,7 +187,7 @@ export function PromiseDetailToolbar({
         )}
       </div>
 
-      {/* Derecha: Opciones de automatización → [Copiar URL solo si publicado] → Publicar (toggle) */}
+      {/* Derecha: Visualización y automatización → [Copiar URL solo si publicado] → Publicar (toggle) */}
       <div className="flex items-center gap-3">
         {onOpenAutomationOptions && (
           <>
@@ -197,7 +197,7 @@ export function PromiseDetailToolbar({
               onClick={onOpenAutomationOptions}
               className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-zinc-800/50 hover:bg-zinc-700/50"
             >
-              Opciones de automatización
+              Visualización y automatización
             </ZenButton>
             <div className="h-4 w-px bg-zinc-700" />
           </>

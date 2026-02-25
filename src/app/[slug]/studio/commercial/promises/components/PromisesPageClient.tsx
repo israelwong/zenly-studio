@@ -104,7 +104,7 @@ export function PromisesPageClient({
                 onClick={() => setShowGlobalSettingsModal(true)}
               >
                 <Zap className="h-4 w-4 mr-2" />
-                Opciones de automatización
+                Visualización y automatización
               </ZenButton>
               <span className="h-5 w-px bg-zinc-700 mx-4 shrink-0" aria-hidden />
               <ZenButton size="sm" onClick={handleOpenPromiseForm}>

@@ -27,6 +27,8 @@ interface PromiseShareOptionsModalProps {
   onSuccess?: () => void;
   /** Llamado tras publicar con éxito (solo cuando mode === 'publish'); ej. copiar URL + toast en el padre */
   onPublishSuccess?: () => void;
+  /** Pestaña por defecto al abrir (ej. "visualizacion" para switches Subtotal por categoría / Precio por ítem). Para uso futuro si se separan por tabs. */
+  defaultTab?: string;
 }
 
 export function PromiseShareOptionsModal({
@@ -38,6 +40,7 @@ export function PromiseShareOptionsModal({
   mode = 'default',
   onSuccess,
   onPublishSuccess,
+  defaultTab: _defaultTab,
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -265,7 +268,7 @@ export function PromiseShareOptionsModal({
     <ZenDialog
       isOpen={isOpen}
       onClose={onClose}
-      title="Opciones de automatización"
+      title="Visualización y automatización"
       description="Define que información verá el prospecto de manera automatica en la pagina de promesa"
       maxWidth="2xl"
       zIndex={10080}

@@ -705,7 +705,7 @@ export function EventInfoCard({
               {contactData.address || promiseData?.address ? (
                 <p className="text-sm text-zinc-200">{contactData.address || promiseData?.address}</p>
               ) : (
-                <p className="text-sm text-zinc-400 italic">No definida</p>
+                <p className="text-sm text-amber-500/90 italic">No definida</p>
               )}
             </div>
           </div>
@@ -764,7 +764,7 @@ export function EventInfoCard({
                 <label className="text-xs font-medium text-zinc-400 block mb-1">
                   Fecha del Evento
                 </label>
-                <p className="text-sm text-zinc-400 italic">Sin fecha seleccionada</p>
+                <p className="text-sm text-amber-500/90 italic">Sin fecha seleccionada</p>
               </div>
             )}
 
@@ -788,7 +788,7 @@ export function EventInfoCard({
                 <label className="text-xs font-medium text-zinc-400 block mb-1">
                   Tipo de Evento
                 </label>
-                <p className="text-sm text-zinc-400 italic">No especificado</p>
+                <p className="text-sm text-amber-500/90 italic">No especificado</p>
               </div>
             )}
 
@@ -805,7 +805,7 @@ export function EventInfoCard({
                 <label className="text-xs font-medium text-zinc-400 block mb-1">
                   Nombre del Evento
                 </label>
-                <p className="text-sm text-zinc-400 italic">No especificado</p>
+                <p className="text-sm text-amber-500/90 italic">No especificado</p>
               </div>
             )}
 
@@ -829,7 +829,7 @@ export function EventInfoCard({
                 <label className="text-xs font-medium text-zinc-400 block mb-1">
                   Locación / Sede
                 </label>
-                <p className="text-sm text-zinc-400 italic">No especificada</p>
+                <p className="text-sm text-amber-500/90 italic">No especificada</p>
               </div>
             )}
 
@@ -843,7 +843,7 @@ export function EventInfoCard({
                   {eventData.duration_hours} {eventData.duration_hours === 1 ? 'hora' : 'horas'}
                 </p>
               ) : (
-                <p className="text-sm text-zinc-400 italic">No definida</p>
+                <p className="text-sm text-amber-500/90 italic">No definida</p>
               )}
             </div>
           </div>
@@ -868,7 +868,7 @@ export function EventInfoCard({
                     <label className="text-xs font-medium text-zinc-400 block mb-1">
                       Canal
                     </label>
-                    <p className="text-sm text-zinc-400 italic">No especificado</p>
+                    <p className="text-sm text-amber-500/90 italic">No especificado</p>
                   </div>
                 )}
                 {acquisitionData.social_network_name && (

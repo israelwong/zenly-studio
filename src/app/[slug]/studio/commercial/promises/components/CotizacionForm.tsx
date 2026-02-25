@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
@@ -24,6 +24,7 @@ import { ItemEditorModal, type ItemFormData, type ItemEditorContext } from '@/co
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
+import type { PublicCotizacion, PublicSeccionData } from '@/types/public-promise';
 import { cn } from '@/lib/utils';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -57,6 +58,10 @@ interface CotizacionFormProps {
   isAutorizando?: boolean;
   isAlreadyAuthorized?: boolean;
   isDisabled?: boolean;
+  /** Ref para que el padre obtenga datos actuales de vista previa (mismo formato que vista pública). */
+  getPreviewDataRef?: React.MutableRefObject<(() => PublicCotizacion | null) | null>;
+  /** Si se define, se muestra botón "Vista previa" en el sidebar (arriba de Guardar/Cambiar a borrador). */
+  onRequestPreview?: () => void;
 }
 
 export function CotizacionForm({
@@ -77,6 +82,8 @@ export function CotizacionForm({
   isAutorizando = false,
   isAlreadyAuthorized = false,
   isDisabled = false,
+  getPreviewDataRef,
+  onRequestPreview,
   onCreateAsRevision,
   revisionOriginalId,
 }: CotizacionFormProps & {
@@ -173,6 +180,8 @@ export function CotizacionForm({
     return () => clearTimeout(t);
   }, []);
   const bonoOnFocusRef = useRef<number>(0);
+  /** Valores originales de negociación desde la DB (solo en edición); null en cotización nueva. */
+  const negociacionInicialRef = useRef<{ bono: number; itemsCortesia: string[] } | null>(null);
 
   // Animación entrada y scroll suave del bloque "Simulación: El cliente pagará"
   useEffect(() => {
@@ -339,8 +348,11 @@ export function CotizacionForm({
           const precioInicial = precioCierreInicial != null && Number(precioCierreInicial) > 0 ? Number(precioCierreInicial) : cotizacionData.price;
           setPrecioPersonalizado(precioInicial);
           setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? false);
-          setItemsCortesia(new Set(cotizacionData.items_cortesia ?? []));
-          setBonoEspecial(Number(cotizacionData.bono_especial) || 0);
+          const itemsCortesiaInicial = cotizacionData.items_cortesia ?? [];
+          const bonoInicial = Number(cotizacionData.bono_especial) || 0;
+          setItemsCortesia(new Set(itemsCortesiaInicial));
+          setBonoEspecial(bonoInicial);
+          negociacionInicialRef.current = { bono: bonoInicial, itemsCortesia: [...itemsCortesiaInicial] };
           const neg = (cotizacionData as { condicion_comercial_negociacion?: { id: string; name: string; discount_percentage: number | null } | null }).condicion_comercial_negociacion;
           const visibles = (cotizacionData as { condiciones_visibles?: string[] | null }).condiciones_visibles;
           if (neg) {
@@ -701,6 +713,15 @@ export function CotizacionForm({
   // Si hay ajustes: condiciones con descuento se ocultan por defecto; el usuario puede activarlas si lo desea.
   const tieneAjustesNegociacion = itemsCortesia.size > 0 || (Number(bonoEspecial) || 0) > 0;
 
+  /** True si los ajustes actuales difieren de lo guardado en la DB (solo tiene sentido si hay valores iniciales). */
+  const esNegociacionModificada = useMemo(() => {
+    const ini = negociacionInicialRef.current;
+    if (!ini) return false;
+    if (bonoEspecial !== ini.bono) return true;
+    if (itemsCortesia.size !== ini.itemsCortesia.length) return true;
+    return !ini.itemsCortesia.every((id) => itemsCortesia.has(id));
+  }, [bonoEspecial, itemsCortesia]);
+
   useEffect(() => {
     if (!tieneAjustesNegociacion) return;
     setCondicionIdsVisibles((prev) => {
@@ -963,8 +984,124 @@ export function CotizacionForm({
     }>);
   }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales]);
 
+  // Vista previa lateral: datos en tiempo real para CotizacionDetailSheet (mismo formato que vista pública)
+  const getPreviewData = useCallback((): PublicCotizacion | null => {
+    if (!catalogo.length || !servicioMap.size) return null;
+    const safeDurationHours = (durationHours && durationHours > 0) ? durationHours : 1;
+    const secciones: PublicSeccionData[] = catalogo.map((seccion, sIdx) => {
+      const categorias = seccion.categorias.map((categoria, cIdx) => {
+        const serviciosCatalog = (categoria.servicios ?? [])
+          .filter((s) => (items[s.id] ?? 0) > 0)
+          .map((s) => {
+            const data = servicioMap.get(s.id);
+            const cantidad = items[s.id] ?? 0;
+            const precioUnit = data?.precioUnitario ?? 0;
+            const billingType = (s.billing_type || data?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const cantidadEfectiva = calcularCantidadEfectiva(billingType, cantidad, safeDurationHours);
+            return {
+              id: s.id,
+              name: s.nombre,
+              name_snapshot: s.nombre,
+              description: null,
+              description_snapshot: null,
+              price: precioUnit,
+              quantity: cantidadEfectiva,
+              is_courtesy: itemsCortesia.has(s.id),
+              billing_type: billingType,
+            };
+          });
+        const customEnCategoria = customItems
+          .map((ci, globalIdx) => ({ ...ci, globalIdx }))
+          .filter((ci) => ci.categoriaId === categoria.id)
+          .map((ci) => ({
+            id: `custom-${ci.globalIdx}-${ci.name}`,
+            name: ci.name,
+            name_snapshot: ci.name,
+            description: ci.description ?? null,
+            description_snapshot: ci.description ?? null,
+            price: ci.unit_price,
+            quantity: ci.quantity,
+            is_courtesy: itemsCortesia.has(`custom-${ci.globalIdx}`),
+            billing_type: (ci.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+          }));
+        return {
+          id: categoria.id,
+          nombre: categoria.nombre,
+          orden: (categoria as { order?: number }).order ?? cIdx,
+          servicios: [...serviciosCatalog, ...customEnCategoria],
+        };
+      }).filter((c) => c.servicios.length > 0);
+      return {
+        id: seccion.id,
+        nombre: seccion.nombre,
+        orden: (seccion as { order?: number }).order ?? sIdx,
+        categorias,
+      };
+    }).filter((s) => s.categorias.length > 0);
+
+    const precioCalculado = calculoPrecio.subtotal ?? 0;
+    const total = precioPersonalizado !== '' && Number(precioPersonalizado) > 0
+      ? Number(precioPersonalizado)
+      : (calculoPrecio.total ?? 0);
+    const precioCierreRedondo = Math.round(total);
+    const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find((c) => c.id === selectedCondicionComercialId) ?? null : null);
+    return {
+      id: cotizacionId ?? 'preview',
+      name: nombre,
+      description: descripcion || null,
+      price: precioCierreRedondo,
+      precio_calculado: Math.round(precioCalculado),
+      /** Precio Final de Cierre del editor: usado por el sheet para Ajuste = PrecioCierre - (PrecioLista - Cortesías - Bono). */
+      negociacion_precio_personalizado: precioCierreRedondo,
+      discount: condicionActiva?.discount_percentage ?? null,
+      status: undefined,
+      servicios: secciones,
+      condiciones_comerciales: condicionActiva
+        ? {
+            metodo_pago: null,
+            condiciones: condicionActiva.name,
+            id: condicionActiva.id,
+            name: condicionActiva.name,
+            description: condicionActiva.description ?? null,
+            advance_percentage: condicionActiva.advance_percentage ?? null,
+            advance_type: condicionActiva.advance_type ?? null,
+            advance_amount: condicionActiva.advance_amount ?? null,
+            discount_percentage: condicionActiva.discount_percentage ?? null,
+          }
+        : null,
+      paquete_origen: null,
+      condiciones_visibles: selectedCondicionComercialId ? [selectedCondicionComercialId] : null,
+      bono_especial: Number(bonoEspecial) || 0,
+    };
+  }, [
+    catalogo,
+    items,
+    customItems,
+    itemsCortesia,
+    bonoEspecial,
+    nombre,
+    descripcion,
+    calculoPrecio.subtotal,
+    calculoPrecio.total,
+    precioPersonalizado,
+    selectedCondicionComercialId,
+    condicionesComerciales,
+    condicionNegociacion,
+    cotizacionId,
+    servicioMap,
+    durationHours,
+  ]);
+
+  useEffect(() => {
+    if (getPreviewDataRef) getPreviewDataRef.current = getPreviewData;
+    return () => {
+      if (getPreviewDataRef) getPreviewDataRef.current = null;
+    };
+  }, [getPreviewDataRef, getPreviewData]);
+
   // Fase 7.8: sincronización global — Precio Final de Cierre reacciona a catálogo (ítems/precio calculado) y ajustes (cortesías, bono)
-  // Solo mostrar badge "Precio actualizado" cuando el usuario haya modificado servicios o ajustes en esta sesión.
+  // Si cambian cortesías O bono, verificar si el precio final debe actualizarse al nuevo subtotal proyectado.
+  const montoBono = Number(bonoEspecial) || 0;
   useEffect(() => {
     if (isFirstMountAjustesSyncRef.current) {
       isFirstMountAjustesSyncRef.current = false;
@@ -979,11 +1116,13 @@ export function CotizacionForm({
       clearTimeout(tBadge);
       clearTimeout(tPending);
     };
-  }, [calculoPrecio.subtotalProyectado]);
+  }, [calculoPrecio.subtotalProyectado, montoBono]);
 
+  // Aplicar sync: Precio Final de Cierre = subtotalProyectado. No zeros: si queda 0 o vacío, se usa subtotalProyectado (o subtotal como fallback).
   useEffect(() => {
     if (!pendingSyncFromAjustes) return;
-    const sugerido = calculoPrecio.subtotalProyectado ?? 0;
+    const base = calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0;
+    const sugerido = Math.max(0, base);
     setPrecioPersonalizado(sugerido);
     setRingPrecioSincronizadoVisible(true);
   }, [pendingSyncFromAjustes, calculoPrecio.subtotalProyectado]);
@@ -2161,6 +2300,26 @@ export function CotizacionForm({
                 if (open) requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
               }}
               headerRef={sectionNegociacionRef}
+              headerAction={
+                esNegociacionModificada ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ini = negociacionInicialRef.current;
+                      if (!ini) return;
+                      setBonoEspecial(ini.bono);
+                      setItemsCortesia(new Set(ini.itemsCortesia));
+                      userHasChangedServicesOrAjustesRef.current = true;
+                      setPendingSyncFromAjustes(true);
+                      toast.success('Ajustes restaurados a la versión guardada');
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors shrink-0 mr-3 pr-0.5"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Restaurar
+                  </button>
+                ) : null
+              }
               contentClassName="bg-zinc-800/30 p-3"
             >
                 <div className="space-y-3">
@@ -2250,7 +2409,16 @@ export function CotizacionForm({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setBonoEspecial(0)}
+                                onClick={() => {
+                                  const bonoActual = Number(bonoEspecial) || 0;
+                                  setBonoEspecial(0);
+                                  userHasChangedServicesOrAjustesRef.current = true;
+                                  const nuevoSubtotalProyectado = (calculoPrecio.subtotalProyectado ?? 0) + bonoActual;
+                                  const valorCierre = Math.max(0, nuevoSubtotalProyectado);
+                                  setPrecioPersonalizado(valorCierre);
+                                  setShowPrecioSincronizadoBadge(true);
+                                  setRingPrecioSincronizadoVisible(true);
+                                }}
                                 className="h-8 w-8 p-0 text-zinc-500 hover:text-destructive hover:bg-destructive/10"
                                 title="Eliminar bono especial"
                               >
@@ -2319,24 +2487,36 @@ export function CotizacionForm({
               ) : (
                 <ZenInput
                   type="number"
-                  min="0"
+                  min={Math.max(0, (calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0))}
                   step="0.01"
                   value={precioPersonalizado}
                   onChange={(e) => {
                     const value = e.target.value;
                     setRingPrecioSincronizadoVisible(false);
-                    if (value === '') { setPrecioPersonalizado(''); return; }
+                    const base = Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
+                    if (value === '') {
+                      setPrecioPersonalizado(base);
+                      return;
+                    }
                     const numValue = parseFloat(value);
                     if (isNaN(numValue) || numValue < 0) return;
-                    setPrecioPersonalizado(value);
+                    setPrecioPersonalizado(numValue < base ? base : value);
                   }}
                   onBlur={(e) => {
                     const value = e.target.value;
-                    if (value === '') return;
+                    const base = Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
+                    if (value === '') {
+                      setPrecioPersonalizado(base);
+                      return;
+                    }
                     const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue < 0) setPrecioPersonalizado('');
+                    if (isNaN(numValue) || numValue < 0) {
+                      setPrecioPersonalizado(base);
+                      return;
+                    }
+                    if (numValue < base) setPrecioPersonalizado(base);
                   }}
-                  placeholder="0"
+                  placeholder={String(Math.max(0, calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0))}
                   className={cn(
                     'mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40',
                     ringPrecioSincronizadoVisible && 'ring-2 ring-amber-500 animate-sugerido-shake'
@@ -2368,20 +2548,53 @@ export function CotizacionForm({
               }}
               headerRef={sectionCondicionesRef}
               headerAction={
-                <ZenButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setEditingCondicionId(null);
-                    setCreateCondicionEspecialMode(false);
-                    setShowCondicionesManager(true);
-                  }}
-                  className="gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-6 min-h-6 px-1.5 text-[11px] shrink-0 mr-2"
-                >
-                  <Settings className="h-3 w-3" />
-                  Gestionar
-                </ZenButton>
+                <div className="flex items-center gap-1 shrink-0 mr-2">
+                  <ZenButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAuditoriaRentabilidadOpen(true)}
+                    disabled={condicionIdsVisibles.size === 0}
+                    title="Análisis de Rentabilidad"
+                    className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                  </ZenButton>
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                      <ZenDropdownMenuItem
+                        onClick={() => {
+                          setEditingCondicionId(null);
+                          setCreateCondicionEspecialMode(false);
+                          setShowCondicionesManager(true);
+                        }}
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Gestionar condiciones
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem
+                        onClick={() => {
+                          setCreateCondicionEspecialMode(true);
+                          setEditingCondicionId(null);
+                          setShowCondicionesManager(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Crear condición especial
+                      </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
+                </div>
               }
               contentClassName="bg-zinc-900/50 p-3"
             >
@@ -2583,35 +2796,6 @@ export function CotizacionForm({
                       </div>
                     );
                   })()}
-                </div>
-
-                <div className="mt-3 flex flex-col gap-2 w-full">
-                  <ZenButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setCreateCondicionEspecialMode(true);
-                      setEditingCondicionId(null);
-                      setShowCondicionesManager(true);
-                    }}
-                    className="w-full gap-2 py-3.5 border-zinc-700/50 bg-zinc-800/30 text-zinc-300 hover:bg-zinc-800/50"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Crear condición comercial especial
-                  </ZenButton>
-                  <ZenButton
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={condicionIdsVisibles.size === 0}
-                    onClick={() => setAuditoriaRentabilidadOpen(true)}
-                    className="w-full gap-2 py-2.5 text-zinc-300 hover:bg-zinc-800/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para comparar rentabilidades' : undefined}
-                  >
-                    <Info className="h-4 w-4" />
-                    Abrir Análisis de Rentabilidad
-                  </ZenButton>
                 </div>
 
                 {/* Resumen de Pago Simulado — animación entrada/salida y scroll suave */}
@@ -2974,6 +3158,18 @@ export function CotizacionForm({
               const isCurrentlyVisible = visibleToClient;
               return (
                 <div className="border-t border-zinc-700 pt-3 mt-4 space-y-2">
+                  {onRequestPreview && (
+                    <ZenButton
+                      type="button"
+                      variant="outline"
+                      onClick={onRequestPreview}
+                      disabled={loading || isDisabled}
+                      className="w-full gap-1.5 border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/70"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Vista previa
+                    </ZenButton>
+                  )}
                   {isEditMode ? (
                     <>
                       <ZenButton

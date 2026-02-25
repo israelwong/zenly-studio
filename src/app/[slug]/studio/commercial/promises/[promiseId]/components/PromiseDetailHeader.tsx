@@ -21,6 +21,9 @@ interface PromiseDetailHeaderProps {
     } | null;
     contactData: {
         contactId: string;
+        contactName?: string | null;
+        /** Alternativa a contactName (usado en pendiente/cierre/autorizada) */
+        name?: string | null;
     } | null;
     isArchived: boolean;
     onPipelineStageChange: (stageId: string, stageName?: string) => void;
@@ -97,7 +100,13 @@ export function PromiseDetailHeader({
                     </ZenButton>
                     )}
                     <div className="flex items-baseline gap-2">
-                        <ZenCardTitle>Promesa</ZenCardTitle>
+                        <ZenCardTitle className="font-normal">
+                            {!contactData
+                              ? 'Propuesta'
+                              : (contactData.contactName ?? contactData.name)
+                                ? <>Propuesta para <span className="font-bold">{contactData.contactName ?? contactData.name}</span></>
+                                : <>Propuesta para <span className="font-bold">sin nombre</span></>}
+                        </ZenCardTitle>
                         {loading && (
                             <div className="flex items-center gap-1.5 pb-0.5">
                                 <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />
@@ -106,7 +115,7 @@ export function PromiseDetailHeader({
                         )}
                     </div>
                 </div>
-                {/* Derecha: badge de etapa, Gestionar Evento, dropdown (Opciones de automatización dentro del menú) */}
+                {/* Derecha: badge de etapa, Gestionar Evento, dropdown (Visualización y automatización dentro del menú) */}
                 <div className="flex items-center gap-3 ml-auto">
                     {/* Badge de Seguimiento (estado) */}
                     {!loading && pipelineStages.length > 0 && currentPipelineStageId && (() => {
@@ -198,7 +207,7 @@ export function PromiseDetailHeader({
                                         <>
                                             <ZenDropdownMenuItem onClick={onAutomateClick}>
                                                 <Zap className="h-4 w-4 mr-2" />
-                                                Opciones de automatización
+                                                Visualización y automatización
                                             </ZenDropdownMenuItem>
                                             <ZenDropdownMenuSeparator />
                                         </>

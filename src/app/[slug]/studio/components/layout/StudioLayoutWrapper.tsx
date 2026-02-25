@@ -222,7 +222,7 @@ function StudioLayoutContent({
       items: [
         {
           id: 'automatizacion',
-          title: 'Opciones de Automatización',
+          title: 'Visualización y automatización de promesas',
           description: 'Configura la capacidad diaria del estudio, gestión de conflictos de fecha, envío automático de WhatsApp y recordatorios inteligentes.',
           icon: Zap,
           onClick: () => {

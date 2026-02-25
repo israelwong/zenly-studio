@@ -78,6 +78,8 @@ interface CotizacionDetailSheetProps {
   dateSoldOut?: boolean;
   /** IDs de condiciones visibles para esta cotización (si viene de la API). Si está definido, se filtra la lista por estos IDs. */
   condicionesVisiblesIds?: string[] | null;
+  /** Modo vista previa desde editor: datos locales (no DB), sin botón Autorizar, solo Cerrar. */
+  isPreviewMode?: boolean;
 }
 
 export function CotizacionDetailSheet({
@@ -98,6 +100,7 @@ export function CotizacionDetailSheet({
   promiseData,
   dateSoldOut = false,
   condicionesVisiblesIds,
+  isPreviewMode = false,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -309,6 +312,7 @@ export function CotizacionDetailSheet({
   const isUpdatingRef = useRef(false);
 
   const handleCotizacionUpdated = useCallback(async (cotizacionId: string) => {
+    if (isPreviewMode) return;
     // Solo procesar si el sheet está abierto y es la cotización actual
     if (!isOpenRef.current) {
       return;
@@ -341,7 +345,7 @@ export function CotizacionDetailSheet({
         isUpdatingRef.current = false;
       }
     }
-  }, [studioSlug, promiseId]);
+  }, [studioSlug, promiseId, isPreviewMode]);
 
   // Suscribirse siempre (el callback verifica si el sheet está abierto usando refs)
   useCotizacionesRealtime({
@@ -663,21 +667,23 @@ export function CotizacionDetailSheet({
             <ZenButton
               variant="outline"
               onClick={onClose}
-              className="shrink-0"
+              className={isPreviewMode ? 'w-full' : 'shrink-0'}
               size="sm"
             >
               <X className="h-4 w-4 mr-1.5" />
               Cerrar
             </ZenButton>
-            <ZenButton
-              onClick={() => setShowAutorizarModal(true)}
-              className="flex-1"
-              size="sm"
-              disabled={!selectedCondicionId}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              Autorizar
-            </ZenButton>
+            {!isPreviewMode && (
+              <ZenButton
+                onClick={() => setShowAutorizarModal(true)}
+                className="flex-1"
+                size="sm"
+                disabled={!selectedCondicionId}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Autorizar
+              </ZenButton>
+            )}
           </div>
         </div>
       </div>

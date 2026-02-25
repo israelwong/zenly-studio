@@ -652,7 +652,7 @@ export function usePromiseCierreLogic({
           setAuthorizationEventoId(eventoId);
         } else {
           const msg = result.error === 'DATE_OCCUPIED'
-            ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Opciones de automatización" o fuerza la reserva si aplica.'
+            ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Visualización y automatización" o fuerza la reserva si aplica.'
             : (result.error || 'Error al autorizar cotización');
           setAuthorizationError(msg);
           toast.error(msg);

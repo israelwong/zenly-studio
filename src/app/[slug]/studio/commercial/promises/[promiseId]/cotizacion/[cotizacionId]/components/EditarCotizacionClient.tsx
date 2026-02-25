@@ -1,17 +1,21 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Eye, CheckCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Settings2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
+import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
+import { PromiseShareOptionsModal } from '../../../components/PromiseShareOptionsModal';
 import { pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { toast } from 'sonner';
 import { startTransition } from 'react';
 import { getStudioPageTitle, STUDIO_PAGE_NAMES } from '@/lib/utils/studio-page-title';
 import { usePromiseFocusMode } from '../../../context/PromiseFocusModeContext';
+import type { PublicCotizacion } from '@/types/public-promise';
 
 interface EditarCotizacionClientProps {
   initialCotizacion: {
@@ -22,6 +26,7 @@ interface EditarCotizacionClientProps {
     status: string;
     promise_id: string | null;
     contact_id: string | null;
+    contact_name?: string | null;
     evento_id: string | null;
     revision_of_id?: string | null;
     revision_number?: number | null;
@@ -92,15 +97,33 @@ export function EditarCotizacionClient({
     ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
     : `/${studioSlug}/studio/commercial/promises/${promiseId}`;
 
-  const [isMounted, setIsMounted] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
   const [isPassingToCierre, setIsPassingToCierre] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewCotizacion, setPreviewCotizacion] = useState<PublicCotizacion | null>(null);
+  const previewDataRef = useRef<(() => PublicCotizacion | null) | null>(null);
+  const [showShareOptionsModal, setShowShareOptionsModal] = useState(false);
+  const [shareSettings, setShareSettings] = useState({ show_items_prices: true, show_categories_subtotals: false });
 
   React.useEffect(() => {
-    setIsMounted(true);
     document.title = getStudioPageTitle(STUDIO_PAGE_NAMES.COTIZACION);
   }, []);
+
+  const loadShareSettings = useCallback(async () => {
+    if (!promiseId || !studioSlug) return;
+    const result = await getPromiseShareSettings(studioSlug, promiseId);
+    if (result.success && result.data) {
+      setShareSettings({
+        show_items_prices: result.data.show_items_prices ?? true,
+        show_categories_subtotals: result.data.show_categories_subtotals ?? false,
+      });
+    }
+  }, [promiseId, studioSlug]);
+
+  useEffect(() => {
+    loadShareSettings();
+  }, [loadShareSettings]);
 
   const cotizacionStatus = initialCotizacion?.status || null;
   const cotizacionName = initialCotizacion?.name || '';
@@ -155,21 +178,26 @@ export function EditarCotizacionClient({
     return null; // El skeleton se muestra en loading.tsx
   }
 
+  const contactName = initialCotizacion.contact_name?.trim() || null;
+  const backLabel = contactName ? `Propuesta para ${contactName}` : 'Propuesta';
+
   const headerContent = (
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center gap-3">
         {isPassingToCierre ? (
-          <span className="inline-flex items-center justify-center p-2 rounded-md text-zinc-500 opacity-50 cursor-not-allowed" aria-hidden>
+          <span className="inline-flex items-center gap-2 rounded-md text-zinc-500 opacity-50 cursor-not-allowed" aria-hidden>
             <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-medium">{backLabel}</span>
           </span>
         ) : (
           <Link
             href={backHref}
             onClick={() => window.dispatchEvent(new CustomEvent('close-overlays'))}
-            className="inline-flex items-center justify-center p-2 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
-            aria-label="Volver al detalle de la promesa"
+            className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors text-sm font-medium"
+            aria-label={`Volver a ${backLabel}`}
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span>{backLabel}</span>
           </Link>
         )}
         <div>
@@ -189,6 +217,16 @@ export function EditarCotizacionClient({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <ZenButton
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowShareOptionsModal(true)}
+          className="gap-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50"
+        >
+          <Settings2 className="h-4 w-4" />
+          Visualización y automatización
+        </ZenButton>
         {false && canShowPasarACierre && (
           <ZenButton
             variant="primary"
@@ -202,23 +240,19 @@ export function EditarCotizacionClient({
             Pasar a Cierre
           </ZenButton>
         )}
-        {isMounted && (
-          <ZenButton
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const url = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
-              window.open(url, '_blank', 'noopener,noreferrer');
-            }}
-            className="gap-1.5 h-8 px-2.5 text-xs border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/70"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Vista previa
-          </ZenButton>
-        )}
       </div>
     </div>
   );
+
+  const handleOpenPreview = useCallback(() => {
+    const data = previewDataRef.current?.() ?? null;
+    if (!data) {
+      toast.info('Completa los datos de la cotización para ver la vista previa');
+      return;
+    }
+    setPreviewCotizacion(data);
+    setIsPreviewOpen(true);
+  }, []);
 
   const formContent = (
     <CotizacionForm
@@ -234,6 +268,8 @@ export function EditarCotizacionClient({
       isAlreadyAuthorized={isAlreadyAuthorized}
       isDisabled={isPassingToCierre}
       hideVisibilityToggle={fromCierre}
+      getPreviewDataRef={previewDataRef}
+      onRequestPreview={handleOpenPreview}
     />
   );
 
@@ -266,6 +302,34 @@ export function EditarCotizacionClient({
         promiseId={promiseId}
         cotizacionName={cotizacionName}
         isLoading={isPassingToCierre}
+      />
+
+      {previewCotizacion && (
+        <CotizacionDetailSheet
+          cotizacion={previewCotizacion}
+          isOpen={isPreviewOpen}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setPreviewCotizacion(null);
+          }}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
+          showItemsPrices={shareSettings.show_items_prices}
+          showCategoriesSubtotals={shareSettings.show_categories_subtotals}
+          isPreviewMode
+        />
+      )}
+
+      <PromiseShareOptionsModal
+        isOpen={showShareOptionsModal}
+        onClose={() => setShowShareOptionsModal(false)}
+        studioSlug={studioSlug}
+        promiseId={promiseId}
+        scope="single"
+        defaultTab="visualizacion"
+        onSuccess={() => {
+          loadShareSettings();
+        }}
       />
     </div>
   );
