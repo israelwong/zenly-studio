@@ -2,15 +2,18 @@
 
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { ZenCard } from '@/components/ui/zen';
+import { useEffect, useCallback } from 'react';
+import confetti from 'canvas-confetti';
+import { CheckCircle2, XCircle, Loader2, FileText, Calendar } from 'lucide-react';
+import { ZenCard, ZenButton } from '@/components/ui/zen';
 
 interface AutorizacionProgressOverlayProps {
   show: boolean;
   currentTask: string;
   completedTasks: string[];
   error: string | null;
+  /** Solo true cuando el servidor respondió con éxito (await). Pantalla de éxito y confeti se muestran solo entonces. */
+  successReceived?: boolean;
   eventoId?: string | null;
   studioSlug?: string;
   promiseId?: string;
@@ -28,25 +31,53 @@ const TASKS = [
   'Finalizando autorización',
 ];
 
+function runConfetti() {
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 },
+    colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'],
+    zIndex: 2147483647,
+  });
+  setTimeout(() => {
+    confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#10b981', '#3b82f6'], zIndex: 2147483647 });
+    confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#10b981', '#3b82f6'], zIndex: 2147483647 });
+  }, 250);
+  setTimeout(() => {
+    confetti({ particleCount: 30, spread: 100, origin: { y: 0.7 }, colors: ['#10b981'], zIndex: 2147483647 });
+  }, 500);
+}
+
 export function AutorizacionProgressOverlay({
   show,
   currentTask,
   completedTasks,
   error,
+  successReceived = false,
+  eventoId,
   studioSlug,
   promiseId,
   onClose,
 }: AutorizacionProgressOverlayProps) {
   const router = useRouter();
-  const isCompleted = completedTasks.length === TASKS.length && !error && currentTask === '';
 
-  // Redirección automática al terminar la animación de los 8 pasos
+  // Pantalla de éxito solo cuando el servidor respondió con éxito (successReceived), no por la animación
+  const showSuccessScreen = successReceived && !error;
+
+  // Confeti una sola vez cuando se muestra la pantalla de éxito (overlay se renderiza en un solo lugar en el árbol)
   useEffect(() => {
-    if (!show || !isCompleted || !studioSlug || !promiseId) return;
-    const path = `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`;
-    router.push(path);
-    onClose?.();
-  }, [show, isCompleted, studioSlug, promiseId, router, onClose]);
+    if (!show || !showSuccessScreen) return;
+    runConfetti();
+  }, [show, showSuccessScreen]);
+
+  const handleNavigate = useCallback(
+    (url: string) => {
+      onClose?.();
+      router.refresh();
+      setTimeout(() => router.push(url), 100);
+    },
+    [router, onClose]
+  );
 
   if (!show || typeof window === 'undefined') {
     return null;
@@ -70,13 +101,13 @@ export function AutorizacionProgressOverlay({
       <ZenCard className="max-w-md w-full min-w-0 p-6 overflow-hidden">
         <div className="text-center mb-6">
           <h3 className="text-xl font-semibold text-white mb-2">
-            {error ? 'Error al autorizar' : isCompleted ? 'Redirigiendo...' : 'Autorizando cotización'}
+            {error ? 'Error al autorizar' : showSuccessScreen ? 'Autorización completada' : 'Autorizando cotización'}
           </h3>
           <p className="text-sm text-zinc-400">
             {error
               ? 'Ocurrió un error durante el proceso'
-              : isCompleted
-                ? 'Llevándote a la cotización autorizada.'
+              : showSuccessScreen
+                ? 'Elige una opción para continuar.'
                 : 'Por favor espera mientras procesamos tu solicitud'}
           </p>
         </div>
@@ -90,31 +121,56 @@ export function AutorizacionProgressOverlay({
               <p className="text-red-400 font-medium mb-2">Error al procesar</p>
               <p className="text-sm text-zinc-400 mb-4">{error}</p>
               {onClose && (
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
-                >
+                <ZenButton variant="secondary" onClick={onClose}>
                   Cerrar
-                </button>
+                </ZenButton>
               )}
             </div>
           </div>
-        ) : isCompleted ? (
-          <div className="flex flex-col items-center gap-4 py-4">
+        ) : showSuccessScreen ? (
+          <div className="flex flex-col items-center gap-6 py-4">
             <div className="flex justify-center w-16 h-16 rounded-full bg-emerald-500/20 shrink-0">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 m-auto" />
             </div>
-            <div className="flex items-center gap-2 text-zinc-400">
-              <Loader2 className="w-5 h-5 animate-spin shrink-0" />
-              <span className="text-sm">Redirigiendo a la cotización autorizada...</span>
+            <p className="text-lg font-semibold text-white">¡Éxito!</p>
+            <p className="text-sm text-zinc-400 text-center">
+              Cotización autorizada y evento creado. Elige a dónde ir:
+            </p>
+            <div className="flex flex-col gap-3 w-full">
+              <ZenButton
+                className="w-full justify-center gap-2"
+                onClick={() =>
+                  studioSlug &&
+                  promiseId &&
+                  handleNavigate(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`)
+                }
+                disabled={!studioSlug || !promiseId}
+              >
+                <FileText className="w-4 h-4 shrink-0" />
+                Ver Resumen Comercial
+              </ZenButton>
+              {eventoId && studioSlug && (
+                <ZenButton
+                  variant="secondary"
+                  className="w-full justify-center gap-2"
+                  onClick={() => handleNavigate(`/${studioSlug}/studio/business/events/${eventoId}`)}
+                >
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  Ir a Gestión de Evento
+                </ZenButton>
+              )}
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             {TASKS.map((task, index) => {
-              const isCompleted = completedTasks.includes(task);
-              const isCurrent = currentTask === task;
-              const isPending = !isCompleted && !isCurrent;
+              const isLastStep = index === TASKS.length - 1;
+              const animationCompleted = completedTasks.includes(task);
+              // Último paso: sigue en loading hasta que el servidor responda (successReceived)
+              const isCurrent =
+                currentTask === task || (isLastStep && !successReceived && animationCompleted);
+              const isCompleted =
+                animationCompleted && (successReceived || !isLastStep);
 
               return (
                 <div

@@ -27,29 +27,6 @@ interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
 }
 
-/** Skeletons por columna: sticky — una vez que pasan a false no vuelven a true (salvo cambio de promiseId/cotización). */
-function useShowSkeletons(
-  loadingRegistro: boolean,
-  condicionesData: unknown,
-  contractData: {
-    contract_content?: string | null;
-    contrato_definido?: boolean;
-  } | null,
-  hasLoadedRegistroOnce: boolean
-) {
-  return useMemo(() => {
-    const showCotizacionSkeleton = !hasLoadedRegistroOnce && loadingRegistro && condicionesData == null;
-    const showContratoSkeleton =
-      !hasLoadedRegistroOnce &&
-      ((loadingRegistro && contractData == null) ||
-        (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === '')));
-    return {
-      showCotizacionSkeleton,
-      showContratoSkeleton,
-    };
-  }, [loadingRegistro, condicionesData, contractData, hasLoadedRegistroOnce]);
-}
-
 type CotizacionListItemType = CotizacionListItem;
 
 interface CierreColumn2Props {
@@ -208,17 +185,6 @@ export function PromiseCierreClient({
   const promiseId = params.promiseId as string;
   const { promiseData: contextPromiseData } = usePromiseContext();
 
-  // ⚠️ CRITICAL: Early returns MUST be before any hooks
-  // Si no hay datos del contexto, no mostrar nada (el skeleton se muestra en loading.tsx)
-  if (!contextPromiseData) {
-    return null;
-  }
-
-  // Si no hay cotización en cierre, no mostrar nada (el layout redirigirá)
-  if (!initialCotizacionEnCierre) {
-    return null;
-  }
-
   const [showEditModal, setShowEditModal] = useState(false);
   const [cotizacionEnCierre, setCotizacionEnCierre] = React.useState(initialCotizacionEnCierre);
 
@@ -326,12 +292,15 @@ export function PromiseCierreClient({
   });
 
   // Skeletons por columna: contrato sigue en skeleton hasta tener content o saber que no hay contrato (evita bloque vacío ~2s).
-  const showSkeletons = useShowSkeletons(
-    cierreLogic.loadingRegistro,
-    cierreLogic.condicionesData,
-    cierreLogic.contractData,
-    cierreLogic.hasLoadedRegistroOnce
-  );
+  const showSkeletons = useMemo(() => {
+    const { loadingRegistro, condicionesData, contractData, hasLoadedRegistroOnce } = cierreLogic;
+    const showCotizacionSkeleton = !hasLoadedRegistroOnce && loadingRegistro && condicionesData == null;
+    const showContratoSkeleton =
+      !hasLoadedRegistroOnce &&
+      ((loadingRegistro && contractData == null) ||
+        (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === '')));
+    return { showCotizacionSkeleton, showContratoSkeleton };
+  }, [cierreLogic.loadingRegistro, cierreLogic.condicionesData, cierreLogic.contractData, cierreLogic.hasLoadedRegistroOnce]);
 
   // Desglose idéntico al de la tarjeta (SSOT servidor) para el modal "Ver cotización" — paridad total con Resumen de Cierre.
   const resumenCierreOverride = useMemo(() => {
@@ -366,8 +335,38 @@ export function PromiseCierreClient({
     };
   }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.pagoData?.pago_monto, cotizacionEnCierre?.price]);
 
+  // Early returns solo después de todos los hooks (regla de React).
+  if (!contextPromiseData) {
+    return null;
+  }
+  if (!initialCotizacionEnCierre && !cierreLogic.isAuthorizing) {
+    return null;
+  }
+
+  // Una sola instancia del overlay: siempre en este árbol para que confeti y estado no se dupliquen
+  const overlay = (
+    <AutorizacionProgressOverlay
+      show={cierreLogic.isAuthorizing}
+      currentTask={cierreLogic.currentTask}
+      completedTasks={cierreLogic.completedTasks}
+      error={cierreLogic.authorizationError}
+      successReceived={cierreLogic.authorizationSuccess}
+      eventoId={cierreLogic.authorizationEventoId}
+      studioSlug={studioSlug}
+      promiseId={promiseId}
+      onClose={() => {
+        cierreLogic.setIsAuthorizing(false);
+        cierreLogic.setAuthorizationError(null);
+        cierreLogic.setAuthorizationEventoId(null);
+        cierreLogic.setAuthorizationSuccess(false);
+      }}
+    />
+  );
+
   return (
     <>
+      {initialCotizacionEnCierre ? (
+        <>
       <div className="space-y-6">
         {/* Layout de 3 columnas: Info + Cotización/Condiciones + Proceso de Cierre */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
@@ -662,6 +661,8 @@ export function PromiseCierreClient({
             isOpen={cierreLogic.showConfirmAutorizarModal}
             onClose={() => cierreLogic.setShowConfirmAutorizarModal(false)}
             onConfirm={cierreLogic.handleConfirmAutorizar}
+            loading={cierreLogic.isAuthorizing}
+            disabled={cierreLogic.isAuthorizing}
             title="¿Autorizar cotización y crear evento?"
             description={
               <div className="space-y-3">
@@ -688,23 +689,11 @@ export function PromiseCierreClient({
             cancelText="Cancelar"
           />
 
-          {/* Overlay de progreso de autorización */}
-          <AutorizacionProgressOverlay
-            show={cierreLogic.isAuthorizing}
-            currentTask={cierreLogic.currentTask}
-            completedTasks={cierreLogic.completedTasks}
-            error={cierreLogic.authorizationError}
-            eventoId={cierreLogic.authorizationEventoId}
-            studioSlug={studioSlug}
-            promiseId={promiseId}
-            onClose={() => {
-              cierreLogic.setIsAuthorizing(false);
-              cierreLogic.setAuthorizationError(null);
-              cierreLogic.setAuthorizationEventoId(null);
-            }}
-          />
         </>
       )}
+        </>
+      ) : null}
+      {overlay}
     </>
   );
 }
