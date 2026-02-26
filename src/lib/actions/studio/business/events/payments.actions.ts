@@ -296,7 +296,7 @@ export async function crearPago(
         // Invalidar caché del cliente
         if (cotizacion.promise?.contact_id && cotizacion.promise_id) {
           const eventIdOrPromiseId = validatedData.promise_id || cotizacion.promise_id;
-          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`, 'page' as any);
+          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`, 'max');
         }
 
         const item: PaymentItem = {
@@ -464,7 +464,7 @@ export async function actualizarPago(
         if (pagoExistente.cotizaciones?.promise?.contact_id) {
           const eventIdOrPromiseId = pagoExistente.promise_id || validatedData.promise_id;
           if (eventIdOrPromiseId) {
-            revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${pagoExistente.cotizaciones.promise.contact_id}`, 'page' as any);
+            revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${pagoExistente.cotizaciones.promise.contact_id}`, 'max');
           }
         }
 

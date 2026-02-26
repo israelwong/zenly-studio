@@ -23,7 +23,6 @@ export default async function PromiseCierrePage({ params }: PromiseCierrePagePro
     const state = stateResult.data.state;
     const allowedStates = ['cierre', 'autorizada'];
     if (!allowedStates.includes(state)) {
-      console.log('🚀 [DEBUG]: Redirecting because state is:', state);
       redirect(getPromisePathFromState(studioSlug, promiseId, state));
     }
   }

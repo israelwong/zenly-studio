@@ -1,8 +1,14 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2 } from 'lucide-react';
-import { ZenConfirmModal } from '@/components/ui/zen';
+import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2, MoreVertical, RefreshCw } from 'lucide-react';
+import {
+  ZenConfirmModal,
+  ZenDropdownMenu,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
+  ZenDropdownMenuTrigger,
+} from '@/components/ui/zen';
 import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ContratoGestionCard } from './ContratoGestionCard';
@@ -265,42 +271,66 @@ export const ContratoSection = memo(function ContratoSection({
               {contratoBoton}
             </button>
           )}
-          {tieneContratoGenerado && onRegenerateContract && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (contratoFirmado) {
-                  setShowRegenerateConfirm(true);
-                } else {
+          {contratoFirmado && (onRegenerateContract || onCancelarContrato) ? (
+            <ZenDropdownMenu>
+              <ZenDropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="h-7 min-w-[2rem] flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors shrink-0"
+                  title="Opciones de contrato"
+                  aria-label="Opciones de contrato"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </ZenDropdownMenuTrigger>
+              <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                {onRegenerateContract && (
+                  <ZenDropdownMenuItem
+                    className="cursor-pointer text-amber-400 focus:text-amber-300"
+                    onSelect={() => setShowRegenerateConfirm(true)}
+                    disabled={isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0 mr-2" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 shrink-0 mr-2" />
+                    )}
+                    Regenerar contrato
+                  </ZenDropdownMenuItem>
+                )}
+                {onCancelarContrato && (
+                  <ZenDropdownMenuItem
+                    className="cursor-pointer text-rose-400 focus:text-rose-300 focus:bg-rose-500/10"
+                    onSelect={() => setShowCancelarContratoConfirm(true)}
+                  >
+                    <Trash2 className="h-4 w-4 shrink-0 mr-2" />
+                    Cancelar contrato
+                  </ZenDropdownMenuItem>
+                )}
+              </ZenDropdownMenuContent>
+            </ZenDropdownMenu>
+          ) : (
+            tieneContratoGenerado &&
+            onRegenerateContract &&
+            !contratoFirmado && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleConfirmRegenerate();
-                }
-              }}
-              disabled={isRegenerating}
-              className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-              title="Regenerar contrato"
-              aria-label="Regenerar contrato"
-            >
-              {isRegenerating ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-              ) : (
-                'Regenerar'
-              )}
-            </button>
-          )}
-          {contratoFirmado && onCancelarContrato && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCancelarContratoConfirm(true);
-              }}
-              className="p-1.5 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
-              title="Cancelar contrato"
-              aria-label="Cancelar contrato"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+                }}
+                disabled={isRegenerating}
+                className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Regenerar contrato"
+                aria-label="Regenerar contrato"
+              >
+                {isRegenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                ) : (
+                  'Regenerar'
+                )}
+              </button>
+            )
           )}
         </div>
       </div>

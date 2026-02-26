@@ -24,6 +24,11 @@ export interface EventoResumenData {
     condiciones_comerciales_discount_percentage_snapshot: number | null;
     negociacion_precio_original: number | null;
     negociacion_precio_personalizado: number | null;
+    precio_calculado: number | null;
+    bono_especial: number | null;
+    items_cortesia: unknown;
+    cortesias_monto_snapshot: number | null;
+    cortesias_count_snapshot: number | null;
     contract_template_id_snapshot: string | null;
     contract_template_name_snapshot: string | null;
     contract_content_snapshot: string | null;
@@ -93,6 +98,11 @@ export async function obtenerResumenEventoCreado(
             condiciones_comerciales_discount_percentage_snapshot: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
+            precio_calculado: true,
+            bono_especial: true,
+            items_cortesia: true,
+            cortesias_monto_snapshot: true,
+            cortesias_count_snapshot: true,
             contract_template_id_snapshot: true,
             contract_template_name_snapshot: true,
             contract_content_snapshot: true,
@@ -158,6 +168,10 @@ export async function obtenerResumenEventoCreado(
           negociacion_precio_personalizado: evento.cotizacion.negociacion_precio_personalizado !== null && evento.cotizacion.negociacion_precio_personalizado !== undefined
             ? Number(evento.cotizacion.negociacion_precio_personalizado)
             : null,
+          precio_calculado: evento.cotizacion.precio_calculado != null ? Number(evento.cotizacion.precio_calculado) : null,
+          bono_especial: evento.cotizacion.bono_especial != null ? Number(evento.cotizacion.bono_especial) : null,
+          cortesias_monto_snapshot: evento.cotizacion.cortesias_monto_snapshot != null ? Number(evento.cotizacion.cortesias_monto_snapshot) : null,
+          cortesias_count_snapshot: evento.cotizacion.cortesias_count_snapshot ?? null,
         },
         pagos,
         totalPagado,

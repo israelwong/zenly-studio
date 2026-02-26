@@ -71,6 +71,12 @@ export interface CotizacionListItem {
   negociacion_precio_personalizado?: number | null;
   /** Fase 11: Total a pagar (precio_final_cierre) para congruencia en listados. */
   total_a_pagar?: number;
+  /** Snapshots para ResumenPago en vista Autorizada */
+  precio_calculado?: number | null;
+  bono_especial?: number | null;
+  items_cortesia?: unknown;
+  cortesias_monto_snapshot?: number | null;
+  cortesias_count_snapshot?: number | null;
 }
 
 export interface CotizacionesListResponse {
@@ -504,6 +510,39 @@ export async function getPromiseDurationHours(
 }
 
 /**
+ * Actualizar solo duration_hours de la promesa (para sincronización Local vs Global desde editor de cotización).
+ */
+export async function updatePromiseDurationHours(
+  studioSlug: string,
+  promiseId: string,
+  durationHours: number | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+    await prisma.studio_promises.update({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      data: { duration_hours: durationHours },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizando duration_hours de promesa:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar duración del evento',
+    };
+  }
+}
+
+/**
  * Obtener cotización autorizada con evento asociado a una promesa
  */
 export async function getCotizacionAutorizadaByPromiseId(
@@ -539,6 +578,11 @@ export async function getCotizacionAutorizadaByPromiseId(
         discount: true,
         evento_id: true,
         condiciones_comerciales_id: true,
+        precio_calculado: true,
+        bono_especial: true,
+        items_cortesia: true,
+        cortesias_monto_snapshot: true,
+        cortesias_count_snapshot: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -584,6 +628,11 @@ export async function getCotizacionAutorizadaByPromiseId(
         negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado !== null && cotizacion.negociacion_precio_personalizado !== undefined
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
+        precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
+        bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
+        items_cortesia: cotizacion.items_cortesia ?? undefined,
+        cortesias_monto_snapshot: cotizacion.cortesias_monto_snapshot != null ? Number(cotizacion.cortesias_monto_snapshot) : null,
+        cortesias_count_snapshot: cotizacion.cortesias_count_snapshot ?? null,
       },
     };
   } catch (error) {

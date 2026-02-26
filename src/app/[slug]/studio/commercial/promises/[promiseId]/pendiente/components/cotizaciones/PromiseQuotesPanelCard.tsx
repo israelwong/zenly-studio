@@ -555,7 +555,7 @@ export function PromiseQuotesPanelCard({
         setReminder(null);
         cierrePayloadRef.current = undefined;
         window.dispatchEvent(new CustomEvent('close-overlays'));
-        router.refresh();
+        // Navegación explícita solo; sin refresh para no disparar el cadenero de pendiente (redirect por state !== 'pendiente')
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
         });

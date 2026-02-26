@@ -1635,7 +1635,7 @@ export async function autorizarYCrearEvento(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // 2. Validar cotizaci?n y promesa
+    // 2. Validar cotización y promesa; incluir ítems para calcular desglose de cortesías antes de borrar registro cierre
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
@@ -1661,6 +1661,7 @@ export async function autorizarYCrearEvento(
             },
           },
         },
+        cotizacion_items: true,
       },
     });
 
@@ -1813,6 +1814,24 @@ export async function autorizarYCrearEvento(
       tagAprobadoId = created.id;
     }
 
+    // Desglose de cortesías (misma lógica que obtenerRegistroCierre) para persistir como snapshot antes de borrar registro cierre
+    const itemsCortesiaArr = Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [];
+    const itemsCortesiaIds = new Set(itemsCortesiaArr);
+    const allItems = cotizacion.cotizacion_items ?? [];
+    let cortesias_monto = 0;
+    let cortesias_count = 0;
+    for (const i of allItems) {
+      const esCortesia = (i as { is_courtesy?: boolean }).is_courtesy === true || itemsCortesiaIds.has(i.id) || (i.item_id != null && itemsCortesiaIds.has(i.item_id));
+      if (!esCortesia) continue;
+      cortesias_count += 1;
+      const qty = (i as { quantity?: number }).quantity ?? 1;
+      const precioUnit = Number((i as { unit_price?: unknown }).unit_price ?? 0);
+      const snapshot = Number((i as { unit_price_snapshot?: number }).unit_price_snapshot ?? 0);
+      const publicSnapshot = Number((i as { public_price_snapshot?: number }).public_price_snapshot ?? 0);
+      const valorComercial = precioUnit > 0 ? precioUnit * qty : (snapshot > 0 ? snapshot : publicSnapshot) * qty;
+      cortesias_monto += valorComercial > 0 ? valorComercial : Number((i as { subtotal?: unknown }).subtotal ?? 0);
+    }
+
     // 7. TRANSACCI?N AT?MICA
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacci?n para evitar race conditions)
@@ -1878,6 +1897,8 @@ export async function autorizarYCrearEvento(
         : null;
 
       // 7.4. Crear o actualizar evento
+      // Duración: studio_events no tiene campo duration; la duración efectiva del evento es la de la cotización autorizada (evento.cotizacion_id → studio_cotizaciones.event_duration).
+      // Los multiplicadores por hora (x N/h) deben leerse siempre de la cotización activa en el renderizado.
       // Normalizar fecha del evento usando UTC para evitar problemas de zona horaria
       // Usar la fecha de la promesa si existe, sino usar la fecha de autorización (fecha actual)
       let eventDateNormalized: Date;
@@ -1953,6 +1974,8 @@ export async function autorizarYCrearEvento(
       // 7.5. Actualizar cotización con snapshots (inmutables) y establecer relación con evento
       // Snapshot de negociación (Ecuación Financiera Maestra): precio_calculado, bono_especial, items_cortesia
       // persisten en la cotización autorizada para que el evento herede el histórico vía cotizacion_id.
+      // Consistencia: AjusteCierre = PrecioFinal - (PrecioLista - Cortesías - Bono); no recalculamos aquí,
+      // copiamos los valores ya guardados en la cotización durante el cierre (centavos exactos).
       const snapshotPrecioCalculado = cotizacion.precio_calculado != null
         ? new Prisma.Decimal(Number(cotizacion.precio_calculado))
         : null;
@@ -1973,6 +1996,8 @@ export async function autorizarYCrearEvento(
           precio_calculado: snapshotPrecioCalculado,
           bono_especial: snapshotBonoEspecial,
           items_cortesia: cotizacion.items_cortesia ?? null,
+          cortesias_monto_snapshot: cortesias_monto > 0 ? new Prisma.Decimal(cortesias_monto) : null,
+          cortesias_count_snapshot: cortesias_count > 0 ? cortesias_count : null,
           // Snapshots de condiciones comerciales
           condiciones_comerciales_name_snapshot:
             condicionSnapshot?.name || null,
@@ -2270,8 +2295,12 @@ export async function autorizarYCrearEvento(
       console.error('[CIERRE] Error sincronizando pipeline al autorizar:', error);
     });
 
+    // Listado Kanban, detalle y vista autorizada: forzar datos frescos tras cambio de estado crítico (cierre → autorizada)
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
     revalidatePath(`/${studioSlug}/studio/business/events/${result.evento_id}`);
+    revalidatePath('/', 'layout');
 
     // Invalidar caché del cliente
     const contactId = cotizacion.promise.contact_id;

@@ -115,13 +115,12 @@ export function ZenConfirmModal({
                     </div>
                 </DialogHeader>
 
-                <DialogFooter className="flex w-full flex-col-reverse sm:flex-row sm:justify-stretch gap-2 px-4 pb-4 pt-0 border-t border-zinc-700/50 pt-4">
+                <DialogFooter className="flex w-full flex-col-reverse sm:flex-row sm:items-center gap-2 px-4 pb-4 pt-0 border-t border-zinc-700/50 pt-4">
                     <ZenButton
                         variant="outline"
                         onClick={onClose}
                         disabled={loading}
-                        fullWidth
-                        className="sm:flex-1 sm:min-w-0 border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-500"
+                        className="w-full sm:w-auto shrink-0 border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-500"
                     >
                         {cancelText}
                     </ZenButton>
@@ -131,8 +130,7 @@ export function ZenConfirmModal({
                             onClick={handleConfirm}
                             loading={loading}
                             loadingText={loadingText}
-                            fullWidth
-                            className={`sm:flex-1 sm:min-w-0 min-w-0 overflow-hidden text-ellipsis ${variant === 'destructive'
+                            className={`flex-1 min-w-0 overflow-hidden text-ellipsis ${variant === 'destructive'
                                 ? 'bg-red-600 hover:bg-red-500 text-white border-0'
                                 : 'bg-blue-600 hover:bg-blue-500 text-white border-0'
                                 }`}

@@ -545,7 +545,6 @@ export function usePromiseCierreLogic({
         window.dispatchEvent(new CustomEvent('close-overlays'));
         router.refresh();
         startTransition(() => {
-          console.log('🚀 [DEBUG]: Redirect triggered by usePromiseCierreLogic.tsx because user cancelled cierre (navigate to pendiente)');
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
         });
       } else {
@@ -570,6 +569,8 @@ export function usePromiseCierreLogic({
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
   const [authorizationEventoId, setAuthorizationEventoId] = useState<string | null>(null);
+  const [authorizationSuccess, setAuthorizationSuccess] = useState(false);
+  const authorizingInProgressRef = useRef(false);
 
   const TASKS_AUTORIZAR = [
     'Obteniendo catálogo de servicios',
@@ -601,12 +602,15 @@ export function usePromiseCierreLogic({
   }, [condicionesData?.condiciones_comerciales, cotizacion.price]);
 
   const handleConfirmAutorizar = useCallback(async () => {
+    if (authorizingInProgressRef.current) return;
+    authorizingInProgressRef.current = true;
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
     setCurrentTask(TASKS_AUTORIZAR[0]);
     setCompletedTasks([]);
     setAuthorizationError(null);
     setAuthorizationEventoId(null);
+    setAuthorizationSuccess(false);
 
     const runProgressAnimation = (): Promise<void> => {
       return new Promise((resolve) => {
@@ -621,7 +625,6 @@ export function usePromiseCierreLogic({
           setTimeout(() => {
             const stepName = TASKS_AUTORIZAR[i];
             setCompletedTasks((prev) => [...prev, stepName]);
-            console.log('✅ [STEP]: Completed step', stepName);
             i++;
             next();
           }, STEP_DELAY_MS);
@@ -650,6 +653,7 @@ export function usePromiseCierreLogic({
           toast.success('¡Cotización autorizada y evento creado!');
           const eventoId = result.data?.evento_id ?? null;
           setAuthorizationEventoId(eventoId);
+          setAuthorizationSuccess(true);
         } else {
           const msg = result.error === 'DATE_OCCUPIED'
             ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Visualización y automatización" o fuerza la reserva si aplica.'
@@ -665,6 +669,8 @@ export function usePromiseCierreLogic({
       toast.error('Error al autorizar cotización');
       setCurrentTask('');
       setCompletedTasks(TASKS_AUTORIZAR);
+    } finally {
+      authorizingInProgressRef.current = false;
     }
   }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault]);
 
@@ -740,6 +746,8 @@ export function usePromiseCierreLogic({
     setAuthorizationError,
     authorizationEventoId,
     setAuthorizationEventoId,
+    authorizationSuccess,
+    setAuthorizationSuccess,
     // Handlers
     handleDefinirCondiciones,
     handleQuitarCondiciones,

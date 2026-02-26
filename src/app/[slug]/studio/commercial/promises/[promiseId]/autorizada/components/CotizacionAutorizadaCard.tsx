@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { startTransition } from 'react';
 import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, Clock, Receipt, CheckCircle } from 'lucide-react';
@@ -12,6 +12,8 @@ import {
   ZenButton,
   ZenConfirmModal,
 } from '@/components/ui/zen';
+import { ResumenPago } from '@/components/shared/precio';
+import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { toast } from 'sonner';
 import { cancelarEvento } from '@/lib/actions/studio/business/events';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
@@ -88,6 +90,50 @@ export function CotizacionAutorizadaCard({
 
   const savedContractContent = contrato?.content || resumen?.cotizacion?.contract_content_snapshot || '';
   const contractTemplateId = contrato?.template_id || resumen?.cotizacion?.contract_template_id_snapshot || null;
+
+  // Resumen de Cierre (solo lectura) desde snapshots: mismo bloque que en cierre
+  const resumenPagoProps = useMemo(() => {
+    const data = cotizacionData as CotizacionListItem & {
+      precio_calculado?: number | null;
+      bono_especial?: number | null;
+      cortesias_monto_snapshot?: number | null;
+      cortesias_count_snapshot?: number | null;
+    };
+    const price = Number(data.price ?? 0);
+    const precioLista = getPrecioListaStudio({ price, precio_calculado: data.precio_calculado ?? null });
+    const montoCortesias = data.cortesias_monto_snapshot ?? 0;
+    const montoBono = data.bono_especial ?? 0;
+    const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
+    if (!tieneConcesiones && !data.precio_calculado) return null;
+    // AjusteCierre = price - (precioLista - cortesiasMonto - bonoEspecial)
+    const ajusteCierre = getAjusteCierre(price, precioLista, montoCortesias, montoBono);
+    const isFixed = condiciones?.advance_type === 'fixed_amount' || condiciones?.advance_type === 'amount';
+    const anticipoFromCondition = isFixed && condiciones?.advance_amount != null
+      ? Number(condiciones.advance_amount)
+      : (condiciones?.advance_percentage != null ? Math.round(price * (condiciones.advance_percentage / 100)) : 0);
+    const totalPagadoResumen = (resumen as { totalPagado?: number } | null)?.totalPagado ?? 0;
+    const anticipo = totalPagadoResumen > 0 ? totalPagadoResumen : anticipoFromCondition;
+    const diferido = Math.max(0, price - anticipo);
+    return {
+      title: 'Resumen de Cierre' as const,
+      compact: true,
+      precioBase: price,
+      descuentoCondicion: 0,
+      precioConDescuento: price,
+      advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
+      anticipoPorcentaje: condiciones?.advance_percentage ?? null,
+      anticipo,
+      diferido,
+      precioLista,
+      montoCortesias,
+      cortesiasCount: data.cortesias_count_snapshot ?? 0,
+      montoBono,
+      precioFinalCierre: price,
+      ajusteCierre,
+      tieneConcesiones,
+      anticipoModificado: false,
+    };
+  }, [cotizacionData, condiciones, resumen]);
 
   const openContractPreview = async () => {
     if (contractTemplateId) {
@@ -275,8 +321,13 @@ export function CotizacionAutorizadaCard({
               </p>
             </div>
 
-            {/* Desglose de Cotización */}
-            {condiciones ? (
+            {/* Resumen de Cierre (solo lectura) cuando hay snapshots de cortesías/bono */}
+            {resumenPagoProps && (
+              <ResumenPago {...resumenPagoProps} />
+            )}
+
+            {/* Desglose de Cotización (cuando no hay Resumen de Cierre por snapshots) */}
+            {!resumenPagoProps && condiciones ? (
               <CondicionesComercialesDesglose
                 precioBase={precioBaseParaCondiciones}
                 condicion={{
@@ -291,7 +342,7 @@ export function CotizacionAutorizadaCard({
                 negociacionPrecioOriginal={negociacionPrecioOriginal}
                 negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
               />
-            ) : (
+            ) : !resumenPagoProps ? (
               <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
                 <h3 className="text-sm font-semibold text-zinc-300 mb-4">
                   Desglose de Cotización
@@ -319,7 +370,7 @@ export function CotizacionAutorizadaCard({
                   </div>
                 </dl>
               </div>
-            )}
+            ) : null}
 
             {/* Pago Inicial */}
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex items-center gap-3">

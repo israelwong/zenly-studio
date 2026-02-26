@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
@@ -14,7 +14,7 @@ import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
-import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { logAuditoriaCotizacion } from '@/lib/utils/audit-precios-logger';
@@ -218,6 +218,13 @@ export function CotizacionForm({
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showNameConflictModal, setShowNameConflictModal] = useState(false);
+  const [showDurationScopeModal, setShowDurationScopeModal] = useState(false);
+  const [pendingSavePublish, setPendingSavePublish] = useState<boolean>(false);
+  const [pendingSaveNombreOverride, setPendingSaveNombreOverride] = useState<string | undefined>(undefined);
+  /** Duración de la promesa al abrir el modal (para copy explícito). */
+  const [promiseDurationForModal, setPromiseDurationForModal] = useState<number | null>(null);
+  /** Alcance elegido en el modal de duración; al elegir se muestra el botón Guardar. */
+  const [selectedDurationScope, setSelectedDurationScope] = useState<'local' | 'global' | null>(null);
   const [conflictSuggestedName, setConflictSuggestedName] = useState('');
   const [conflictPublish, setConflictPublish] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
@@ -1664,7 +1671,11 @@ export function CotizacionForm({
     setShowConfirmDialog(false);
   };
 
-  const handleSave = async (publish: boolean, nombreOverride?: string) => {
+  const handleSave = async (
+    publish: boolean,
+    nombreOverride?: string,
+    options?: { skipDurationScopeCheck?: boolean; scope?: 'local' | 'global' }
+  ) => {
     if (isSubmittingRef.current || loading) {
       return;
     }
@@ -1687,6 +1698,23 @@ export function CotizacionForm({
     if (!promiseId && !isEditMode) {
       toast.error('Se requiere una promise para crear la cotización');
       return;
+    }
+
+    // Sincronización duración: si la cotización tiene distinta duración que la promesa, preguntar alcance
+    if (isEditMode && promiseId && !options?.skipDurationScopeCheck) {
+      const durationResult = await getPromiseDurationHours(promiseId);
+      const horasPromesa = durationResult.success ? (durationResult.duration_hours ?? null) : null;
+      const horasCotizacion = durationHours != null && durationHours > 0 ? durationHours : null;
+      if (
+        (horasCotizacion !== horasPromesa) &&
+        (horasCotizacion != null || horasPromesa != null)
+      ) {
+        setPendingSavePublish(publish);
+        setPendingSaveNombreOverride(nombreOverride);
+        setPromiseDurationForModal(horasPromesa);
+        setShowDurationScopeModal(true);
+        return;
+      }
     }
 
     const intent = publish ? 'publish' : 'draft';
@@ -1733,6 +1761,17 @@ export function CotizacionForm({
           condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
           condiciones_visibles: Array.from(condicionIdsVisibles),
         });
+
+        if (result.success && options?.scope === 'global' && promiseId) {
+          const updatePromiseRes = await updatePromiseDurationHours(
+            studioSlug,
+            promiseId,
+            durationHours && durationHours > 0 ? durationHours : null
+          );
+          if (!updatePromiseRes.success) {
+            toast.error(updatePromiseRes.error ?? 'No se pudo actualizar la duración del evento');
+          }
+        }
 
         if (!result.success) {
           if (result.error === DUPLICATE_NAME_ERROR) {
@@ -3276,6 +3315,77 @@ export function CotizacionForm({
               Confirmar y Guardar
             </ZenButton>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Zen: duración distinta a la promesa — selección + botón Guardar */}
+      <Dialog open={showDurationScopeModal} onOpenChange={(open) => { if (!open) { setShowDurationScopeModal(false); setPromiseDurationForModal(null); setSelectedDurationScope(null); } }}>
+        <DialogContent
+          className="sm:max-w-md bg-zinc-950/95 border-zinc-800 shadow-2xl"
+          overlayClassName="bg-zinc-950/50 backdrop-blur-sm"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-white font-semibold">¿Cómo aplicar la duración?</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              Has ajustado esta cotización a <span className="text-amber-400 font-medium">{durationHours ?? 0} h</span>, pero el tiempo base del evento es de <span className="text-amber-400 font-medium">{promiseDurationForModal ?? 0} h</span>. ¿Cómo deseas proceder?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <button
+              type="button"
+              onClick={() => setSelectedDurationScope('local')}
+              disabled={loading}
+              className={`w-full flex items-start gap-3 p-4 rounded-lg border transition-colors text-left focus:outline-none focus:ring-2 focus:ring-zinc-600 focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:opacity-50 cursor-pointer ${selectedDurationScope === 'local' ? 'border-amber-500/50 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800'}`}
+            >
+              <div className="shrink-0 w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-zinc-400" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-medium text-white block">Solo para esta cotización ({durationHours ?? 0} h)</span>
+                <span className="text-sm text-zinc-400 mt-0.5 block">Conservar los datos originales del evento ({promiseDurationForModal ?? 0} h) y aplicar el cambio solo a este presupuesto.</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDurationScope('global')}
+              disabled={loading}
+              className={`w-full flex items-start gap-3 p-4 rounded-lg border transition-colors text-left focus:outline-none focus:ring-2 focus:ring-zinc-600 focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:opacity-50 cursor-pointer ${selectedDurationScope === 'global' ? 'border-amber-500/50 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800'}`}
+            >
+              <div className="shrink-0 w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
+                <Globe className="w-5 h-5 text-zinc-400" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-medium text-white block">Actualizar duración global ({promiseDurationForModal ?? 0} h → {durationHours ?? 0} h)</span>
+                <span className="text-sm text-zinc-400 mt-0.5 block">Sincronizar el tiempo base del evento. Esto afectará el cálculo automático de otros paquetes y la visualización general.</span>
+              </div>
+            </button>
+          </div>
+          {/* Footer de acciones: Cancelar (izq) y Guardar (der) */}
+          <div className="mt-8 flex justify-between items-center gap-4">
+            <ZenButton
+              variant="ghost"
+              onClick={() => { setShowDurationScopeModal(false); setPromiseDurationForModal(null); setSelectedDurationScope(null); }}
+              className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            >
+              Cancelar
+            </ZenButton>
+            {selectedDurationScope ? (
+              <ZenButton
+                onClick={() => {
+                  if (!selectedDurationScope) return;
+                  setShowDurationScopeModal(false);
+                  setPromiseDurationForModal(null);
+                  setSelectedDurationScope(null);
+                  handleSave(pendingSavePublish, pendingSaveNombreOverride, { skipDurationScopeCheck: true, scope: selectedDurationScope });
+                }}
+                disabled={loading}
+              >
+                {loading ? 'Guardando...' : 'Guardar'}
+              </ZenButton>
+            ) : (
+              <div />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

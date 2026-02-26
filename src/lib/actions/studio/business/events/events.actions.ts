@@ -1624,7 +1624,7 @@ export async function cancelarEvento(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
 
     // Invalidar caché de lista (con studioSlug para aislamiento)
-    revalidateTag(`events-list-${studioSlug}`, 'page' as any);
+    revalidateTag(`events-list-${studioSlug}`, 'max');
 
     // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {

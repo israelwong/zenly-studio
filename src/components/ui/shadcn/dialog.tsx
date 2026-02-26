@@ -53,16 +53,19 @@ function DialogContent({
   children,
   showCloseButton = true,
   overlayZIndex,
+  overlayClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
   overlayZIndex?: number
+  /** Clase adicional para el overlay (ej. backdrop-blur-sm, bg-zinc-950/50) */
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay
         style={overlayZIndex ? { zIndex: overlayZIndex } : undefined}
-        className={overlayZIndex ? undefined : undefined}
+        className={overlayClassName}
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
