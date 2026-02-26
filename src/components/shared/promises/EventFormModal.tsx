@@ -1189,24 +1189,24 @@ export function EventFormModal({
                                         <div className="flex items-start gap-2">
                                             <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                                             <div className="space-y-1.5 flex-1">
-                                                <p className="text-xs font-medium text-amber-300">{formatDisplayDate(fecha)} ya está programada:</p>
-                                                {conflictos.map((conflicto) => (
-                                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
-                                                        {conflicto.contexto === 'promise' ? (
-                                                            <>
-                                                                <p className="font-medium">Promesa: {conflicto.contact_name || 'Sin nombre'}</p>
-                                                                {conflicto.time && <p className="text-amber-300/70">Hora: {conflicto.time}</p>}
-                                                                {conflicto.concept && <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>}
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <p className="font-medium">Evento: {conflicto.event_name || 'Sin nombre'}</p>
-                                                                {conflicto.time && <p className="text-amber-300/70">Hora: {conflicto.time}</p>}
-                                                                {conflicto.concept && <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                                <p className="text-xs font-medium text-amber-300">
+                                                    Esta fecha ya está asociada a:
+                                                </p>
+                                                {conflictos.map((conflicto) => {
+                                                    const prospecto = conflicto.contact_name || 'Sin nombre';
+                                                    const tipoEvento = conflicto.event_type_name || (conflicto.contexto === 'promise' ? 'Promesa' : 'Evento');
+                                                    const nombreEvento = conflicto.event_name || conflicto.concept || '—';
+                                                    const linea = [prospecto, tipoEvento, nombreEvento].join(' • ');
+                                                    return (
+                                                        <p key={conflicto.id} className="text-xs text-amber-200/80">
+                                                            {linea}
+                                                            {conflicto.time && (
+                                                                <span className="text-amber-300/70 ml-1">({conflicto.time})</span>
+                                                            )}
+                                                        </p>
+                                                    );
+                                                })}
+                                                <p className="text-xs text-amber-400/80 mt-1">Es informativo; puedes crear la promesa de todos modos.</p>
                                             </div>
                                         </div>
                                     </ZenCardContent>

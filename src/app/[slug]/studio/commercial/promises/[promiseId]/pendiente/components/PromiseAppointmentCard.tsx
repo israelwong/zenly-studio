@@ -14,7 +14,7 @@ import {
   eliminarAgendamiento,
 } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
-import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { formatDisplayDate, formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ export function PromiseAppointmentCard({
   const [loading, setLoading] = useState(!hasInitial);
   const [submitting, setSubmitting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [date, setDate] = useState<Date | undefined>(undefined);
@@ -142,6 +143,7 @@ export function PromiseAppointmentCard({
         const result = await crearAgendamiento(studioSlug, payload);
         if (result.success) {
           setAgendamiento(result.data || null);
+          setIsFormVisible(false);
           toast.success('Cita agendada');
           window.dispatchEvent(new CustomEvent('agenda-updated'));
           startTransition(() => router.refresh());
@@ -164,6 +166,7 @@ export function PromiseAppointmentCard({
       const result = await eliminarAgendamiento(studioSlug, agendamiento.id);
       if (result.success) {
         setAgendamiento(null);
+        setIsFormVisible(false);
         toast.success('Cita cancelada');
         window.dispatchEvent(new CustomEvent('agenda-updated'));
         startTransition(() => router.refresh());
@@ -180,8 +183,8 @@ export function PromiseAppointmentCard({
 
   if (loading) {
     return (
-      <ZenCard variant="outlined" className="border-zinc-800">
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
+      <ZenCard variant="outlined" className="border-zinc-800 bg-zinc-900/50 transition-all duration-200">
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="h-4 w-36 bg-zinc-800 rounded animate-pulse" />
         </ZenCardHeader>
         <ZenCardContent className="p-2">
@@ -191,59 +194,99 @@ export function PromiseAppointmentCard({
     );
   }
 
-  return (
-    <ZenCard variant="outlined" className="border-zinc-800">
-      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
-        <ZenCardTitle className="text-sm font-medium text-zinc-300">
-          Cita comercial
-        </ZenCardTitle>
-      </ZenCardHeader>
-      <ZenCardContent className="p-2.5 space-y-2">
-        {hasAgenda && !editMode ? (
-          <>
-            {agendamiento.concept && (
-              <p className="text-sm font-medium text-emerald-400 truncate">{agendamiento.concept}</p>
-            )}
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              {tipoPresencial ? (
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-              ) : (
-                <Video className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-              )}
-              <span className="truncate">
-                {tipoPresencial ? 'Presencial' : 'Virtual'} · {formatDisplayDate(agendamiento.date)}
-                {agendamiento.time ? ` · ${agendamiento.time}` : ''}
-              </span>
+  // Estado vacío compacto (mismo diseño que recordatorio)
+  if (!hasAgenda && !editMode && !isFormVisible) {
+    return (
+      <ZenCard variant="outlined" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 hover:border-zinc-600/60">
+        <ZenCardContent className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
+              <CalendarClock className="h-4 w-4 text-zinc-500" aria-hidden />
             </div>
+            <p className="text-xs text-zinc-400 truncate">Agendar cita</p>
+          </div>
+          <ZenButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+            onClick={() => setIsFormVisible(true)}
+            title="Crear agendamiento"
+            aria-label="Crear agendamiento"
+          >
+            <span className="text-lg font-light leading-none">+</span>
+          </ZenButton>
+        </ZenCardContent>
+      </ZenCard>
+    );
+  }
+
+  // Resumen: cita activa (mismo patrón que recordatorio activo)
+  if (hasAgenda && !editMode) {
+    return (
+      <ZenCard variant="outlined" className="border-zinc-800 bg-zinc-900/50 transition-all duration-200">
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <ZenCardTitle className="text-sm font-medium">Cita comercial</ZenCardTitle>
             {!isDisabled && (
-              <div className="flex gap-1.5 pt-0.5">
+              <div className="flex items-center gap-1 shrink-0">
                 <ZenButton
-                  type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
+                  className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
                   onClick={() => setEditMode(true)}
-                  disabled={submitting}
-                  className="flex-1 gap-1 h-7 text-xs border-zinc-700 text-zinc-300"
-                  title="Cambiar fecha, hora o tipo de cita"
+                  title="Reprogramar"
                 >
-                  <CalendarClock className="h-3 w-3 shrink-0" />
                   Reprogramar
                 </ZenButton>
                 <ZenButton
-                  type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
+                  className="h-7 w-7 p-0 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
                   onClick={handleCancelarCita}
                   disabled={submitting}
-                  className="gap-1 h-7 text-xs border-red-900/50 text-red-400 hover:bg-red-950/30"
+                  loading={submitting}
+                  title="Cancelar cita"
+                  aria-label="Cancelar cita"
                 >
-                  <Trash2 className="h-3 w-3 shrink-0" />
-                  Cancelar cita
+                  <Trash2 className="h-4 w-4" />
                 </ZenButton>
               </div>
             )}
-          </>
-        ) : (
+          </div>
+        </ZenCardHeader>
+        <ZenCardContent className="p-3">
+          {agendamiento?.concept && (
+            <p className="text-xs text-zinc-400 truncate" title={agendamiento.concept}>
+              {agendamiento.concept}
+            </p>
+          )}
+          <div className="flex items-center gap-2 text-xs mt-1">
+            {tipoPresencial ? (
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            ) : (
+              <Video className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            )}
+            <span className="text-zinc-400 truncate">
+              {tipoPresencial ? 'Presencial' : 'Virtual'}
+              {agendamiento?.time ? ` · ${agendamiento.time}` : ''}
+            </span>
+          </div>
+          <p className="text-xs font-medium text-emerald-400/90 mt-1">
+            {agendamiento?.date && formatDisplayDateLong(agendamiento.date)}
+          </p>
+        </ZenCardContent>
+      </ZenCard>
+    );
+  }
+
+  // Formulario (crear o editar)
+  return (
+    <ZenCard variant="outlined" className="border-zinc-800 bg-zinc-900/50 transition-all duration-200">
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
+        <ZenCardTitle className="text-sm font-medium">Cita comercial</ZenCardTitle>
+      </ZenCardHeader>
+      <ZenCardContent className="p-2.5 space-y-2">
           <form onSubmit={handleSubmit} className="space-y-2 text-sm">
             <AgendaSubjectInput
               context="COMMERCIAL"
@@ -342,32 +385,29 @@ export function PromiseAppointmentCard({
                 />
               </div>
             )}
-            <div className="flex gap-1.5 pt-0.5">
-              {editMode && (
-                <ZenButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditMode(false)}
-                  disabled={submitting}
-                  className="h-7 text-xs"
-                >
-                  Cerrar
-                </ZenButton>
-              )}
+            <div className="flex gap-2 pt-3">
+              <ZenButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editMode ? setEditMode(false) : setIsFormVisible(false)}
+                disabled={submitting}
+                className="h-7 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                {editMode ? 'Cerrar' : 'Cancelar'}
+              </ZenButton>
               <ZenButton
                 type="submit"
                 variant="primary"
                 size="sm"
                 disabled={submitting || !date || isDisabled}
                 loading={submitting}
-                className={cn('h-7 text-xs', editMode ? 'flex-1' : 'w-full')}
+                className="flex-1 h-7 text-xs"
               >
-                {hasAgenda && editMode ? 'Actualizar' : 'Crear agendamiento'}
+                {hasAgenda && editMode ? 'Actualizar' : 'Agendar cita'}
               </ZenButton>
             </div>
           </form>
-        )}
       </ZenCardContent>
     </ZenCard>
   );

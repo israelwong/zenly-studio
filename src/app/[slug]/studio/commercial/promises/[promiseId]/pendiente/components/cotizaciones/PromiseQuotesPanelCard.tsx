@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -731,6 +731,42 @@ export function PromiseQuotesPanelCard({
                 {cotizacion.description}
               </p>
             )}
+            {(() => {
+              const hasDuration = cotizacion.event_duration != null && cotizacion.event_duration > 0;
+              const cortesiasCount = cotizacion.cortesias_count_snapshot ?? (Array.isArray(cotizacion.items_cortesia) ? cotizacion.items_cortesia.length : 0);
+              const hasCortesias = cortesiasCount > 0;
+              const hasBono = cotizacion.bono_especial != null && cotizacion.bono_especial > 0;
+              if (!hasDuration && !hasCortesias && !hasBono) return null;
+              const divider = <span className="text-zinc-500 px-1">|</span>;
+              return (
+                <div className="flex items-center flex-nowrap gap-0 text-xs text-zinc-400 mb-1.5">
+                  {hasDuration && (
+                    <>
+                      <span className="inline-flex items-center gap-1 shrink-0" title="Duración">
+                        <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                        <span>{cotizacion.event_duration} hrs</span>
+                      </span>
+                      {(hasCortesias || hasBono) && divider}
+                    </>
+                  )}
+                  {hasCortesias && (
+                    <>
+                      <span className="inline-flex items-center gap-1 shrink-0 text-emerald-500">
+                        <Gift className="h-3.5 w-3.5" />
+                        <span>{cortesiasCount} Cortesía{cortesiasCount !== 1 ? 's' : ''}</span>
+                      </span>
+                      {hasBono && divider}
+                    </>
+                  )}
+                  {hasBono && (
+                    <span className="inline-flex items-center gap-1 shrink-0 text-amber-500" title="Bono especial">
+                      <Ticket className="h-3.5 w-3.5" />
+                      <span>Bono: ${Number(cotizacion.bono_especial).toLocaleString('es-MX', { minimumFractionDigits: 0 })}</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-sm font-semibold ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'

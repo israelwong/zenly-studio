@@ -1751,6 +1751,22 @@ export async function verificarDisponibilidadFecha(
             status: {
                 not: 'cancelado',
             },
+            // Excluir ítems cuya promesa relacionada está archivada (etapa pipeline slug = 'archived')
+            AND: [
+                {
+                    OR: [
+                        { promise_id: null },
+                        {
+                            promise: {
+                                OR: [
+                                    { pipeline_stage_id: null },
+                                    { pipeline_stage: { slug: { not: 'archived' } } },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
         };
 
         // Excluir agendamiento actual si se está editando

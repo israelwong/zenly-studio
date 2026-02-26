@@ -77,6 +77,8 @@ export interface CotizacionListItem {
   items_cortesia?: unknown;
   cortesias_monto_snapshot?: number | null;
   cortesias_count_snapshot?: number | null;
+  /** Duración del evento en horas (para listado en card) */
+  event_duration?: number | null;
 }
 
 export interface CotizacionesListResponse {
@@ -421,6 +423,11 @@ export async function getCotizacionesByPromiseId(
         evento_id: true,
         condiciones_comerciales_id: true,
         negociacion_precio_personalizado: true,
+        event_duration: true,
+        bono_especial: true,
+        items_cortesia: true,
+        cortesias_count_snapshot: true,
+        cortesias_monto_snapshot: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -446,6 +453,9 @@ export async function getCotizacionesByPromiseId(
       data: cotizaciones.map((cot) => {
         const negocio = (cot as { negociacion_precio_personalizado?: unknown }).negociacion_precio_personalizado;
         const totalAPagar = negocio != null && Number(negocio) > 0 ? Number(negocio) : cot.price;
+        const itemsCortesia = cot.items_cortesia;
+        const cortesiasCount = cot.cortesias_count_snapshot ?? (Array.isArray(itemsCortesia) ? itemsCortesia.length : 0);
+        const bono = cot.bono_especial != null ? Number(cot.bono_especial) : null;
         return {
           id: cot.id,
           name: cot.name,
@@ -468,6 +478,11 @@ export async function getCotizacionesByPromiseId(
           condiciones_comerciales: cot.condiciones_comerciales,
           negociacion_precio_personalizado: negocio != null ? Number(negocio) : null,
           total_a_pagar: totalAPagar,
+          event_duration: cot.event_duration != null ? Number(cot.event_duration) : null,
+          bono_especial: bono,
+          items_cortesia: itemsCortesia ?? undefined,
+          cortesias_count_snapshot: cortesiasCount,
+          cortesias_monto_snapshot: cot.cortesias_monto_snapshot != null ? Number(cot.cortesias_monto_snapshot) : null,
         };
       }),
     };

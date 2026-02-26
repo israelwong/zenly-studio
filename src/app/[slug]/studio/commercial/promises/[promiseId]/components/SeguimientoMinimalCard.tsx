@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CalendarIcon, Settings } from 'lucide-react';
+import { CalendarIcon, Settings, Bell, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenInput } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { formatDisplayDate, formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
 import {
   getReminderByPromise,
@@ -18,7 +18,7 @@ import {
   createReminderSubject,
   type ReminderSubject,
 } from '@/lib/actions/studio/commercial/promises/reminder-subjects.actions';
-import { ReminderFormModal, ManageSubjectsModal } from '@/components/shared/reminders';
+import { ManageSubjectsModal } from '@/components/shared/reminders';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -41,7 +41,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
   const [loading, setLoading] = useState(!hasInitial);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [subjects, setSubjects] = useState<ReminderSubject[]>([]);
@@ -54,6 +54,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
   const [month, setMonth] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [errors, setErrors] = useState<{ subject?: string; date?: string }>({});
+  const [isFormVisible, setIsFormVisible] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -190,8 +191,11 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
       });
 
       if (result.success && result.data) {
+        const wasEditing = !!reminder;
         setReminder(result.data);
+        setIsEditing(false);
         setSubjectText('');
+        setSelectedSubjectId(null);
         setDescription('');
         const tomorrow = new Date(Date.UTC(
           getTodayUtc().getUTCFullYear(),
@@ -202,7 +206,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
         setSelectedDate(tomorrow);
         setMonth(tomorrow);
         setErrors({});
-        toast.success('Seguimiento programado');
+        toast.success(wasEditing ? 'Seguimiento actualizado' : 'Seguimiento programado');
         window.dispatchEvent(new CustomEvent('reminder-updated'));
         onSuccess?.();
       } else {
@@ -222,6 +226,8 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
       const result = await deleteReminder(studioSlug, reminder.id);
       if (result.success) {
         setReminder(null);
+        setIsFormVisible(false);
+        setIsEditing(false);
         setSubjectText('');
         setSelectedSubjectId(null);
         setDescription('');
@@ -262,70 +268,120 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
     );
   }
 
-  if (reminder) {
+  // Recordatorio activo: resumen con opción de editar inline o limpiar (solo Trash2 en cabecera)
+  if (reminder && !isEditing) {
     return (
-      <>
-        <ZenCard variant="outlined" className="border-zinc-800">
-          <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-            <div className="flex items-center justify-between">
-              <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
-              <div className="flex items-center gap-1.5">
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200"
-                  onClick={() => setShowEditModal(true)}
-                  title="Editar seguimiento"
-                >
-                  Editar
-                </ZenButton>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
-                  onClick={handleClear}
-                  disabled={clearing}
-                  loading={clearing}
-                  title="Limpiar seguimiento"
-                >
-                  Limpiar
-                </ZenButton>
-              </div>
+      <ZenCard variant="outlined" className="border-zinc-800 bg-zinc-900/50 transition-all duration-200">
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
+            <div className="flex items-center gap-1 shrink-0">
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                onClick={() => {
+                  setSubjectText(reminder.subject_text);
+                  setSelectedSubjectId(reminder.subject_id ?? null);
+                  setDescription(reminder.description ?? '');
+                  const d = reminder.reminder_date;
+                  const date = typeof d === 'string' ? new Date(d + 'T12:00:00.000Z') : new Date(d);
+                  const norm = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
+                  setSelectedDate(norm);
+                  setMonth(norm);
+                  setErrors({});
+                  setIsEditing(true);
+                }}
+                title="Editar seguimiento"
+              >
+                Editar
+              </ZenButton>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+                onClick={handleClear}
+                disabled={clearing}
+                loading={clearing}
+                title="Limpiar seguimiento"
+                aria-label="Limpiar seguimiento"
+              >
+                <Trash2 className="h-4 w-4" />
+              </ZenButton>
             </div>
-          </ZenCardHeader>
-          <ZenCardContent className="p-3">
-            <p className="text-xs text-zinc-400 truncate" title={reminder.subject_text}>
-              {reminder.subject_text}
-            </p>
-            <p className="text-xs font-medium text-emerald-400/90 mt-1">
-              {formatDisplayDate(reminder.reminder_date)}
-            </p>
-          </ZenCardContent>
-        </ZenCard>
-        <ReminderFormModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          studioSlug={studioSlug}
-          promiseId={promiseId}
-          existingReminder={reminder}
-          onSuccess={(r) => {
-            setReminder(r);
-            setShowEditModal(false);
-            onSuccess?.();
-          }}
-          onDeleted={() => {
-            setReminder(null);
-            setShowEditModal(false);
-            onSuccess?.();
-          }}
-        />
-      </>
+          </div>
+        </ZenCardHeader>
+        <ZenCardContent className="p-3">
+          <p className="text-xs text-zinc-400 truncate" title={reminder.subject_text}>
+            {reminder.subject_text}
+          </p>
+          <p className="text-xs font-medium text-emerald-400/90 mt-1">
+            {formatDisplayDateLong(reminder.reminder_date)}
+          </p>
+        </ZenCardContent>
+      </ZenCard>
     );
   }
 
+  // Estado vacío compacto: sin recordatorio y formulario colapsado (y no en modo edición)
+  if (!isFormVisible && !isEditing) {
+    return (
+      <ZenCard variant="outlined" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 hover:border-zinc-600/60">
+        <ZenCardContent className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
+              <Bell className="h-4 w-4 text-zinc-500" aria-hidden />
+            </div>
+            <p className="text-xs text-zinc-400 truncate">Programar recordatorio</p>
+          </div>
+          <ZenButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+            onClick={() => setIsFormVisible(true)}
+            title="Programar seguimiento"
+            aria-label="Programar seguimiento"
+          >
+            <span className="text-lg font-light leading-none">+</span>
+          </ZenButton>
+        </ZenCardContent>
+      </ZenCard>
+    );
+  }
+
+  const handleCancelForm = () => {
+    if (isEditing && reminder) {
+      setIsEditing(false);
+      setSubjectText(reminder.subject_text);
+      setSelectedSubjectId(reminder.subject_id ?? null);
+      setDescription(reminder.description ?? '');
+      const d = reminder.reminder_date;
+      const date = typeof d === 'string' ? new Date(d + 'T12:00:00.000Z') : new Date(d);
+      const norm = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
+      setSelectedDate(norm);
+      setMonth(norm);
+      setErrors({});
+    } else {
+      setIsFormVisible(false);
+      setSubjectText('');
+      setSelectedSubjectId(null);
+      setDescription('');
+      setErrors({});
+      const tomorrow = new Date(Date.UTC(
+        getTodayUtc().getUTCFullYear(),
+        getTodayUtc().getUTCMonth(),
+        getTodayUtc().getUTCDate() + 1,
+        12, 0, 0
+      ));
+      setSelectedDate(tomorrow);
+      setMonth(tomorrow);
+    }
+  };
+
   return (
     <>
-    <ZenCard variant="outlined" className="border-zinc-800">
+    <ZenCard variant="outlined" className="border-zinc-800 bg-zinc-900/50 transition-all duration-200">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
         <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
       </ZenCardHeader>
@@ -499,11 +555,12 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
           <ZenButton
             type="button"
             size="sm"
-            variant="outline"
-            onClick={handleClear}
-            disabled={!reminder || saving || clearing}
+            variant="ghost"
+            onClick={handleCancelForm}
+            disabled={saving || clearing}
+            className="text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
           >
-            {clearing ? '…' : 'Limpiar'}
+            Cancelar
           </ZenButton>
           <ZenButton
             type="button"
@@ -512,7 +569,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
             onClick={handleSubmit}
             disabled={saving || clearing || !subjectText.trim() || !selectedDate}
           >
-            {saving ? 'Guardando…' : 'Programar seguimiento'}
+            {saving ? 'Guardando…' : isEditing ? 'Actualizar seguimiento' : 'Programar seguimiento'}
           </ZenButton>
         </div>
       </ZenCardContent>
