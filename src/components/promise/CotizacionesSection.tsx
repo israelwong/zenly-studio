@@ -185,14 +185,14 @@ export function CotizacionesSection({
                   <ZenCardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <ZenCardTitle className="text-white group-hover:text-zinc-200 transition-colors">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <ZenCardTitle className="text-white group-hover:text-zinc-200 transition-colors mb-0">
                             {cotizacion.name}
                           </ZenCardTitle>
                           {cotizacion.event_duration != null && (
-                            <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 text-xs font-semibold">
-                              {cotizacion.event_duration} h
-                            </ZenBadge>
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 shrink-0 m-0">
+                              {cotizacion.event_duration} {cotizacion.event_duration === 1 ? 'hr' : 'hrs'}
+                            </span>
                           )}
                         </div>
                         {cotizacion.description && (

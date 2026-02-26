@@ -556,9 +556,9 @@ export function CotizacionDetailSheet({
                 Servicios Incluidos
               </h3>
               {currentCotizacion.event_duration != null && currentCotizacion.event_duration > 0 && (
-                <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 text-xs font-semibold">
-                  Duración evento: {currentCotizacion.event_duration} h
-                </ZenBadge>
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-500 border border-emerald-500/40">
+                  Duración evento: {currentCotizacion.event_duration} {currentCotizacion.event_duration === 1 ? 'hr' : 'hrs'}
+                </span>
               )}
             </div>
             <PublicServiciosTree

@@ -243,9 +243,9 @@ export function PaquetesSection({
                             {promiseDurationHours != null && promiseDurationHours > 0 ? (
                                 <>
                                     Explora otros paquetes disponibles basados en la duración de{' '}
-                                    <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 font-semibold">
-                                        {promiseDurationHours} {promiseDurationHours === 1 ? 'hora' : 'horas'}
-                                    </ZenBadge>
+                                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-500 border border-emerald-500/40">
+                                        {promiseDurationHours} {promiseDurationHours === 1 ? 'hr' : 'hrs'}
+                                    </span>
                                     {' '}definida para tu evento.
                                 </>
                             ) : (
