@@ -21,7 +21,7 @@ export function PromiseLayoutSkeleton({ children }: PromiseLayoutSkeletonProps) 
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
               <div className="flex items-baseline gap-2">
-                <ZenCardTitle>Promesa</ZenCardTitle>
+                <ZenCardTitle className="font-normal text-zinc-400">Propuesta para <span className="font-bold text-zinc-500">…</span></ZenCardTitle>
                 <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
               </div>
             </div>

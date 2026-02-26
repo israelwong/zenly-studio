@@ -357,6 +357,7 @@ export function PromiseLayoutClient({
               }}
               studioSlug={studioSlug}
               promiseId={promiseId}
+              contactName={stateData.promiseData.contact_name ?? undefined}
               mode={shareModalMode}
               onPublishSuccess={async () => {
                 const { getOrCreateShortUrl } = await import('@/lib/actions/studio/commercial/promises/promise-short-url.actions');

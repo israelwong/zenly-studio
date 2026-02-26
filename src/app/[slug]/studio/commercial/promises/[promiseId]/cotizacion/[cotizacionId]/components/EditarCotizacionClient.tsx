@@ -325,6 +325,7 @@ export function EditarCotizacionClient({
         onClose={() => setShowShareOptionsModal(false)}
         studioSlug={studioSlug}
         promiseId={promiseId}
+        contactName={initialCotizacion?.contact_name ?? undefined}
         scope="single"
         defaultTab="visualizacion"
         onSuccess={() => {

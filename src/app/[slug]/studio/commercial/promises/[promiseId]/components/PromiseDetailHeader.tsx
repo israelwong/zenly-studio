@@ -100,12 +100,12 @@ export function PromiseDetailHeader({
                     </ZenButton>
                     )}
                     <div className="flex items-baseline gap-2">
-                        <ZenCardTitle className="font-normal">
+                        <ZenCardTitle className="font-normal text-zinc-400">
                             {!contactData
-                              ? 'Propuesta'
+                              ? 'Propuesta para …'
                               : (contactData.contactName ?? contactData.name)
-                                ? <>Propuesta para <span className="font-bold">{contactData.contactName ?? contactData.name}</span></>
-                                : <>Propuesta para <span className="font-bold">sin nombre</span></>}
+                                ? <>Propuesta para <span className="font-bold text-white">{contactData.contactName ?? contactData.name}</span></>
+                                : <>Propuesta para <span className="font-bold text-zinc-300">sin nombre</span></>}
                         </ZenCardTitle>
                         {loading && (
                             <div className="flex items-center gap-1.5 pb-0.5">

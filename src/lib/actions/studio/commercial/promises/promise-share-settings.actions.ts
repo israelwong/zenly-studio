@@ -141,7 +141,10 @@ export async function getPromiseShareSettings(
 }
 
 /**
- * Actualizar preferencias de compartir para una promesa
+ * Actualizar preferencias de compartir para una promesa.
+ * Regla de oro:
+ * - remember_preferences === true ("Todas las promesas"): escribe en studios (defaults) y limpia overrides de esta promesa.
+ * - remember_preferences === false ("Solo esta promesa"): escribe ÚNICAMENTE en studio_promises (la fila de este promiseId). Bajo ninguna circunstancia toca la tabla studios.
  */
 export async function updatePromiseShareSettings(
   studioSlug: string,
@@ -222,7 +225,7 @@ export async function updatePromiseShareSettings(
         },
       });
     } else {
-      // Guardar como override específico de la promesa
+      // "Solo esta promesa": escribir solo en studio_promises (una fila por promiseId). No tocar studios.
       await prisma.studio_promises.update({
         where: { id: promiseId },
         data: {

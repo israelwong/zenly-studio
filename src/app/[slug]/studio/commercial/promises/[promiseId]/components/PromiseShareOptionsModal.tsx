@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Package, AlertTriangle } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
 import {
@@ -28,10 +28,12 @@ interface PromiseShareOptionsModalProps {
   scope?: 'global' | 'single';
   /** Modo "Confirmar y Publicar": botón principal publica la promesa tras guardar opciones */
   mode?: 'default' | 'publish';
-  /** Llamado tras guardar (esta promesa o global) para refrescar la vista */
+  /** Llamado tras guardar (esta promesa o global) para refrescar la vista / invalidar cache */
   onSuccess?: () => void;
   /** Llamado tras publicar con éxito (solo cuando mode === 'publish'); ej. copiar URL + toast en el padre */
   onPublishSuccess?: () => void;
+  /** Nombre del contacto para el toast al guardar solo esta promesa */
+  contactName?: string | null;
   /** Pestaña por defecto al abrir (ej. "visualizacion" para switches Subtotal por categoría / Precio por ítem). Para uso futuro si se separan por tabs. */
   defaultTab?: string;
 }
@@ -45,6 +47,7 @@ export function PromiseShareOptionsModal({
   mode = 'default',
   onSuccess,
   onPublishSuccess,
+  contactName = null,
   defaultTab: _defaultTab,
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
@@ -74,7 +77,25 @@ export function PromiseShareOptionsModal({
   const [maxEventsPerDay, setMaxEventsPerDay] = useState(1);
 
   const isGlobal = scope === 'global';
+  const loadingForPromiseIdRef = useRef<string | null>(null);
+  /** Snapshot tras última carga; Guardar se habilita solo si hay diferencias. */
+  const lastLoadedSnapshotRef = useRef<{
+    show_packages: boolean;
+    show_categories_subtotals: boolean;
+    show_items_prices: boolean;
+    min_days_to_hire: number;
+    show_standard_conditions: boolean;
+    show_offer_conditions: boolean;
+    portafolios: boolean;
+    allow_online_authorization: boolean;
+    auto_generate_contract: boolean;
+    allow_recalc: boolean;
+    rounding_mode: 'exact' | 'charm';
+    saveScope?: 'single' | 'all';
+    max_events_per_day?: number;
+  } | null>(null);
 
+  // Reset estado y recarga cuando cambia la promesa: aislamiento total (no mostrar datos de otra promesa).
   useEffect(() => {
     if (!isOpen) {
       setLoading(false);
@@ -82,8 +103,24 @@ export function PromiseShareOptionsModal({
       return;
     }
     if (isGlobal) {
+      lastLoadedSnapshotRef.current = null;
       loadGlobalSettings();
     } else if (promiseId) {
+      lastLoadedSnapshotRef.current = null;
+      setLoading(true);
+      setSaveScope('single');
+      setShowPackages(true);
+      setShowCategoriesSubtotals(false);
+      setShowItemsPrices(false);
+      setMinDaysToHire(30);
+      setShowStandardConditions(true);
+      setShowOfferConditions(false);
+      setShowPortafolios(true);
+      setAllowOnlineAuthorization(true);
+      setAutoGenerateContract(false);
+      setAllowRecalc(true);
+      setRoundingMode('charm');
+      setMaxEventsPerDay(1);
       loadSettings();
     }
   }, [isOpen, promiseId, scope]);
@@ -106,6 +143,20 @@ export function PromiseShareOptionsModal({
         setAllowRecalc(d.allow_recalc ?? true);
         setRoundingMode(d.rounding_mode === 'exact' ? 'exact' : 'charm');
         setMaxEventsPerDay(Math.max(1, d.max_events_per_day ?? 1));
+        lastLoadedSnapshotRef.current = {
+          show_packages: d.show_packages,
+          show_categories_subtotals: d.show_categories_subtotals,
+          show_items_prices: d.show_items_prices,
+          min_days_to_hire: d.min_days_to_hire,
+          show_standard_conditions: d.show_standard_conditions ?? true,
+          show_offer_conditions: d.show_offer_conditions ?? false,
+          portafolios: d.portafolios ?? true,
+          allow_online_authorization: d.allow_online_authorization ?? true,
+          auto_generate_contract: d.auto_generate_contract ?? false,
+          allow_recalc: d.allow_recalc ?? true,
+          rounding_mode: d.rounding_mode === 'exact' ? 'exact' : 'charm',
+          max_events_per_day: Math.max(1, d.max_events_per_day ?? 1),
+        };
       } else {
         toast.error(result.error || 'Error al cargar configuración');
       }
@@ -119,31 +170,52 @@ export function PromiseShareOptionsModal({
 
   const loadSettings = async () => {
     if (!promiseId) return;
+    loadingForPromiseIdRef.current = promiseId;
     setLoading(true);
     try {
       const result = await getPromiseShareSettings(studioSlug, promiseId);
+      if (loadingForPromiseIdRef.current !== promiseId) return;
       if (result.success && result.data) {
-        setHasCotizacion(result.data.has_cotizacion);
-        setHasOverride(!result.data.remember_preferences);
-        setShowPackages(result.data.show_packages);
-        setShowCategoriesSubtotals(result.data.show_categories_subtotals);
-        setShowItemsPrices(result.data.show_items_prices);
-        setMinDaysToHire(result.data.min_days_to_hire);
-        setShowStandardConditions(result.data.show_standard_conditions ?? true);
-        setShowOfferConditions(result.data.show_offer_conditions ?? false);
-        setShowPortafolios(result.data.portafolios ?? true);
-        setAllowOnlineAuthorization(result.data.allow_online_authorization ?? true);
-        setAutoGenerateContract(result.data.auto_generate_contract ?? false);
-        setAllowRecalc(result.data.allow_recalc ?? true);
-        setRoundingMode(result.data.rounding_mode === 'exact' ? 'exact' : 'charm');
+        // Herencia read-only: si la promesa tiene overrides se usan; si no, vienen los globales del studio como placeholder (no se guardan al "Solo esta promesa").
+        const d = result.data;
+        setHasCotizacion(d.has_cotizacion);
+        setHasOverride(!d.remember_preferences);
+        setShowPackages(d.show_packages);
+        setShowCategoriesSubtotals(d.show_categories_subtotals);
+        setShowItemsPrices(d.show_items_prices);
+        setMinDaysToHire(d.min_days_to_hire);
+        setShowStandardConditions(d.show_standard_conditions ?? true);
+        setShowOfferConditions(d.show_offer_conditions ?? false);
+        setShowPortafolios(d.portafolios ?? true);
+        setAllowOnlineAuthorization(d.allow_online_authorization ?? true);
+        setAutoGenerateContract(d.auto_generate_contract ?? false);
+        setAllowRecalc(d.allow_recalc ?? true);
+        setRoundingMode(d.rounding_mode === 'exact' ? 'exact' : 'charm');
+        lastLoadedSnapshotRef.current = {
+          show_packages: d.show_packages,
+          show_categories_subtotals: d.show_categories_subtotals,
+          show_items_prices: d.show_items_prices,
+          min_days_to_hire: d.min_days_to_hire,
+          show_standard_conditions: d.show_standard_conditions ?? true,
+          show_offer_conditions: d.show_offer_conditions ?? false,
+          portafolios: d.portafolios ?? true,
+          allow_online_authorization: d.allow_online_authorization ?? true,
+          auto_generate_contract: d.auto_generate_contract ?? false,
+          allow_recalc: d.allow_recalc ?? true,
+          rounding_mode: d.rounding_mode === 'exact' ? 'exact' : 'charm',
+          saveScope: 'single',
+        };
       } else {
         toast.error(result.error || 'Error al cargar preferencias');
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
-      toast.error('Error al cargar preferencias');
+      if (loadingForPromiseIdRef.current === promiseId) {
+        console.error('Error loading settings:', error);
+        toast.error('Error al cargar preferencias');
+      }
     } finally {
-      setLoading(false);
+      if (loadingForPromiseIdRef.current === promiseId) setLoading(false);
+      loadingForPromiseIdRef.current = null;
     }
   };
 
@@ -212,13 +284,14 @@ export function PromiseShareOptionsModal({
           max_events_per_day: maxEvents,
         });
         if (result.success) {
-          toast.success('Configuración del estudio guardada');
+          toast.success('Preferencias actualizadas globalmente para el Studio');
           onSuccess?.();
           onClose();
         } else {
           toast.error(result.error || 'Error al guardar configuración');
         }
       } else if (promiseId) {
+        // Solo esta promesa: remember_preferences: false => backend escribe ÚNICAMENTE en studio_promises (esta fila). No toca tabla studios.
         const result = await updatePromiseShareSettings(studioSlug, promiseId, {
           show_packages: showPackages,
           show_categories_subtotals: showCategoriesSubtotals,
@@ -244,9 +317,12 @@ export function PromiseShareOptionsModal({
             }
           } else {
             if (rememberPreferences) {
-              toast.success('Preferencias guardadas para todas las promesas');
+              toast.success('Preferencias actualizadas globalmente para el Studio');
             } else {
-              toast.success('Preferencias guardadas solo para esta promesa');
+              const name = contactName?.trim() || null;
+              toast.success(name
+                ? `Configuración guardada solo para la propuesta de ${name}`
+                : 'Configuración guardada solo para esta propuesta');
             }
           }
           onSuccess?.();
@@ -297,6 +373,8 @@ export function PromiseShareOptionsModal({
                 type="button"
                 onClick={() => setSaveScope('single')}
                 disabled={saving}
+                aria-pressed={saveScope === 'single'}
+                aria-label="Guardar solo para esta promesa (no modifica configuración global)"
                 className={cn(
                   'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
                   saveScope === 'single'
@@ -329,9 +407,42 @@ export function PromiseShareOptionsModal({
             onClick={() => handleSave(isGlobal ? true : saveScope === 'all')}
             loading={saving}
             disabled={
-              minDaysToHire < 1 ||
-              saving ||
-              (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)))
+              (() => {
+                const snap = lastLoadedSnapshotRef.current;
+                const hasChanges = !snap
+                  ? false
+                  : isGlobal
+                    ? (showPackages !== snap.show_packages ||
+                        showCategoriesSubtotals !== snap.show_categories_subtotals ||
+                        showItemsPrices !== snap.show_items_prices ||
+                        minDaysToHire !== snap.min_days_to_hire ||
+                        showStandardConditions !== snap.show_standard_conditions ||
+                        showOfferConditions !== snap.show_offer_conditions ||
+                        showPortafolios !== snap.portafolios ||
+                        allowOnlineAuthorization !== snap.allow_online_authorization ||
+                        autoGenerateContract !== snap.auto_generate_contract ||
+                        allowRecalc !== snap.allow_recalc ||
+                        roundingMode !== snap.rounding_mode ||
+                        maxEventsPerDay !== (snap.max_events_per_day ?? 1))
+                    : (showPackages !== snap.show_packages ||
+                        showCategoriesSubtotals !== snap.show_categories_subtotals ||
+                        showItemsPrices !== snap.show_items_prices ||
+                        minDaysToHire !== snap.min_days_to_hire ||
+                        showStandardConditions !== snap.show_standard_conditions ||
+                        showOfferConditions !== snap.show_offer_conditions ||
+                        showPortafolios !== snap.portafolios ||
+                        allowOnlineAuthorization !== snap.allow_online_authorization ||
+                        autoGenerateContract !== snap.auto_generate_contract ||
+                        allowRecalc !== snap.allow_recalc ||
+                        roundingMode !== snap.rounding_mode ||
+                        saveScope !== (snap.saveScope ?? 'single'));
+                return (
+                  !hasChanges ||
+                  minDaysToHire < 1 ||
+                  saving ||
+                  (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)))
+                );
+              })()
             }
           >
             {saving ? (mode === 'publish' ? 'Publicando…' : 'Guardando…') : (mode === 'publish' && !isGlobal ? 'Confirmar y Publicar' : 'Guardar cambios')}
@@ -709,7 +820,10 @@ export function PromiseShareOptionsModal({
                 <div className="flex items-start gap-3">
                   <ZenSwitch
                     checked={allowOnlineAuthorization}
-                    onCheckedChange={setAllowOnlineAuthorization}
+                    onCheckedChange={(checked) => {
+                      setAllowOnlineAuthorization(checked);
+                      setAutoGenerateContract(checked);
+                    }}
                     variant="emerald"
                     className="mt-0.5"
                   />
