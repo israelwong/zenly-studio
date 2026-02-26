@@ -178,8 +178,7 @@ export function EditarCotizacionClient({
     return null; // El skeleton se muestra en loading.tsx
   }
 
-  const contactName = initialCotizacion.contact_name?.trim() || null;
-  const backLabel = contactName ? `Propuesta para ${contactName}` : 'Propuesta';
+  const backLabel = 'Propuestas';
 
   const headerContent = (
     <div className="flex items-center justify-between w-full">
@@ -194,7 +193,7 @@ export function EditarCotizacionClient({
             href={backHref}
             onClick={() => window.dispatchEvent(new CustomEvent('close-overlays'))}
             className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors text-sm font-medium"
-            aria-label={`Volver a ${backLabel}`}
+            aria-label="Volver a Propuestas"
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
             <span>{backLabel}</span>
@@ -321,6 +320,7 @@ export function EditarCotizacionClient({
       )}
 
       <PromiseShareOptionsModal
+        key={promiseId}
         isOpen={showShareOptionsModal}
         onClose={() => setShowShareOptionsModal(false)}
         studioSlug={studioSlug}

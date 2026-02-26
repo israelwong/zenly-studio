@@ -350,6 +350,7 @@ export function PromiseLayoutClient({
         {promiseId && (
           <>
             <PromiseShareOptionsModal
+              key={promiseId}
               isOpen={isShareModalOpen}
               onClose={() => {
                 setIsShareModalOpen(false);

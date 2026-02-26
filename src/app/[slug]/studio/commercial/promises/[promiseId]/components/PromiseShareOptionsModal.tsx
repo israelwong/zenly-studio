@@ -559,14 +559,20 @@ export function PromiseShareOptionsModal({
               </div>
             )}
 
-            {/* Badge si tiene configuración personalizada (solo single) */}
-            {!isGlobal && hasOverride && (
-              <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="text-sm text-amber-400 font-medium">
-                  Configuración activa solo para esta promesa
-                </span>
-              </div>
+            {/* Badge / label según ajustes (solo single) */}
+            {!isGlobal && (
+              hasOverride ? (
+                <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="text-sm text-amber-400 font-medium">
+                    Configuración activa solo para esta promesa
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  Usando ajustes predeterminados del Studio
+                </p>
+              )
             )}
 
             {/* Sección: Vista general — Portafolios (izq) y Paquetes (der) misma altura */}
@@ -631,9 +637,9 @@ export function PromiseShareOptionsModal({
                   </div>
                 )}
 
-                {/* Nivel 2 y 3: Recálculo + Estilo de redondeo en un solo bloque */}
+                {/* Recálculo + tarjetas Exacto / Mágico con ejemplos */}
                 {showPackages && (
-                  <div className="flex flex-col gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50 animate-in fade-in duration-200">
+                  <div className="flex flex-col gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                     <div className="flex items-start gap-3">
                       <ZenSwitch
                         checked={allowRecalc}
@@ -649,17 +655,17 @@ export function PromiseShareOptionsModal({
                         </p>
                       </div>
                     </div>
-
                     {allowRecalc && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-200">
                         <button
                           type="button"
                           onClick={() => setRoundingMode('exact')}
-                          className={`text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                          className={cn(
+                            'text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50',
                             roundingMode === 'exact'
                               ? 'border-emerald-500/50 bg-emerald-500/10'
                               : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
-                          }`}
+                          )}
                           aria-pressed={roundingMode === 'exact'}
                           aria-label="Estilo Exacto"
                         >
@@ -676,11 +682,12 @@ export function PromiseShareOptionsModal({
                         <button
                           type="button"
                           onClick={() => setRoundingMode('charm')}
-                          className={`text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                          className={cn(
+                            'text-left p-3 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50',
                             roundingMode === 'charm'
                               ? 'border-emerald-500/50 bg-emerald-500/10'
                               : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
-                          }`}
+                          )}
                           aria-pressed={roundingMode === 'charm'}
                           aria-label="Estilo Mágico (Charm)"
                         >
@@ -701,76 +708,59 @@ export function PromiseShareOptionsModal({
               </ZenCardContent>
             </ZenCard>
 
-            {/* Sección: Información en cotización y paquetes */}
+            {/* Sección: Información en cotización y paquetes — Sensible en una línea (tooltips) */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200">Mostrar información en cotización y paquetes</h3>
-              <div className="space-y-3">
-                {/* Primera fila: Subtotales y precios (arriba) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
-                    showCategoriesSubtotals 
-                      ? 'border-amber-500/50 bg-amber-500/5' 
-                      : 'border-zinc-800'
-                  }`}>
-                    <ZenSwitch
-                      checked={showCategoriesSubtotals}
-                      onCheckedChange={(checked) => handleSensitiveOptionChange('subtotals', checked)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <label className="text-sm font-medium text-zinc-200">
-                          Subtotal por categoría
-                        </label>
-                        <HoverCard openDelay={200} closeDelay={100}>
-                          <HoverCardTrigger asChild>
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help">
-                              Sensible
-                            </span>
-                          </HoverCardTrigger>
-                          <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
-                            El prospecto podrá ver los montos de cada categoría. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
-                          </HoverCardContent>
-                        </HoverCard>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        El prospecto verá el monto del subtotal por categoría
-                      </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
+                  showCategoriesSubtotals ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-800'
+                }`}>
+                  <ZenSwitch
+                    checked={showCategoriesSubtotals}
+                    onCheckedChange={(checked) => handleSensitiveOptionChange('subtotals', checked)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-sm font-medium text-zinc-200">Subtotal por categoría</label>
+                      <HoverCard openDelay={200} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help shrink-0">Sensible</span>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
+                          El prospecto podrá ver los montos de cada categoría. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
+                        </HoverCardContent>
+                      </HoverCard>
                     </div>
-                  </div>
-
-                  <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
-                    showItemsPrices 
-                      ? 'border-amber-500/50 bg-amber-500/5' 
-                      : 'border-zinc-800'
-                  }`}>
-                    <ZenSwitch
-                      checked={showItemsPrices}
-                      onCheckedChange={(checked) => handleSensitiveOptionChange('prices', checked)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <label className="text-sm font-medium text-zinc-200">
-                          Precio por item
-                        </label>
-                        <HoverCard openDelay={200} closeDelay={100}>
-                          <HoverCardTrigger asChild>
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help">
-                              Sensible
-                            </span>
-                          </HoverCardTrigger>
-                          <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
-                            El prospecto podrá ver el precio individual de cada servicio o producto. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
-                          </HoverCardContent>
-                        </HoverCard>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        El prospecto verá el precio individual de cada item
-                      </p>
-                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">El prospecto verá el monto del subtotal por categoría</p>
                   </div>
                 </div>
+
+                <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
+                  showItemsPrices ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-800'
+                }`}>
+                  <ZenSwitch
+                    checked={showItemsPrices}
+                    onCheckedChange={(checked) => handleSensitiveOptionChange('prices', checked)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-sm font-medium text-zinc-200">Precio por ítem</label>
+                      <HoverCard openDelay={200} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-amber-500/50 text-[10px] font-medium text-amber-400/90 cursor-help shrink-0">Sensible</span>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="top" className="z-[10090] max-w-xs bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs p-3">
+                          El prospecto podrá ver el precio individual de cada servicio o producto. Esta información puede ser utilizada para negociar o comparar con otros proveedores.
+                        </HoverCardContent>
+                      </HoverCard>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">El prospecto verá el precio individual de cada ítem</p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
 
                 {/* Sección: Condiciones comerciales */}
                 <div className="space-y-2">
@@ -801,13 +791,16 @@ export function PromiseShareOptionsModal({
                     />
                     <div className="flex-1">
                       <label className="text-sm font-medium text-zinc-200">
-                        Especiales
+                        Condiciones de Oferta
                       </label>
                       <p className="text-xs text-zinc-400 mt-0.5">
-                        El prospecto verá las condiciones comerciales de tipo oferta
+                        Muestra condiciones vinculadas a ofertas públicas del estudio.
                       </p>
                     </div>
                   </div>
+                  <p className="text-xs text-zinc-500 mt-2 px-1">
+                    Nota: Las condiciones de negociación directa configuradas en el editor siempre serán visibles para el prospecto.
+                  </p>
                   </div>
                 </div>
               </div>

@@ -539,6 +539,7 @@ function StudioLayoutContent({
       </ZenDialog>
 
       <PromiseShareOptionsModal
+        key="global"
         isOpen={showAutomationModal}
         onClose={() => setShowAutomationModal(false)}
         studioSlug={studioSlug}

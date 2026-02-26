@@ -10,7 +10,7 @@ import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
 import { CondicionesComercialesSelector } from './shared/CondicionesComercialesSelector';
 import { PrecioDesglose } from './shared/PrecioDesglose';
 import { TerminosCondiciones } from './shared/TerminosCondiciones';
-import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos } from '@/lib/actions/public/promesas.actions';
+import { obtenerCondicionesComercialesParaCotizacion, obtenerTerminosCondicionesPublicos } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
 import {
   getPrecioListaStudio,
@@ -117,28 +117,49 @@ export function CotizacionDetailSheet({
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Exclusividad negociación: condiciones_visibles solo aplican a cotizaciones que las tienen.
-  // Si es paquete o cotización sin condiciones_visibles → solo standard/offer públicas.
-  const esCotizacionConNegociacion =
+  // is_public: false solo aparece si está en condiciones_visibles (carga vía obtenerCondicionesComercialesParaCotizacion).
+  const esCotizacionConVisibles =
     currentCotizacion.condiciones_visibles != null && currentCotizacion.condiciones_visibles.length > 0;
 
+  // Prioridad negociación: la condición ad-hoc de negociación se muestra siempre, ignorando showStandardConditions/showOfferConditions.
+  const condicionNegociacion = currentCotizacion.condicion_comercial_negociacion;
+
   const condicionesAMostrar = useMemo(() => {
-    if (!condicionesComerciales.length) return [];
-    if (esCotizacionConNegociacion && condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
+    const negSynthetic = condicionNegociacion
+      ? {
+          id: condicionNegociacion.id,
+          name: condicionNegociacion.name,
+          description: condicionNegociacion.description,
+          advance_percentage: condicionNegociacion.advance_percentage,
+          advance_type: condicionNegociacion.advance_type ?? 'percentage',
+          advance_amount: condicionNegociacion.advance_amount ?? null,
+          discount_percentage: condicionNegociacion.discount_percentage,
+          type: undefined as string | undefined,
+          metodos_pago: [] as Array<{ id: string; metodo_pago_id: string; metodo_pago_name: string }>,
+        }
+      : null;
+
+    if (!condicionesComerciales.length && !negSynthetic) return [];
+    let catalogList: typeof condicionesComerciales;
+    if (esCotizacionConVisibles && condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
       const setIds = new Set(condicionesVisiblesIds);
-      return condicionesComerciales.filter((c) => setIds.has(c.id));
+      catalogList = condicionesComerciales.filter((c) => setIds.has(c.id));
+    } else {
+      catalogList = condicionesComerciales.filter((c) => {
+        const tipo = c.type || 'standard';
+        if (tipo === 'standard') return showStandardConditions;
+        if (tipo === 'offer') return showOfferConditions;
+        return false;
+      });
     }
-    return condicionesComerciales.filter((c) => {
-      const tipo = c.type || 'standard';
-      if (tipo === 'standard') return showStandardConditions;
-      if (tipo === 'offer') return showOfferConditions;
-      return false;
-    });
+    return negSynthetic ? [negSynthetic, ...catalogList] : catalogList;
   }, [
     condicionesComerciales,
     condicionesVisiblesIds,
     showStandardConditions,
     showOfferConditions,
-    esCotizacionConNegociacion,
+    esCotizacionConVisibles,
+    condicionNegociacion,
   ]);
 
   // Actualizar cotización cuando cambia la prop
@@ -160,46 +181,41 @@ export function CotizacionDetailSheet({
     setSelectedMetodoPagoId(only.metodos_pago?.length ? only.metodos_pago[0].id : null);
   }, [isOpen, condicionesAMostrar, selectedCondicionId]);
 
-  const loadCondicionesYTerminos = useCallback(async () => {
-    setLoadingCondiciones(true);
-    try {
-      const [condicionesResult, terminosResult] = await Promise.all([
-        obtenerCondicionesComercialesPublicas(studioSlug),
-        obtenerTerminosCondicionesPublicos(studioSlug),
-      ]);
+  const loadCondicionesYTerminos = useCallback(
+    async (visiblesIds?: string[] | null) => {
+      setLoadingCondiciones(true);
+      try {
+        const [condicionesResult, terminosResult] = await Promise.all([
+          obtenerCondicionesComercialesParaCotizacion(studioSlug, visiblesIds),
+          obtenerTerminosCondicionesPublicos(studioSlug),
+        ]);
 
-      if (condicionesResult.success && condicionesResult.data) {
-        // Guardar todas; condicionesAMostrar aplica (condiciones_visibles por cotización O legacy por tipo)
-        setCondicionesComerciales(condicionesResult.data);
+        if (condicionesResult.success && condicionesResult.data) {
+          setCondicionesComerciales(condicionesResult.data);
+        }
+        if (terminosResult.success && terminosResult.data) {
+          setTerminosCondiciones(terminosResult.data);
+        }
+      } catch (error) {
+        console.error('[CotizacionDetailSheet] Error al cargar condiciones y términos:', error);
+      } finally {
+        setLoadingCondiciones(false);
       }
-
-      if (terminosResult.success && terminosResult.data) {
-        setTerminosCondiciones(terminosResult.data);
-      }
-    } catch (error) {
-      console.error('[CotizacionDetailSheet] Error al cargar condiciones y términos:', error);
-    } finally {
-      setLoadingCondiciones(false);
-    }
-  }, [studioSlug, showStandardConditions, showOfferConditions]);
+    },
+    [studioSlug]
+  );
 
   useEffect(() => {
     if (isOpen) {
-      // Si ya tenemos los datos iniciales, usarlos directamente
       if (condicionesComercialesIniciales || terminosCondicionesIniciales) {
-        if (condicionesComercialesIniciales) {
-          setCondicionesComerciales(condicionesComercialesIniciales);
-        }
-        if (terminosCondicionesIniciales) {
-          setTerminosCondiciones(terminosCondicionesIniciales);
-        }
+        if (condicionesComercialesIniciales) setCondicionesComerciales(condicionesComercialesIniciales);
+        if (terminosCondicionesIniciales) setTerminosCondiciones(terminosCondicionesIniciales);
         setLoadingCondiciones(false);
       } else {
-        // Si no, cargarlos
-        loadCondicionesYTerminos();
+        loadCondicionesYTerminos(cotizacion.condiciones_visibles ?? undefined);
       }
     }
-  }, [isOpen, studioSlug, condicionesComercialesIniciales, terminosCondicionesIniciales, loadCondicionesYTerminos]);
+  }, [isOpen, studioSlug, cotizacion, condicionesComercialesIniciales, terminosCondicionesIniciales, loadCondicionesYTerminos]);
 
   const handleSelectCondicion = (condicionId: string, metodoPagoId: string) => {
     setSelectedCondicionId(condicionId);
@@ -233,7 +249,14 @@ export function CotizacionDetailSheet({
   const calculatePriceWithCondition = () => {
     if (!selectedCondicionId) return null;
 
-    const condicion = condicionesComerciales.find(c => c.id === selectedCondicionId);
+    const condicion =
+      condicionNegociacion && selectedCondicionId === condicionNegociacion.id
+        ? {
+            ...condicionNegociacion,
+            advance_type: (condicionNegociacion.advance_type ?? 'percentage') as 'percentage' | 'fixed_amount',
+            metodos_pago: [] as Array<{ id: string; metodo_pago_id: string; metodo_pago_name: string }>,
+          }
+        : condicionesComerciales.find((c) => c.id === selectedCondicionId);
     if (!condicion) return null;
 
     const precioBase = precioBaseParaCondicion;

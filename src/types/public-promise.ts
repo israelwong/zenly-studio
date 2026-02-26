@@ -84,6 +84,16 @@ export interface PublicCotizacion {
   } | null;
   /** IDs de condiciones comerciales visibles para esta cotización (configuración del Studio). */
   condiciones_visibles?: string[] | null;
+  /** Condición ad-hoc de negociación (manual). Siempre visible para el prospecto, no se filtra por Estándar/Oferta. */
+  condicion_comercial_negociacion?: {
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    advance_type: string | null;
+    advance_amount: number | null;
+    discount_percentage: number | null;
+  } | null;
   selected_by_prospect?: boolean;
   selected_at?: Date | null;
   negociacion_precio_original?: number | null;

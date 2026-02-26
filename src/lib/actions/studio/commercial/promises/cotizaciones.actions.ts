@@ -1984,7 +1984,15 @@ export async function updateCotizacion(
       }
 
       if (validatedData.condiciones_comerciales_id !== undefined) {
-        updateData.condiciones_comerciales_id = validatedData.condiciones_comerciales_id ?? null;
+        let condicionId = validatedData.condiciones_comerciales_id ?? null;
+        if (condicionId) {
+          const existe = await tx.studio_condiciones_comerciales.findFirst({
+            where: { id: condicionId, studio_id: studio.id },
+            select: { id: true },
+          });
+          if (!existe) condicionId = null;
+        }
+        updateData.condiciones_comerciales_id = condicionId;
       }
       if (validatedData.condiciones_visibles !== undefined) {
         updateData.condiciones_visibles = validatedData.condiciones_visibles?.length ? validatedData.condiciones_visibles : null;

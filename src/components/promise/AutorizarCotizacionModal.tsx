@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { CheckCircle2, ChevronRight, Check, Shield, CalendarX2 } from 'lucide-react';
-import { ZenButton } from '@/components/ui/zen';
+import { ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import {
   Dialog,
   DialogContent,
@@ -215,6 +215,7 @@ export function AutorizarCotizacionModal({
 }: AutorizarCotizacionModalProps) {
   // Estado del Booking Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [formData, setFormData] = useState<Partial<BookingFormData>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -430,12 +431,21 @@ export function AutorizarCotizacionModal({
     3: "Revisa los detalles antes de confirmar"
   };
 
-  // Handler para cambios en el Dialog
+  // Intento de cerrar: mostrar confirmación para evitar pérdida de datos
+  const handleCloseAttempt = () => {
+    if (isSubmitting) return;
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmCancel = () => {
+    setShowCancelConfirm(false);
+    onClose();
+  };
+
+  // Handler para cambios en el Dialog (ej. clic fuera o Escape)
   const handleDialogChange = (open: boolean) => {
-    // No permitir cerrar el modal si está procesando
-    // El modal debe mantenerse abierto mientras se procesa la autorización
     if (!open && !isSubmitting) {
-      onClose();
+      handleCloseAttempt();
     }
   };
 
@@ -537,6 +547,8 @@ export function AutorizarCotizacionModal({
           className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
           overlayZIndex={10020}
           style={{ zIndex: 10030 }}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
         >
         {/* Header con barra de progreso */}
         <div className="pt-6 mb-0">
@@ -573,7 +585,7 @@ export function AutorizarCotizacionModal({
           currentStep={currentStep}
           onBack={handleBack}
           onNext={handleNext}
-          onCancel={onClose}
+          onCancel={handleCloseAttempt}
           canGoBack={currentStep > 1}
           canGoNext={currentStep < 3 || !dateSoldOut}
           isSubmitting={isSubmitting}
@@ -581,6 +593,18 @@ export function AutorizarCotizacionModal({
         />
       </DialogContent>
     </Dialog>
+
+    <ZenConfirmModal
+      isOpen={showCancelConfirm}
+      onClose={() => setShowCancelConfirm(false)}
+      onConfirm={handleConfirmCancel}
+      title="Cancelar proceso"
+      description="¿Deseas cancelar el proceso? Se perderán los datos ingresados."
+      confirmText="Sí, cancelar"
+      cancelText="No, continuar"
+      variant="destructive"
+      zIndex={10040}
+    />
     </>
   );
 }

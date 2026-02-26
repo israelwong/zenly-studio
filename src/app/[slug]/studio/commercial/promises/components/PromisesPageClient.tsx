@@ -172,6 +172,7 @@ export function PromisesPageClient({
       />
 
       <PromiseShareOptionsModal
+        key="global"
         isOpen={showGlobalSettingsModal}
         onClose={() => setShowGlobalSettingsModal(false)}
         studioSlug={studioSlug}

@@ -263,6 +263,7 @@ async function _obtenerCondicionesComercialesPublicasInternal(
 
 /**
  * Obtener condiciones comerciales con caché (revalidate: 3600s)
+ * Solo devuelve condiciones con is_public: true. Para condiciones no públicas ver obtenerCondicionesComercialesParaCotizacion.
  */
 export async function obtenerCondicionesComercialesPublicas(
   studioSlug: string
@@ -295,6 +296,68 @@ export async function obtenerCondicionesComercialesPublicas(
   );
 
   return getCachedCondiciones();
+}
+
+/**
+ * Obtener condiciones para la vista pública de una cotización.
+ * Si condicionesVisiblesIds tiene IDs: devuelve esas condiciones (incl. is_public: false), para que el Socio pueda mostrar solo las que eligió en el editor.
+ * Si no: devuelve solo condiciones públicas (mismo que obtenerCondicionesComercialesPublicas).
+ */
+export async function obtenerCondicionesComercialesParaCotizacion(
+  studioSlug: string,
+  condicionesVisiblesIds?: string[] | null
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+    discount_percentage: number | null;
+    type?: string;
+    metodos_pago: Array<{
+      id: string;
+      metodo_pago_id: string;
+      metodo_pago_name: string;
+    }>;
+  }>;
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+    if (condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
+      const byIds = await obtenerCondicionesComercialesPorIds(studio.id, condicionesVisiblesIds);
+      return {
+        success: true,
+        data: byIds.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          advance_percentage: c.advance_percentage,
+          advance_type: c.advance_type,
+          advance_amount: c.advance_amount,
+          discount_percentage: c.discount_percentage,
+          type: c.type,
+          metodos_pago: c.metodos_pago,
+        })),
+      };
+    }
+    return obtenerCondicionesComercialesPublicas(studioSlug);
+  } catch (error) {
+    console.error("[obtenerCondicionesComercialesParaCotizacion] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al obtener condiciones",
+    };
+  }
 }
 
 /** Tipo de condición comercial para vista pública (mismo shape que obtenerCondicionesComercialesPublicas). */
@@ -1753,6 +1816,17 @@ export async function getPublicPromiseActiveQuote(
                   description: true,
                 },
               },
+              condicion_comercial_negociacion: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  advance_percentage: true,
+                  advance_type: true,
+                  advance_amount: true,
+                  discount_percentage: true,
+                },
+              },
               paquete: {
                 select: {
                   id: true,
@@ -2008,6 +2082,19 @@ export async function getPublicPromiseActiveQuote(
           if (v == null) return null;
           if (Array.isArray(v)) return v.filter((id: unknown): id is string => typeof id === 'string');
           return null;
+        })(),
+        condicion_comercial_negociacion: (() => {
+          const neg = (cot as { condicion_comercial_negociacion?: { id: string; name: string; description: string | null; advance_percentage: number | null; advance_type: string | null; advance_amount: unknown; discount_percentage: number | null } | null }).condicion_comercial_negociacion;
+          if (!neg) return null;
+          return {
+            id: neg.id,
+            name: neg.name,
+            description: neg.description,
+            advance_percentage: neg.advance_percentage,
+            advance_type: neg.advance_type,
+            advance_amount: neg.advance_amount != null ? Number(neg.advance_amount) : null,
+            discount_percentage: neg.discount_percentage,
+          };
         })(),
         bono_especial: (cot as { bono_especial?: unknown }).bono_especial != null ? Number((cot as { bono_especial: unknown }).bono_especial) : null,
         negociacion_precio_original: (cot as { negociacion_precio_original?: unknown }).negociacion_precio_original != null ? Number((cot as { negociacion_precio_original: unknown }).negociacion_precio_original) : null,
@@ -2619,6 +2706,7 @@ export async function getPublicPromiseNegociacion(
             status: true,
             selected_by_prospect: true,
             order: true,
+            condiciones_visibles: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
             cotizacion_items: {
@@ -2659,6 +2747,17 @@ export async function getPublicPromiseNegociacion(
               },
             },
             condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
+            condicion_comercial_negociacion: {
               select: {
                 id: true,
                 name: true,
@@ -2891,6 +2990,22 @@ export async function getPublicPromiseNegociacion(
           name: cotizacion.paquete.name,
         }
         : null,
+      condiciones_visibles: Array.isArray((cotizacion as { condiciones_visibles?: unknown }).condiciones_visibles)
+        ? (cotizacion as { condiciones_visibles: unknown[] }).condiciones_visibles.filter((id: unknown): id is string => typeof id === 'string')
+        : null,
+      condicion_comercial_negociacion: (() => {
+        const neg = (cotizacion as { condicion_comercial_negociacion?: { id: string; name: string; description: string | null; advance_percentage: number | null; advance_type: string | null; advance_amount: unknown; discount_percentage: number | null } | null }).condicion_comercial_negociacion;
+        if (!neg) return null;
+        return {
+          id: neg.id,
+          name: neg.name,
+          description: neg.description,
+          advance_percentage: neg.advance_percentage,
+          advance_type: neg.advance_type,
+          advance_amount: neg.advance_amount != null ? Number(neg.advance_amount) : null,
+          discount_percentage: neg.discount_percentage,
+        };
+      })(),
       selected_by_prospect: cotizacion.selected_by_prospect || false,
       negociacion_precio_original: cotizacion.negociacion_precio_original ? Number(cotizacion.negociacion_precio_original) : null,
       negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,

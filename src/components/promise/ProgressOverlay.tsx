@@ -1,7 +1,7 @@
 'use client';
 
 import { createPortal } from 'react-dom';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, XCircle, RefreshCw, FileSignature, ArrowRight } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
@@ -58,8 +58,7 @@ export function ProgressOverlay({
 }: ProgressOverlayProps) {
   const router = useRouter();
   const [isNavigating, setIsNavigating] = useState(false);
-  const confettiTriggeredRef = useRef(false);
-  
+
   // Extraer solo el primer nombre
   const firstName = contactName?.split(' ')[0] || '';
 
@@ -88,64 +87,53 @@ export function ProgressOverlay({
     }
   };
 
-  // 🎉 Confetti: Disparar cuando llega a completed
+  // 🎉 Confetti: disparo obligatorio cada vez que se muestra la vista de éxito (sin memoria ni flags).
   useEffect(() => {
-    // Si overlay está oculto, resetear flag
-    if (!show) {
-      confettiTriggeredRef.current = false;
-      return;
-    }
+    if (!show || currentStep !== 'completed') return;
 
-    // Si está en completed y NO se ha disparado, disparar confetti
-    if (currentStep === 'completed' && !confettiTriggeredRef.current) {
-      confettiTriggeredRef.current = true;
-      
-      // Primera ráfaga: Centro
+    // Primera ráfaga: centro
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'],
+      zIndex: 2147483647,
+    });
+
+    const t1 = setTimeout(() => {
       confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'],
+        particleCount: 50,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0 },
+        colors: ['#10b981', '#3b82f6', '#8b5cf6'],
         zIndex: 2147483647,
       });
-      
-      // Segunda ráfaga: Lados (250ms después)
-      setTimeout(() => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-          colors: ['#10b981', '#3b82f6', '#8b5cf6'],
-          zIndex: 2147483647,
-        });
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-          colors: ['#10b981', '#3b82f6', '#8b5cf6'],
-          zIndex: 2147483647,
-        });
-      }, 250);
-      
-      // Tercera ráfaga: Extra (500ms después)
-      setTimeout(() => {
-        confetti({
-          particleCount: 30,
-          spread: 100,
-          origin: { y: 0.7 },
-          colors: ['#10b981', '#10b981', '#10b981'],
-          zIndex: 2147483647,
-        });
-      }, 500);
-    }
-    
-    // Si NO está en completed, resetear flag para permitir nuevo confetti
-    if (currentStep !== 'completed') {
-      confettiTriggeredRef.current = false;
-    }
-  }, [currentStep, show]);
+      confetti({
+        particleCount: 50,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1 },
+        colors: ['#10b981', '#3b82f6', '#8b5cf6'],
+        zIndex: 2147483647,
+      });
+    }, 250);
+
+    const t2 = setTimeout(() => {
+      confetti({
+        particleCount: 30,
+        spread: 100,
+        origin: { y: 0.7 },
+        colors: ['#10b981', '#10b981', '#10b981'],
+        zIndex: 2147483647,
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [show, currentStep]);
 
   const portalContent = (
     <div

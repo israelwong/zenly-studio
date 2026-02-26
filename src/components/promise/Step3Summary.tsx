@@ -2,9 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Calendar, MapPin, User, Phone, Mail, FileText, Home, Edit, ExternalLink } from 'lucide-react';
+import { Calendar, MapPin, User, Phone, Mail, FileText, Home, Edit, ExternalLink } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCheckbox } from '@/components/ui/zen';
-import { SeparadorZen } from '@/components/ui/zen';
+import { ResumenPago } from '@/components/shared/precio';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 
 interface PrecioCalculado {
@@ -78,15 +78,6 @@ export function Step3Summary({
     onAcceptTerms(checked);
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
-
   // Usar formatDisplayDateLong que usa métodos UTC exclusivamente
   const formatDate = (date: Date | null): string => {
     if (!date) return 'No definida';
@@ -94,101 +85,32 @@ export function Step3Summary({
   };
 
   const finalPrice = precioFinalCierre ?? (precioCalculado ? precioCalculado.precioConDescuento : precioFinal);
-
-  const anticipo = Math.round(precioCalculado?.anticipo ?? 0);
-  const diferido = Math.round(finalPrice - anticipo);
   const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
+  // Misma lógica que CotizacionDetailSheet / PrecioDesglose: sin redondear a enteros; ResumenPago formatea con 2 decimales.
+  const anticipo = precioCalculado?.anticipo ?? 0;
+  const diferido = finalPrice - anticipo;
 
   return (
     <div className="space-y-4">
-      {/* Card: Cotización */}
-      <ZenCard variant="outlined" padding="none" className="bg-zinc-900/50 border-zinc-800">
-        <ZenCardContent className="p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-              Cotización autorizada
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {tieneConcesiones && (
-              <>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Precio de lista</span>
-                  <span className="font-medium text-zinc-500 line-through">
-                    {formatPrice(precioLista ?? precioCalculado?.precioBase ?? precioFinal)}
-                  </span>
-                </div>
-                {montoCortesias > 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400">
-                      Cortesías{cortesiasCount > 0 ? ` (${cortesiasCount})` : ''}
-                    </span>
-                    <span className="font-medium text-violet-400">
-                      -{formatPrice(montoCortesias)}
-                    </span>
-                  </div>
-                )}
-                {montoBono > 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400">Bono Especial</span>
-                    <span className="font-medium text-amber-400">
-                      -{formatPrice(montoBono)}
-                    </span>
-                  </div>
-                )}
-                {ajusteCierre !== 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400">
-                      {ajusteCierre < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
-                    </span>
-                    <span className="font-medium text-zinc-300">
-                      {ajusteCierre < 0 ? `-${formatPrice(Math.abs(ajusteCierre))}` : `+${formatPrice(ajusteCierre)}`}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className={`flex justify-between items-center ${tieneConcesiones ? 'pt-2 border-t border-zinc-800' : ''}`}>
-              <span className="text-sm font-semibold text-white">Total a pagar</span>
-              <span className="text-base font-bold text-emerald-400">
-                {formatPrice(finalPrice)}
-              </span>
-            </div>
-
-            {anticipo > 0 && (
-              <>
-                <div className="flex justify-between items-center bg-blue-500/10 rounded p-2 border border-blue-500/20">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-blue-400">
-                      Anticipo requerido
-                    </p>
-                    {precioCalculado?.advanceType === 'percentage' && precioCalculado.anticipoPorcentaje && (
-                      <p className="text-xs text-zinc-500">
-                        {precioCalculado.anticipoPorcentaje}%
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-sm font-bold text-blue-400 ml-2">
-                    {formatPrice(anticipo)}
-                  </span>
-                </div>
-
-                {diferido > 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400">Restante</span>
-                    <span className="font-medium text-zinc-300">
-                      {formatPrice(diferido)}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </ZenCardContent>
-      </ZenCard>
+      {/* Resumen de Pago sin card extra; el componente tiene su propio contenedor. */}
+      <ResumenPago
+        precioBase={precioCalculado?.precioBase ?? precioLista ?? finalPrice}
+        descuentoCondicion={precioCalculado?.descuentoCondicion ?? 0}
+        precioConDescuento={precioCalculado?.precioConDescuento}
+        advanceType={precioCalculado?.advanceType ?? 'percentage'}
+        anticipoPorcentaje={precioCalculado?.anticipoPorcentaje ?? null}
+        anticipo={anticipo}
+        diferido={diferido}
+        precioLista={precioLista ?? precioCalculado?.precioBase ?? null}
+        montoCortesias={montoCortesias}
+        cortesiasCount={cortesiasCount}
+        montoBono={montoBono}
+        precioFinalCierre={finalPrice}
+        ajusteCierre={ajusteCierre}
+        tieneConcesiones={tieneConcesiones}
+        compact
+        title="COTIZACIÓN AUTORIZADA"
+      />
 
       {/* Card: Datos del evento */}
       <ZenCard variant="outlined" padding="none" className="bg-zinc-900/30 border-zinc-800">

@@ -98,7 +98,9 @@ export function PublicContractView({
   const [renderedContent, setRenderedContent] = useState<string | null>(contractContent);
   const [eventData, setEventData] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
+  const contractScrollRef = useRef<HTMLDivElement>(null);
 
   // Limpiar estado de firma cuando el contrato deja de estar firmado (p. ej. regenerado por el estudio)
   useEffect(() => {
@@ -108,6 +110,23 @@ export function PublicContractView({
       setShowSignConfirmModal(false);
     }
   }, [isSigned]);
+
+  // Reset scroll-to-bottom al abrir/cerrar el modal
+  useEffect(() => {
+    if (!isOpen) setHasScrolledToBottom(false);
+  }, [isOpen]);
+
+  // Si el contenido no requiere scroll (más corto que el viewport), habilitar botón de firma de inmediato
+  useEffect(() => {
+    if (!isOpen || !(templateContent || renderedContent)) return;
+    const t = setTimeout(() => {
+      const el = contractScrollRef.current;
+      if (!el) return;
+      const { scrollHeight, clientHeight } = el;
+      if (scrollHeight <= clientHeight + 10) setHasScrolledToBottom(true);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [isOpen, templateContent, renderedContent]);
 
   // Detectar si es mobile
   useEffect(() => {
@@ -432,7 +451,19 @@ export function PublicContractView({
               </div>
             </div>
           ) : (templateContent || renderedContent) ? (
-            <div className="bg-zinc-950 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
+            <div
+              ref={contractScrollRef}
+              className="bg-zinc-950 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                const { scrollTop, scrollHeight, clientHeight } = el;
+                const threshold = 24;
+                const atBottom =
+                  scrollHeight <= clientHeight + 10 ||
+                  scrollTop + clientHeight >= scrollHeight - threshold;
+                setHasScrolledToBottom((prev) => prev || atBottom);
+              }}
+            >
               <ContractPreview
                 // ⚠️ HIGIENE DE DATOS: Si hay condiciones comerciales, usar template original para re-renderizar con desglose
                 // Si no hay condiciones comerciales, usar contenido renderizado
@@ -460,14 +491,21 @@ export function PublicContractView({
             </div>
           )}
 
-          {/* Acciones: habilitar solo cuando el preview del contrato está montado */}
-          <div className="flex flex-col sm:flex-row gap-2 ">
+          {/* Acciones: habilitar solo cuando el preview está montado y el usuario llegó al final del scroll */}
+          <div className="flex flex-col gap-2">
+            {!isSigned && !hasScrolledToBottom && isPreviewMounted && (
+              <p className="text-xs text-zinc-500">
+                Desplázate hasta el final del contrato para habilitar la firma.
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
             {!isSigned && (
               <ZenButton
                 variant="primary"
                 onClick={handleSign}
-                disabled={!isPreviewMounted || isSigning}
-                className="flex-1 text-sm py-2"
+                disabled={!isPreviewMounted || isSigning || !hasScrolledToBottom}
+                className="flex-1 text-sm py-2.5 h-11"
+                title={!hasScrolledToBottom ? 'Desplázate hasta el final del contrato para firmar' : undefined}
               >
                 {isSigning ? (
                   <>
@@ -488,7 +526,7 @@ export function PublicContractView({
                   variant="outline"
                   onClick={handleExportPDF}
                   disabled={!isPreviewMounted || isExportingPDF}
-                  className="flex-1 text-sm py-2"
+                  className="flex-1 text-sm py-2.5 h-11"
                 >
                   {isExportingPDF ? (
                     <>
@@ -504,13 +542,14 @@ export function PublicContractView({
                 </ZenButton>
                 <ZenButton
                   variant="primary"
-                  onClick={onClose}
-                  className="flex-1 text-sm py-2"
-                >
-                  Cerrar
+onClick={onClose}
+                className="flex-1 text-sm py-2.5 h-11"
+              >
+                Cerrar
                 </ZenButton>
               </>
             )}
+            </div>
           </div>
         </div>
       </ZenDialog>
