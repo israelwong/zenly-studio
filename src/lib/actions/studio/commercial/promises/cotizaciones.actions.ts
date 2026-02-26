@@ -1292,9 +1292,8 @@ export async function duplicateCotizacion(
         description: original.description,
         price: original.price,
         status: 'pendiente',
-        visible_to_client: false, // Duplicadas siempre ocultas inicialmente (studio las editarรก)
+        visible_to_client: false, // Duplicadas siempre ocultas inicialmente (studio las editará)
         condiciones_comerciales_id: original.condiciones_comerciales_id,
-        event_duration: original.event_duration, // Copiar duración del evento
         archived: false,
         order: newOrder,
         // Snapshots de condiciones comerciales (copiar de original)
@@ -1304,6 +1303,12 @@ export async function duplicateCotizacion(
         condiciones_comerciales_advance_type_snapshot: original.condiciones_comerciales_advance_type_snapshot,
         condiciones_comerciales_advance_amount_snapshot: original.condiciones_comerciales_advance_amount_snapshot,
         condiciones_comerciales_discount_percentage_snapshot: original.condiciones_comerciales_discount_percentage_snapshot,
+        // Duración, bono y cortesías (heredar de original)
+        event_duration: original.event_duration,
+        bono_especial: original.bono_especial,
+        items_cortesia: original.items_cortesia,
+        cortesias_monto_snapshot: original.cortesias_monto_snapshot,
+        cortesias_count_snapshot: original.cortesias_count_snapshot,
         // Snapshots de contrato (copiar de original)
         contract_template_id_snapshot: original.contract_template_id_snapshot,
         contract_template_name_snapshot: original.contract_template_name_snapshot,
@@ -1380,7 +1385,7 @@ export async function duplicateCotizacion(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
-    // Retornar la cotizaciรณn completa para actualizaciรณn optimista
+    // Retornar la cotización completa para actualización optimista (incl. duración, bono, cortesías para badges)
     const cotizacionCompleta = await prisma.studio_cotizaciones.findUnique({
       where: { id: nuevaCotizacion.id },
       select: {
@@ -1396,27 +1401,44 @@ export async function duplicateCotizacion(
         revision_of_id: true,
         revision_number: true,
         revision_status: true,
+        event_duration: true,
+        bono_especial: true,
+        items_cortesia: true,
+        cortesias_count_snapshot: true,
+        cortesias_monto_snapshot: true,
       },
     });
+
+    if (!cotizacionCompleta) {
+      return { success: true, data: { id: nuevaCotizacion.id, name: nuevaCotizacion.name } };
+    }
+
+    const priceNum = Number(cotizacionCompleta.price);
+    const itemsCortesia = cotizacionCompleta.items_cortesia;
+    const cortesiasCount = cotizacionCompleta.cortesias_count_snapshot ?? (Array.isArray(itemsCortesia) ? itemsCortesia.length : 0);
 
     return {
       success: true,
       data: {
         id: nuevaCotizacion.id,
         name: nuevaCotizacion.name,
-        ...(cotizacionCompleta && {
-          cotizacion: {
-            id: cotizacionCompleta.id,
-            name: cotizacionCompleta.name,
-            price: cotizacionCompleta.price,
-            status: cotizacionCompleta.status,
-            description: cotizacionCompleta.description,
-            created_at: cotizacionCompleta.created_at,
-            updated_at: cotizacionCompleta.updated_at,
-            order: cotizacionCompleta.order,
-            archived: cotizacionCompleta.archived,
-          },
-        }),
+        cotizacion: {
+          id: cotizacionCompleta.id,
+          name: cotizacionCompleta.name,
+          price: priceNum,
+          status: cotizacionCompleta.status,
+          description: cotizacionCompleta.description,
+          created_at: cotizacionCompleta.created_at,
+          updated_at: cotizacionCompleta.updated_at,
+          order: cotizacionCompleta.order,
+          archived: cotizacionCompleta.archived,
+          visible_to_client: false,
+          event_duration: cotizacionCompleta.event_duration != null ? Number(cotizacionCompleta.event_duration) : null,
+          bono_especial: cotizacionCompleta.bono_especial != null ? Number(cotizacionCompleta.bono_especial) : null,
+          items_cortesia: itemsCortesia ?? undefined,
+          cortesias_count_snapshot: cortesiasCount,
+          cortesias_monto_snapshot: cotizacionCompleta.cortesias_monto_snapshot != null ? Number(cotizacionCompleta.cortesias_monto_snapshot) : null,
+        },
       },
     };
   } catch (error) {

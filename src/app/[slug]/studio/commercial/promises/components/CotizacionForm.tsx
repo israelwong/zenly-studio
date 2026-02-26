@@ -7,7 +7,7 @@ import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, List
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
+import { Accordion, AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
 import { Separator } from '@/components/ui/shadcn/separator';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
@@ -28,7 +28,7 @@ import type { PublicCotizacion, PublicSeccionData } from '@/types/public-promise
 import { cn } from '@/lib/utils';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
-import { FormSection, type FormSectionId } from './FormSection';
+import type { FormSectionId } from './FormSection';
 
 const DUPLICATE_NAME_ERROR = 'Ya existe una cotización con ese nombre en esta promesa';
 
@@ -137,7 +137,16 @@ export function CotizacionForm({
   const [isCourtesyMode, setIsCourtesyMode] = useState(false);
   const [itemsCortesia, setItemsCortesia] = useState<Set<string>>(new Set());
   const [bonoEspecial, setBonoEspecial] = useState<number>(0);
-  const [openSection, setOpenSection] = useState<FormSectionId | null>('base');
+  const [accordionValue, setAccordionValue] = useState<string[]>(['base']);
+  const handleAccordionChange = useCallback((newValue: string[]) => {
+    setAccordionValue((prev) => {
+      if (newValue.includes('negociacion') && !prev.includes('negociacion')) {
+        return ['negociacion', 'condiciones'];
+      }
+      return newValue;
+    });
+    if (!newValue.includes('negociacion')) setIsCourtesyMode(false);
+  }, []);
   const sectionBaseRef = useRef<HTMLDivElement>(null);
   const sectionNegociacionRef = useRef<HTMLDivElement>(null);
   const sectionCondicionesRef = useRef<HTMLDivElement>(null);
@@ -2211,7 +2220,7 @@ export function CotizacionForm({
         />
       </div>
 
-      {/* Columna 2: Configuración de la Cotización */}
+      {/* Columna 2: Configuración — sticky, scroll en el contenedor; botones debajo del contenido */}
       <div
         className={
           focusMode
@@ -2220,54 +2229,71 @@ export function CotizacionForm({
         }
       >
         <form onSubmit={(e) => { e.preventDefault(); handleSave(false); }} className="space-y-4">
+          <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white mb-4">Configuración</h3>
 
-            <FormSection
-              id="base"
-              title="Información base"
-              summary={[nombre?.trim() || 'Sin nombre', durationHours != null ? ` · ${durationHours} h` : ''].filter(Boolean).join('') || undefined}
-              open={openSection === 'base'}
-              onOpenChange={(open) => {
-                setOpenSection(open ? 'base' : null);
-                if (open) requestAnimationFrame(() => sectionBaseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-              }}
-              headerRef={sectionBaseRef}
-              contentClassName="bg-zinc-900/30 p-3"
-            >
-              <ZenInput
-                label="Nombre de la Cotización"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej: Cotización Boda Premium"
-                required
-                className="mb-4"
-              />
-              <ZenTextarea
-                label="Descripción (opcional)"
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-                placeholder="Describe los servicios incluidos..."
-                className="min-h-[80px]"
-              />
-              <ZenInput
-                label="Duración del Evento (Horas)"
-                type="number"
-                min="0"
-                step="0.5"
-                value={durationHours !== null ? durationHours.toString() : ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '') {
-                    setDurationHours(null);
-                  } else {
-                    const numValue = Number(value);
-                    setDurationHours(numValue > 0 ? numValue : null);
-                  }
-                }}
-                placeholder="Ej: 8"
-                hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
-              />
-            </FormSection>
+            <Accordion type="multiple" value={accordionValue} onValueChange={handleAccordionChange} className="space-y-0">
+              <AccordionItem value="base" id="cotizacion-form-section-base">
+                <AccordionHeader
+                  ref={sectionBaseRef}
+                  className={cn(
+                    'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
+                    accordionValue.includes('base') ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+                  )}
+                >
+                  <AccordionTrigger
+                    className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5"
+                    onClick={() => accordionValue.includes('base') && requestAnimationFrame(() => sectionBaseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 w-full">
+                      {accordionValue.includes('base') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                      <span>Información base</span>
+                    </div>
+                    {!accordionValue.includes('base') && (
+                      <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+                        {[nombre?.trim() || 'Sin nombre', durationHours != null ? ` · ${durationHours} h` : ''].filter(Boolean).join('') || 'Nombre y duración'}
+                      </span>
+                    )}
+                  </AccordionTrigger>
+                </AccordionHeader>
+                <AccordionContent>
+                  <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-900/30 p-3">
+                    <ZenInput
+                      label="Nombre de la Cotización"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Ej: Cotización Boda Premium"
+                      required
+                      className="mb-4"
+                    />
+                    <ZenTextarea
+                      label="Descripción (opcional)"
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      placeholder="Describe los servicios incluidos..."
+                      className="min-h-[80px]"
+                    />
+                    <ZenInput
+                      label="Duración del Evento (Horas)"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={durationHours !== null ? durationHours.toString() : ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '') {
+                          setDurationHours(null);
+                        } else {
+                          const numValue = Number(value);
+                          setDurationHours(numValue > 0 ? numValue : null);
+                        }
+                      }}
+                      placeholder="Ej: 8"
+                      hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
 
           {/* Cálculo Financiero — 3 columnas (homologado con Negociación) */}
           <div className="z-10">
@@ -2323,44 +2349,55 @@ export function CotizacionForm({
             </div>
 
             {/* 2. Ajustes de Negociación */}
-            <FormSection
-              id="negociacion"
-              title="Ajustes de negociación"
-              summary={(() => {
-                const parts: string[] = [];
-                if (bonoEspecial > 0) parts.push(`Bono: ${formatearMoneda(bonoEspecial)}`);
-                if (itemsCortesia.size > 0) parts.push(`${itemsCortesia.size} Cortesía${itemsCortesia.size !== 1 ? 's' : ''}`);
-                return parts.length > 0 ? parts.join(' · ') : 'Cortesías y bono';
-              })()}
-              open={openSection === 'negociacion'}
-              onOpenChange={(open) => {
-                setOpenSection(open ? 'negociacion' : null);
-                if (!open) setIsCourtesyMode(false);
-                if (open) requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-              }}
-              headerRef={sectionNegociacionRef}
-              headerAction={
-                esNegociacionModificada ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ini = negociacionInicialRef.current;
-                      if (!ini) return;
-                      setBonoEspecial(ini.bono);
-                      setItemsCortesia(new Set(ini.itemsCortesia));
-                      userHasChangedServicesOrAjustesRef.current = true;
-                      setPendingSyncFromAjustes(true);
-                      toast.success('Ajustes restaurados a la versión guardada');
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors shrink-0 mr-3 pr-0.5"
+              <AccordionItem value="negociacion" id="cotizacion-form-section-negociacion">
+                <AccordionHeader
+                  ref={sectionNegociacionRef}
+                  className={cn(
+                    'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
+                    accordionValue.includes('negociacion') ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+                  )}
+                >
+                  <AccordionTrigger
+                    className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5"
+                    onClick={() => accordionValue.includes('negociacion') && requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Restaurar
-                  </button>
-                ) : null
-              }
-              contentClassName="bg-zinc-800/30 p-3"
-            >
+                    <div className="flex items-center gap-2 min-w-0 w-full">
+                      {accordionValue.includes('negociacion') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                      <span>Ajustes de negociación</span>
+                    </div>
+                    {!accordionValue.includes('negociacion') && (
+                      <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+                        {(() => {
+                          const parts: string[] = [];
+                          if (bonoEspecial > 0) parts.push(`Bono: ${formatearMoneda(bonoEspecial)}`);
+                          if (itemsCortesia.size > 0) parts.push(`${itemsCortesia.size} Cortesía${itemsCortesia.size !== 1 ? 's' : ''}`);
+                          return parts.length > 0 ? parts.join(' · ') : 'Cortesías y bono';
+                        })()}
+                      </span>
+                    )}
+                  </AccordionTrigger>
+                  {esNegociacionModificada ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const ini = negociacionInicialRef.current;
+                        if (!ini) return;
+                        setBonoEspecial(ini.bono);
+                        setItemsCortesia(new Set(ini.itemsCortesia));
+                        userHasChangedServicesOrAjustesRef.current = true;
+                        setPendingSyncFromAjustes(true);
+                        toast.success('Ajustes restaurados a la versión guardada');
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors shrink-0 mr-3 pr-0.5"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Restaurar
+                    </button>
+                  ) : null}
+                </AccordionHeader>
+                <AccordionContent>
+                  <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-800/30 p-3">
                 <div className="space-y-3">
                   <div className="grid grid-cols-[auto_1fr] gap-3">
                     <div>
@@ -2369,7 +2406,10 @@ export function CotizacionForm({
                         type="button"
                         variant={isCourtesyMode ? 'secondary' : 'outline'}
                         size="sm"
-                        onClick={() => setIsCourtesyMode(prev => !prev)}
+                        onClick={() => {
+                          if (!isCourtesyMode) setAccordionValue((prev) => prev.filter((x) => x !== 'base'));
+                          setIsCourtesyMode((prev) => !prev);
+                        }}
                         className={cn(
                           'w-full justify-center gap-1.5 rounded-lg border backdrop-blur-sm h-9 text-xs',
                           isCourtesyMode
@@ -2496,7 +2536,9 @@ export function CotizacionForm({
                     );
                   })()}
                 </div>
-            </FormSection>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
 
             <ZenConfirmModal
               isOpen={confirmClearCortesiasOpen}
@@ -2563,74 +2605,85 @@ export function CotizacionForm({
             </div>
 
             {/* 3. Condiciones de cierre */}
-            <FormSection
-              id="condiciones"
-              title="Condiciones de cierre"
-              summary={(() => {
-                const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find(c => c.id === selectedCondicionComercialId) ?? null : null);
-                if (!condicionActiva) return `${condicionIdsVisibles.size} ${condicionIdsVisibles.size === 1 ? 'visible' : 'visibles'} para cierre`;
-                const adv = condicionActiva.advance_type === 'fixed_amount' && condicionActiva.advance_amount != null
-                  ? formatearMoneda(condicionActiva.advance_amount)
-                  : `${condicionActiva.advance_percentage ?? 0}%`;
-                return `${condicionActiva.name} · Anticipo ${adv}`;
-              })()}
-              open={openSection === 'condiciones'}
-              onOpenChange={(open) => {
-                setOpenSection(open ? 'condiciones' : null);
-                if (open) requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-              }}
-              headerRef={sectionCondicionesRef}
-              headerAction={
-                <div className="flex items-center gap-1 shrink-0 mr-2">
-                  <ZenButton
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAuditoriaRentabilidadOpen(true)}
-                    disabled={condicionIdsVisibles.size === 0}
-                    title="Análisis de Rentabilidad"
-                    className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              <AccordionItem value="condiciones" id="cotizacion-form-section-condiciones">
+                <AccordionHeader
+                  ref={sectionCondicionesRef}
+                  className={cn(
+                    'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
+                    accordionValue.includes('condiciones') ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+                  )}
+                >
+                  <AccordionTrigger
+                    className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5"
+                    onClick={() => accordionValue.includes('condiciones') && requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
                   >
-                    <BarChart3 className="h-4 w-4" />
-                  </ZenButton>
-                  <ZenDropdownMenu>
-                    <ZenDropdownMenuTrigger asChild>
-                      <ZenButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </ZenButton>
-                    </ZenDropdownMenuTrigger>
-                    <ZenDropdownMenuContent align="end">
-                      <ZenDropdownMenuItem
-                        onClick={() => {
-                          setEditingCondicionId(null);
-                          setCreateCondicionEspecialMode(false);
-                          setShowCondicionesManager(true);
-                        }}
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Gestionar condiciones
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuItem
-                        onClick={() => {
-                          setCreateCondicionEspecialMode(true);
-                          setEditingCondicionId(null);
-                          setShowCondicionesManager(true);
-                        }}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Crear condición especial
-                      </ZenDropdownMenuItem>
-                    </ZenDropdownMenuContent>
-                  </ZenDropdownMenu>
-                </div>
-              }
-              contentClassName="bg-zinc-900/50 p-3"
-            >
+                    <div className="flex items-center gap-2 min-w-0 w-full">
+                      {accordionValue.includes('condiciones') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                      <span>Condiciones de cierre</span>
+                    </div>
+                    {!accordionValue.includes('condiciones') && (
+                      <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+                        {(() => {
+                          const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find(c => c.id === selectedCondicionComercialId) ?? null : null);
+                          if (!condicionActiva) return `${condicionIdsVisibles.size} ${condicionIdsVisibles.size === 1 ? 'visible' : 'visibles'} para cierre`;
+                          const adv = condicionActiva.advance_type === 'fixed_amount' && condicionActiva.advance_amount != null
+                            ? formatearMoneda(condicionActiva.advance_amount)
+                            : `${condicionActiva.advance_percentage ?? 0}%`;
+                          return `${condicionActiva.name} · Anticipo ${adv}`;
+                        })()}
+                      </span>
+                    )}
+                  </AccordionTrigger>
+                  <div className="flex items-center gap-1 shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
+                    <ZenButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAuditoriaRentabilidadOpen(true)}
+                      disabled={condicionIdsVisibles.size === 0}
+                      title="Análisis de Rentabilidad"
+                      className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                    </ZenButton>
+                    <ZenDropdownMenu>
+                      <ZenDropdownMenuTrigger asChild>
+                        <ZenButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </ZenButton>
+                      </ZenDropdownMenuTrigger>
+                      <ZenDropdownMenuContent align="end">
+                        <ZenDropdownMenuItem
+                          onClick={() => {
+                            setEditingCondicionId(null);
+                            setCreateCondicionEspecialMode(false);
+                            setShowCondicionesManager(true);
+                          }}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Gestionar condiciones
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem
+                          onClick={() => {
+                            setCreateCondicionEspecialMode(true);
+                            setEditingCondicionId(null);
+                            setShowCondicionesManager(true);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Crear condición especial
+                        </ZenDropdownMenuItem>
+                      </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
+                  </div>
+                </AccordionHeader>
+                <AccordionContent>
+                  <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-900/50 p-3">
                 <div>
                   <p className="text-[11px] text-zinc-500 mb-3">
                     Puedes habilitar u ocultar las condiciones de contratación que el prospecto podrá elegir para esta cotización.
@@ -2885,7 +2938,11 @@ export function CotizacionForm({
                   );
                 })()}
                 </div>
-            </FormSection>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </div>
+            </Accordion>
 
             {/* Modal compartido: crear o editar condiciones comerciales (igual que en negociación) */}
             <CondicionesComercialesManager
@@ -3098,7 +3155,6 @@ export function CotizacionForm({
                 </Sheet>
               );
             })()}
-          </div>
 
           {/* Ficha de Condición Comercial Pre-Autorizada */}
           {isPreAutorizada && condicionComercialPreAutorizada && (
@@ -3183,9 +3239,13 @@ export function CotizacionForm({
             </div>
           )}
 
-          {/* Botones de persistencia y publicación (1 por fila, ancho completo) */}
+          </div>
+
+          {/* Botones debajo del contenido (mismo flujo, sin scroll interno) */}
           {customActionButtons ? (
-            customActionButtons
+            <div className="border-t border-zinc-700 pt-3 mt-4">
+              {customActionButtons}
+            </div>
           ) : !hideActionButtons ? (
             (() => {
               const isCurrentlyVisible = visibleToClient;
