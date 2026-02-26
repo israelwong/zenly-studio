@@ -737,7 +737,7 @@ export function PromiseQuotesPanelCard({
               const hasCortesias = cortesiasCount > 0;
               const hasBono = cotizacion.bono_especial != null && cotizacion.bono_especial > 0;
               if (!hasDuration && !hasCortesias && !hasBono) return null;
-              const divider = <span className="text-zinc-500 px-1">|</span>;
+              const divider = <span className="text-zinc-500 px-1">·</span>;
               return (
                 <div className="flex items-center flex-nowrap gap-0 text-xs text-zinc-400 mb-1.5">
                   {hasDuration && (
