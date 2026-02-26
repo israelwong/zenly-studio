@@ -722,11 +722,14 @@ export function PromiseQuotesPanel({
           return [...pendientes, ...archivadas, ...canceladas];
         });
       }}
-      onNameUpdate={(id, newName) => {
-        // Marcar como cambio local para evitar recarga desde realtime
+      onNameUpdate={(id, newName, newDescription) => {
         localChangesRef.current.add(id);
         setCotizaciones((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
+          prev.map((c) =>
+            c.id === id
+              ? { ...c, name: newName, description: newDescription ?? c.description }
+              : c
+          )
         );
       }}
       onPasarACierre={async (cotizacionId) => {

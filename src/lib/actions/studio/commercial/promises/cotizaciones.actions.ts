@@ -1476,16 +1476,17 @@ export async function reorderCotizaciones(
 }
 
 /**
- * Actualizar nombre de cotizaciรณn
+ * Actualizar nombre y opcionalmente descripción de cotización
  */
 export async function updateCotizacionName(
   cotizacionId: string,
   studioSlug: string,
-  newName: string
+  newName: string,
+  newDescription?: string | null
 ): Promise<CotizacionResponse> {
   try {
     if (!newName.trim()) {
-      return { success: false, error: 'El nombre no puede estar vacรญo' };
+      return { success: false, error: 'El nombre no puede estar vacío' };
     }
 
     const studio = await prisma.studios.findUnique({
@@ -1508,9 +1509,14 @@ export async function updateCotizacionName(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
+    const data: { name: string; description?: string | null } = { name: newName.trim() };
+    if (newDescription !== undefined) {
+      data.description = newDescription === '' ? null : newDescription.trim() || null;
+    }
+
     const updated = await prisma.studio_cotizaciones.update({
       where: { id: cotizacionId },
-      data: { name: newName.trim() },
+      data,
     });
 
     // Registrar log si hay promise_id
@@ -1520,14 +1526,13 @@ export async function updateCotizacionName(
         studioSlug,
         cotizacion.promise_id,
         'quotation_updated',
-        'user', // Asumimos que es acciรณn de usuario
-        null, // TODO: Obtener userId del contexto
+        'user',
+        null,
         {
           quotationName: updated.name,
         }
       ).catch((error) => {
-        // No fallar si el log falla, solo registrar error
-        console.error('[COTIZACIONES] Error registrando log de cotizaciรณn actualizada:', error);
+        console.error('[COTIZACIONES] Error registrando log de cotización actualizada:', error);
       });
     }
 
@@ -1539,10 +1544,11 @@ export async function updateCotizacionName(
       data: {
         id: updated.id,
         name: updated.name,
+        description: updated.description,
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error actualizando nombre:', error);
+    console.error('[COTIZACIONES] Error actualizando nombre/descripción:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar nombre',
