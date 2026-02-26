@@ -71,7 +71,8 @@ function CotizacionCardInner({
   const hasCondiciones = condicionesData != null;
 
   const condicion = condicionesData?.condiciones_comerciales;
-  const precioBase = cotizacion?.price ?? 0;
+  /** Total a pagar (precio de cierre negociado). Base para cálculo de anticipo %. */
+  const totalFinalCierre = cotizacion?.price ?? 0;
   const montoCortesias = desgloseCierre?.cortesias_monto ?? 0;
   const montoBono = desgloseCierre?.bono_especial ?? 0;
   const tieneConcesiones = (montoCortesias > 0) || (montoBono > 0);
@@ -81,12 +82,12 @@ function CotizacionCardInner({
       ? getPrecioListaStudio({ price: cotizacion.price, precio_calculado: desgloseCierre.precio_calculado })
       : cotizacion.price;
     const ajuste = desgloseCierre
-      ? getAjusteCierre(precioBase, lista, montoCortesias, montoBono)
+      ? getAjusteCierre(totalFinalCierre, lista, montoCortesias, montoBono)
       : 0;
     const isFixed = condicion?.advance_type === 'fixed_amount' || condicion?.advance_type === 'amount';
     const ant = isFixed && condicion?.advance_amount != null
       ? Number(condicion.advance_amount)
-      : (condicion?.advance_percentage != null ? Math.round(precioBase * (condicion.advance_percentage / 100)) : 0);
+      : (condicion?.advance_percentage != null ? Math.round(totalFinalCierre * (condicion.advance_percentage / 100)) : 0);
     return {
       precioLista: lista,
       ajusteCierre: ajuste,
@@ -94,11 +95,11 @@ function CotizacionCardInner({
       advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
       anticipoPorcentaje: condicion?.advance_percentage ?? null,
     };
-  }, [desgloseCierre, cotizacion.price, precioBase, montoCortesias, montoBono, condicion?.advance_type, condicion?.advance_amount, condicion?.advance_percentage]);
+  }, [desgloseCierre, cotizacion.price, totalFinalCierre, montoCortesias, montoBono, condicion?.advance_type, condicion?.advance_amount, condicion?.advance_percentage]);
 
   const anticipoOverride = pagoData?.pago_monto != null ? Number(pagoData.pago_monto) : null;
   const anticipo = anticipoOverride ?? anticipoFromCondition;
-  const diferido = Math.max(0, precioBase - anticipo);
+  const diferido = Math.max(0, totalFinalCierre - anticipo);
   const anticipoModificado = anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01;
 
   const [ajustePopoverOpen, setAjustePopoverOpen] = useState(false);
@@ -141,9 +142,9 @@ function CotizacionCardInner({
     if (!ajusteFino || !cotizacion?.id) return;
     const monto =
       ajusteFino.advance_type === 'fixed_amount' && ajusteFino.advance_amount != null
-        ? ajusteFino.advance_amount
+        ? Math.round(ajusteFino.advance_amount)
         : ajusteFino.advance_percentage != null
-          ? Math.round(precioBase * (ajusteFino.advance_percentage / 100))
+          ? Math.round(totalFinalCierre * (ajusteFino.advance_percentage / 100))
           : 0;
     setSavingAnticipo(true);
     try {
@@ -158,7 +159,7 @@ function CotizacionCardInner({
     } finally {
       setSavingAnticipo(false);
     }
-  }, [ajusteFino, cotizacion?.id, studioSlug, precioBase, onAnticipoUpdated]);
+  }, [ajusteFino, cotizacion?.id, studioSlug, totalFinalCierre, onAnticipoUpdated]);
 
   const showResumenPago = hasCondiciones && desgloseCierre && tieneConcesiones;
 
@@ -228,9 +229,9 @@ function CotizacionCardInner({
                   <ResumenPago
                     title="Resumen de Cierre"
                     compact
-                    precioBase={precioBase}
-                    descuentoCondicion={0}
-                    precioConDescuento={precioBase}
+precioBase={totalFinalCierre}
+                descuentoCondicion={0}
+                precioConDescuento={totalFinalCierre}
                     advanceType={advanceType}
                     anticipoPorcentaje={anticipoPorcentaje}
                     anticipo={anticipo}
@@ -239,7 +240,7 @@ function CotizacionCardInner({
                     montoCortesias={montoCortesias}
                     cortesiasCount={desgloseCierre.cortesias_count}
                     montoBono={montoBono}
-                    precioFinalCierre={precioBase}
+                    precioFinalCierre={totalFinalCierre}
                     ajusteCierre={ajusteCierre}
                     tieneConcesiones
                     anticipoModificado={anticipoModificado}

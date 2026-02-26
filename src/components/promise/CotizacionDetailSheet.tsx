@@ -112,7 +112,7 @@ export function CotizacionDetailSheet({
   const [selectedMetodoPagoId, setSelectedMetodoPagoId] = useState<string | null>(null);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
   const [currentCotizacion, setCurrentCotizacion] = useState(cotizacion);
-  const precioDesgloseRef = useRef<HTMLDivElement>(null);
+  const sheetContainerRef = useRef<HTMLDivElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -308,17 +308,12 @@ export function CotizacionDetailSheet({
     [precioFinal, precioLista, montoCortesias, montoBono]
   );
 
-  // Scroll automático al desglose cuando se selecciona una condición comercial
+  // Iniciar siempre en el tope al abrir el sheet (evitar scroll automático)
   useEffect(() => {
-    if (precioCalculado && precioDesgloseRef.current) {
-      setTimeout(() => {
-        precioDesgloseRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-        });
-      }, 100);
+    if (isOpen && sheetContainerRef.current) {
+      sheetContainerRef.current.scrollTop = 0;
     }
-  }, [precioCalculado]);
+  }, [isOpen]);
 
   // Escuchar cambios en la cotización específica usando Realtime
   // Usar ref para mantener el ID actual sin depender del closure
@@ -490,8 +485,11 @@ export function CotizacionDetailSheet({
         onClick={onClose}
       />
 
-      {/* Sheet */}
-      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] overflow-y-auto shadow-2xl">
+      {/* Sheet: ref para forzar scrollTop=0 al abrir */}
+      <div
+        ref={sheetContainerRef}
+        className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] overflow-y-auto shadow-2xl"
+      >
         {/* Header */}
         <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-3">
@@ -614,7 +612,6 @@ export function CotizacionDetailSheet({
 
                   return (
                     <PrecioDesglose
-                      ref={precioDesgloseRef}
                       precioBase={precioBase}
                       descuentoCondicion={descuentoCondicion}
                       precioConDescuento={precioConDescuento}
@@ -647,7 +644,6 @@ export function CotizacionDetailSheet({
                 {/* Cálculo de precio según condición comercial */}
                 {precioCalculado && (
                   <PrecioDesglose
-                    ref={precioDesgloseRef}
                     precioBase={precioCalculado.precioBase}
                     descuentoCondicion={precioCalculado.descuentoCondicion}
                     precioConDescuento={precioCalculado.precioConDescuento}

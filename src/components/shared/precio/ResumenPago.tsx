@@ -92,6 +92,19 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
       };
     }, [precioFinalCierre, precioFinalNegociado, precioConDesc, cortesias, precioBase]);
 
+    // Regla de oro: Anticipo % se calcula SIEMPRE sobre Total a pagar (precioFinalAPagar), no sobre precioBase.
+    const { anticipoDisplay, diferidoDisplay } = useMemo(() => {
+      const total = precioFinalAPagar;
+      if (advanceType === 'percentage' && (anticipoPorcentaje ?? 0) > 0) {
+        const ant = Math.round(total * (anticipoPorcentaje ?? 0) / 100);
+        return { anticipoDisplay: ant, diferidoDisplay: Math.max(0, total - ant) };
+      }
+      return {
+        anticipoDisplay: anticipo,
+        diferidoDisplay: Math.max(0, total - anticipo),
+      };
+    }, [advanceType, anticipoPorcentaje, anticipo, precioFinalAPagar]);
+
     return (
       <div
         ref={ref}
@@ -187,7 +200,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
               {formatPrecioCierre(precioFinalAPagar)}
             </span>
           </div>
-          {anticipo > 0 && (
+          {anticipoDisplay > 0 && (
             <>
               <div className="flex justify-between items-center pt-2 gap-1">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -199,20 +212,20 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                   </span>
                 </div>
                 <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
-                  {formatPrecioCierre(anticipo)}
+                  {formatPrecioCierre(anticipoDisplay)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-400">
                   Diferido
-                  {diferido > 0 && (
+                  {diferidoDisplay > 0 && (
                     <span className="text-xs text-zinc-500 ml-1">
                       (a liquidar 2 días antes del evento)
                     </span>
                   )}
                 </span>
                 <span className="text-sm font-medium text-zinc-300">
-                  {formatPrecioCierre(diferido)}
+                  {formatPrecioCierre(diferidoDisplay)}
                 </span>
               </div>
             </>

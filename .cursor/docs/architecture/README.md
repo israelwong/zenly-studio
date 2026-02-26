@@ -105,13 +105,25 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
+### 6. Componentes compartidos (precio / cierre)
+**Carpeta:** [components/](components/)
+
+| Documento | Descripción |
+|-----------|-------------|
+| [resumen-pago.md](components/resumen-pago.md) | ResumenPago: props, estados (compact / editable / solo lectura), flujo de datos, uso de snapshots en vista Autorizada, fórmula de anticipo % sobre Total a pagar. |
+
+**Cuándo consultar:** Mantener o extender el bloque "Resumen de Cierre/Pago"; asegurar paridad Cierre vs Autorizada; no romper cálculo de anticipo ni precisión de centavos (ver también Master [calculo-utilidad-financiera.md](../masters/calculo-utilidad-financiera.md) §8).
+
+---
+
 ## 🏗️ Estructura de Carpetas
 
 ```
 .cursor/docs/
 ├── architecture/           # ← ESTÁS AQUÍ
 │   ├── README.md          # Este archivo
-│   ├── flows/             # Flujos paso a paso (cierre, autorización, etc.)
+│   ├── components/       # Componentes compartidos (ResumenPago, etc.)
+│   ├── flows/            # Flujos paso a paso (cierre, autorización, etc.)
 │   │   ├── README.md
 │   │   └── flujo-cierre-cotizacion.md
 │   └── ... (contracts-flow, promise-detalle, etc.)

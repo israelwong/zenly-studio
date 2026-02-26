@@ -176,17 +176,18 @@ export function ConfirmarCierreModal({
     }
   }, [isOpen, studioSlug, cotizacionId]);
 
-  const precioBase = cotizacion?.price ?? 0;
+  /** Total a pagar (precio de cierre). Base para anticipo %. */
+  const totalAPagar = cotizacion?.price ?? 0;
   const condicionActiva = selectedId === NEGOCIACION_ID
     ? cotizacion?.condicion_comercial_negociacion ?? null
     : condiciones.find((c) => c.id === selectedId) ?? null;
   const usarAjuste = ajusteFino?.editing ? ajusteFino : condicionActiva;
   const anticipo = usarAjuste
     ? (usarAjuste.advance_type === 'fixed_amount' || usarAjuste.advance_type === 'amount') && usarAjuste.advance_amount != null
-      ? Number(usarAjuste.advance_amount)
-      : (usarAjuste.advance_percentage ?? 0) / 100 * precioBase
+      ? Math.round(Number(usarAjuste.advance_amount))
+      : (usarAjuste.advance_percentage != null ? Math.round(totalAPagar * (usarAjuste.advance_percentage / 100)) : 0)
     : 0;
-  const diferido = Math.max(0, precioBase - anticipo);
+  const diferido = Math.max(0, totalAPagar - anticipo);
 
   const buildPayload = (): PasarACierreOptions => {
     if (selectedId === NEGOCIACION_ID) {
@@ -247,15 +248,15 @@ export function ConfirmarCierreModal({
   const cortesiasCount = cotizacion?.cortesias_count ?? 0;
   const montoBono = cotizacion?.bono_especial ?? 0;
   // Ecuación financiera: Total = PrecioLista - Cortesías - Bono + AjusteCierre → ajusteCierre = Total - (PrecioLista - Cortesías - Bono)
-  const baseDescuentos = precioLista != null ? precioLista - montoCortesias - montoBono : precioBase;
-  const ajustePorCierre = precioLista != null && Math.abs(precioBase - baseDescuentos) >= 0.01 ? precioBase - baseDescuentos : 0;
+  const baseDescuentos = precioLista != null ? precioLista - montoCortesias - montoBono : totalAPagar;
+  const ajustePorCierre = precioLista != null && Math.abs(totalAPagar - baseDescuentos) >= 0.01 ? totalAPagar - baseDescuentos : 0;
   const tieneConcesiones = (precioLista != null && precioLista > 0) || montoCortesias > 0 || montoBono > 0 || Math.abs(ajustePorCierre) >= 0.01;
   const anticipoPct = usarAjuste?.advance_type === 'percentage' || usarAjuste?.advance_type !== 'fixed_amount' ? (usarAjuste?.advance_percentage ?? 0) : null;
 
   const displayAnticipo = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.anticipo : anticipo;
   const displayAnticipoPct = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.anticipoPct : anticipoPct;
   const displayAdvanceType = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.advanceType : (usarAjuste?.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage');
-  const displayDiferido = Math.max(0, precioBase - displayAnticipo);
+  const displayDiferido = Math.max(0, totalAPagar - displayAnticipo);
 
   const handleAjustePopoverOpenChange = (open: boolean) => {
     if (open) {
@@ -381,9 +382,9 @@ export function ConfirmarCierreModal({
             <Popover open={ajusteFinoPopoverOpen} onOpenChange={handleAjustePopoverOpenChange}>
               <ResumenPago
                 compact
-                precioBase={precioBase}
+                precioBase={totalAPagar}
                 descuentoCondicion={0}
-                precioConDescuento={precioBase}
+                precioConDescuento={totalAPagar}
                 advanceType={displayAdvanceType}
                 anticipoPorcentaje={displayAnticipoPct}
                 anticipo={displayAnticipo}
@@ -392,7 +393,7 @@ export function ConfirmarCierreModal({
                 montoCortesias={montoCortesias}
                 cortesiasCount={cortesiasCount}
                 montoBono={montoBono}
-                precioFinalCierre={precioBase}
+                precioFinalCierre={totalAPagar}
                 ajusteCierre={ajustePorCierre}
                 tieneConcesiones={tieneConcesiones}
                 renderAnticipoActions={
