@@ -13,9 +13,11 @@ interface ComparadorButtonProps {
   paquetes: PublicPaquete[];
   promiseId: string;
   studioSlug: string;
+  /** Fuente de verdad paquetes = promesa. Solo para PaqueteDetailSheet (cotización usa cotizacion.event_duration). */
+  promiseDurationHours?: number | null;
 }
 
-export function ComparadorButton({ cotizaciones, paquetes, promiseId, studioSlug }: ComparadorButtonProps) {
+export function ComparadorButton({ cotizaciones, paquetes, promiseId, studioSlug, promiseDurationHours }: ComparadorButtonProps) {
   const [showComparador, setShowComparador] = useState(false);
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
   const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
@@ -89,6 +91,7 @@ export function ComparadorButton({ cotizaciones, paquetes, promiseId, studioSlug
           onClose={() => setSelectedPaquete(null)}
           promiseId={promiseId}
           studioSlug={studioSlug}
+          promiseDurationHours={promiseDurationHours}
         />
       )}
     </>

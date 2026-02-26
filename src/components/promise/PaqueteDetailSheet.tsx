@@ -58,6 +58,8 @@ interface PaqueteDetailSheetProps {
   showOfferConditions?: boolean;
   showPackages?: boolean;
   cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
+  /** Fuente de verdad paquetes = promesa (promise.duration_hours). Multiplicadores x/h. */
+  promiseDurationHours?: number | null;
 }
 
 export function PaqueteDetailSheet({
@@ -75,6 +77,7 @@ export function PaqueteDetailSheet({
   showOfferConditions = false,
   showPackages = false,
   cotizaciones = [],
+  promiseDurationHours,
 }: PaqueteDetailSheetProps) {
   const [showSolicitarModal, setShowSolicitarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -365,6 +368,7 @@ export function PaqueteDetailSheet({
               servicios={paquete.servicios}
               showPrices={false}
               showSubtotals={false}
+              eventDurationHours={promiseDurationHours ?? null}
             />
           </div>
 

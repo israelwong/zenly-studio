@@ -94,6 +94,8 @@ export interface PublicCotizacion {
     advance_amount: number | null;
     discount_percentage: number | null;
   } | null;
+  /** Duración del evento para esta cotización (horas). Prioridad sobre promise.duration_hours en vista pública. */
+  event_duration?: number | null;
   selected_by_prospect?: boolean;
   selected_at?: Date | null;
   negociacion_precio_original?: number | null;

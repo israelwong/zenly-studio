@@ -138,6 +138,7 @@ export function ActiveQuoteSection({
   );
   const hasVisibleQuotes = visibleQuotes.length > 0;
 
+  // Sección cotización: fuente de verdad = cotización (cada card/sheet usa cotizacion.event_duration).
   // ⚠️ TAREA 3: Renderizar solo la sección de cotizaciones (sin paquetes aún)
   // Los paquetes se cargan después en un Suspense separado
   return (
@@ -158,7 +159,6 @@ export function ActiveQuoteSection({
           paquetes={[]}
           autoGenerateContract={share_settings.auto_generate_contract}
           mostrarBotonAutorizar={share_settings.allow_online_authorization}
-          durationHours={promise.duration_hours ?? null}
           dateSoldOut={dateSoldOut}
           promiseData={{
             contact_name: promise.contact_name,

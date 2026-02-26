@@ -43,7 +43,6 @@ interface CotizacionesSectionRealtimeProps {
   autoGenerateContract?: boolean;
   /** Mostrar botón Autorizar en el detalle de cotización (share_settings.allow_online_authorization). */
   mostrarBotonAutorizar?: boolean;
-  durationHours?: number | null;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
   promiseData?: {
     contact_name: string;
@@ -74,7 +73,6 @@ export function CotizacionesSectionRealtime({
   paquetes = [],
   autoGenerateContract = false,
   mostrarBotonAutorizar = true,
-  durationHours,
   promiseData,
   dateSoldOut = false,
 }: CotizacionesSectionRealtimeProps) {
@@ -241,7 +239,6 @@ export function CotizacionesSectionRealtime({
         autoGenerateContract={autoGenerateContract}
         mostrarBotonAutorizar={mostrarBotonAutorizar}
         recentlyUpdated={recentlyUpdated}
-        durationHours={durationHours}
         promiseData={promiseData}
         dateSoldOut={dateSoldOut}
       />

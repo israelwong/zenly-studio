@@ -133,6 +133,9 @@ export function AvailablePackagesSectionWrapper({
   const hasActiveQuote = activeQuoteData && activeQuoteData.cotizaciones.length > 0;
   const paquetesData = availablePackagesResult.success && availablePackagesResult.data ? availablePackagesResult.data : null;
 
+  // Sección paquetes: fuente de verdad = promesa (promise.duration_hours).
+  const promiseDurationHours = activeQuoteData?.promise?.duration_hours ?? basicPromise.promise.duration_hours ?? null;
+
   // Si no hay datos de paquetes, verificar si hay portafolios para mostrar
   const hasPackages = paquetesData && paquetesData.share_settings.show_packages && paquetesData.paquetes.length > 0;
   const hasPortafolios = paquetesData && paquetesData.share_settings.portafolios && paquetesData.portafolios && paquetesData.portafolios.length > 0;
@@ -161,7 +164,7 @@ export function AvailablePackagesSectionWrapper({
           showPackages={activeQuoteData?.share_settings.show_packages ?? basicPromise.studio.promise_share_default_show_packages}
           cotizaciones={activeQuoteData?.cotizaciones ?? []}
           cotizacionesCompletas={activeQuoteData?.cotizaciones ?? []}
-          durationHours={basicPromise.promise.duration_hours ?? null}
+          promiseDurationHours={promiseDurationHours}
         />
       )}
 

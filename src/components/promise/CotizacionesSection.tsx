@@ -44,7 +44,6 @@ interface CotizacionesSectionProps {
   /** Mostrar botón Autorizar en el sheet de detalle (share_settings.allow_online_authorization). */
   mostrarBotonAutorizar?: boolean;
   recentlyUpdated?: Set<string>;
-  durationHours?: number | null;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
   promiseData?: {
     contact_name: string;
@@ -75,7 +74,6 @@ export function CotizacionesSection({
   autoGenerateContract = false,
   mostrarBotonAutorizar = true,
   recentlyUpdated = new Set(),
-  durationHours,
   promiseData,
   dateSoldOut = false,
 }: CotizacionesSectionProps) {
@@ -142,13 +140,8 @@ export function CotizacionesSection({
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="h-4 w-4 text-zinc-400" />
-              <h2 className="text-xl md:text-3xl font-bold text-white flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl md:text-3xl font-bold text-white">
                 {cotizacionesOrdenadas.length === 1 ? 'Cotización Personalizada' : 'Cotizaciones Personalizadas'}
-                {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
-                  <ZenBadge variant="outline" className="text-[10px] px-2.5 py-1 text-emerald-400 border-emerald-500/30 bg-emerald-500/10 rounded-full">
-                    {durationHours} {durationHours === 1 ? 'hora' : 'horas'}
-                  </ZenBadge>
-                )}
               </h2>
             </div>
             <p className="text-sm text-zinc-400">
@@ -192,9 +185,16 @@ export function CotizacionesSection({
                   <ZenCardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <ZenCardTitle className="text-white group-hover:text-zinc-200 transition-colors">
-                          {cotizacion.name}
-                        </ZenCardTitle>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <ZenCardTitle className="text-white group-hover:text-zinc-200 transition-colors">
+                            {cotizacion.name}
+                          </ZenCardTitle>
+                          {cotizacion.event_duration != null && (
+                            <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 text-xs font-semibold">
+                              {cotizacion.event_duration} h
+                            </ZenBadge>
+                          )}
+                        </div>
                         {cotizacion.description && (
                           <p className="text-sm text-zinc-400 mt-0.5 line-clamp-2">
                             {cotizacion.description}

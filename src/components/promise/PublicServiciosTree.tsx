@@ -12,9 +12,11 @@ interface PublicServiciosTreeProps {
   servicios: PublicSeccionData[];
   showPrices?: boolean;
   showSubtotals?: boolean;
+  /** Duración del evento en horas. Si se pasa, los ítems HOUR muestran x{eventDurationHours}/h (fuente de verdad para el multiplicador). */
+  eventDurationHours?: number | null;
 }
 
-export function PublicServiciosTree({ servicios, showPrices = false, showSubtotals = false }: PublicServiciosTreeProps) {
+export function PublicServiciosTree({ servicios, showPrices = false, showSubtotals = false, eventDurationHours }: PublicServiciosTreeProps) {
   // ⚠️ SAFETY: Validar que servicios sea un array válido
   if (!Array.isArray(servicios) || servicios.length === 0) {
     return (
@@ -281,6 +283,10 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                     : 0;
                                   const esCortesia = servicio.is_courtesy === true || (esCotizacion && (servicio.price === 0 || servicio.price === undefined));
                                   const mediaInfo = getServiceMediaInfo(servicio);
+                                  // Fuente de verdad para multiplicador: para HOUR usar eventDurationHours si está definido
+                                  const multiplierDisplay = servicio.billing_type === 'HOUR' && eventDurationHours != null
+                                    ? eventDurationHours
+                                    : cantidad;
 
                                   return (
                                     <div
@@ -295,7 +301,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                               <span className="inline">
                                                 <span className="wrap-break-word">{servicioNombre}</span>
                                                 <span className="text-xs text-zinc-500 whitespace-nowrap">
-                                                  {' '}x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
+                                                  {' '}x{multiplierDisplay}{servicio.billing_type === 'HOUR' ? '/h' : ''}
                                                 </span>
                                               </span>
                                               {esCortesia && (

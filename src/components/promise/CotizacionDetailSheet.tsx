@@ -551,13 +551,21 @@ export function CotizacionDetailSheet({
 
           {/* Servicios incluidos */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Servicios Incluidos
-            </h3>
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <h3 className="text-lg font-semibold text-white">
+                Servicios Incluidos
+              </h3>
+              {currentCotizacion.event_duration != null && currentCotizacion.event_duration > 0 && (
+                <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 text-xs font-semibold">
+                  Duración evento: {currentCotizacion.event_duration} h
+                </ZenBadge>
+              )}
+            </div>
             <PublicServiciosTree
               servicios={currentCotizacion.servicios}
               showPrices={showItemsPrices}
               showSubtotals={showCategoriesSubtotals}
+              eventDurationHours={currentCotizacion.event_duration ?? null}
             />
           </div>
 

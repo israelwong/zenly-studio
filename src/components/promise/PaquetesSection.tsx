@@ -47,7 +47,8 @@ interface PaquetesSectionProps {
     showPackages?: boolean;
     cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
     cotizacionesCompletas?: PublicCotizacion[];
-    durationHours?: number | null;
+    /** Fuente de verdad paquetes = promesa (promise.duration_hours). */
+    promiseDurationHours?: number | null;
 }
 
 /**
@@ -154,7 +155,7 @@ export function PaquetesSection({
     showPackages = false,
     cotizaciones = [],
     cotizacionesCompletas = [],
-    durationHours,
+    promiseDurationHours,
 }: PaquetesSectionProps & { studioId?: string }) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
 
@@ -238,29 +239,19 @@ export function PaquetesSection({
                                 }
                             </h2>
                         </div>
-                        <p className="text-zinc-400">
-                            {showAsAlternative
-                                ? (
-                                    <>
-                                        Explora otros paquetes disponibles
-                                        {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
-                                            <span className="block mt-1 text-xs text-zinc-500">
-                                                Precios calculados para tu evento por <span className="font-semibold text-blue-400">{durationHours} {durationHours === 1 ? 'hora' : 'horas'}</span>. El precio puede variar según las horas configuradas.
-                                            </span>
-                                        )}
-                                    </>
-                                )
-                                : (
-                                    <>
-                                        Conoce nuestros paquetes predefinidos con excelente relación precio-calidad
-                                        {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
-                                            <span className="block mt-1 text-xs text-zinc-500">
-                                                Precios calculados para tu evento por <span className="font-semibold text-blue-400">{durationHours} {durationHours === 1 ? 'hora' : 'horas'}</span>. El precio puede variar según las horas configuradas.
-                                            </span>
-                                        )}
-                                    </>
-                                )}
-                        </p>
+                        <div className="text-zinc-400">
+                            {promiseDurationHours != null && promiseDurationHours > 0 ? (
+                                <>
+                                    Explora otros paquetes disponibles basados en la duración de{' '}
+                                    <ZenBadge variant="secondary" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 font-semibold">
+                                        {promiseDurationHours} {promiseDurationHours === 1 ? 'hora' : 'horas'}
+                                    </ZenBadge>
+                                    {' '}definida para tu evento.
+                                </>
+                            ) : (
+                                'Explora otros paquetes disponibles basados en la duración definida para tu evento.'
+                            )}
+                        </div>
                     </div>
 
                     {/* Paquetes - Grid en mobile, carousel solo en desktop si hay más de 3 */}
@@ -400,6 +391,7 @@ export function PaquetesSection({
                     minDaysToHire={minDaysToHire}
                     showPackages={showPackages}
                     cotizaciones={cotizaciones}
+                    promiseDurationHours={promiseDurationHours}
                 />
             )}
         </>

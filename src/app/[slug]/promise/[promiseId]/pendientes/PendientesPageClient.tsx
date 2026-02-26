@@ -247,7 +247,6 @@ export function PendientesPageClient({
           paquetes={paquetes}
           autoGenerateContract={shareSettings.auto_generate_contract}
           mostrarBotonAutorizar={shareSettings.allow_online_authorization}
-          durationHours={promise.duration_hours}
           promiseData={{
             contact_name: promise.contact_name,
             contact_phone: promise.contact_phone,
@@ -278,7 +277,7 @@ export function PendientesPageClient({
           showOfferConditions={shareSettings.show_offer_conditions}
           showPackages={shareSettings.show_packages}
           cotizaciones={initialCotizaciones}
-          durationHours={promise.duration_hours}
+          promiseDurationHours={promise.duration_hours ?? null}
         />
       )}
 
@@ -298,6 +297,7 @@ export function PendientesPageClient({
           paquetes={shareSettings.show_packages ? paquetes : []}
           promiseId={promiseId}
           studioSlug={studioSlug}
+          promiseDurationHours={promise.duration_hours ?? null}
         />
       )}
 

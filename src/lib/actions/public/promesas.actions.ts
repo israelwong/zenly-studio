@@ -957,6 +957,7 @@ export async function getPublicPromisePendientes(
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
+      duration_hours: number | null;
     };
     studio: {
       studio_name: string;
@@ -1080,6 +1081,7 @@ export async function getPublicPromisePendientes(
               selected_by_prospect: true,
               order: true,
               evento_id: true,
+              event_duration: true,
               cotizacion_items: {
                 select: {
                   id: true,
@@ -1331,7 +1333,11 @@ export async function getPublicPromisePendientes(
       } | null;
     };
 
+    // Obtener duration_hours de la promise para uso por cotización (cot.event_duration ?? promise)
+    const promiseDurationHours = promise.duration_hours ?? null;
+
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
+      const horasParaCotizacion = cot.event_duration ?? promiseDurationHours;
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       (cot.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
@@ -1399,10 +1405,10 @@ export async function getPublicPromisePendientes(
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización sobre promesa
             const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
-            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+            const cantidadEfectiva = billingType === 'HOUR' && horasParaCotizacion !== null
+              ? calcularCantidadEfectiva(billingType, cantidad, horasParaCotizacion)
               : cantidad;
             return {
               id: item.item_id || item.id || '',
@@ -1444,6 +1450,7 @@ export async function getPublicPromisePendientes(
             name: cot.paquete.name,
           }
           : null,
+        event_duration: cot.event_duration ?? null,
         selected_by_prospect: cot.selected_by_prospect || false,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
       };
@@ -1451,8 +1458,6 @@ export async function getPublicPromisePendientes(
 
     // 8. Mapear paquetes usando el engine de precios (SSoT)
     const mapearPaquetesStart = Date.now();
-    // Obtener duration_hours de la promise
-    const promiseDurationHours = promise.duration_hours ?? null;
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
@@ -1605,6 +1610,7 @@ export async function getPublicPromisePendientes(
           event_name: promiseBasic.event_name,
           event_date: promiseBasic.event_date,
           event_location: promiseBasic.event_location,
+          duration_hours: promise.duration_hours ?? null,
         },
         studio,
         cotizaciones: mappedCotizaciones,
@@ -1772,6 +1778,7 @@ export async function getPublicPromiseActiveQuote(
               status: true,
               selected_by_prospect: true,
               order: true,
+              event_duration: true,
               condiciones_visibles: true,
               bono_especial: true,
               items_cortesia: true,
@@ -1932,6 +1939,7 @@ export async function getPublicPromiseActiveQuote(
     const promiseDurationHours = promise.duration_hours ?? null;
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
+      const horasParaCotizacion = cot.event_duration ?? promiseDurationHours;
       // ⚠️ TAREA 1: No cargar multimedia en vista previa (se carga on-demand)
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
@@ -2030,10 +2038,10 @@ export async function getPublicPromiseActiveQuote(
               : false;
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización
             const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
-            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+            const cantidadEfectiva = billingType === 'HOUR' && horasParaCotizacion !== null
+              ? calcularCantidadEfectiva(billingType, cantidad, horasParaCotizacion)
               : cantidad;
             return {
               id: item.item_id || item.id || '', // Usar id del cotizacion_item si no hay item_id
@@ -2062,6 +2070,7 @@ export async function getPublicPromiseActiveQuote(
         status: cot.status,
         order: cot.order ?? 0,
         evento_id: cot.evento_id,
+        event_duration: cot.event_duration ?? null,
         servicios: servicios,
         condiciones_comerciales: condicionesComerciales
           ? {
@@ -2144,7 +2153,7 @@ export async function getPublicPromiseActiveQuote(
           event_name: promiseBasic.event_name,
           event_date: promiseBasic.event_date,
           event_location: promiseBasic.event_location,
-          duration_hours: promiseBasic.duration_hours,
+          duration_hours: promise.duration_hours ?? promiseBasic.duration_hours ?? null,
         },
         studio,
         cotizaciones: mappedCotizaciones,
@@ -3894,6 +3903,7 @@ export async function getPublicPromiseData(
             visible_to_client: true,
             order: true,
             evento_id: true,
+            event_duration: true,
             condiciones_visibles: true,
             bono_especial: true,
             items_cortesia: true,
@@ -4185,6 +4195,7 @@ export async function getPublicPromiseData(
     };
 
     const mappedCotizaciones: PublicCotizacion[] = (quotesOrdenadas as any[]).map((cot: any) => {
+      const horasParaCotizacion = cot.event_duration ?? promiseDurationHours;
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       // Agregar multimedia de todos los items
@@ -4264,10 +4275,10 @@ export async function getPublicPromiseData(
               : ((item as any).is_courtesy === true);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización
             const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
-            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+            const cantidadEfectiva = billingType === 'HOUR' && horasParaCotizacion !== null
+              ? calcularCantidadEfectiva(billingType, cantidad, horasParaCotizacion)
               : cantidad;
             return {
               id: item.item_id || item.id || '',
@@ -4318,6 +4329,7 @@ export async function getPublicPromiseData(
             name: cot.paquete.name,
           }
           : null,
+        event_duration: cot.event_duration ?? null,
         selected_by_prospect: cot.selected_by_prospect || false,
         negociacion_precio_original: (cot as any).negociacion_precio_original
           ? Number((cot as any).negociacion_precio_original)
@@ -5367,6 +5379,7 @@ export async function getPublicPromiseUpdate(
                 status: true,
                 selected_by_prospect: true,
                 order: true,
+                event_duration: true,
                 cotizacion_items: {
                   select: {
                     id: true,
@@ -5443,7 +5456,7 @@ export async function getPublicPromiseUpdate(
       };
     }
 
-    // Obtener duration_hours de la promise para cálculo dinámico
+    // Obtener duration_hours de la promise; cada cotización puede sobreescribir con event_duration
     const promiseDurationHours = promise.duration_hours ?? null;
 
     // 3. Obtener multimedia y catálogo solo de los items de las cotizaciones
@@ -5524,6 +5537,7 @@ export async function getPublicPromiseUpdate(
     };
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
+      const horasParaCotizacion = cot.event_duration ?? promiseDurationHours;
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       (cot.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
@@ -5579,10 +5593,10 @@ export async function getPublicPromiseUpdate(
             const originalItem = itemsFiltrados.find((i) => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización
             const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
-            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
-              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+            const cantidadEfectiva = billingType === 'HOUR' && horasParaCotizacion !== null
+              ? calcularCantidadEfectiva(billingType, cantidad, horasParaCotizacion)
               : cantidad;
             return {
               id: item.item_id || item.id || '',
@@ -5624,6 +5638,7 @@ export async function getPublicPromiseUpdate(
             name: cot.paquete.name,
           }
           : null,
+        event_duration: cot.event_duration ?? null,
         selected_by_prospect: cot.selected_by_prospect || false,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
       };
