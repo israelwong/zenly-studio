@@ -2760,7 +2760,7 @@ export function CotizacionForm({
                         <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalGasto)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-500">(−) Comisión sugerida ({pctComision}%)</span>
+                        <span className="text-zinc-500">(−) Comisión ({pctComision}%)</span>
                         <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionSugerido)}</span>
                       </div>
                       <Separator className="bg-zinc-700/50 my-1.5" />

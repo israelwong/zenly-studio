@@ -297,19 +297,20 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
-                                            <h6 className="text-sm text-zinc-300 leading-tight flex items-center gap-1.5 flex-wrap">
-                                              <span className="inline">
-                                                <span className="wrap-break-word">{servicioNombre}</span>
-                                                <span className="text-xs text-zinc-500 whitespace-nowrap">
-                                                  {' '}x{multiplierDisplay}{servicio.billing_type === 'HOUR' ? '/h' : ''}
-                                                </span>
-                                              </span>
+                                            <h6 className={`text-sm leading-tight ${esCortesia ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                                              <span className="break-words">{servicioNombre}</span>
                                               {esCortesia && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full text-[9px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
-                                                  <Gift className="w-2.5 h-2.5" />
-                                                  CORTESÍA
-                                                </span>
+                                                <>
+                                                  {' '}
+                                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full text-[9px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 align-middle">
+                                                    <Gift className="w-2.5 h-2.5" />
+                                                    CORTESÍA
+                                                  </span>
+                                                </>
                                               )}
+                                              <span className="text-xs text-zinc-500 whitespace-nowrap">
+                                                {' '}x{multiplierDisplay}{servicio.billing_type === 'HOUR' ? '/h' : ''}
+                                              </span>
                                             </h6>
                                           </div>
                                           {servicioDescripcion && (
