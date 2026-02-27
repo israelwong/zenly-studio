@@ -126,7 +126,7 @@ export async function getCatalogShell(
                     servicioCategoriaId: sc.service_categories.id,
                     nombre: s.name,
                     costo: s.cost,
-                    gasto: 0,
+                    gasto: s.item_expenses.reduce((sum, g) => sum + g.cost, 0),
                     tipo_utilidad: s.utility_type,
                     type: 'service' as const,
                     billing_type: s.billing_type,
@@ -244,9 +244,9 @@ export async function obtenerCatalogo(
                     servicioCategoriaId: sc.service_categories.id,
                     nombre: s.name,
                     costo: s.cost,
-                    gasto: 0, // Calculado desde item_expenses si necesario
+                    gasto: s.item_expenses.reduce((sum, g) => sum + g.cost, 0),
                     tipo_utilidad: s.utility_type,
-                    type: 'service' as const, // Valor por defecto
+                    type: 'service' as const,
                     billing_type: s.billing_type,
                     operational_category: s.operational_category ?? undefined,
                     default_duration_days: s.default_duration_days,

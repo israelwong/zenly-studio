@@ -14,7 +14,7 @@ import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
-import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion, promocionarItemAlCatalogo, guardarCotizacionComoPaquete } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion, promocionarItemAlCatalogo, guardarCotizacionComoPaquete, actualizarItemYSnapshotCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { logAuditoriaCotizacion } from '@/lib/utils/audit-precios-logger';
@@ -1308,8 +1308,7 @@ export function CotizacionForm({
       if (data.id && !data.id.startsWith('custom-')) {
         // Verificar si debe guardarse en catálogo global
         if (options?.saveToCatalog) {
-          // Actualizar item existente en catálogo global
-          const updateResult = await actualizarItem({
+          const payload = {
             id: data.id,
             name: data.name,
             cost: data.cost ?? 0,
@@ -1317,21 +1316,28 @@ export function CotizacionForm({
             billing_type: data.billing_type,
             gastos: data.gastos || [],
             status: data.status,
-          });
-        
-          if (!updateResult.success) {
-            toast.error(updateResult.error || 'Error al actualizar en catálogo');
-            return;
+            operational_category: data.operational_category ?? undefined,
+            defaultDurationDays: data.defaultDurationDays ?? 1,
+          };
+          // Fase 5.3: con cotizacionId se actualiza global + snapshot (recalculo unit_price, subtotal, public_price_snapshot)
+          if (cotizacionId) {
+            const updateResult = await actualizarItemYSnapshotCotizacion(studioSlug, cotizacionId, payload);
+            if (!updateResult.success) {
+              toast.error(updateResult.error || 'Error al actualizar ítem y cotización');
+              return;
+            }
+          } else {
+            const updateResult = await actualizarItem(payload);
+            if (!updateResult.success) {
+              toast.error(updateResult.error || 'Error al actualizar en catálogo');
+              return;
+            }
           }
 
-          // Recargar catálogo para reflejar cambios
           const catalogoResult = await obtenerCatalogo(studioSlug);
           if (catalogoResult.success && catalogoResult.data) {
             setCatalogo(catalogoResult.data);
-            toast.success('Item actualizado en catálogo. Los cambios se reflejarán en el cálculo.');
           }
-
-          // Eliminar override si existía (ya está en catálogo global)
           if (data.id) {
             setItemOverrides(prev => {
               const updated = new Map(prev);
@@ -1339,6 +1345,8 @@ export function CotizacionForm({
               return updated;
             });
           }
+          startTransition(() => router.refresh());
+          toast.success(cotizacionId ? 'Item y cotización actualizados. El precio se ha actualizado.' : 'Item actualizado en catálogo.');
         } else {
           // Modo snapshot: convertir item del catálogo a custom item
           // 1. Obtener cantidad actual antes de remover
@@ -1585,7 +1593,7 @@ export function CotizacionForm({
       return;
     }
 
-    // Convertir a ItemFormData
+    // Convertir a ItemFormData (Fase 5.4: incluir operational_category y defaultDurationDays)
     const tipoUtilidad = servicioEncontrado.tipo_utilidad === 'service' ? 'servicio' : 'producto';
     const itemData: ItemFormData = {
       id: servicioEncontrado.id,
@@ -1597,6 +1605,8 @@ export function CotizacionForm({
       billing_type: (servicioEncontrado.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
       gastos: servicioEncontrado.gastos?.map((g: any) => ({ nombre: g.nombre, costo: g.costo })) || [],
       status: servicioEncontrado.status || 'active',
+      operational_category: (servicioEncontrado.operational_category as ItemFormData['operational_category']) ?? null,
+      defaultDurationDays: servicioEncontrado.default_duration_days ?? 1,
     };
 
     setItemToEdit(itemData);

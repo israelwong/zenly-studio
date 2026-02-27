@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import type { CotizacionItemType, OperationalCategory } from '@prisma/client';
 import { Prisma } from '@prisma/client';
@@ -34,6 +35,7 @@ import {
 } from '@/lib/actions/schemas/cotizaciones-schemas';
 import { guardarEstructuraCotizacionAutorizada, calcularYGuardarPreciosCotizacion } from './cotizacion-pricing';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
+import { calcularPrecio, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 import { getPromiseRouteStateFromSlug, type PromiseRouteState } from '@/lib/utils/promise-navigation';
@@ -1636,6 +1638,140 @@ export async function promocionarItemAlCatalogo(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al guardar en catálogo',
+    };
+  }
+}
+
+const ActualizarItemYSnapshotSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  cost: z.number().min(0),
+  tipoUtilidad: z.enum(['servicio', 'producto']).optional(),
+  billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional(),
+  gastos: z.array(z.object({ nombre: z.string(), costo: z.number().min(0) })).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  operational_category: z.enum(['PRODUCTION', 'POST_PRODUCTION', 'DELIVERY', 'DIGITAL_DELIVERY', 'PHYSICAL_DELIVERY', 'LOGISTICS']).nullable().optional(),
+  defaultDurationDays: z.number().int().min(1).optional(),
+});
+
+/**
+ * Sincronización total: actualiza ítem maestro (studio_items) y snapshot (studio_cotizacion_items)
+ * en una sola transacción cuando actualizarGlobal es true. Clona base_cost, utility_type,
+ * expenses y calculated_price del global al snapshot.
+ */
+export async function actualizarItemYSnapshotCotizacion(
+  studioSlug: string,
+  cotizacionId: string,
+  data: unknown
+): Promise<{ success: boolean; data?: { unit_price: number }; error?: string }> {
+  try {
+    const validated = ActualizarItemYSnapshotSchema.parse(data);
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      include: { promise: { select: { duration_hours: true } } },
+    });
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+    if (cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada') {
+      return { success: false, error: 'No se puede actualizar una cotización autorizada o aprobada' };
+    }
+    const configForm = await obtenerConfiguracionPrecios(studioSlug);
+    if (!configForm) {
+      return { success: false, error: 'No hay configuración de precios' };
+    }
+    const configPrecios: ConfiguracionPrecios = {
+      utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30'),
+      utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20'),
+      comision_venta: parseFloat(configForm.comision_venta || '0.10'),
+      sobreprecio: parseFloat(configForm.sobreprecio || '0.05'),
+    };
+    // Fase 5.4: Recalcular totales con datos completos del global (cost + gastos + utilidad + cronograma)
+    const totalGastos = (validated.gastos || []).reduce((acc, g) => acc + g.costo, 0);
+    const tipoUtilidad = validated.tipoUtilidad === 'producto' ? 'producto' : 'servicio';
+    const precios = calcularPrecio(validated.cost, totalGastos, tipoUtilidad, configPrecios);
+    const durationHours = cotizacion.event_duration ?? cotizacion.promise?.duration_hours ?? null;
+    const billingType = (validated.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+    const taskType = validated.operational_category
+      ? operationalCategoryToTaskType(validated.operational_category as OperationalCategory)
+      : undefined;
+    const internalDeliveryDays = validated.defaultDurationDays ?? undefined;
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Actualizar ítem maestro (global)
+      await tx.studio_items.update({
+        where: { id: validated.id },
+        data: {
+          name: validated.name,
+          cost: validated.cost,
+          ...(validated.tipoUtilidad !== undefined && {
+            utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product',
+          }),
+          ...(validated.billing_type !== undefined && { billing_type: validated.billing_type }),
+          ...(validated.status !== undefined && { status: validated.status }),
+          ...(validated.operational_category !== undefined && { operational_category: validated.operational_category }),
+          ...(validated.defaultDurationDays !== undefined && { default_duration_days: validated.defaultDurationDays }),
+          ...(validated.gastos !== undefined && {
+            item_expenses: {
+              deleteMany: {},
+              create: validated.gastos!.map((g) => ({ name: g.nombre, cost: g.costo })),
+            },
+          }),
+        },
+      });
+
+      // 2. Snapshot: foto fiel y completa del global (precios + cronograma + gastos)
+      const rows = await tx.studio_cotizacion_items.findMany({
+        where: { cotizacion_id: cotizacionId, item_id: validated.id },
+      });
+      for (const row of rows) {
+        const cantidadEfectiva = calcularCantidadEfectiva(billingType, row.quantity, durationHours);
+        const subtotalRecalculado = precios.precio_final * cantidadEfectiva;
+        await tx.studio_cotizacion_items.update({
+          where: { id: row.id },
+          data: {
+            // Campos operacionales
+            name: validated.name,
+            cost: validated.cost,
+            expense: totalGastos,
+            profit_type: tipoUtilidad,
+            billing_type: billingType,
+            // Fase 5.4: Totales recalculados con calcularPrecio (ej. $3,235.16)
+            unit_price: precios.precio_final,
+            subtotal: subtotalRecalculado,
+            profit: precios.utilidad_base,
+            public_price: precios.precio_final,
+            // Cronograma: operational_category → task_type + duración
+            ...(taskType !== undefined && { task_type: taskType }),
+            ...(internalDeliveryDays !== undefined && { internal_delivery_days: internalDeliveryDays }),
+            // Snapshots inmutables: foto fiel de precios y metadatos
+            name_snapshot: validated.name,
+            cost_snapshot: validated.cost,
+            expense_snapshot: totalGastos,
+            unit_price_snapshot: precios.precio_final,
+            profit_snapshot: precios.utilidad_base,
+            public_price_snapshot: precios.precio_final,
+            profit_type_snapshot: tipoUtilidad,
+          },
+        });
+      }
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+    return { success: true, data: { unit_price: precios.precio_final } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizarItemYSnapshotCotizacion:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar ítem y snapshot',
     };
   }
 }
