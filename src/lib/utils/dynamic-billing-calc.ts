@@ -8,11 +8,11 @@
  * 
  * @param billingType - Tipo de facturación: HOUR, SERVICE, o UNIT
  * @param quantity - Cantidad base del ítem
- * @param durationHours - Duración del evento en horas (puede ser null)
+ * @param durationHours - Horas totales de cobertura del servicio (puede ser null)
  * @returns Cantidad efectiva a usar en el cálculo
  * 
  * @example
- * // Item HOUR con 8 horas de evento
+ * // Item HOUR con 8 horas de cobertura
  * calcularCantidadEfectiva('HOUR', 1, 8) // retorna 8
  * 
  * // Item SERVICE (independiente de horas)
@@ -41,7 +41,7 @@ export function calcularCantidadEfectiva(
  * @param unitPrice - Precio unitario del ítem
  * @param billingType - Tipo de facturación: HOUR, SERVICE, o UNIT
  * @param quantity - Cantidad base del ítem
- * @param durationHours - Duración del evento en horas (puede ser null)
+ * @param durationHours - Horas totales de cobertura del servicio (puede ser null)
  * @returns Subtotal calculado (precio × cantidad efectiva)
  * 
  * @example

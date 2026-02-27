@@ -37,7 +37,7 @@ export function calcularPrecioServicio(
  * @param servicios - Array de servicios con cantidad
  * @param porcentajeUtilidadServicio - Porcentaje de utilidad para servicios (default: 0.30)
  * @param porcentajeUtilidadProducto - Porcentaje de utilidad para productos (default: 0.20)
- * @param durationHours - Duración del evento en horas (opcional). Si se proporciona, los items de tipo HOUR se multiplican por esta duración
+ * @param durationHours - Horas totales de cobertura del servicio (opcional). Si se proporciona, los items de tipo HOUR se multiplican por esta duración
  */
 export function calcularPrecioPaquete(
     servicios: ServicioConCantidad[],

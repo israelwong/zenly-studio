@@ -272,6 +272,8 @@ Componente → Renderiza string formateado
 ### Core Engine
 - `src/lib/utils/package-price-engine.ts` - Motor de decisión
 - `src/lib/utils/package-price-formatter.ts` - Formateador visual
+- `src/lib/utils/catalog-calc.ts` - `calcularPrecio()` (ver MASTER_FINANCIAL_SSOT_GUIDE.md)
+- `src/lib/utils/dynamic-billing-calc.ts` - Cantidad efectiva y subtotales con horas de cobertura
 
 ### Server Actions
 - `src/lib/actions/public/promesas.actions.ts` - Acciones públicas (usa engine)
@@ -342,5 +344,17 @@ Componente → Renderiza string formateado
 
 ---
 
-**Última revisión**: 2026-01-28  
-**Mantenido por**: Sistema Zenly POZ
+---
+
+## 🔗 Documentos Relacionados
+
+| Documento | Tema | Ubicación |
+|-----------|------|-----------|
+| `ARCHITECTURE_QUOTATION.md` | Arquitectura completa de cotizaciones | `../architecture/` |
+| `sistema-sincronizacion-maestro.md` | Snapshots y actualización atómica | `../masters/` |
+| `MASTER_FINANCIAL_SSOT_GUIDE.md` | Fuente única de verdad financiera | `../masters/` |
+
+---
+
+**Última revisión:** 2026-02-27  
+**Mantenido por:** Sistema Zenly POZ

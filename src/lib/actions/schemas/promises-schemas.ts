@@ -127,7 +127,7 @@ export interface PromiseWithContact {
   event_name: string | null; // Nombre del evento (opcional)
   event_location: string | null; // Locación del evento (nombre o texto libre)
   event_location_id: string | null; // FK opcional a studio_locations (modelo híbrido)
-  duration_hours: number | null; // Duración del evento en horas
+  duration_hours: number | null; // Horas totales de cobertura del servicio
   interested_dates: string[] | null;
   event_date: Date | string | null; // Fecha del evento (consolidado) - puede venir como Date o string YYYY-MM-DD desde server
   defined_date: Date | string | null; // Fecha definida del evento (legacy) - puede venir como Date o string YYYY-MM-DD desde server

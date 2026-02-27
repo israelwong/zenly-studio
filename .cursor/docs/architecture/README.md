@@ -6,7 +6,32 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ## 📚 Documentos Disponibles
 
-### 1. Flujo de Autorización de Promesas Públicas
+### 1. Arquitectura de Cotizaciones
+**Archivo:** `ARCHITECTURE_QUOTATION.md`  
+**Versión:** 2.0 (Post-Refactor Semántico)  
+**Estado:** ✅ Producción
+
+**Contenido:**
+- Modelo de datos completo (cotizaciones, items, snapshots)
+- Refactor semántico: event_duration → "Horas de servicio" / "Tiempo de cobertura"
+- Cálculo de precios dinámico por billing_type (HOUR, SERVICE, UNIT)
+- Prioridad de horas de cobertura (cotización > promesa > null)
+- Sincronización: Ley de Actualización Atómica
+- Estados de cotización y permisos
+- Integración con Scheduler (task_type, delivery_days)
+- Negociación y precio personalizado
+- Componentes UI y Server Actions
+
+**Cuándo consultar:**
+- Crear/editar cotizaciones
+- Entender cálculo de subtotales dinámicos
+- Depurar precios incorrectos
+- Entender snapshots y sincronización
+- Onboarding en sistema de cotizaciones
+
+---
+
+### 2. Flujo de Autorización de Promesas Públicas
 **Archivo:** `public-promise-authorization-flow.md`  
 **Versión:** 2.0 (Post-Authorization Lock)  
 **Estado:** ✅ Producción
@@ -30,7 +55,29 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 2. Flows (flujos paso a paso)
+### 3. Arquitectura de Precios y Resiliencia
+**Archivo:** `precios-resiliencia.md`  
+**Versión:** 1.0  
+**Estado:** ✅ Producción
+
+**Contenido:**
+- Single Source of Truth (SSoT) financiero
+- Motor de precios de paquetes (`package-price-engine.ts`)
+- Formateador visual (`package-price-formatter.ts`)
+- Lógica de charm rounding
+- Puntos de salida y congruencia (4 nodos críticos)
+- Capa de resiliencia y retry con DB
+- Testing unitarios
+
+**Cuándo consultar:**
+- Entender motor de pricing de paquetes
+- Depurar precios inconsistentes entre vitrina/comparador/detalle
+- Revisar lógica de charm rounding (.99)
+- Solucionar errores de conexión a BD
+
+---
+
+### 4. Flows (flujos paso a paso)
 **Carpeta:** [flows/](flows/)
 
 Documentos de flujos operativos explícitos (UI → componentes → Server Actions → servidor) para cierre, autorización, etc. Índice en `flows/README.md`.
@@ -44,7 +91,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 3. Arquitectura Promesa Cierre
+### 5. Arquitectura Promesa Cierre
 **Archivo:** [promesa-cierre.md](promesa-cierre.md)  
 **Estado:** ✅ Referencia
 
@@ -67,7 +114,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 4. Arquitectura Promesa Pendiente
+### 6. Arquitectura Promesa Pendiente
 **Archivo:** [promesa-pendiente.md](promesa-pendiente.md)  
 **Estado:** ✅ Referencia
 
@@ -88,24 +135,25 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 5. Panel de Gestión Logística (Scheduler)
+### 7. Panel de Gestión Logística (Scheduler)
 **Archivo:** `panel-gestion-logistica.md`  
 **Estado:** ✅ Producción
 
 **Contenido (fuente única):**
 - Resumen ejecutivo, arquitectura de componentes (PublicationBar, PublicationSummarySheet, LogisticsTaskCard)
 - Obtención de datos (obtenerMetricasLogisticasEvento, obtenerEstructuraCompletaLogistica)
-- Cálculo de presupuesto por tarea (esquema, función maestra, duración evento, sync cotización→scheduler)
+- Cálculo de presupuesto por tarea (esquema, función maestra, horas de cobertura, sync cotización→scheduler)
 - Nómina (entidades, estados pendiente/pagado, montos, integridad)
 - Flujo de usuario, archivos del sistema, otros docs del ecosistema Scheduler, mantenimiento
 
 **Cuándo consultar:**
 - Iterar sobre el panel logístico, barra del scheduler, presupuestos o nómina
 - Onboarding en Scheduler / gestión logística
+- **Ver también:** `masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md` para drag & drop
 
 ---
 
-### 6. Componentes compartidos (precio / cierre)
+### 8. Componentes compartidos (precio / cierre)
 **Carpeta:** [components/](components/)
 
 | Documento | Descripción |

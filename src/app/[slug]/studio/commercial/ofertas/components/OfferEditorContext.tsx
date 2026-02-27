@@ -38,8 +38,8 @@ interface LeadFormData {
   validate_with_calendar: boolean;
   enable_event_name: boolean; // Solicitar nombre del evento
   event_name_required: boolean; // Nombre del evento obligatorio
-  enable_event_duration: boolean; // Solicitar duración del evento
-  event_duration_required: boolean; // Duración del evento obligatoria
+  enable_event_duration: boolean; // Solicitar horas de servicio
+  event_duration_required: boolean; // Horas de servicio obligatorias
   fields_config: {
     fields: LeadFormField[];
   };

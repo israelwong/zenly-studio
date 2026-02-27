@@ -367,7 +367,7 @@ export async function submitOfferLeadform(
           event_type_id: validatedData.event_type_id || null,
           event_date: eventDate, // ✅ Guardar como event_date (parseado de forma segura)
           name: validatedData.event_name?.trim() || null, // ✅ Guardar nombre del evento
-          duration_hours: validatedData.event_duration ? parseInt(validatedData.event_duration, 10) || null : null, // ✅ Guardar duración del evento en horas
+          duration_hours: validatedData.event_duration ? parseInt(validatedData.event_duration, 10) || null : null, // ✅ Guardar horas de cobertura del servicio
           // ✅ Marcar como prueba si aplica
           is_test: isTest,
           test_created_at: testTimestamp,

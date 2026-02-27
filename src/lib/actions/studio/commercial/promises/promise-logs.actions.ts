@@ -265,7 +265,7 @@ export async function getPromiseById(
   event_location: string | null;
   event_location_id: string | null;
   event_name: string | null; // Nombre del evento
-  duration_hours: number | null; // Duración del evento en horas
+  duration_hours: number | null; // Horas totales de cobertura del servicio
   interested_dates: string[] | null;
   event_date: Date | null;
   defined_date: Date | null;

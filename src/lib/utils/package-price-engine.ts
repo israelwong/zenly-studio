@@ -117,7 +117,7 @@ function calculateRecalculatedPrice(
       .find(s => s.id === item.item_id);
     const billingType = (itemCatalogo?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
 
-    // Calcular cantidad efectiva usando duración del evento o del paquete
+    // Calcular cantidad efectiva usando horas de cobertura del servicio o del paquete
     const horasParaCalculo = durationHours;
     const cantidadEfectiva = calcularCantidadEfectiva(
       billingType,

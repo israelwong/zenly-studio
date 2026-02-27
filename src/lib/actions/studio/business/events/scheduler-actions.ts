@@ -1287,7 +1287,7 @@ export async function obtenerEstructuraCompletaLogistica(
         quantity = q;
         const bt = (t.cotizacion_item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
         billingType = bt;
-        // HOUR: duración del evento (alineado con cotización: event_duration ?? promise.duration_hours)
+        // HOUR: horas de cobertura (alineado con cotización: event_duration ?? promise.duration_hours)
         if (bt === 'HOUR') durationHours = eventDurationHours;
         if (budgetAmount == null) {
           const cantidadEfectiva = calcularCantidadEfectiva(bt, q, bt === 'HOUR' ? eventDurationHours : null);

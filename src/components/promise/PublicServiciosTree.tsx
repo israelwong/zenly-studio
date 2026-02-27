@@ -12,7 +12,7 @@ interface PublicServiciosTreeProps {
   servicios: PublicSeccionData[];
   showPrices?: boolean;
   showSubtotals?: boolean;
-  /** Duración del evento en horas. Si se pasa, los ítems HOUR muestran x{eventDurationHours}/h (fuente de verdad para el multiplicador). */
+  /** Horas de cobertura. Si se pasa, los ítems HOUR muestran x{eventDurationHours}/h (fuente de verdad para el multiplicador). */
   eventDurationHours?: number | null;
 }
 

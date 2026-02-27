@@ -1897,7 +1897,7 @@ export async function autorizarYCrearEvento(
         : null;
 
       // 7.4. Crear o actualizar evento
-      // Duración: studio_events no tiene campo duration; la duración efectiva del evento es la de la cotización autorizada (evento.cotizacion_id → studio_cotizaciones.event_duration).
+      // Duración: studio_events no tiene campo duration; las horas de cobertura se obtienen de la cotización autorizada (evento.cotizacion_id → studio_cotizaciones.event_duration).
       // Los multiplicadores por hora (x N/h) deben leerse siempre de la cotización activa en el renderizado.
       // Normalizar fecha del evento usando UTC para evitar problemas de zona horaria
       // Usar la fecha de la promesa si existe, sino usar la fecha de autorización (fecha actual)

@@ -555,7 +555,7 @@ export function CotizacionDetailSheet({
               </h3>
               {currentCotizacion.event_duration != null && currentCotizacion.event_duration > 0 && (
                 <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-500 border border-emerald-500/40">
-                  Duración evento: {currentCotizacion.event_duration} {currentCotizacion.event_duration === 1 ? 'hr' : 'hrs'}
+                  Cobertura: {currentCotizacion.event_duration} {currentCotizacion.event_duration === 1 ? 'hr' : 'hrs'}
                 </span>
               )}
             </div>

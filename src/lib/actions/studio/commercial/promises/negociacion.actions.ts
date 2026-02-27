@@ -191,7 +191,7 @@ export async function crearVersionNegociada(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotizaci?n original (select explícito incl. event_duration para clonar en versión negociada)
+    // Obtener cotización original (select explícito incl. event_duration para clonar horas de cobertura en versión negociada)
     const cotizacionOriginal = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_original_id,
@@ -293,7 +293,7 @@ export async function crearVersionNegociada(
             : null,
           negociacion_notas: validatedData.notas || null,
           negociacion_created_at: new Date(),
-          event_duration: cotizacionOriginal.event_duration ?? null, // Heredar duración del evento de la cotización original
+          event_duration: cotizacionOriginal.event_duration ?? null, // Heredar horas de cobertura de la cotización original
         },
       });
 

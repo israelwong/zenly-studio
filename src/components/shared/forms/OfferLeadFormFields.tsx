@@ -26,8 +26,8 @@ export interface OfferLeadFormFieldsProps {
   validateWithCalendar?: boolean;
   enableEventName?: boolean; // Solicitar nombre del evento
   eventNameRequired?: boolean; // Nombre del evento obligatorio
-  enableEventDuration?: boolean; // Solicitar duración del evento
-  eventDurationRequired?: boolean; // Duración del evento obligatoria
+  enableEventDuration?: boolean; // Solicitar horas de cobertura
+  eventDurationRequired?: boolean; // Horas de cobertura obligatorias
   eventTypeId?: string | null;
   eventTypeName?: string | null; // Nombre del tipo de evento para placeholder dinámico
   studioId: string;
@@ -154,12 +154,12 @@ export function OfferLeadFormFields({
     });
   }
 
-  // Agregar campo de duración del evento si está habilitado
+  // Agregar campo de horas de cobertura si está habilitado
   if (enableEventDuration) {
     basicFields.push({
       id: "event_duration",
       type: "number",
-      label: "Duración del evento (horas)",
+      label: "Tiempo de cobertura (horas)",
       required: eventDurationRequired,
       placeholder: "Ej: 6",
     });

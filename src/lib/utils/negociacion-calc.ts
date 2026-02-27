@@ -15,7 +15,7 @@ import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 /**
  * Item de cotización con estructura completa
  */
-/** HOUR = cantidad × event_duration; SERVICE/UNIT = cantidad */
+/** HOUR = cantidad × horas_cobertura; SERVICE/UNIT = cantidad */
 export type BillingTypeNegociacion = 'HOUR' | 'SERVICE' | 'UNIT';
 
 export interface CotizacionItem {
@@ -209,7 +209,7 @@ export function calcularRentabilidadGlobal(
 
 /**
  * Calcula el precio negociado y el impacto en utilidad
- * Usa cantidad efectiva (HOUR × event_duration) para costo/gasto y normaliza comisión.
+ * Usa cantidad efectiva (HOUR × horas_cobertura) para costo/gasto y normaliza comisión.
  * Utilidad/margen alineados con calcularRentabilidadGlobal (no restar bono del ingreso).
  */
 export function calcularPrecioNegociado(

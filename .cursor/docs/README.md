@@ -32,8 +32,10 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 
 | Documento | Dominio |
 |-----------|---------|
+| [sistema-sincronizacion-maestro.md](masters/sistema-sincronizacion-maestro.md) | Sistema de snapshots y sincronización Catálogo → Cotizaciones |
+| [MASTER_FINANCIAL_SSOT_GUIDE.md](masters/MASTER_FINANCIAL_SSOT_GUIDE.md) | Sistema financiero: cálculo de precios, gastos, utilidades |
+| [ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md](masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md) | Algoritmo de reordenamiento drag & drop en Scheduler |
 | [MASTER_DATE_SSOT_GUIDE.md](masters/MASTER_DATE_SSOT_GUIDE.md) | Manejo de fechas y zonas horarias |
-| [MASTER_FINANCIAL_SSOT_GUIDE.md](masters/MASTER_FINANCIAL_SSOT_GUIDE.md) | Sistema financiero y contable |
 
 **Úsalos primero:** Estos son las referencias definitivas para sus dominios.
 
@@ -46,11 +48,12 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | Documento | Descripción |
 |-----------|-------------|
 | [README.md](architecture/README.md) | Índice de arquitectura |
+| [ARCHITECTURE_QUOTATION.md](architecture/ARCHITECTURE_QUOTATION.md) | Arquitectura completa de cotizaciones y refactor semántico |
+| [precios-resiliencia.md](architecture/precios-resiliencia.md) | Motor de precios de paquetes y resiliencia DB |
 | [tenant.md](architecture/tenant.md) | Sistema multi-tenant |
 | [promises-kanban-system.md](architecture/promises-kanban-system.md) | Sistema de promesas y pipeline |
 | [contracts-flow.md](architecture/contracts-flow.md) | Flujo de contratos |
 | [direct-navigator.md](architecture/direct-navigator.md) | Navegación directa |
-| [precios-resiliencia.md](architecture/precios-resiliencia.md) | Resiliencia en precios |
 | [promise-detalle.md](architecture/promise-detalle.md) | Detalle de promesas |
 | [redireccionamiento-promesas.md](architecture/redireccionamiento-promesas.md) | Redirects de promesas |
 | [renderizado-contratos.md](architecture/renderizado-contratos.md) | Renderizado de contratos |
@@ -189,6 +192,9 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | Problema con Google APIs | [features/google-oauth-implementation.md](features/google-oauth-implementation.md) |
 | Error de conexión a BD | [solutions/FIX_CONEXIONES_DB.md](solutions/FIX_CONEXIONES_DB.md) |
 | Problema con fechas | [masters/MASTER_DATE_SSOT_GUIDE.md](masters/MASTER_DATE_SSOT_GUIDE.md) |
+| Precios incorrectos/inconsistentes | [masters/MASTER_FINANCIAL_SSOT_GUIDE.md](masters/MASTER_FINANCIAL_SSOT_GUIDE.md) |
+| Problema con snapshots | [masters/sistema-sincronizacion-maestro.md](masters/sistema-sincronizacion-maestro.md) |
+| Problema drag & drop Scheduler | [masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md](masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md) |
 | Error de OAuth PKCE | [solutions/OAUTH_PKCE_PROBLEM.md](solutions/OAUTH_PKCE_PROBLEM.md) |
 | Problema con Storage/RLS | [solutions/solucion-storage-rls-autenticacion.md](solutions/solucion-storage-rls-autenticacion.md) |
 
@@ -307,8 +313,8 @@ find .cursor/docs -name "*oauth*"
 La documentación está organizada en **8 carpetas temáticas**:
 
 ```
-masters/      → Documentos SSOT (2 docs)
-architecture/ → Arquitectura (9 docs)
+masters/      → Documentos SSOT (4 docs)
+architecture/ → Arquitectura (10 docs)
 auth/         → Autenticación (3 docs)
 audits/       → Auditorías (4 docs)
 analysis/     → Análisis (5 docs)
@@ -319,7 +325,7 @@ solutions/    → Soluciones (5 docs)
 config/       → Config (2 docs)
 ```
 
-**Total:** 44 documentos organizados
+**Total:** 47 documentos organizados
 
 ### Reglas de Organización
 
@@ -360,6 +366,13 @@ git log --since="1 month ago" -- .cursor/docs/
 ---
 
 ## 📅 Historial de Cambios
+
+### 27 de febrero de 2026
+- ✅ Creado `sistema-sincronizacion-maestro.md` - Documenta Ley de Actualización Atómica
+- ✅ Actualizado `MASTER_FINANCIAL_SSOT_GUIDE.md` - Documenta fix de `obtenerCatalogo()`
+- ✅ Creado `ARCHITECTURE_QUOTATION.md` - Documenta refactor semántico event_duration
+- ✅ Creado `masters/README.md` - Índice de documentos maestros
+- ✅ Actualizado referencias cruzadas entre documentos
 
 ### 2 de febrero de 2026
 - ✅ **Reorganización completa** de documentación en 8 carpetas temáticas

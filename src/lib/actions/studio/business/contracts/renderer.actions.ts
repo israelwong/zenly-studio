@@ -283,7 +283,7 @@ export async function getPromiseContractData(
     
     const secciones = estructura.secciones;
 
-    // Obtener event_duration de la cotizaci?n (prioridad: cotizacion.event_duration > promise.duration_hours)
+    // Obtener horas de cobertura (prioridad: cotizacion.event_duration > promise.duration_hours)
     const eventDuration = cotizacion.event_duration ?? promise.duration_hours ?? null;
     
     // Crear mapa de item_id -> billing_type desde items originales
@@ -902,7 +902,7 @@ export async function getEventContractData(
       return { success: false, error: "El evento no tiene una cotizaci?n autorizada" };
     }
 
-    // Obtener event_duration de la cotizaci?n (prioridad: cotizacion.event_duration > promise.duration_hours)
+    // Obtener horas de cobertura (prioridad: cotizacion.event_duration > promise.duration_hours)
     const eventDuration = cotizacionAprobada.event_duration ?? event.promise?.duration_hours ?? null;
     
     // Crear mapa de item_id -> billing_type desde items originales
@@ -1019,7 +1019,7 @@ export async function getEventContractData(
           precio: precio,
         };
         
-        // Si el item tiene billing_type HOUR y hay event_duration, agregar horas
+        // Si el item tiene billing_type HOUR y hay horas de cobertura, agregar multiplicador
         if (item.item_id) {
           const billingType = billingTypeMap.get(item.item_id);
           if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {

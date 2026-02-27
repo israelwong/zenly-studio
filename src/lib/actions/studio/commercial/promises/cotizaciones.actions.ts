@@ -79,7 +79,7 @@ export interface CotizacionListItem {
   items_cortesia?: unknown;
   cortesias_monto_snapshot?: number | null;
   cortesias_count_snapshot?: number | null;
-  /** Duración del evento en horas (para listado en card) */
+  /** Horas de cobertura del servicio (para listado en card) */
   event_duration?: number | null;
 }
 
@@ -498,7 +498,7 @@ export async function getCotizacionesByPromiseId(
 }
 
 /**
- * Obtener duration_hours de una promise
+ * Obtener horas de cobertura de una promesa
  */
 export async function getPromiseDurationHours(
   promiseId: string
@@ -518,10 +518,10 @@ export async function getPromiseDurationHours(
       duration_hours: promise.duration_hours,
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error obteniendo duration_hours:', error);
+    console.error('[COTIZACIONES] Error obteniendo horas de cobertura:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener duration_hours',
+      error: error instanceof Error ? error.message : 'Error al obtener horas de cobertura',
     };
   }
 }
@@ -2269,7 +2269,7 @@ export async function updateCotizacion(
       });
     }
 
-    // Obtener duration_hours para calcular cantidad efectiva de custom items
+    // Obtener horas de cobertura para calcular cantidad efectiva de custom items
     const durationHours = cotizacion.event_duration ?? null;
 
     // Snapshot operational_category → task_type (Fase 1.5 Integridad de la Raíz)
@@ -2421,7 +2421,7 @@ export async function updateCotizacion(
         updateData.visible_to_client = validatedData.visible_to_client;
       }
 
-      // Solo actualizar event_duration si se proporciona explícitamente
+      // Solo actualizar horas de cobertura si se proporciona explícitamente
       if (validatedData.event_duration !== undefined) {
         updateData.event_duration = validatedData.event_duration;
       }

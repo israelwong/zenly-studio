@@ -68,8 +68,8 @@ export const CreateOfferSchema = z.object({
     validate_with_calendar: z.boolean().default(false),
     enable_event_name: z.boolean().default(false), // Solicitar nombre del evento
     event_name_required: z.boolean().default(false), // Nombre del evento obligatorio
-    enable_event_duration: z.boolean().default(false), // Solicitar duración del evento
-    event_duration_required: z.boolean().default(false), // Duración del evento obligatoria
+    enable_event_duration: z.boolean().default(false), // Solicitar horas de servicio
+    event_duration_required: z.boolean().default(false), // Horas de servicio obligatorias
   }),
 });
 
@@ -85,7 +85,7 @@ export const SubmitLeadFormSchema = z.object({
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   interest_date: z.string().optional(), // Fecha de interés del evento
   event_name: z.string().max(200, 'El nombre del evento es demasiado largo').optional().or(z.literal('')), // Nombre del evento
-  event_duration: z.string().optional().or(z.literal('')), // Duración del evento en horas
+  event_duration: z.string().optional().or(z.literal('')), // Horas de cobertura del servicio
   // Asunto / Tipo de evento
   event_type_id: z.string().optional(), // Si useEventTypes = true
   subject: z.string().optional(), // LEGACY: si useEventTypes = false

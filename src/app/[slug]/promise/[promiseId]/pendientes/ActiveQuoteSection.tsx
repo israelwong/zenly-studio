@@ -138,7 +138,7 @@ export function ActiveQuoteSection({
   );
   const hasVisibleQuotes = visibleQuotes.length > 0;
 
-  // Sección cotización: fuente de verdad = cotización (cada card/sheet usa cotizacion.event_duration).
+  // Sección cotización: cada cotización define sus propias horas de cobertura (cotizacion.event_duration).
   // ⚠️ TAREA 3: Renderizar solo la sección de cotizaciones (sin paquetes aún)
   // Los paquetes se cargan después en un Suspense separado
   return (

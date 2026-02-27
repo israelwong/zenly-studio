@@ -394,7 +394,7 @@ export function CotizacionForm({
             setCondicionIdsVisibles(new Set([cotizacionData.condiciones_comerciales_id ?? neg!.id].filter(Boolean)));
           }
 
-          // Cargar event_duration de la cotización si existe
+          // Cargar horas de cobertura de la cotización si existe
           const cotizacionEventDuration = (cotizacionData as { event_duration?: number | null }).event_duration;
           if (cotizacionEventDuration) {
             setDurationHours(cotizacionEventDuration);
@@ -2457,7 +2457,7 @@ export function CotizacionForm({
                       className="min-h-[80px]"
                     />
                     <ZenInput
-                      label="Duración del Evento (Horas)"
+                      label="Horas de servicio"
                       type="number"
                       min="0"
                       step="0.5"

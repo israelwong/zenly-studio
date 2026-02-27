@@ -13,7 +13,7 @@ interface ComparadorButtonProps {
   paquetes: PublicPaquete[];
   promiseId: string;
   studioSlug: string;
-  /** Fuente de verdad paquetes = promesa. Solo para PaqueteDetailSheet (cotización usa cotizacion.event_duration). */
+  /** Paquetes usan horas de la promesa. Cotizaciones usan cotizacion.event_duration (pueden sobreescribir). */
   promiseDurationHours?: number | null;
 }
 

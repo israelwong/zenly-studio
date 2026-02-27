@@ -95,7 +95,7 @@ export async function guardarEstructuraCotizacionAutorizadaSinTx(
       throw new Error('Cotización no encontrada');
     }
 
-    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
+    // Obtener horas de cobertura: prioridad: cotizacion.event_duration > promise.duration_hours
     const durationHours = cotizacion.event_duration ?? cotizacion.promise?.duration_hours ?? null;
 
     // 3️⃣ Obtener items de la cotización (fuera de transacción)
@@ -283,7 +283,7 @@ export async function calcularYGuardarPreciosCotizacion(
       },
     });
 
-    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
+    // Obtener horas de cobertura: prioridad: cotizacion.event_duration > promise.duration_hours
     const durationHours = cotizacion?.event_duration ?? cotizacion?.promise?.duration_hours ?? null;
 
     // 4️⃣ Obtener items de la cotización

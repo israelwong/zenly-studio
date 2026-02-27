@@ -53,7 +53,7 @@ interface EventInfoCardProps {
     event_type_name?: string | null;
     event_location?: string | null;
     event_name?: string | null; // Nombre del evento
-    duration_hours?: number | null; // Duración del evento en horas
+    duration_hours?: number | null; // Horas de cobertura del servicio
     event_date?: Date | null; // Para eventos confirmados
     interested_dates?: string | null; // Para promesas (solo una fecha única)
     address?: string | null; // Para eventos confirmados
@@ -85,7 +85,7 @@ interface EventInfoCardProps {
     event_location: string | null;
     event_location_id?: string | null;
     event_name?: string | null; // Nombre del evento (opcional)
-    duration_hours?: number | null; // Duración del evento en horas
+    duration_hours?: number | null; // Horas de cobertura del servicio
     interested_dates: string | null;
     acquisition_channel_id: string | null;
     social_network_id: string | null;
@@ -836,7 +836,7 @@ export function EventInfoCard({
             {/* Duración del Evento */}
             <div>
               <label className="text-xs font-medium text-zinc-400 block mb-1">
-                Duración del Evento
+                Horas de servicio
               </label>
               {eventData.duration_hours ? (
                 <p className="text-sm text-zinc-200">

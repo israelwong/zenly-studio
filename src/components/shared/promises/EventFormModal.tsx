@@ -1441,7 +1441,7 @@ export function EventFormModal({
                         {/* Duración del Evento */}
                         <div>
                             <label className="text-sm font-medium text-zinc-300 block mb-2">
-                                Duración del Evento (horas)
+                                Horas de servicio
                             </label>
                             <ZenInput
                                 type="number"

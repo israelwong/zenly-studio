@@ -1334,7 +1334,7 @@ export async function getPublicPromisePendientes(
       } | null;
     };
 
-    // Obtener duration_hours de la promise para uso por cotización (cot.event_duration ?? promise)
+    // Obtener horas de cobertura de la promesa (cada cotización puede sobreescribirla con event_duration)
     const promiseDurationHours = promise.duration_hours ?? null;
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -1936,7 +1936,7 @@ export async function getPublicPromiseActiveQuote(
       });
     });
 
-    // Obtener duration_hours de la promise para cálculo dinámico
+    // Obtener horas de cobertura de la promesa para cálculo dinámico
     const promiseDurationHours = promise.duration_hours ?? null;
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -2801,7 +2801,7 @@ export async function getPublicPromiseNegociacion(
 
     const cotizacion = promise.quotes[0];
 
-    // Obtener duration_hours de la promise para cálculo dinámico
+    // Obtener horas de cobertura de la promesa para cálculo dinámico
     const promiseDurationHours = promise.duration_hours ?? null;
 
     // 4. ⚠️ OPTIMIZADO: NO cargar catálogo completo
@@ -3417,7 +3417,7 @@ export async function getPublicPromiseCierre(
       }
     }
 
-    // Obtener duration_hours de la promise para cálculo dinámico
+    // Obtener horas de cobertura de la promesa para cálculo dinámico
     const promiseDurationHours = promise.duration_hours ?? null;
 
     // 3. ⚠️ OPTIMIZADO: NO cargar catálogo completo
@@ -4019,7 +4019,7 @@ export async function getPublicPromiseData(
     // Validar que la promesa tenga al menos cotizaciones o paquetes disponibles
     // Esto se verifica después de obtener las cotizaciones y paquetes
 
-    // Obtener duration_hours de la promise para cálculo dinámico de paquetes
+    // Obtener horas de cobertura de la promesa para cálculo dinámico de paquetes
     const promiseDurationHours = promise.duration_hours ?? null;
 
     // Obtener preferencias de compartir (combinar defaults del studio con overrides de la promesa)
@@ -5459,7 +5459,7 @@ export async function getPublicPromiseUpdate(
       };
     }
 
-    // Obtener duration_hours de la promise; cada cotización puede sobreescribir con event_duration
+    // Obtener horas de cobertura de la promesa (cada cotización puede sobreescribirla con event_duration)
     const promiseDurationHours = promise.duration_hours ?? null;
 
     // 3. Obtener multimedia y catálogo solo de los items de las cotizaciones

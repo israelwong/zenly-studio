@@ -51,8 +51,8 @@ interface OfferLeadFormProps {
   emailRequired?: boolean;
   enableEventName?: boolean; // Solicitar nombre del evento
   eventNameRequired?: boolean; // Nombre del evento obligatorio
-  enableEventDuration?: boolean; // Solicitar duración del evento
-  eventDurationRequired?: boolean; // Duración del evento obligatoria
+  enableEventDuration?: boolean; // Solicitar horas de cobertura
+  eventDurationRequired?: boolean; // Horas de cobertura obligatorias
   coverUrl?: string | null;
   coverType?: string | null;
   isPreview?: boolean;

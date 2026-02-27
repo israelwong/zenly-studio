@@ -52,7 +52,7 @@ interface ResumenCotizacionProps {
       seccion_name_raw?: string | null;
     }>;
   };
-  /** Duración del evento en horas (para ítems HOUR: mostrar "x N /hrs"). Snapshot de cotización manda. */
+  /** Horas de cobertura (para ítems HOUR: mostrar "x N /hrs"). Snapshot de cotización manda. */
   event_duration?: number | null;
   /** Fallback: duración desde la promesa (solo si event_duration es null). */
   promiseDurationHours?: number | null;
