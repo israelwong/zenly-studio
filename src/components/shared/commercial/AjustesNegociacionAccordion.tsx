@@ -85,8 +85,8 @@ export function AjustesNegociacionAccordion({
           className={cn(
             'w-full items-center gap-2 border transition-all duration-300',
             isExpanded
-              ? 'rounded-t-lg bg-zinc-950/40 border-purple-900/30 border-l-2 border-l-[#A78BFA]/40'
-              : 'rounded-lg bg-zinc-800/20 border-purple-900/30'
+              ? 'rounded-t-lg bg-zinc-950/40 border-zinc-800 border-l-2 border-l-purple-500/60'
+              : 'rounded-lg bg-zinc-800/20 border-purple-800/40'
           )}
         >
           <AccordionTrigger
@@ -120,7 +120,7 @@ export function AjustesNegociacionAccordion({
           )}
         </AccordionHeader>
         <AccordionContent>
-          <div className="rounded-b-lg border border-t-0 border-purple-900/30 border-l-2 border-l-[#A78BFA]/40 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
+          <div className="rounded-b-lg border border-t-0 border-zinc-800 border-l-2 border-l-purple-500/60 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
             <div className="space-y-3">
               <div className="grid grid-cols-[auto_1fr] gap-3">
                 <div>
