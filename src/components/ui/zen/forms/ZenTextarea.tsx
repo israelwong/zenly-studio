@@ -136,7 +136,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
             'text-sm font-medium leading-normal',
             ZEN_COLORS.text.secondary,
             'flex items-center gap-2',
-            'mb-2'
+            'mb-1.5'
           )}
           suppressHydrationWarning
         >
@@ -174,7 +174,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
         />
 
         {/* Footer con contador y mensajes */}
-        <div className="flex justify-between items-start mt-1">
+        <div className="flex justify-between items-start mt-0">
           <div className="flex-1">
             {/* Mensaje de error */}
             {error && (

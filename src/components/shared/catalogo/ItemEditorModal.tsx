@@ -644,16 +644,16 @@ export function ItemEditorModal({
                         </div>
                     )}
                     {context === 'cotizaciones' && item && (
-                        <div className="mx-6 mb-0 rounded-lg border border-blue-600/50 bg-blue-500/10 px-4 py-3 text-sm text-blue-200/90">
+                        <div className="mx-6 mb-0 rounded-lg border border-blue-600/50 bg-blue-500/10 px-4 py-2.5 text-sm text-blue-200/90">
                             <strong>Modo Edición de Cotización:</strong> Puedes elegir si los cambios son solo para este cliente o si afectan a todo el catálogo.
                         </div>
                     )}
 
                     <div className="px-6 pb-6">
-                        <form className={`space-y-6 ${context === 'cotizaciones' && !item ? 'mt-2' : 'mt-6'}`}>
+                        <form className={`space-y-6 ${context === 'cotizaciones' ? 'mt-2' : 'mt-6'}`}>
                                 {/* Nombre del Item */}
                                 <div>
-                                    <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                    <label className="block text-sm font-medium text-zinc-200 mb-1.5">
                                         Nombre del Item
                                     </label>
                                     <ZenTextarea
@@ -698,11 +698,11 @@ export function ItemEditorModal({
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
                                         Tipo de Utilidad
                                     </label>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-1.5">
                                         <ZenButton
                                             type="button"
                                             variant={formData.tipoUtilidad === 'servicio' ? 'primary' : 'outline'}
-                                            size="md"
+                                            size="sm"
                                             onClick={() => handleInputChange("tipoUtilidad", "servicio")}
                                             disabled={isSaving}
                                             className="flex-1"
@@ -719,7 +719,7 @@ export function ItemEditorModal({
                                         <ZenButton
                                             type="button"
                                             variant={formData.tipoUtilidad === 'producto' ? 'primary' : 'outline'}
-                                            size="md"
+                                            size="sm"
                                             onClick={() => handleInputChange("tipoUtilidad", "producto")}
                                             disabled={isSaving}
                                             className="flex-1"
@@ -792,7 +792,7 @@ export function ItemEditorModal({
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
                                         <label className="text-sm font-medium text-zinc-200">
-                                            Configuración interna
+                                            Configuración de cronograma
                                         </label>
                                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-700/60 text-zinc-400 border border-zinc-600/50">
                                             <Lock className="h-2.5 w-2.5" />
@@ -862,7 +862,7 @@ export function ItemEditorModal({
                                                 }}
                                                 disabled={isSaving}
                                                 className={cn(
-                                                    "max-w-[6rem] transition-all duration-300",
+                                                    "max-w-[6rem] h-[42px] transition-all duration-300",
                                                     durationFlash && "ring-2 ring-amber-400/70 ring-offset-2 ring-offset-zinc-900"
                                                 )}
                                             />
