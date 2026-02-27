@@ -25,7 +25,6 @@ export interface AjustesNegociacionAccordionProps {
   onRestaurar?: () => void;
   sectionRef?: React.RefObject<HTMLDivElement | null>;
   onScrollIntoView?: () => void;
-  /** Cotización: onBlur sync; paquete: opcional */
   onBonoBlur?: () => void;
   onBonoFocus?: () => void;
   className?: string;
@@ -76,6 +75,7 @@ export function AjustesNegociacionAccordion({
   const hasCortesias = itemsCortesiaSize > 0;
   const hasBono = bonoEspecial > 0;
   const showTotal = hasCortesias && hasBono;
+  const isExpanded = accordionValue.includes(value);
 
   return (
     <>
@@ -83,8 +83,10 @@ export function AjustesNegociacionAccordion({
         <AccordionHeader
           ref={sectionRef as React.RefObject<HTMLDivElement>}
           className={cn(
-            'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
-            accordionValue.includes(value) ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+            'w-full items-center gap-2 border border-zinc-800 transition-all duration-300',
+            isExpanded
+              ? 'rounded-t-lg bg-zinc-950/40 border-l-2 border-l-[#A78BFA]/40'
+              : 'rounded-lg bg-zinc-800/20'
           )}
         >
           <AccordionTrigger
@@ -92,11 +94,11 @@ export function AjustesNegociacionAccordion({
             onClick={onScrollIntoView}
           >
             <div className="flex items-center gap-2 min-w-0 w-full">
-              {accordionValue.includes(value) ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-              <span>Ajustes de negociación</span>
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-purple-400/60" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+              <span className={isExpanded ? 'text-zinc-200' : ''}>Ajustes de negociación</span>
             </div>
-            {!accordionValue.includes(value) && (
-              <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+            {!isExpanded && (
+              <span className="text-sm text-purple-400/60 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
                 {(() => {
                   const parts: string[] = [];
                   if (hasBono) parts.push(`Bono: ${formatearMoneda(bonoEspecial)}`);
@@ -118,7 +120,7 @@ export function AjustesNegociacionAccordion({
           )}
         </AccordionHeader>
         <AccordionContent>
-          <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-800/30 p-3">
+          <div className="rounded-b-lg border border-t-0 border-zinc-800 border-l-2 border-l-[#A78BFA]/40 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
             <div className="space-y-3">
               <div className="grid grid-cols-[auto_1fr] gap-3">
                 <div>
@@ -134,8 +136,8 @@ export function AjustesNegociacionAccordion({
                     className={cn(
                       'w-full justify-center gap-1.5 rounded-lg border backdrop-blur-sm h-9 text-xs',
                       isCourtesyMode
-                        ? 'bg-purple-800 border-purple-700/80 text-white hover:bg-purple-700'
-                        : 'bg-zinc-800/30 border-zinc-600/80 text-zinc-300 hover:bg-zinc-800/50'
+                        ? 'bg-purple-900/50 border-purple-800/60 text-purple-200 hover:bg-purple-900/70'
+                        : 'bg-zinc-800/30 border-zinc-700 text-zinc-400 hover:bg-zinc-800/50'
                     )}
                   >
                     {isCourtesyMode ? (<><Gift className="w-3.5 h-3.5 shrink-0" /> Finalizar modo cortesía</>) : (<><Gift className="w-3.5 h-3.5 shrink-0" /> Habilitar modo cortesía</>)}
@@ -158,11 +160,11 @@ export function AjustesNegociacionAccordion({
                     onBlur={(e) => { if (e.target.value === '') setBonoEspecial(0); onBonoBlur?.(); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                     placeholder="0"
-                    className="mt-0 h-9 text-sm rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40"
+                    className="mt-0 h-9 text-sm rounded-lg border-zinc-700 bg-zinc-800/20 focus:bg-zinc-800/40"
                   />
                 </div>
               </div>
-              <Separator className="my-3 bg-zinc-700/50" />
+              <Separator className="my-3 bg-zinc-800" />
               {!hasCortesias && !hasBono ? (
                 <p className="text-[10px] text-zinc-600">Sin ajustes. Precio sugerido = Precio calculado.</p>
               ) : (
@@ -171,13 +173,13 @@ export function AjustesNegociacionAccordion({
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-zinc-400">Cortesías ({itemsCortesiaSize})</span>
                       <div className="flex items-center gap-1">
-                        <span className="tabular-nums text-purple-400">-{formatearMoneda(montoCortesias)}</span>
+                        <span className="tabular-nums text-purple-400/70">-{formatearMoneda(montoCortesias)}</span>
                         <ZenButton
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRequestClearCortesias('cortesias')}
-                          className="h-8 w-8 p-0 text-purple-400/80 hover:text-purple-300 hover:bg-purple-500/10"
+                          className="h-8 w-8 p-0 text-purple-400/50 hover:text-purple-300/70 hover:bg-purple-500/10"
                           title="Eliminar todas las cortesías"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -189,7 +191,7 @@ export function AjustesNegociacionAccordion({
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-zinc-400">Bono Especial</span>
                       <div className="flex items-center gap-1">
-                        <span className="tabular-nums text-emerald-400/90">-{formatearMoneda(bonoEspecial)}</span>
+                        <span className="tabular-nums text-purple-300/60">-{formatearMoneda(bonoEspecial)}</span>
                         <ZenButton
                           type="button"
                           variant="ghost"
@@ -205,11 +207,11 @@ export function AjustesNegociacionAccordion({
                   )}
                   {showTotal && (
                     <>
-                      <Separator className="my-3 bg-zinc-700/50" />
+                      <Separator className="my-3 bg-zinc-800" />
                       <div className="flex items-center justify-between gap-2 text-sm font-medium">
                         <span className="text-zinc-300">Descuento total</span>
                         <div className="flex items-center gap-1">
-                          <span className="tabular-nums font-semibold text-red-400">
+                          <span className="tabular-nums font-semibold text-red-400/80">
                             -{formatearMoneda(montoCortesias + bonoEspecial)}
                           </span>
                           <ZenButton

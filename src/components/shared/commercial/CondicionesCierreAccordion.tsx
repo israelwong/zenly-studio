@@ -42,14 +42,12 @@ export interface CondicionesCierreAccordionProps {
   configuracionPrecios: ConfiguracionPrecios | null;
   precioPersonalizado: string | number;
   tieneAjustesNegociacion: boolean;
-  /** Si se pasa condicionId, abre la auditoría con los datos de esa condición. */
   onAuditoriaClick?: (condicionId?: string) => void;
   onGestionarCondiciones: () => void;
   onCreateCondicionEspecial: () => void;
   onEditCondicion: (condId: string) => void;
   sectionRef?: React.RefObject<HTMLDivElement | null>;
   onScrollIntoView?: () => void;
-  /** Solo cotización: selectedCondicionComercialId para resumen del trigger */
   selectedCondicionComercialId?: string | null;
   className?: string;
 }
@@ -118,13 +116,17 @@ export function CondicionesCierreAccordion({
     ? 'Habilita las condiciones de contratación que aplican a este paquete. Revisa utilidad real y margen por condición.'
     : 'Puedes habilitar u ocultar las condiciones de contratación que el prospecto podrá elegir para esta cotización.';
 
+  const isExpanded = accordionValue.includes(value);
+
   return (
     <AccordionItem value={value} id={`section-${value}`} className={cn('border-0', className)}>
       <AccordionHeader
         ref={sectionRef as React.RefObject<HTMLDivElement>}
         className={cn(
-          'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
-          accordionValue.includes(value) ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
+          'w-full items-center gap-2 border border-zinc-800 transition-all duration-300',
+          isExpanded
+            ? 'rounded-t-lg bg-zinc-950/40 border-l-2 border-l-[#FB7185]/40'
+            : 'rounded-lg bg-zinc-800/20'
         )}
       >
         <AccordionTrigger
@@ -132,11 +134,11 @@ export function CondicionesCierreAccordion({
           onClick={onScrollIntoView}
         >
           <div className="flex items-center gap-2 min-w-0 w-full">
-            {accordionValue.includes(value) ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-            <span>Condiciones de cierre</span>
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-rose-400/60" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+            <span className={isExpanded ? 'text-zinc-200' : ''}>Condiciones de cierre</span>
           </div>
-          {!accordionValue.includes(value) && (
-            <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+          {!isExpanded && (
+            <span className="text-sm text-rose-400/50 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
               {summaryLine}
             </span>
           )}
@@ -173,7 +175,7 @@ export function CondicionesCierreAccordion({
         </div>
       </AccordionHeader>
       <AccordionContent>
-        <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-900/50 p-3">
+        <div className="rounded-b-lg border border-t-0 border-zinc-800 border-l-2 border-l-[#FB7185]/40 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
           <p className="text-[11px] text-zinc-500 mb-3">{descriptionText}</p>
           {tieneAjustesNegociacion && context === 'cotizacion' && (
             <p className="text-[11px] text-amber-600 mt-1 mb-3">
@@ -194,14 +196,14 @@ export function CondicionesCierreAccordion({
                 <div
                   key={cond.id}
                   className={cn(
-                    'rounded-lg border transition-all duration-200 ease-out relative',
-                    dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
-                    !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
-                    !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/5',
-                    !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
+                    'rounded-lg border transition-all duration-300 ease-out relative',
+                    dobleBeneficio && 'ring-1 ring-amber-500/30 border-amber-500/50 bg-amber-950/20',
+                    !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/50 border-amber-500/50 bg-amber-950/10',
+                    !dobleBeneficio && !isSimulacion && isVisible && 'border-rose-500/20 bg-rose-950/10',
+                    !dobleBeneficio && !isSimulacion && !isVisible && 'border-zinc-800 bg-zinc-900/50 opacity-60'
                   )}
                 >
-                  <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/30' : 'border-zinc-700/50')}>
+                  <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/30' : isVisible ? 'border-rose-500/15' : 'border-zinc-700/50')}>
                     <span className={cn('font-medium text-sm min-w-0 truncate', isSimulacion ? 'text-white' : 'text-zinc-300')}>{cond.name}</span>
                     <button
                       type="button"
@@ -215,21 +217,21 @@ export function CondicionesCierreAccordion({
                       }}
                       className={cn(
                         'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                        isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                        isVisible ? 'text-rose-300/70 bg-rose-500/10 border border-rose-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
                       )}
                       aria-label={isVisible ? 'Ocultar' : 'Visible'}
                     >
                       {isVisible ? 'Visible' : 'Oculto'}
                     </button>
-                    {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
+                    {isSimulacion && <span className="text-[10px] text-amber-500/80 shrink-0">[Simulando]</span>}
                     {cond.type === 'offer' && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full shrink-0">OFERTA</span>
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-300/60 border border-purple-500/20 rounded-full shrink-0">OFERTA</span>
                     )}
                     {onAuditoriaClick && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onAuditoriaClick(cond.id); }}
-                          className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80"
+                          className="shrink-0 p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50"
                           title="Auditoría con esta condición"
                           aria-label="Ver auditoría"
                         >
@@ -239,7 +241,7 @@ export function CondicionesCierreAccordion({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onEditCondicion(cond.id); }}
-                      className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80"
+                      className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50"
                       title="Editar condición"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -251,9 +253,9 @@ export function CondicionesCierreAccordion({
                     onClick={() => setCondicionSimulacionId(condicionSimulacionId === cond.id ? null : cond.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId(condicionSimulacionId === cond.id ? null : cond.id); } }}
                     className={cn(
-                      'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
+                      'px-3 py-2.5 cursor-pointer transition-colors duration-300 text-left',
                       isSimulacion && 'bg-amber-500/5',
-                      isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
+                      isVisible && !isSimulacion && 'hover:bg-zinc-800/30',
                       !isVisible && 'hover:bg-zinc-800/30'
                     )}
                   >
@@ -262,21 +264,21 @@ export function CondicionesCierreAccordion({
                       <span>Anticipo: {cond.advance_type === 'fixed_amount' && cond.advance_amount != null ? formatearMoneda(cond.advance_amount) : `${cond.advance_percentage ?? 0}%`}</span>
                       <span>Descuento: {descuentoPct}%</span>
                     </div>
-                    <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : 'border-zinc-700/40')}>
+                    <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/20' : 'border-zinc-700/40')}>
                       <div className="flex justify-between items-center text-[10px]">
                         <span className="text-zinc-500">Utilidad real</span>
-                        <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
+                        <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/80' : 'text-rose-400/70')}>{formatearMoneda(utilidadCond)}</span>
                       </div>
                       <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
                         <div
-                          className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
+                          className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive/80', saludCond === 'amber' && 'bg-amber-500/80', saludCond === 'emerald' && 'bg-emerald-500/80')}
                           style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
                         />
                       </div>
                       <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
                     </div>
                     {dobleBeneficio && (
-                      <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
+                      <div className="mt-2 text-[10px] text-amber-400/70 flex items-center gap-1">
                         <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
                       </div>
                     )}
@@ -298,18 +300,18 @@ export function CondicionesCierreAccordion({
                 return (
                   <div
                     className={cn(
-                      'rounded-lg border transition-all duration-200 ease-out relative',
-                      dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
-                      !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
-                      !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/10',
-                      !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
+                      'rounded-lg border transition-all duration-300 ease-out relative',
+                      dobleBeneficio && 'ring-1 ring-amber-500/30 border-amber-500/50 bg-amber-950/20',
+                      !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/50 border-amber-500/50 bg-amber-950/10',
+                      !dobleBeneficio && !isSimulacion && isVisible && 'border-rose-500/20 bg-rose-950/10',
+                      !dobleBeneficio && !isSimulacion && !isVisible && 'border-zinc-800 bg-zinc-900/50 opacity-60'
                     )}
                   >
-                    <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/20' : 'border-zinc-700/50')}>
-                      <div className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/30' : isVisible ? 'border-rose-500/15' : 'border-zinc-700/50')}>
+                      <div className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-rose-400/50 bg-rose-400/50 flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white/80" />
                       </div>
-                      <span className="font-medium text-sm text-white min-w-0 truncate">{cond.name}</span>
+                      <span className="font-medium text-sm text-zinc-200 min-w-0 truncate">{cond.name}</span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -322,18 +324,18 @@ export function CondicionesCierreAccordion({
                         }}
                         className={cn(
                           'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                          isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                          isVisible ? 'text-rose-300/70 bg-rose-500/10 border border-rose-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
                         )}
                       >
                         {isVisible ? 'Visible' : 'Oculto'}
                       </button>
-                      {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
-                      <span className="text-[10px] text-emerald-400/80 shrink-0">Condición especial</span>
+                      {isSimulacion && <span className="text-[10px] text-amber-500/80 shrink-0">[Simulando]</span>}
+                      <span className="text-[10px] text-rose-400/50 shrink-0">Condición especial</span>
                       {onAuditoriaClick && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onAuditoriaClick(cond.id); }}
-                          className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80"
+                          className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50"
                           title="Auditoría con esta condición"
                           aria-label="Ver auditoría"
                         >
@@ -347,28 +349,28 @@ export function CondicionesCierreAccordion({
                       onClick={() => setCondicionSimulacionId(condicionSimulacionId === cond.id ? null : cond.id)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId(condicionSimulacionId === cond.id ? null : cond.id); } }}
                       className={cn(
-                        'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
+                        'px-3 py-2.5 cursor-pointer transition-colors duration-300 text-left',
                         isSimulacion && 'bg-amber-500/5',
-                        isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
+                        isVisible && !isSimulacion && 'hover:bg-zinc-800/30',
                         !isVisible && 'hover:bg-zinc-800/30'
                       )}
                     >
                       <div className="text-xs text-zinc-400">Descuento: {cond.discount_percentage ?? 0}%</div>
-                      <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : 'border-zinc-700/40')}>
+                      <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/20' : 'border-zinc-700/40')}>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-zinc-500">Utilidad real</span>
-                          <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
+                          <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/80' : 'text-rose-400/70')}>{formatearMoneda(utilidadCond)}</span>
                         </div>
                         <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
                           <div
-                            className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
+                            className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive/80', saludCond === 'amber' && 'bg-amber-500/80', saludCond === 'emerald' && 'bg-emerald-500/80')}
                             style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
                           />
                         </div>
                         <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
                       </div>
                       {dobleBeneficio && (
-                        <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
+                        <div className="mt-2 text-[10px] text-amber-400/70 flex items-center gap-1">
                           <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado' : 'Doble beneficio: ajustes y descuento'}
                         </div>
                       )}
@@ -401,14 +403,14 @@ export function CondicionesCierreAccordion({
                   simulacionBlockExpanded ? 'mt-3 max-h-[400px] opacity-100' : 'max-h-0 opacity-0 mt-0'
                 )}
               >
-                <div className="rounded-lg border border-amber-500/40 bg-zinc-800/20 p-3 ring-1 ring-amber-500/30">
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">Simulación: El cliente pagará</p>
+                <div className="rounded-lg border border-amber-500/30 bg-zinc-800/20 p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Simulación: El cliente pagará</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-zinc-300">
                       <span>Precio de Cierre</span>
                       <span className="tabular-nums">{formatearMoneda(precioCierre)}</span>
                     </div>
-                    <div className="flex justify-between text-amber-400/90">
+                    <div className="flex justify-between text-amber-400/70">
                       <span>Descuento aplicado ({pct}%)</span>
                       <span className="tabular-nums">-{formatearMoneda(descuentoMonto)}</span>
                     </div>
