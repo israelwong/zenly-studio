@@ -20,6 +20,18 @@ function operationalCategoryToTaskType(oc: OperationalCategory | null): Cotizaci
     default: return undefined;
   }
 }
+
+/** Mapeo inverso: task_type (cotización) → operational_category (catálogo) */
+function taskTypeToOperationalCategory(tt: CotizacionItemType | null): OperationalCategory | undefined {
+  if (!tt) return undefined;
+  switch (tt) {
+    case 'OPERATION': return 'PRODUCTION';
+    case 'EDITING': return 'POST_PRODUCTION';
+    case 'DELIVERY': return 'DIGITAL_DELIVERY';
+    case 'CUSTOM': return 'LOGISTICS';
+    default: return undefined;
+  }
+}
 import {
   createCotizacionSchema,
   updateCotizacionSchema,
@@ -1453,14 +1465,21 @@ export async function duplicateCotizacion(
 }
 
 /**
- * Guardar cotización como paquete (Fase 2).
+ * Guardar cotización como paquete (Fase 8.2).
  * Clona ítems de catálogo (item_id + service_category_id) a un nuevo studio_paquetes.
- * El paquete se crea con visibility: 'private' para que el socio decida si lo hace público.
+ * Permite configurar metadatos del paquete y visibilidad desde el modal de confirmación.
  */
 export async function guardarCotizacionComoPaquete(
   studioSlug: string,
-  cotizacionId: string
-): Promise<{ success: boolean; data?: { paqueteId: string }; error?: string }> {
+  cotizacionId: string,
+  options?: {
+    name?: string;
+    description?: string | null;
+    baseHours?: number | null;
+    visibility?: 'public' | 'private';
+    coverPhotoUrl?: string | null;
+  }
+): Promise<{ success: boolean; data?: { paqueteId: string; customItemsCount: number }; error?: string }> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -1474,11 +1493,25 @@ export async function guardarCotizacionComoPaquete(
       where: { id: cotizacionId, studio_id: studio.id },
       include: {
         cotizacion_items: {
-          where: {
-            item_id: { not: null },
-            service_category_id: { not: null },
-          },
           orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            item_id: true,
+            service_category_id: true,
+            quantity: true,
+            is_custom: true,
+            name: true,
+            cost: true,
+            expense: true,
+            profit_type: true,
+            billing_type: true,
+            task_type: true,
+            internal_delivery_days: true,
+            order: true,
+          },
+        },
+        promise: {
+          select: { duration_hours: true },
         },
       },
     });
@@ -1487,50 +1520,142 @@ export async function guardarCotizacionComoPaquete(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    const itemsValidos = cotizacion.cotizacion_items.filter(
-      (i): i is typeof i & { item_id: string; service_category_id: string } =>
-        i.item_id != null && i.service_category_id != null
-    );
+    if (cotizacion.cotizacion_items.length === 0) {
+      return { success: false, error: 'La cotización no tiene ítems' };
+    }
 
-    const maxOrderResult = await prisma.studio_paquetes.findFirst({
-      where: { studio_id: studio.id },
-      orderBy: { order: 'desc' },
-      select: { order: true },
-    });
-    const newOrder = (maxOrderResult?.order ?? -1) + 1;
+    // Obtener config de precios para calcular precio de custom items
+    const configForm = await obtenerConfiguracionPrecios(studioSlug);
+    if (!configForm) {
+      return { success: false, error: 'No hay configuración de precios' };
+    }
+    const configPrecios: ConfiguracionPrecios = {
+      utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30'),
+      utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20'),
+      comision_venta: parseFloat(configForm.comision_venta || '0.10'),
+      sobreprecio: parseFloat(configForm.sobreprecio || '0.05'),
+    };
 
-    const paquete = await prisma.studio_paquetes.create({
-      data: {
-        studio_id: studio.id,
-        event_type_id: cotizacion.event_type_id,
-        name: `${cotizacion.name} (Paquete)`,
-        description: cotizacion.description ?? null,
-        precio: Number(cotizacion.price),
-        base_hours: cotizacion.event_duration ?? null,
-        visibility: 'private',
-        status: 'active',
-        order: newOrder,
-        bono_especial: cotizacion.bono_especial ?? null,
-        items_cortesia: cotizacion.items_cortesia ?? null,
-      },
-    });
+    const result = await prisma.$transaction(async (tx) => {
+      // FASE 1: Persistir custom items al catálogo global
+      const customItems = cotizacion.cotizacion_items.filter(
+        (item) => item.is_custom === true || (item.item_id === null && item.service_category_id !== null)
+      );
 
-    if (itemsValidos.length > 0) {
-      await prisma.studio_paquete_items.createMany({
-        data: itemsValidos.map((item, idx) => ({
+      const customItemIdMap = new Map<string, string>(); // old_id → new_item_id
+
+      for (const customItem of customItems) {
+        // Mapear task_type (snapshot) → operational_category (catálogo)
+        const operational_category = taskTypeToOperationalCategory(customItem.task_type);
+        
+        // Crear ítem en catálogo global
+        const nuevoItem = await tx.studio_items.create({
+          data: {
+            studio_id: studio.id,
+            name: customItem.name ?? 'Servicio personalizado',
+            cost: customItem.cost ?? 0,
+            utility_type: (customItem.profit_type === 'producto' || customItem.profit_type === 'product') ? 'product' : 'service',
+            billing_type: (customItem.billing_type as 'HOUR' | 'SERVICE' | 'UNIT') ?? 'SERVICE',
+            operational_category,
+            default_duration_days: customItem.internal_delivery_days,
+            status: 'active',
+            order: 0,
+          },
+        });
+
+        customItemIdMap.set(customItem.id, nuevoItem.id);
+      }
+
+      // FASE 2: Preparar todos los items (catálogo + custom ya persistidos)
+      const allItems = cotizacion.cotizacion_items.map((item) => {
+        if (item.is_custom === true || item.item_id === null) {
+          // Custom item: usar nuevo ID del catálogo
+          const newItemId = customItemIdMap.get(item.id);
+          if (!newItemId || !item.service_category_id) return null;
+          return {
+            item_id: newItemId,
+            service_category_id: item.service_category_id,
+            quantity: item.quantity,
+          };
+        } else {
+          // Item de catálogo: usar ID existente
+          if (!item.item_id || !item.service_category_id) return null;
+          return {
+            item_id: item.item_id,
+            service_category_id: item.service_category_id,
+            quantity: item.quantity,
+          };
+        }
+      }).filter((item): item is { item_id: string; service_category_id: string; quantity: number } => 
+        item !== null
+      );
+
+      if (allItems.length === 0) {
+        throw new Error('No hay ítems válidos para crear el paquete');
+      }
+
+      // FASE 3: Validar items_cortesia (que los IDs existan en la cotización)
+      let itemsCortesiaValidos: string[] = [];
+      if (Array.isArray(cotizacion.items_cortesia)) {
+        const itemsCortesiaFromCotizacion = cotizacion.items_cortesia as string[];
+        const cotizacionItemIds = new Set(cotizacion.cotizacion_items.map(i => i.id));
+        
+        itemsCortesiaValidos = itemsCortesiaFromCotizacion.filter(itemId => {
+          if (cotizacionItemIds.has(itemId)) {
+            return true;
+          }
+          console.warn(`[PAQUETE] item_cortesia ID ${itemId} no existe en cotización, omitido`);
+          return false;
+        });
+      }
+
+      // FASE 4: Obtener order máximo para el paquete
+      const maxOrderResult = await tx.studio_paquetes.findFirst({
+        where: { studio_id: studio.id },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      const newOrder = (maxOrderResult?.order ?? -1) + 1;
+
+      // FASE 5: Crear paquete con bono y cortesías validadas (Fase 8.2: opciones personalizables)
+      const paquete = await tx.studio_paquetes.create({
+        data: {
+          studio_id: studio.id,
+          event_type_id: cotizacion.event_type_id,
+          name: options?.name ?? `${cotizacion.name} (Paquete)`,
+          description: options?.description !== undefined ? options.description : (cotizacion.description ?? null),
+          precio: Number(cotizacion.price),
+          base_hours: options?.baseHours !== undefined ? options.baseHours : (cotizacion.event_duration ?? null),
+          visibility: options?.visibility ?? 'private',
+          cover_photo_url: options?.coverPhotoUrl ?? null,
+          status: 'active',
+          order: newOrder,
+          bono_especial: cotizacion.bono_especial ? new Prisma.Decimal(Number(cotizacion.bono_especial)) : null,
+          items_cortesia: itemsCortesiaValidos.length > 0 ? itemsCortesiaValidos : null,
+        },
+      });
+
+      // FASE 6: Crear paquete_items
+      await tx.studio_paquete_items.createMany({
+        data: allItems.map((item, idx) => ({
           paquete_id: paquete.id,
-          item_id: item.item_id!,
-          service_category_id: item.service_category_id!,
+          item_id: item.item_id,
+          service_category_id: item.service_category_id,
           quantity: item.quantity,
           order: idx,
         })),
       });
-    }
+
+      return { 
+        paqueteId: paquete.id,
+        customItemsCount: customItems.length,
+      };
+    }, { maxWait: 10_000, timeout: 20_000 });
 
     revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
-    return { success: true, data: { paqueteId: paquete.id } };
+    return { success: true, data: result };
   } catch (error) {
     console.error('[COTIZACIONES] Error guardarCotizacionComoPaquete:', error);
     return {

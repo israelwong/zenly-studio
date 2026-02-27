@@ -55,7 +55,51 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 3. Arquitectura de Precios y Resiliencia
+### 3. Flujo: Cotización a Paquete
+**Archivo:** `cotizacion-a-paquete.md`  
+**Versión:** 2.0 (Post-Fix Persistencia)  
+**Estado:** ✅ Producción
+
+**Contenido:**
+- Conversión de cotización exitosa a paquete reutilizable
+- Persistencia automática de custom items al catálogo global
+- Validación de items_cortesia (filtrado de IDs inválidos)
+- Modal de confirmación con aviso preventivo
+- Transacción atómica (6 fases)
+- Casos de uso (con/sin custom items, con bonos/cortesías)
+- Testing y validación
+
+**Cuándo consultar:**
+- Implementar/mantener flujo "Guardar como paquete"
+- Depurar errores FK en paquete_items
+- Entender persistencia de custom items
+- Validar integridad de items_cortesia
+
+---
+
+### 4. Mapeo de Campos Snapshot
+**Archivo:** `snapshot-field-mapping.md`  
+**Versión:** 1.0 (Fase 8.1)  
+**Estado:** ✅ Producción
+
+**Contenido:**
+- Diferencia entre `operational_category` (catálogo) y `task_type` (snapshot)
+- Funciones de mapeo bidireccional (`operationalCategoryToTaskType`, `taskTypeToOperationalCategory`)
+- Casos de uso: crear cotización, convertir a paquete, scheduler sync
+- Reglas de oro para queries a `studio_items` vs `studio_cotizacion_items`
+- Frontend: ItemFormData y tipos correctos
+- Archivos críticos del sistema
+
+**Cuándo consultar:**
+- Error "Unknown field operational_category" en snapshots
+- Implementar conversión entre catálogo y cotización
+- Queries que involucren task_type o operational_category
+- Sincronización con scheduler
+- Onboarding: entender arquitectura de snapshots
+
+---
+
+### 5. Arquitectura de Precios y Resiliencia
 **Archivo:** `precios-resiliencia.md`  
 **Versión:** 1.0  
 **Estado:** ✅ Producción
@@ -77,7 +121,7 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 4. Flows (flujos paso a paso)
+### 5. Flows (flujos paso a paso)
 **Carpeta:** [flows/](flows/)
 
 Documentos de flujos operativos explícitos (UI → componentes → Server Actions → servidor) para cierre, autorización, etc. Índice en `flows/README.md`.
@@ -91,7 +135,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 5. Arquitectura Promesa Cierre
+### 6. Arquitectura Promesa Cierre
 **Archivo:** [promesa-cierre.md](promesa-cierre.md)  
 **Estado:** ✅ Referencia
 
@@ -114,7 +158,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 6. Arquitectura Promesa Pendiente
+### 7. Arquitectura Promesa Pendiente
 **Archivo:** [promesa-pendiente.md](promesa-pendiente.md)  
 **Estado:** ✅ Referencia
 
@@ -135,7 +179,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 7. Panel de Gestión Logística (Scheduler)
+### 8. Panel de Gestión Logística (Scheduler)
 **Archivo:** `panel-gestion-logistica.md`  
 **Estado:** ✅ Producción
 
@@ -153,7 +197,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
-### 8. Componentes compartidos (precio / cierre)
+### 9. Componentes compartidos (precio / cierre)
 **Carpeta:** [components/](components/)
 
 | Documento | Descripción |

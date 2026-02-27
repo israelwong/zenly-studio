@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback, startTransiti
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe, PackagePlus } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenSwitch, ZenLabel } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { Accordion, AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
@@ -33,6 +33,8 @@ import { cn } from '@/lib/utils';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import type { FormSectionId } from './FormSection';
+import { PaqueteCoverDropzone } from '../../paquetes/components/PaqueteCoverDropzone';
+import { useMediaUpload } from '@/hooks/useMediaUpload';
 
 const DUPLICATE_NAME_ERROR = 'Ya existe una cotización con ese nombre en esta promesa';
 
@@ -66,6 +68,12 @@ interface CotizacionFormProps {
   getPreviewDataRef?: React.MutableRefObject<(() => PublicCotizacion | null) | null>;
   /** Si se define, se muestra botón "Vista previa" en el sidebar (arriba de Guardar/Cambiar a borrador). */
   onRequestPreview?: () => void;
+  /** Si true, oculta el botón "Guardar como paquete" del sidebar (ej. cuando se muestra en el header). */
+  hideGuardarComoPaqueteInSidebar?: boolean;
+  /** Ref para exponer el handler de "Guardar como paquete" al componente padre. */
+  getGuardarComoPaqueteHandlerRef?: React.MutableRefObject<(() => void) | null>;
+  /** Callback para notificar al padre cuando cambia el estado de guardado del paquete. */
+  onSavingAsPaqueteChange?: (isSaving: boolean) => void;
 }
 
 export function CotizacionForm({
@@ -90,6 +98,9 @@ export function CotizacionForm({
   onRequestPreview,
   onCreateAsRevision,
   revisionOriginalId,
+  hideGuardarComoPaqueteInSidebar = false,
+  getGuardarComoPaqueteHandlerRef,
+  onSavingAsPaqueteChange,
 }: CotizacionFormProps & {
   onCreateAsRevision?: (data: {
     nombre: string;
@@ -229,7 +240,7 @@ export function CotizacionForm({
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showNameConflictModal, setShowNameConflictModal] = useState(false);
-  const [showPaqueteCustomItemsModal, setShowPaqueteCustomItemsModal] = useState(false);
+  const [showPaqueteModal, setShowPaqueteModal] = useState(false);
   const [showDurationScopeModal, setShowDurationScopeModal] = useState(false);
   const [isSavingAsPaquete, setIsSavingAsPaquete] = useState(false);
   const [pendingSavePublish, setPendingSavePublish] = useState<boolean>(false);
@@ -242,6 +253,15 @@ export function CotizacionForm({
   const [conflictPublish, setConflictPublish] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
   const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
+  
+  // Estados para modal de paquete (Fase 8.2)
+  const [paqueteNombre, setPaqueteNombre] = useState('');
+  const [paqueteDescripcion, setPaqueteDescripcion] = useState('');
+  const [paqueteHoras, setPaqueteHoras] = useState<number | null>(null);
+  const [paqueteVisibility, setPaqueteVisibility] = useState<'public' | 'private'>('private');
+  const [paqueteCoverMedia, setPaqueteCoverMedia] = useState<Array<{ file_url: string; file_type: string; filename: string; file_size?: number }>>([]);
+  const [isPaqueteCoverUploading, setIsPaqueteCoverUploading] = useState(false);
+  const { uploadFiles } = useMediaUpload();
   
   // Estados para ItemEditorModal
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -593,6 +613,31 @@ export function CotizacionForm({
       onLoadingChangeRef.current(cargandoCatalogo);
     }
   }, [cargandoCatalogo]);
+
+  // Exponer handler de "Guardar como paquete" al componente padre
+  useEffect(() => {
+    if (getGuardarComoPaqueteHandlerRef) {
+      getGuardarComoPaqueteHandlerRef.current = () => {
+        if (!cotizacionId) {
+          toast.info('Guarda primero la cotización como borrador para poder convertirla en paquete.');
+          return;
+        }
+        setPaqueteNombre(nombre ? `${nombre} (Paquete)` : '');
+        setPaqueteDescripcion(descripcion || '');
+        setPaqueteHoras(durationHours);
+        setPaqueteVisibility('private');
+        setPaqueteCoverMedia([]);
+        setShowPaqueteModal(true);
+      };
+    }
+  }, [getGuardarComoPaqueteHandlerRef, cotizacionId, nombre, descripcion, durationHours]);
+
+  // Notificar cambios en el estado de guardado del paquete
+  useEffect(() => {
+    if (onSavingAsPaqueteChange) {
+      onSavingAsPaqueteChange(isSavingAsPaquete);
+    }
+  }, [isSavingAsPaquete, onSavingAsPaqueteChange]);
 
   // Crear mapa de servicios para acceso rápido
   const configKey = useMemo(() => {
@@ -1730,12 +1775,23 @@ export function CotizacionForm({
   const runGuardarComoPaquete = async () => {
     if (!cotizacionId) return;
     setIsSavingAsPaquete(true);
-    setShowPaqueteCustomItemsModal(false);
+    setShowPaqueteModal(false);
     try {
-      const result = await guardarCotizacionComoPaquete(studioSlug, cotizacionId);
+      const coverUrl = paqueteCoverMedia.length > 0 ? paqueteCoverMedia[0].file_url : null;
+      const result = await guardarCotizacionComoPaquete(studioSlug, cotizacionId, {
+        name: paqueteNombre || undefined,
+        description: paqueteDescripcion || null,
+        baseHours: paqueteHoras !== null ? paqueteHoras : undefined,
+        visibility: paqueteVisibility,
+        coverPhotoUrl: coverUrl,
+      });
       if (result.success && result.data?.paqueteId) {
+        const customCount = result.data.customItemsCount ?? 0;
+        const visibilityText = paqueteVisibility === 'public' ? 'público' : 'privado';
         toast.success('Paquete creado', {
-          description: 'Puedes configurarlo y publicarlo cuando quieras.',
+          description: customCount > 0
+            ? `${customCount} ítem(s) personalizado(s) guardados en tu catálogo. Paquete ${visibilityText}.`
+            : `Paquete ${visibilityText} creado. Puedes configurarlo cuando quieras.`,
           action: {
             label: 'Configurar paquete',
             onClick: () => router.push(`/${studioSlug}/studio/commercial/paquetes/${result.data!.paqueteId}/editar`),
@@ -1754,11 +1810,41 @@ export function CotizacionForm({
       toast.info('Guarda primero la cotización como borrador para poder convertirla en paquete.');
       return;
     }
-    if (customItems.length > 0) {
-      setShowPaqueteCustomItemsModal(true);
-      return;
+    // Pre-llenar datos del modal (Fase 8.2)
+    setPaqueteNombre(nombre ? `${nombre} (Paquete)` : '');
+    setPaqueteDescripcion(descripcion || '');
+    setPaqueteHoras(durationHours);
+    setPaqueteVisibility('private');
+    setPaqueteCoverMedia([]);
+    setShowPaqueteModal(true);
+  };
+
+  const handlePaqueteCoverUpload = async (files: File[]) => {
+    if (files.length === 0) return;
+    setIsPaqueteCoverUploading(true);
+    try {
+      const uploaded = await uploadFiles(files, studioSlug, 'paquetes', undefined);
+      if (uploaded.length > 0) {
+        const file = uploaded[0];
+        const isVideo = /\.(mp4|mov|webm|avi)$/i.test(file.fileName);
+        setPaqueteCoverMedia([{
+          file_url: file.url,
+          file_type: isVideo ? 'video' : 'image',
+          filename: file.fileName,
+          file_size: file.size,
+        }]);
+        toast.success('Portada cargada correctamente');
+      }
+    } catch (error) {
+      toast.error('Error al subir la portada');
+      console.error('Error uploading paquete cover:', error);
+    } finally {
+      setIsPaqueteCoverUploading(false);
     }
-    runGuardarComoPaquete();
+  };
+
+  const handlePaqueteCoverRemove = () => {
+    setPaqueteCoverMedia([]);
   };
 
   // Redirigir a returnPath (cierre o detalle de promesa) para evitar fallos con historial vacío en nueva pestaña
@@ -2360,6 +2446,7 @@ export function CotizacionForm({
               onCancel={handleCancelClick}
               savingIntent={savingIntent}
               saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+              hideGuardarComoPaquete={hideGuardarComoPaqueteInSidebar}
             />
           ))
         }
@@ -2902,38 +2989,258 @@ export function CotizacionForm({
         </DialogContent>
       </Dialog>
 
-      {/* Modal: ítems personalizados al guardar como paquete (Fase 2.2) */}
-      <Dialog open={showPaqueteCustomItemsModal} onOpenChange={setShowPaqueteCustomItemsModal}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">Ítems personalizados en la cotización</DialogTitle>
+      {/* Modal: configuración del paquete (Fase 8.5) */}
+      <Dialog 
+        open={showPaqueteModal}
+        modal={true}
+      >
+        <DialogContent 
+          className="sm:max-w-lg bg-zinc-900 border-zinc-700 p-0 gap-0 max-h-[90vh] flex flex-col"
+          onEscapeKeyDown={(e) => {
+            if (!isSavingAsPaquete) {
+              setShowPaqueteModal(false);
+            } else {
+              e.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(e) => {
+            // Prevenir cierre al hacer clic fuera del modal
+            e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            // Prevenir cierre al interactuar fuera del modal
+            e.preventDefault();
+          }}
+        >
+          {/* Botón de cierre X - fuera del header para evitar conflictos */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!isSavingAsPaquete) {
+                setShowPaqueteModal(false);
+              }
+            }}
+            disabled={isSavingAsPaquete}
+            className="absolute top-4 right-4 z-50 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-30"
+            aria-label="Cerrar modal"
+          >
+            <X className="h-4 w-4 text-zinc-400" />
+          </button>
+
+          {/* Header fijo */}
+          <DialogHeader className="shrink-0 bg-zinc-900 border-b border-zinc-800 px-6 pt-6 pb-4">
+            <DialogTitle className="text-white flex items-center gap-2">
+              <PackagePlus className="w-5 h-5 text-emerald-400" />
+              Crear paquete desde cotización
+            </DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Hay {customItems.length} ítem(s) personalizado(s) que no están en el catálogo. El paquete se creará solo con los ítems de catálogo. Para incluirlos después, usa &quot;Guardar en catálogo&quot; en cada ítem y vuelve a crear el paquete si lo necesitas.
+              Configura los metadatos del paquete antes de crearlo
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2 max-h-48 overflow-y-auto space-y-1">
-            {customItems.map((ci, idx) => {
-              const seccion = catalogoFiltrado.find(s => s.categorias?.some(c => c.id === ci.categoriaId));
-              const categoria = seccion?.categorias?.find(c => c.id === ci.categoriaId);
-              const seccionNombre = seccion?.nombre ?? '—';
-              const categoriaNombre = categoria?.nombre ?? '—';
-              return (
-                <div key={idx} className="text-sm text-zinc-300 py-1 border-b border-zinc-700/50 last:border-0">
-                  <span className="text-zinc-500">{seccionNombre}</span>
-                  <span className="text-zinc-500 mx-1">›</span>
-                  <span className="text-zinc-400">{categoriaNombre}</span>
-                  <span className="text-zinc-500 mx-1">›</span>
-                  <span className="text-white">{ci.name}</span>
+
+          {/* Contenido scrollable con bloques lógicos */}
+          <div className="overflow-y-auto px-6 py-6 space-y-6">
+            {/* BLOQUE 1: Información Base */}
+            <div className="space-y-4">
+              {/* Nombre del paquete */}
+              <div className="space-y-1.5">
+                <ZenLabel htmlFor="paquete-nombre" className="block text-zinc-300">
+                  Nombre del paquete
+                </ZenLabel>
+                <ZenInput
+                  id="paquete-nombre"
+                  value={paqueteNombre}
+                  onChange={(e) => setPaqueteNombre(e.target.value)}
+                  placeholder="Ej: Paquete Boda Premium"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Descripción del paquete */}
+              <div className="space-y-1.5">
+                <ZenLabel htmlFor="paquete-descripcion" className="block text-zinc-300">
+                  Descripción <span className="text-zinc-500 font-normal">(opcional)</span>
+                </ZenLabel>
+                <ZenTextarea
+                  id="paquete-descripcion"
+                  value={paqueteDescripcion}
+                  onChange={(e) => setPaqueteDescripcion(e.target.value)}
+                  placeholder="Describe el paquete..."
+                  rows={3}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* BLOQUE 2: Carátula */}
+            <div className="space-y-1.5">
+              <ZenLabel className="block text-zinc-300">
+                Carátula <span className="text-zinc-500 font-normal text-xs">(opcional - puedes agregarla ahora o editarla después)</span>
+              </ZenLabel>
+              <PaqueteCoverDropzone
+                media={paqueteCoverMedia}
+                onDropFiles={handlePaqueteCoverUpload}
+                onRemoveMedia={handlePaqueteCoverRemove}
+                isUploading={isPaqueteCoverUploading}
+              />
+            </div>
+
+            {/* BLOQUE 3: Resumen Financiero */}
+            <div className="space-y-1.5">
+              <ZenLabel className="block text-zinc-300">
+                Precio de tu paquete <span className="text-zinc-500 font-normal text-xs">(precio basado en tu cotización)</span>
+              </ZenLabel>
+              <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Columna 1: Precio */}
+                  <div className="flex flex-col">
+                    <p className="text-xs text-zinc-400 mb-1">Precio</p>
+                    <p className="text-2xl font-bold text-emerald-400">
+                      {formatearMoneda(
+                        Math.round(
+                          precioPersonalizado !== '' && Number(precioPersonalizado) > 0
+                            ? Number(precioPersonalizado)
+                            : calculoPrecio.total
+                        )
+                      )}
+                    </p>
+                  </div>
+                  
+                  {/* Columna 2: Negociaciones */}
+                  <div className="flex flex-col space-y-1.5 pl-4 border-l border-zinc-700/50">
+                    <p className="text-xs text-zinc-400 mb-0.5">Negociación con</p>
+                    {itemsCortesia.size > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-xs text-zinc-400">
+                            {itemsCortesia.size} {itemsCortesia.size === 1 ? 'cortesía' : 'cortesías'}
+                          </span>
+                        </div>
+                        <span className="text-xs font-medium text-emerald-400">
+                          -{formatearMoneda(calculoPrecio.montoCortesias)}
+                        </span>
+                      </div>
+                    )}
+                    {bonoEspecial > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Gift className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="text-xs text-zinc-400">Bono</span>
+                        </div>
+                        <span className="text-xs font-medium text-amber-400">
+                          -{formatearMoneda(bonoEspecial)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* BLOQUE 4: Configuración Final */}
+            <div className="space-y-4">
+              {/* Horas de cobertura */}
+              <div className="space-y-1.5">
+                <ZenLabel htmlFor="paquete-horas" className="block text-zinc-300">
+                  Horas de cobertura
+                </ZenLabel>
+                <ZenInput
+                  id="paquete-horas"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={paqueteHoras ?? ''}
+                  onChange={(e) => setPaqueteHoras(e.target.value ? parseFloat(e.target.value) : null)}
+                  placeholder="Ej: 8"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Visibilidad */}
+              <div className="space-y-1.5">
+                <ZenLabel className="block text-zinc-300">Visibilidad del paquete</ZenLabel>
+                <div className="flex items-center justify-between bg-zinc-800/50 rounded-lg p-3 border border-zinc-700">
+                  <div className="flex items-center gap-3">
+                    {paqueteVisibility === 'public' ? (
+                      <Globe className="w-5 h-5 text-emerald-400" />
+                    ) : (
+                      <Eye className="w-5 h-5 text-zinc-400" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {paqueteVisibility === 'public' ? 'Público' : 'Privado'}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {paqueteVisibility === 'public' 
+                          ? 'Visible en tu perfil público'
+                          : 'Solo visible internamente'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <ZenSwitch
+                    checked={paqueteVisibility === 'public'}
+                    onCheckedChange={(checked) => setPaqueteVisibility(checked ? 'public' : 'private')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* BLOQUE 5: Advertencia de ítems personalizados */}
+            {customItems.length > 0 && (
+              <div className="space-y-2">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                  <p className="text-xs text-amber-200 flex items-start gap-2">
+                    <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      💡 Se detectaron <strong>{customItems.length} ítem(s) personalizado(s)</strong> que se guardarán automáticamente en tu catálogo global para poder crear este paquete.
+                    </span>
+                  </p>
+                </div>
+                <div className="max-h-32 overflow-y-auto space-y-1 bg-zinc-800/30 rounded-lg p-2">
+                  {customItems.map((ci, idx) => {
+                    const seccion = catalogoFiltrado.find(s => s.categorias?.some(c => c.id === ci.categoriaId));
+                    const categoria = seccion?.categorias?.find(c => c.id === ci.categoriaId);
+                    const seccionNombre = seccion?.nombre ?? '—';
+                    const categoriaNombre = categoria?.nombre ?? '—';
+                    return (
+                      <div key={idx} className="text-xs text-zinc-300 py-1 border-b border-zinc-700/30 last:border-0">
+                        <span className="text-zinc-500">{seccionNombre}</span>
+                        <span className="text-zinc-500 mx-1">›</span>
+                        <span className="text-zinc-400">{categoriaNombre}</span>
+                        <span className="text-zinc-500 mx-1">›</span>
+                        <span className="text-white">{ci.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter className="flex gap-2">
-            <ZenButton variant="secondary" onClick={() => setShowPaqueteCustomItemsModal(false)} className="flex-1">
+
+          {/* Footer fijo */}
+          <DialogFooter className="shrink-0 bg-zinc-900 border-t border-zinc-800 px-6 py-4 flex flex-row gap-2 sm:flex-row">
+            <ZenButton 
+              variant="secondary" 
+              onClick={() => {
+                if (!isSavingAsPaquete) {
+                  setShowPaqueteModal(false);
+                }
+              }} 
+              disabled={isSavingAsPaquete}
+              className="flex-1"
+            >
               Cancelar
             </ZenButton>
-            <ZenButton variant="primary" onClick={runGuardarComoPaquete} disabled={isSavingAsPaquete} loading={isSavingAsPaquete} className="flex-1">
-              Crear paquete igualmente
+            <ZenButton 
+              variant="primary" 
+              onClick={runGuardarComoPaquete} 
+              disabled={isSavingAsPaquete || !paqueteNombre.trim()} 
+              loading={isSavingAsPaquete} 
+              className="flex-1"
+            >
+              {customItems.length > 0 ? 'Guardar y crear paquete' : 'Crear paquete'}
             </ZenButton>
           </DialogFooter>
         </DialogContent>

@@ -295,8 +295,11 @@ export function PromiseQuotesPanelCard({
       loading: 'Creando paquete desde la cotización...',
       success: (result) => {
         if (result.success && result.data?.paqueteId) {
+          const customCount = result.data.customItemsCount ?? 0;
           return {
-            description: 'Paquete creado. Puedes configurarlo y publicarlo cuando quieras.',
+            description: customCount > 0 
+              ? `Paquete creado. ${customCount} ítem(s) personalizado(s) guardados en tu catálogo.`
+              : 'Paquete creado. Puedes configurarlo y publicarlo cuando quieras.',
             action: {
               label: 'Configurar paquete',
               onClick: () => router.push(`/${studioSlug}/studio/commercial/paquetes/${result.data!.paqueteId}/editar`),

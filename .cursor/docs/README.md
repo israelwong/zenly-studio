@@ -49,6 +49,8 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 |-----------|-------------|
 | [README.md](architecture/README.md) | Índice de arquitectura |
 | [ARCHITECTURE_QUOTATION.md](architecture/ARCHITECTURE_QUOTATION.md) | Arquitectura completa de cotizaciones y refactor semántico |
+| [cotizacion-a-paquete.md](architecture/cotizacion-a-paquete.md) | Flujo de conversión cotización → paquete con persistencia de custom items |
+| [snapshot-field-mapping.md](architecture/snapshot-field-mapping.md) | Mapeo bidireccional operational_category ↔ task_type (snapshots) |
 | [precios-resiliencia.md](architecture/precios-resiliencia.md) | Motor de precios de paquetes y resiliencia DB |
 | [tenant.md](architecture/tenant.md) | Sistema multi-tenant |
 | [promises-kanban-system.md](architecture/promises-kanban-system.md) | Sistema de promesas y pipeline |
@@ -132,6 +134,10 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | [sistema-permisos-equipo-studio.md](features/sistema-permisos-equipo-studio.md) | Permisos y roles |
 | [SMART_ITEM_LINKS.md](features/SMART_ITEM_LINKS.md) | Enlaces inteligentes |
 | [WHATSAPP_SMART_COMPOSER.md](features/WHATSAPP_SMART_COMPOSER.md) | Composer de WhatsApp |
+| [cotizacion-a-paquete-modal.md](features/cotizacion-a-paquete-modal.md) | Modal de conversión Cotización → Paquete |
+| [FASE_8_3_MODAL_ARMONICO.md](features/FASE_8_3_MODAL_ARMONICO.md) | Refactor estético modal paquetes |
+| [FASE_8_3_BOTON_HEADER.md](features/FASE_8_3_BOTON_HEADER.md) | Reubicación botón "Guardar como paquete" |
+| [FASE_8_5_FIX_BOTON_CERRAR.md](features/FASE_8_5_FIX_BOTON_CERRAR.md) | Fix botón X del modal |
 
 ---
 
@@ -314,7 +320,7 @@ La documentación está organizada en **8 carpetas temáticas**:
 
 ```
 masters/      → Documentos SSOT (4 docs)
-architecture/ → Arquitectura (10 docs)
+architecture/ → Arquitectura (11 docs)
 auth/         → Autenticación (3 docs)
 audits/       → Auditorías (4 docs)
 analysis/     → Análisis (5 docs)
@@ -325,7 +331,7 @@ solutions/    → Soluciones (5 docs)
 config/       → Config (2 docs)
 ```
 
-**Total:** 47 documentos organizados
+**Total:** 48 documentos organizados
 
 ### Reglas de Organización
 
@@ -367,7 +373,40 @@ git log --since="1 month ago" -- .cursor/docs/
 
 ## 📅 Historial de Cambios
 
-### 27 de febrero de 2026
+### 27 de febrero de 2026 (Fase 8.5)
+- ✅ Creado `FASE_8_5_FIX_BOTON_CERRAR.md` - Fix botón X del modal "Crear Paquete"
+- ✅ Reemplazado `DialogClose` por `<button>` normal para evitar conflictos con Radix UI
+- ✅ Mejorado `onEscapeKeyDown` con `preventDefault` explícito durante guardado
+
+### 27 de febrero de 2026 (Fase 8.3)
+- ✅ Creado `FASE_8_3_MODAL_ARMONICO.md` - Refactor estético del modal "Crear Paquete"
+- ✅ Creado `FASE_8_3_BOTON_HEADER.md` - Reubicación de "Guardar como paquete" al header
+- ✅ Reorganizado modal en 5 bloques lógicos con `space-y-6`
+- ✅ Estandarizado spacing de campos con `space-y-1.5`
+- ✅ Prevenido cierre accidental por click en overlay (`onPointerDownOutside`, `onInteractOutside`)
+- ✅ Movido botón "Guardar como paquete" desde sidebar a header de edición
+- ✅ Implementado patrón de refs para exponer handlers entre componentes
+- ✅ Eliminado `Separator` redundante entre advertencias
+
+### 27 de febrero de 2026 (Fase 8.2)
+- ✅ Creado `cotizacion-a-paquete-modal.md` - Modal de configuración completo para "Guardar como Paquete"
+- ✅ Actualizada `guardarCotizacionComoPaquete()` - Agregado parámetro `options` para metadatos
+- ✅ Implementado modal en `CotizacionForm.tsx` - Campos: nombre, descripción, carátula (DnD), negociación, precio, horas, visibilidad
+- ✅ Header y footer sticky - Mejor UX con prevención de cierre accidental
+- ✅ Actualizado `cotizacion-a-paquete.md` a versión 3.0
+
+### 27 de febrero de 2026 (Fase 8.1)
+- ✅ Creado `snapshot-field-mapping.md` - Mapeo bidireccional operational_category ↔ task_type
+- ✅ Fix queries a `studio_cotizacion_items` - Corregido uso de task_type en snapshots
+- ✅ Agregado `taskTypeToOperationalCategory()` en cotizaciones.actions.ts
+- ✅ Fix conversión snapshot → catálogo en guardarCotizacionComoPaquete
+
+### 27 de febrero de 2026 (PM - Fase 8.0)
+- ✅ Creado `cotizacion-a-paquete.md` - Flujo de conversión con persistencia automática de custom items
+- ✅ Fix `guardarCotizacionComoPaquete()` - Persistencia de custom items, validación items_cortesia
+- ✅ Actualizado modal de confirmación con aviso preventivo
+
+### 27 de febrero de 2026 (AM)
 - ✅ Creado `sistema-sincronizacion-maestro.md` - Documenta Ley de Actualización Atómica
 - ✅ Actualizado `MASTER_FINANCIAL_SSOT_GUIDE.md` - Documenta fix de `obtenerCatalogo()`
 - ✅ Creado `ARCHITECTURE_QUOTATION.md` - Documenta refactor semántico event_duration

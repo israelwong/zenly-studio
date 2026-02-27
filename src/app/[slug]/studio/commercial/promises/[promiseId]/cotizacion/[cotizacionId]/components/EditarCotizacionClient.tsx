@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle, Settings2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Settings2, PackagePlus } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
 import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
@@ -105,6 +105,8 @@ export function EditarCotizacionClient({
   const previewDataRef = useRef<(() => PublicCotizacion | null) | null>(null);
   const [showShareOptionsModal, setShowShareOptionsModal] = useState(false);
   const [shareSettings, setShareSettings] = useState({ show_items_prices: true, show_categories_subtotals: false });
+  const guardarComoPaqueteRef = useRef<(() => void) | null>(null);
+  const [isSavingAsPaquete, setIsSavingAsPaquete] = useState(false);
 
   React.useEffect(() => {
     document.title = getStudioPageTitle(STUDIO_PAGE_NAMES.COTIZACION);
@@ -220,6 +222,17 @@ export function EditarCotizacionClient({
           type="button"
           variant="ghost"
           size="sm"
+          onClick={() => guardarComoPaqueteRef.current?.()}
+          disabled={isFormLoading || isSavingAsPaquete}
+          className="gap-1.5"
+        >
+          <PackagePlus className="h-4 w-4" />
+          {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+        </ZenButton>
+        <ZenButton
+          type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setShowShareOptionsModal(true)}
           className="gap-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
         >
@@ -269,6 +282,9 @@ export function EditarCotizacionClient({
       hideVisibilityToggle={fromCierre}
       getPreviewDataRef={previewDataRef}
       onRequestPreview={handleOpenPreview}
+      hideGuardarComoPaqueteInSidebar={true}
+      getGuardarComoPaqueteHandlerRef={guardarComoPaqueteRef}
+      onSavingAsPaqueteChange={setIsSavingAsPaquete}
     />
   );
 
