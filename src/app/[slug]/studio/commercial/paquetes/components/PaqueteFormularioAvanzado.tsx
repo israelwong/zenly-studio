@@ -1,14 +1,26 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon, Eye, EyeOff, Save, Globe, FileText, Plus, Edit2 } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenDialog } from '@/components/ui/zen';
+import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon, Globe, FileText, Plus, Edit2, ListChecks, Gift, BarChart3, Info } from 'lucide-react';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenDialog, ZenSwitch, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
+import { Accordion, AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
+import { Separator } from '@/components/ui/shadcn/separator';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import { ItemEditorModal, type ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
+import { CommercialConfigSidebar, CommercialConfigActionButtons } from '@/components/shared/commercial/CommercialConfigSidebar';
+import { AuditoriaRentabilidadSheet } from '@/components/shared/commercial/AuditoriaRentabilidadSheet';
+import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
+import type { PublicCotizacion } from '@/types/public-promise';
+import { AjustesNegociacionAccordion } from '@/components/shared/commercial/AjustesNegociacionAccordion';
+import { CondicionesCierreAccordion } from '@/components/shared/commercial/CondicionesCierreAccordion';
+import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
+import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { crearPaquete, actualizarPaquete } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
@@ -18,6 +30,7 @@ import type { SeccionData, ServicioData } from '@/lib/actions/schemas/catalogo-s
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { useStorageRefresh } from '@/hooks/useStorageRefresh';
 import { PaqueteCoverDropzone } from './PaqueteCoverDropzone';
+import { cn } from '@/lib/utils';
 
 interface PaqueteFormularioAvanzadoProps {
     studioSlug: string;
@@ -55,6 +68,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [descripcion, setDescripcion] = useState('');
     const [baseHours, setBaseHours] = useState<number | ''>((paquete as { base_hours?: number | null })?.base_hours || '');
     const [isFeaturedInternal, setIsFeaturedInternal] = useState((paquete as { is_featured?: boolean })?.is_featured || false);
+    const [visibility, setVisibility] = useState<'public' | 'private'>((paquete as { visibility?: string })?.visibility === 'private' ? 'private' : 'public');
     const [precioPersonalizado, setPrecioPersonalizado] = useState<string | number>('');
     const [isPublishedInternal, setIsPublishedInternal] = useState(paquete?.status === 'active' || false);
 
@@ -110,6 +124,38 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [showPublishDialog, setShowPublishDialog] = useState(false);
     const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
     const summaryRef = useRef<HTMLDivElement>(null);
+    const [accordionValue, setAccordionValue] = useState<string[]>(['base']);
+    const handleAccordionChange = useCallback((newValue: string[]) => {
+        setAccordionValue((prev) => {
+            if (newValue.includes('negociacion') && !prev.includes('negociacion')) {
+                return ['negociacion', 'condiciones'];
+            }
+            return newValue;
+        });
+        if (!newValue.includes('negociacion')) setIsCourtesyMode(false);
+    }, []);
+    const [bonoEspecial, setBonoEspecial] = useState(0);
+    const [itemsCortesia, setItemsCortesia] = useState<Set<string>>(new Set());
+    const [isCourtesyMode, setIsCourtesyMode] = useState(false);
+    const [auditoriaRentabilidadOpen, setAuditoriaRentabilidadOpen] = useState(false);
+    const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        discount_percentage: number | null;
+        advance_percentage?: number | null;
+        advance_type?: string | null;
+        advance_amount?: number | null;
+        type?: string;
+    }>>([]);
+    const [condicionIdsVisibles, setCondicionIdsVisibles] = useState<Set<string>>(new Set());
+    const [condicionSimulacionId, setCondicionSimulacionId] = useState<string | null>(null);
+    const [showCondicionesManager, setShowCondicionesManager] = useState(false);
+    const [editingCondicionId, setEditingCondicionId] = useState<string | null>(null);
+    const [createCondicionEspecialMode, setCreateCondicionEspecialMode] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const sectionNegociacionRef = useRef<HTMLDivElement>(null);
+    const sectionCondicionesRef = useRef<HTMLDivElement>(null);
 
     // Estados para edición/creación de ítems
     const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -137,6 +183,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             } else {
                 setIsFeaturedInternal((paquete as { is_featured?: boolean }).is_featured || false);
             }
+            setVisibility((paquete as { visibility?: string }).visibility === 'private' ? 'private' : 'public');
             setPrecioPersonalizado(paquete.precio || '');
 
             // Cargar cover si existe
@@ -156,6 +203,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             } else {
                 setCoverMedia([]);
             }
+            const paq = paquete as { bono_especial?: number | null; items_cortesia?: string[] | null };
+            if (paq.bono_especial != null) setBonoEspecial(Number(paq.bono_especial));
+            if (Array.isArray(paq.items_cortesia)) setItemsCortesia(new Set(paq.items_cortesia));
             if (onPublishedChange) {
                 onPublishedChange(paquete.status === 'active');
             } else {
@@ -187,6 +237,29 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paquete?.id]); // Solo usar paquete.id para evitar re-renders
+
+    const loadCondicionesComerciales = useCallback(async () => {
+        const result = await obtenerCondicionesComerciales(studioSlug);
+        if (result.success && result.data) {
+            const list = result.data.map(c => ({
+                id: c.id,
+                name: c.name,
+                description: c.description ?? null,
+                discount_percentage: c.discount_percentage ?? null,
+                advance_percentage: c.advance_percentage ?? null,
+                advance_type: c.advance_type ?? null,
+                advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
+                type: c.type ?? undefined,
+            }));
+            setCondicionesComerciales(list);
+            // Paquete: mostrar todas las condiciones activas por defecto (copia fiel de rentabilidad)
+            setCondicionIdsVisibles(new Set(list.map(c => c.id)));
+        }
+    }, [studioSlug]);
+
+    useEffect(() => {
+        loadCondicionesComerciales();
+    }, [loadCondicionesComerciales]);
 
     // Cargar mapa de vínculos (padre → hijos) para inserción en cascada
     useEffect(() => {
@@ -358,13 +431,71 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     // Estado para el cálculo de precios
     const [calculoPrecio, setCalculoPrecio] = useState({
         subtotal: 0,
+        montoCortesias: 0,
+        subtotalProyectado: 0,
         totalCosto: 0,
         totalGasto: 0,
         total: 0,
         utilidadNeta: 0,
-        utilidadNetaCalculada: 0, // Utilidad basada solo en precio calculado
-        diferenciaPrecio: 0 // Diferencia entre precio personalizado y calculado
+        utilidadNetaCalculada: 0,
+        diferenciaPrecio: 0,
+        montoComision: 0,
+        utilidadSinDescuento: 0,
+        montoDescuentoCondicion: 0,
     });
+
+    // Datos para vista previa (formato público: secciones/servicios con cantidad) — después de calculoPrecio
+    const previewServiciosPublic = useMemo(() => {
+        const list: Array<{ id: string; nombre: string; orden: number; categorias: Array<{ id: string; nombre: string; orden: number; servicios: Array<{ id: string; name: string; description: string | null; quantity: number; billing_type?: string }> }> }> = [];
+        catalogo.forEach(seccion => {
+            const categorias = seccion.categorias
+                .map(cat => ({
+                    ...cat,
+                    servicios: cat.servicios
+                        .filter(s => (items[s.id] || 0) > 0)
+                        .map(s => ({
+                            id: s.id,
+                            name: s.nombre,
+                            description: (s as { description?: string | null }).description ?? null,
+                            quantity: items[s.id] || 0,
+                            billing_type: (s as ServicioData).billing_type,
+                        })),
+                }))
+                .filter(cat => cat.servicios.length > 0);
+            if (categorias.length > 0) {
+                list.push({
+                    id: seccion.id,
+                    nombre: seccion.nombre,
+                    orden: (seccion as { order?: number }).order ?? 0,
+                    categorias: categorias.map(c => ({
+                        id: c.id,
+                        nombre: c.nombre,
+                        orden: (c as { order?: number }).order ?? 0,
+                        servicios: c.servicios,
+                    })),
+                });
+            }
+        });
+        return list;
+    }, [catalogo, items]);
+
+    // Cotización sintética para vista previa unificada (CotizacionDetailSheet = mismo componente que cotizaciones)
+    const previewCotizacion = useMemo((): PublicCotizacion => {
+        const price = precioPersonalizado !== '' && !Number.isNaN(Number(precioPersonalizado)) ? Number(precioPersonalizado) : (calculoPrecio.total || 0);
+        const eventHours = baseHours !== '' && baseHours !== null && !Number.isNaN(Number(baseHours)) ? Number(baseHours) : null;
+        return {
+            id: 'preview-paquete',
+            name: nombre.trim() || 'Sin nombre',
+            description: descripcion?.trim() || null,
+            price,
+            precio_calculado: price,
+            discount: null,
+            servicios: previewServiciosPublic,
+            condiciones_comerciales: null,
+            paquete_origen: null,
+            event_duration: eventHours,
+        };
+    }, [nombre, descripcion, precioPersonalizado, calculoPrecio.total, previewServiciosPublic, baseHours]);
 
     // Items del paquete para el desglose
     const [itemsParaDesglose, setItemsParaDesglose] = useState<Array<{
@@ -382,6 +513,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         if (!configuracionPrecios) {
             setCalculoPrecio({
                 subtotal: 0,
+                montoCortesias: 0,
+                subtotalProyectado: 0,
                 totalCosto: 0,
                 totalGasto: 0,
                 total: 0,
@@ -432,12 +565,17 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         if (serviciosSeleccionados.length === 0) {
             setCalculoPrecio({
                 subtotal: 0,
+                montoCortesias: 0,
+                subtotalProyectado: 0,
                 totalCosto: 0,
                 totalGasto: 0,
                 total: 0,
                 utilidadNeta: 0,
                 utilidadNetaCalculada: 0,
-                diferenciaPrecio: 0
+                diferenciaPrecio: 0,
+                montoComision: 0,
+                utilidadSinDescuento: 0,
+                montoDescuentoCondicion: 0,
             });
             setItemsParaDesglose([]);
             return;
@@ -447,44 +585,58 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         let totalCosto = 0;
         let totalGasto = 0;
 
+        let montoCortesias = 0;
         serviciosSeleccionados.forEach(s => {
-            // Para HOUR: precio_hora × base_hours (sin multiplicar por cantidad)
-            // Para SERVICE/UNIT: cantidad × precio_unitario
+            let itemSubtotal = 0;
             if (s.billingType === 'HOUR' && durationHours !== null && durationHours > 0) {
-                // Precio por hora × horas base
-                subtotal += (s.precioUnitario || 0) * durationHours;
+                itemSubtotal = (s.precioUnitario || 0) * durationHours;
+                subtotal += itemSubtotal;
                 totalCosto += (s.costo || 0) * durationHours;
                 totalGasto += (s.gasto || 0) * durationHours;
             } else {
-                // Precio fijo × cantidad
-                subtotal += (s.precioUnitario || 0) * s.cantidad;
+                itemSubtotal = (s.precioUnitario || 0) * s.cantidad;
+                subtotal += itemSubtotal;
                 totalCosto += (s.costo || 0) * s.cantidad;
                 totalGasto += (s.gasto || 0) * s.cantidad;
             }
+            if (itemsCortesia.has(s.id)) montoCortesias += itemSubtotal;
         });
 
+        const bonoNum = Number(bonoEspecial) || 0;
+        const subtotalProyectado = Math.max(0, subtotal - montoCortesias - bonoNum);
         const precioPersonalizadoNum = precioPersonalizado === '' ? 0 : Number(precioPersonalizado) || 0;
 
         // Utilidad basada solo en precio calculado (sin personalizar)
-        const utilidadNetaCalculada = subtotal - (totalCosto + totalGasto);
+        const utilidadNetaCalculada = subtotalProyectado - (totalCosto + totalGasto);
 
-        // Diferencia entre precio personalizado y precio calculado
-        const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotal : 0;
+        // Diferencia entre precio personalizado y precio proyectado (con descuentos)
+        const diferenciaPrecio = precioPersonalizadoNum > 0 ? precioPersonalizadoNum - subtotalProyectado : 0;
 
-        // Precio final a usar (personalizado o calculado)
-        const total = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
+        // Precio final a usar (personalizado o proyectado)
+        const total = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotalProyectado;
 
-        // Utilidad neta final (considera precio personalizado si existe)
-        const utilidadNeta = total - (totalCosto + totalGasto);
+        // Comisión y utilidad neta real (después de comisión)
+        const comisionRatio = configuracionPrecios
+            ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
+            : 0.05;
+        const montoComision = Number((total * comisionRatio).toFixed(2)) || 0;
+        const utilidadNeta = total - (totalCosto + totalGasto) - montoComision;
+        const montoComisionSugerido = Number((subtotalProyectado * comisionRatio).toFixed(2)) || 0;
+        const utilidadSinDescuento = subtotalProyectado - (totalCosto + totalGasto) - montoComisionSugerido;
 
         const resultado = {
             subtotal: Number(subtotal.toFixed(2)) || 0,
+            montoCortesias: Number(montoCortesias.toFixed(2)) || 0,
+            subtotalProyectado: Number(subtotalProyectado.toFixed(2)) || 0,
             totalCosto: Number(totalCosto.toFixed(2)) || 0,
             totalGasto: Number(totalGasto.toFixed(2)) || 0,
             total: Number(total.toFixed(2)) || 0,
             utilidadNeta: Number(utilidadNeta.toFixed(2)) || 0,
             utilidadNetaCalculada: Number(utilidadNetaCalculada.toFixed(2)) || 0,
-            diferenciaPrecio: Number(diferenciaPrecio.toFixed(2)) || 0
+            diferenciaPrecio: Number(diferenciaPrecio.toFixed(2)) || 0,
+            montoComision,
+            utilidadSinDescuento: Number(utilidadSinDescuento.toFixed(2)) || 0,
+            montoDescuentoCondicion: 0,
         };
 
         setCalculoPrecio(resultado);
@@ -517,7 +669,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
         }>);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [items, precioPersonalizado, baseHours, configKey, catalogo, selectedServices]); // Incluir catalogo y selectedServices para recalcular cuando cambien
+    }, [items, precioPersonalizado, baseHours, configKey, catalogo, selectedServices, bonoEspecial, itemsCortesia]);
 
     // Handlers para toggles (accordion behavior)
     const toggleSeccion = (seccionId: string) => {
@@ -864,7 +1016,10 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 event_type_id: initialEventTypeId || paquete?.event_type_id || 'temp',
                 precio: calculoPrecio.total,
                 status: shouldPublish ? 'active' : 'inactive',
+                visibility,
                 is_featured: isFeatured,
+                bono_especial: bonoEspecial > 0 ? bonoEspecial : null,
+                items_cortesia: itemsCortesia.size > 0 ? Array.from(itemsCortesia) : null,
                 servicios: serviciosData
             };
 
@@ -1126,211 +1281,479 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     serviciosSeleccionados={serviciosSeleccionados}
                     configuracionPrecios={configuracionPrecios}
                     baseHours={baseHours !== '' && baseHours !== null ? Number(baseHours) : null}
+                    isCourtesyMode={isCourtesyMode}
+                    itemsCortesia={itemsCortesia}
+                    onToggleCortesia={(itemId) => {
+                        setItemsCortesia(prev => {
+                            const next = new Set(prev);
+                            if (next.has(itemId)) next.delete(itemId);
+                            else next.add(itemId);
+                            return next;
+                        });
+                    }}
                 />
             </div>
 
-            {/* Columna 2: Configuración del Paquete */}
-            <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <h3 className="text-lg font-semibold text-white mb-4">Configuración</h3>
-
-                        <ZenInput
-                            label="Nombre del Paquete"
-                            value={nombre}
-                            onChange={(e) => setNombre(e.target.value)}
-                            placeholder="Ej: Paquete Fotógrafo Boda"
-                            required
-                            className="mb-4"
-                        />
-
-                        <ZenTextarea
-                            label="Descripción (opcional)"
-                            value={descripcion}
-                            onChange={(e) => setDescripcion(e.target.value)}
-                            placeholder="Describe los servicios incluidos..."
-                            className="min-h-[80px]"
-                        />
-
-                        <ZenInput
-                            label="Horas Base"
-                            type="number"
-                            value={baseHours}
-                            onChange={(e) => setBaseHours(e.target.value === '' ? '' : Number(e.target.value))}
-                            placeholder="Ej: 8"
-                            min="0"
-                            step="0.5"
-                            hint="Duración base del paquete en horas. Los servicios tipo 'Por Hora' se multiplicarán por este valor."
-                        />
-
-                        {/* Cover */}
-                        <div className="mt-4">
-                            <div className="flex items-center gap-2 mb-3">
-                                <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-                                <span className="font-medium text-white text-sm">
-                                    Carátula <span className="text-zinc-400 font-normal">(opcional)</span>
-                                </span>
-                            </div>
-                            <PaqueteCoverDropzone
-                                media={coverMedia}
-                                onDropFiles={async (files) => {
-                                    try {
-                                        const uploadedFiles = await uploadFiles(
-                                            files,
-                                            studioSlug,
-                                            'paquetes',
-                                            paquete?.id
-                                        );
-
-                                        if (uploadedFiles.length > 0) {
-                                            const newCover = uploadedFiles[0];
-                                            const isVideo = newCover.fileName.toLowerCase().includes('.mp4') ||
-                                                newCover.fileName.toLowerCase().includes('.mov') ||
-                                                newCover.fileName.toLowerCase().includes('.webm') ||
-                                                newCover.fileName.toLowerCase().includes('.avi');
-                                            setCoverMedia([{
-                                                file_url: newCover.url,
-                                                file_type: isVideo ? 'video' : 'image',
-                                                filename: newCover.fileName,
-                                                thumbnail_url: newCover.url,
-                                                file_size: newCover.size
-                                            }]);
-                                        }
-                                    } catch (error) {
-                                        console.error('Error uploading cover:', error);
-                                        toast.error('Error al subir la carátula');
-                                    }
-                                }}
-                                onRemoveMedia={async () => {
-                                    if (coverMedia[0]?.file_url) {
-                                        try {
-                                            await deleteFile(coverMedia[0].file_url, studioSlug, coverMedia[0].file_size);
-                                            setCoverMedia([]);
-                                        } catch (error) {
-                                            console.error('Error deleting cover:', error);
-                                            toast.error('Error al eliminar la carátula');
-                                        }
-                                    } else {
-                                        setCoverMedia([]);
-                                    }
-                                }}
-                                isUploading={isUploading}
-                            />
-                        </div>
-
-                    </div>
-
-
-                    {/* Resumen Financiero */}
-                    <div ref={summaryRef} className="z-10">
-                        <h3 className="text-lg font-semibold text-white mb-4">
-                            Cálculo Financiero
-                        </h3>
-                        <div className="bg-zinc-800/50 rounded-lg p-4 space-y-4">
-                            {/* Precio calculado y Precio personalizado en 2 columnas */}
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* Precio calculado */}
-                                <div>
-                                    <label className="text-xs text-zinc-500 mb-1 block">Precio calculado</label>
-                                    <ZenInput
-                                        type="text"
-                                        value={formatearMoneda(calculoPrecio.subtotal)}
-                                        readOnly
-                                        className="mt-0"
+            {/* Columna 2: Configuración — CommercialConfigSidebar (Fase 4) */}
+            <CommercialConfigSidebar
+                context="paquete"
+                title="Configuración"
+                accordionValue={accordionValue}
+                onAccordionChange={handleAccordionChange}
+                onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }}
+                baseSection={
+                    <AccordionItem value="base" className="border-0">
+                        <AccordionHeader className="w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20 rounded-t-lg border-b border-zinc-700/50 data-[state=open]:rounded-t-lg data-[state=closed]:rounded-lg">
+                            <AccordionTrigger className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5">
+                                <div className="flex items-center gap-2 min-w-0 w-full">
+                                    {accordionValue.includes('base') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                                    <span>Información base</span>
+                                </div>
+                                {!accordionValue.includes('base') && (
+                                    <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
+                                        {[nombre?.trim() || 'Sin nombre', baseHours !== '' ? ` · ${baseHours} h` : ''].filter(Boolean).join('') || 'Nombre y horas'}
+                                    </span>
+                                )}
+                            </AccordionTrigger>
+                        </AccordionHeader>
+                        <AccordionContent>
+                            <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden bg-zinc-900/30 p-3">
+                                <ZenInput
+                                    label="Nombre del Paquete"
+                                    value={nombre}
+                                    onChange={(e) => setNombre(e.target.value)}
+                                    placeholder="Ej: Paquete Fotógrafo Boda"
+                                    required
+                                    className="mb-4"
+                                />
+                                <ZenTextarea
+                                    label="Descripción (opcional)"
+                                    value={descripcion}
+                                    onChange={(e) => setDescripcion(e.target.value)}
+                                    placeholder="Describe los servicios incluidos..."
+                                    className="min-h-[80px]"
+                                />
+                                <ZenInput
+                                    label="Horas Base"
+                                    type="number"
+                                    value={baseHours}
+                                    onChange={(e) => setBaseHours(e.target.value === '' ? '' : Number(e.target.value))}
+                                    placeholder="Ej: 8"
+                                    min="0"
+                                    step="0.5"
+                                    hint="Duración base del paquete en horas. Los servicios tipo 'Por Hora' se multiplicarán por este valor."
+                                />
+                                {/* Carátula integrada (diseño compacto) */}
+                                <div className="mt-4 pt-4 border-t border-zinc-700/50">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        <span className="font-medium text-white text-sm">Carátula <span className="text-zinc-400 font-normal">(opcional)</span></span>
+                                    </div>
+                                    <PaqueteCoverDropzone
+                                        media={coverMedia}
+                                        onDropFiles={async (files) => {
+                                            try {
+                                                const uploadedFiles = await uploadFiles(files, studioSlug, 'paquetes', paquete?.id);
+                                                if (uploadedFiles.length > 0) {
+                                                    const newCover = uploadedFiles[0];
+                                                    const isVideo = /\.(mp4|mov|webm|avi)$/i.test(newCover.fileName);
+                                                    setCoverMedia([{ file_url: newCover.url, file_type: isVideo ? 'video' : 'image', filename: newCover.fileName, thumbnail_url: newCover.url, file_size: newCover.size }]);
+                                                }
+                                            } catch (error) {
+                                                console.error('Error uploading cover:', error);
+                                                toast.error('Error al subir la carátula');
+                                            }
+                                        }}
+                                        onRemoveMedia={async () => {
+                                            if (coverMedia[0]?.file_url) {
+                                                try {
+                                                    await deleteFile(coverMedia[0].file_url, studioSlug, coverMedia[0].file_size);
+                                                    setCoverMedia([]);
+                                                } catch (error) {
+                                                    console.error('Error deleting cover:', error);
+                                                    toast.error('Error al eliminar la carátula');
+                                                }
+                                            } else setCoverMedia([]);
+                                        }}
+                                        isUploading={isUploading}
                                     />
                                 </div>
-
-                                {/* Precio personalizado */}
-                                <div>
-                                    <label className="text-xs text-zinc-500 mb-1 block">Precio personalizado</label>
-                                    <ZenInput
-                                        type="number"
-                                        value={precioPersonalizado}
-                                        onChange={(e) => setPrecioPersonalizado(e.target.value)}
-                                        placeholder="0"
-                                        className="mt-0"
-                                    />
+                                {/* Tarjetas de estatus y visibilidad — compactas, info en popover grande y legible */}
+                                <div className="mt-4 pt-4 border-t border-zinc-700/50 flex flex-col gap-2">
+                                    <ZenCard variant="outlined" padding="none" className="border-zinc-700/50">
+                                        <ZenCardContent className="p-2">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-sm font-medium text-zinc-200 shrink-0">
+                                                        {visibility === 'public' ? 'Visibilidad pública' : 'Visibilidad privada'}
+                                                    </span>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 rounded p-0.5">
+                                                                <Info className="h-3.5 w-3.5" aria-hidden />
+                                                            </button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="max-w-[320px] p-4 text-sm text-zinc-300 bg-zinc-800 border-zinc-700">
+                                                            Visible para prospectos en la promesa pública para que puedan seleccionarlo. Si es privado, solo se usará internamente.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </div>
+                                                <ZenSwitch
+                                                    checked={visibility === 'public'}
+                                                    onCheckedChange={(checked) => setVisibility(checked ? 'public' : 'private')}
+                                                    label=""
+                                                    variant="emerald"
+                                                    className="!mt-0 !space-x-0 shrink-0"
+                                                />
+                                            </div>
+                                        </ZenCardContent>
+                                    </ZenCard>
+                                    <ZenCard variant="outlined" padding="none" className="border-zinc-700/50">
+                                        <ZenCardContent className="p-2">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-sm font-medium text-zinc-200 shrink-0">
+                                                        {isFeatured ? 'Paquete destacado' : 'No destacado'}
+                                                    </span>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 rounded p-0.5">
+                                                                <Info className="h-3.5 w-3.5" aria-hidden />
+                                                            </button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="max-w-[320px] p-4 text-sm text-zinc-300 bg-zinc-800 border-zinc-700">
+                                                            Se mostrará una sugerencia de &quot;Recomendado&quot; sobre este paquete en la vista pública para llamar la atención del prospecto.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </div>
+                                                <ZenSwitch
+                                                    checked={isFeatured}
+                                                    onCheckedChange={setIsFeatured}
+                                                    label=""
+                                                    variant="amber"
+                                                    className="!mt-0 !space-x-0 shrink-0"
+                                                />
+                                            </div>
+                                        </ZenCardContent>
+                                    </ZenCard>
                                 </div>
                             </div>
-
-                            {/* Ganarás */}
-                            <div>
-                                <label className="text-sm font-semibold text-amber-500 mb-2 block">Ganancia bruta</label>
-                                <div className={`text-2xl font-bold ${calculoPrecio.utilidadNeta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {formatearMoneda(calculoPrecio.utilidadNeta)}
-                                </div>
-                                {calculoPrecio.diferenciaPrecio !== 0 && (
-                                    <div className="text-xs mt-2">
-                                        <span className={calculoPrecio.diferenciaPrecio > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                            {calculoPrecio.diferenciaPrecio > 0 ? '+' : ''}{formatearMoneda(calculoPrecio.diferenciaPrecio)}
+                        </AccordionContent>
+                    </AccordionItem>
+                }
+                restSections={
+                    <>
+                        {/* Cálculo Financiero — mismo diseño que cotización (bordes esmeralda/ámbar) */}
+                        <div ref={summaryRef} className="z-10 mb-3">
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLElement).click(); } }}
+                                        className="cursor-pointer rounded-lg border-2 border-emerald-500/70 bg-emerald-950/50 px-3 py-2.5 transition-colors hover:border-emerald-400/80 hover:bg-emerald-950/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 w-full flex items-center gap-3"
+                                    >
+                                        <ListChecks className="h-4 w-4 shrink-0 text-emerald-400/80" />
+                                        <span className="text-sm text-zinc-500 shrink-0">Precio calculado</span>
+                                        <span className="text-base font-semibold text-white tabular-nums truncate text-right min-w-0 flex-1">
+                                            {formatearMoneda(calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal)}
                                         </span>
-                                        <span className="text-zinc-400">{' '}sobre la ganancia calculada</span>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Desglose colapsable */}
-                            <div className="border-t border-zinc-700 pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setSeccionesExpandidas(prev => {
-                                        const newSet = new Set(prev);
-                                        if (newSet.has('desglose-financiero')) {
-                                            newSet.delete('desglose-financiero');
-                                        } else {
-                                            newSet.add('desglose-financiero');
-                                        }
-                                        return newSet;
-                                    })}
-                                    className="w-full flex items-center justify-between text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
-                                >
-                                    <span>Desglose de precio</span>
-                                    {seccionesExpandidas.has('desglose-financiero') ? (
-                                        <ChevronDown className="w-4 h-4" />
-                                    ) : (
-                                        <ChevronRight className="w-4 h-4" />
-                                    )}
-                                </button>
-                                {seccionesExpandidas.has('desglose-financiero') && itemsParaDesglose.length > 0 && configuracionPrecios && (
-                                    <div className="mt-3">
-                                        <PrecioDesglosePaquete
-                                            items={itemsParaDesglose}
-                                            configuracion={configuracionPrecios}
-                                            precioPersonalizado={precioPersonalizado === '' ? undefined : Number(precioPersonalizado) || undefined}
-                                            showCard={false}
-                                        />
+                                </SheetTrigger>
+                                <SheetContent side="right" className="flex flex-col w-full max-w-md bg-zinc-900 border-zinc-800 shadow-xl">
+                                    <SheetHeader className="border-b border-zinc-800/50 pb-4">
+                                        <SheetTitle className="text-left text-white">Construcción de precio</SheetTitle>
+                                    </SheetHeader>
+                                    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                                        <p className="text-xs text-zinc-500">
+                                            <span className="font-medium text-zinc-400">¿Cómo se calcula?</span>
+                                            <br />
+                                            <span className="mt-1 inline-block">Utilidad neta = Precio − (Costos + Gastos + Comisión). Cortesías y bono reducen el subtotal proyectado.</span>
+                                        </p>
+                                        {configuracionPrecios && itemsParaDesglose.length > 0 && (
+                                            <PrecioDesglosePaquete
+                                                items={itemsParaDesglose}
+                                                configuracion={configuracionPrecios}
+                                                precioPersonalizado={precioPersonalizado === '' ? undefined : Number(precioPersonalizado) || undefined}
+                                                showCard={false}
+                                            />
+                                        )}
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Botones */}
-                            <div className="border-t border-zinc-700 pt-3">
-                                <div className="flex gap-2">
-                                    <ZenButton
-                                        type="button"
-                                        variant="secondary"
-                                        onClick={handleCancelClick}
-                                        disabled={loading}
-                                        className="flex-1"
-                                    >
-                                        Cancelar
-                                    </ZenButton>
-                                    <ZenButton
-                                        type="submit"
-                                        variant="primary"
-                                        loading={loading}
-                                        loadingText="Guardando..."
-                                        disabled={loading}
-                                        className="flex-1"
-                                    >
-                                        {paquete?.id ? 'Actualizar' : 'Crear'} Paquete
-                                    </ZenButton>
-                                </div>
-                            </div>
+                                </SheetContent>
+                            </Sheet>
                         </div>
-                    </div>
-                </form>
-            </div>
+
+                        <AjustesNegociacionAccordion
+                            accordionValue={accordionValue}
+                            isCourtesyMode={isCourtesyMode}
+                            setIsCourtesyMode={setIsCourtesyMode}
+                            bonoEspecial={bonoEspecial}
+                            setBonoEspecial={setBonoEspecial}
+                            itemsCortesiaSize={itemsCortesia.size}
+                            montoCortesias={calculoPrecio.montoCortesias}
+                            subtotalProyectado={calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0}
+                            setPrecioPersonalizado={(v) => setPrecioPersonalizado(v === '' ? '' : v)}
+                            setAccordionValue={setAccordionValue}
+                            onConfirmClearCortesias={(mode) => {
+                                setItemsCortesia(new Set());
+                                if (mode === 'all') setBonoEspecial(0);
+                            }}
+                            sectionRef={sectionNegociacionRef}
+                            onScrollIntoView={() => accordionValue.includes('negociacion') && requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
+                        />
+
+                        {/* Precio Final de Cierre — misma posición que en cotizaciones (después de Ajustes, antes de Condiciones) */}
+                        <div className="mb-4">
+                            <label className="text-xs text-zinc-500 mb-1 block">Precio Final de Cierre</label>
+                            <ZenInput
+                                type="number"
+                                step="0.01"
+                                value={precioPersonalizado}
+                                onChange={(e) => setPrecioPersonalizado(e.target.value)}
+                                placeholder={String(calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0)}
+                                className="mt-0 rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40"
+                            />
+                            <p className="text-[11px] text-zinc-500 mt-1">Monto que se cobrará por el paquete.</p>
+                        </div>
+
+                        <CondicionesCierreAccordion
+                            context="paquete"
+                            accordionValue={accordionValue}
+                            condicionesComerciales={condicionesComerciales}
+                            condicionIdsVisibles={condicionIdsVisibles}
+                            setCondicionIdsVisibles={setCondicionIdsVisibles}
+                            condicionSimulacionId={condicionSimulacionId}
+                            setCondicionSimulacionId={setCondicionSimulacionId}
+                            condicionNegociacion={null}
+                            calculoPrecio={{
+                                totalCosto: calculoPrecio.totalCosto,
+                                totalGasto: calculoPrecio.totalGasto,
+                                subtotalProyectado: calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal,
+                                montoDescuentoCondicion: 0,
+                            }}
+                            configuracionPrecios={configuracionPrecios}
+                            precioPersonalizado={precioPersonalizado}
+                            tieneAjustesNegociacion={bonoEspecial > 0 || itemsCortesia.size > 0}
+                            onAuditoriaClick={(condicionId) => {
+                                if (condicionId) setCondicionSimulacionId(condicionId);
+                                setAuditoriaRentabilidadOpen(true);
+                            }}
+                            onGestionarCondiciones={() => { setEditingCondicionId(null); setCreateCondicionEspecialMode(false); setShowCondicionesManager(true); }}
+                            onCreateCondicionEspecial={() => { setCreateCondicionEspecialMode(true); setEditingCondicionId(null); setShowCondicionesManager(true); }}
+                            onEditCondicion={(condId) => { setEditingCondicionId(condId); setCreateCondicionEspecialMode(false); setShowCondicionesManager(true); }}
+                            sectionRef={sectionCondicionesRef}
+                            onScrollIntoView={() => accordionValue.includes('condiciones') && requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
+                        />
+                    </>
+                }
+                modalsAndSheets={
+                    <>
+                        {(() => {
+                            const comisionRatio = configuracionPrecios
+                                ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta)
+                                : 0.05;
+                            const totalCosto = calculoPrecio.totalCosto ?? 0;
+                            const totalGasto = calculoPrecio.totalGasto ?? 0;
+                            const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
+                            const condSim = condicionSimulacionId
+                                ? condicionesComerciales.find(c => c.id === condicionSimulacionId) ?? null
+                                : null;
+                            const totalRecibirSim = condSim
+                                ? Math.max(0, precioCierreBase - (precioCierreBase * ((condSim as { discount_percentage?: number | null }).discount_percentage ?? 0)) / 100)
+                                : null;
+                            const utilidadProyectada = totalRecibirSim != null
+                                ? totalRecibirSim - totalCosto - totalGasto - totalRecibirSim * comisionRatio
+                                : (calculoPrecio as { utilidadNeta?: number }).utilidadNeta ?? calculoPrecio.utilidadNeta;
+                            const totalParaSheet = totalRecibirSim ?? calculoPrecio.total ?? 0;
+                            const idsParaComparativa = condicionSimulacionId
+                                ? new Set(condicionIdsVisibles).add(condicionSimulacionId)
+                                : condicionIdsVisibles;
+                            const pctComision = (comisionRatio * 100).toFixed(0);
+                            const ingresoSugerido = calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0;
+                            const comisionSugerido = ingresoSugerido * comisionRatio;
+                            const metaServicio = configuracionPrecios
+                                ? (configuracionPrecios.utilidad_servicio > 1 ? configuracionPrecios.utilidad_servicio / 100 : configuracionPrecios.utilidad_servicio)
+                                : 0.4;
+                            const metaProducto = configuracionPrecios
+                                ? (configuracionPrecios.utilidad_producto > 1 ? configuracionPrecios.utilidad_producto / 100 : configuracionPrecios.utilidad_producto)
+                                : 0.15;
+                            const totalVentaServicios = configuracionPrecios && itemsParaDesglose.length > 0
+                                ? itemsParaDesglose
+                                    .filter((i) => (i.tipo_utilidad ?? 'service') === 'service')
+                                    .reduce((sum, i) => {
+                                        const q = (i as { cantidadEfectiva?: number }).cantidadEfectiva ?? i.cantidad;
+                                        const r = calcularPrecio(i.costo || 0, i.gasto || 0, 'servicio', configuracionPrecios);
+                                        return sum + r.precio_final * q;
+                                    }, 0)
+                                : 0;
+                            const totalVentaProductos = configuracionPrecios && itemsParaDesglose.length > 0
+                                ? itemsParaDesglose
+                                    .filter((i) => (i.tipo_utilidad ?? 'service') === 'product')
+                                    .reduce((sum, i) => {
+                                        const q = (i as { cantidadEfectiva?: number }).cantidadEfectiva ?? i.cantidad;
+                                        const r = calcularPrecio(i.costo || 0, i.gasto || 0, 'producto', configuracionPrecios);
+                                        return sum + r.precio_final * q;
+                                    }, 0)
+                                : 0;
+                            const precioParaMix = (calculoPrecio.total && calculoPrecio.total > 0) ? calculoPrecio.total : (calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0);
+                            const margenObjetivoPct = precioParaMix > 0
+                                ? ((totalVentaServicios * metaServicio) + (totalVentaProductos * metaProducto)) / precioParaMix * 100
+                                : 0;
+                            const margenCierre = totalParaSheet > 0 ? (utilidadProyectada / totalParaSheet) * 100 : 0;
+                            const ratioAlObjetivo = margenObjetivoPct > 0 ? margenCierre / margenObjetivoPct : 1;
+                            const explicacionSalud = ratioAlObjetivo >= 0.9 ? 'Estás al 90% o más de tu meta de margen para este mix.' : ratioAlObjetivo >= 0.7 ? 'Estás entre 70% y 89% de tu meta; margen aceptable pero mejorable.' : 'El margen está por debajo del 70% de la meta para este mix de ítems.';
+                            const saludColor = margenCierre < 15 ? 'destructive' : margenCierre < 25 ? 'amber' : 'emerald';
+
+                            return (
+                                <AuditoriaRentabilidadSheet
+                                    open={auditoriaRentabilidadOpen}
+                                    onOpenChange={setAuditoriaRentabilidadOpen}
+                                    title="Auditoría de Rentabilidad"
+                                    total={totalParaSheet}
+                                    totalCosto={totalCosto}
+                                    totalGasto={totalGasto}
+                                    utilidadNeta={utilidadProyectada}
+                                >
+                                    <div>
+                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Escenario del sistema</h3>
+                                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-1.5 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-zinc-500">Ingreso sugerido</span>
+                                                <span className="tabular-nums text-zinc-200">{formatearMoneda(ingresoSugerido)}</span>
+                                            </div>
+                                            {(calculoPrecio as { montoDescuentoCondicion?: number }).montoDescuentoCondicion > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500">(−) Descuento por Condición Comercial</span>
+                                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda((calculoPrecio as { montoDescuentoCondicion?: number }).montoDescuentoCondicion ?? 0)}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between">
+                                                <span className="text-zinc-500">(−) Costos de producción</span>
+                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalCosto)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-zinc-500">(−) Gastos</span>
+                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalGasto)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-zinc-500">(−) Comisión sugerida ({pctComision}%)</span>
+                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionSugerido)}</span>
+                                            </div>
+                                            <Separator className="bg-zinc-700/50 my-1.5" />
+                                            <div className="flex justify-between font-medium">
+                                                <span className="text-zinc-300">Utilidad sugerida</span>
+                                                <span className="tabular-nums text-emerald-500/90">
+                                                    {formatearMoneda(
+                                                        (ingresoSugerido > 0 && ((calculoPrecio as { utilidadSinDescuento?: number }).utilidadSinDescuento ?? 0) === 0)
+                                                            ? Math.max(0, ingresoSugerido - totalCosto - totalGasto - comisionSugerido)
+                                                            : ((calculoPrecio as { utilidadSinDescuento?: number }).utilidadSinDescuento ?? 0)
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {idsParaComparativa.size > 0 && (
+                                        <div>
+                                            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Comparativa de cierre</h3>
+                                            <div className="space-y-3">
+                                                {Array.from(idsParaComparativa).map((id) => {
+                                                    const c = condicionesComerciales.find((x) => x.id === id) ?? null;
+                                                    if (!c) return null;
+                                                    const pct = (c as { discount_percentage?: number | null }).discount_percentage ?? 0;
+                                                    const descuentoMonto = (precioCierreBase * pct) / 100;
+                                                    const ingreso = Math.max(0, precioCierreBase - descuentoMonto);
+                                                    const comisionEsc = ingreso * comisionRatio;
+                                                    const utilidadNetaReal = ingreso - totalCosto - totalGasto - comisionEsc;
+                                                    const nombre = (c as { name?: string }).name ?? 'Condición';
+                                                    const esSimulando = id === condicionSimulacionId;
+                                                    return (
+                                                        <div
+                                                            key={id}
+                                                            className={cn(
+                                                                'rounded-lg border p-3 space-y-1.5 text-sm',
+                                                                esSimulando ? 'border-amber-500/40 bg-zinc-800/10 ring-1 ring-amber-500/30' : 'border-zinc-700/50 bg-zinc-800/10'
+                                                            )}
+                                                        >
+                                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                                                                Escenario: {nombre}
+                                                                {esSimulando && <span className="ml-1.5 text-amber-400/90">(SIMULANDO)</span>}
+                                                            </h4>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-zinc-500">Ingreso (Precio cierre − Descuento)</span>
+                                                                <span className="tabular-nums text-zinc-200">{formatearMoneda(ingreso)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-zinc-500">(−) Costos</span>
+                                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalCosto)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-zinc-500">(−) Gastos</span>
+                                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalGasto)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-zinc-500">(−) Comisión ({pctComision}%)</span>
+                                                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionEsc)}</span>
+                                                            </div>
+                                                            <Separator className="bg-zinc-700/50 my-1.5" />
+                                                            <div className="flex justify-between font-medium">
+                                                                <span className="text-zinc-300">Utilidad neta real</span>
+                                                                <span className={cn(
+                                                                    'tabular-nums',
+                                                                    utilidadNetaReal >= 0 && (utilidadNetaReal / (ingreso || 1)) * 100 >= 25 ? 'text-emerald-400' : utilidadNetaReal >= 0 ? 'text-amber-400' : 'text-destructive'
+                                                                )}>
+                                                                    {formatearMoneda(utilidadNetaReal)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Salud financiera</h3>
+                                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-2 text-sm">
+                                            <p className="text-[11px] text-zinc-500 leading-relaxed">
+                                                Meta de margen ponderada según tu mix: <strong className="text-zinc-300">{margenObjetivoPct.toFixed(1)}%</strong>. (Servicios {(metaServicio * 100).toFixed(0)}%, productos {(metaProducto * 100).toFixed(0)}%.)
+                                            </p>
+                                            <p className="text-[11px] text-zinc-500 leading-relaxed">
+                                                Tu margen de cierre es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}
+                                                <span className={cn(saludColor === 'destructive' && 'text-destructive', saludColor === 'amber' && 'text-amber-400', saludColor === 'emerald' && 'text-emerald-400')}>
+                                                    {saludColor === 'destructive' ? 'rojo' : saludColor === 'amber' ? 'ámbar' : 'verde'}
+                                                </span>.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </AuditoriaRentabilidadSheet>
+                            );
+                        })()}
+                        <CotizacionDetailSheet
+                                cotizacion={previewCotizacion}
+                                isOpen={previewOpen}
+                                onClose={() => setPreviewOpen(false)}
+                                promiseId="preview"
+                                studioSlug={studioSlug}
+                                isPreviewMode
+                            />
+                    </>
+                }
+                actionButtons={
+                    <CommercialConfigActionButtons
+                        onGuardarComoPaquete={() => {}}
+                        hideGuardarComoPaquete
+                        loading={loading}
+                        isDisabled={loading}
+                        onRequestPreview={() => setPreviewOpen(true)}
+                        isEditMode={!!paquete?.id}
+                        visibleToClient={!!paquete?.id}
+                        condicionIdsVisiblesSize={condicionIdsVisibles.size}
+                        onSaveDraft={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+                        onSavePublish={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+                        onCancel={handleCancelClick}
+                        savingIntent={null}
+                    />
+                }
+            />
 
             {/* Modal de confirmación de cierre */}
             <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -1461,6 +1884,19 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     </div>
                 </div>
             </ZenDialog>
+
+            <CondicionesComercialesManager
+                studioSlug={studioSlug}
+                isOpen={showCondicionesManager || !!editingCondicionId}
+                onClose={() => {
+                    setShowCondicionesManager(false);
+                    setEditingCondicionId(null);
+                    setCreateCondicionEspecialMode(false);
+                }}
+                onRefresh={loadCondicionesComerciales}
+                initialMode={createCondicionEspecialMode ? 'create' : undefined}
+                initialEditingId={editingCondicionId ?? undefined}
+            />
 
             {/* Modal de edición/creación de ítem */}
             {selectedCategoriaForItem && (

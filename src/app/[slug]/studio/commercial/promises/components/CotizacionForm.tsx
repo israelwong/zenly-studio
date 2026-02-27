@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe, PackagePlus } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
@@ -14,11 +14,15 @@ import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
-import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion, promocionarItemAlCatalogo, guardarCotizacionComoPaquete } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { logAuditoriaCotizacion } from '@/lib/utils/audit-precios-logger';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
+import { CommercialConfigSidebar, CommercialConfigActionButtons } from '@/components/shared/commercial/CommercialConfigSidebar';
+import { AuditoriaRentabilidadSheet } from '@/components/shared/commercial/AuditoriaRentabilidadSheet';
+import { AjustesNegociacionAccordion } from '@/components/shared/commercial/AjustesNegociacionAccordion';
+import { CondicionesCierreAccordion } from '@/components/shared/commercial/CondicionesCierreAccordion';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import { ItemEditorModal, type ItemFormData, type ItemEditorContext } from '@/components/shared/catalogo/ItemEditorModal';
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
@@ -150,8 +154,6 @@ export function CotizacionForm({
   const sectionBaseRef = useRef<HTMLDivElement>(null);
   const sectionNegociacionRef = useRef<HTMLDivElement>(null);
   const sectionCondicionesRef = useRef<HTMLDivElement>(null);
-  const [confirmClearCortesiasOpen, setConfirmClearCortesiasOpen] = useState(false);
-  const [confirmClearDiscountMode, setConfirmClearDiscountMode] = useState<'cortesias' | 'all'>('cortesias');
   const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
     id: string;
     name: string;
@@ -227,7 +229,9 @@ export function CotizacionForm({
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showNameConflictModal, setShowNameConflictModal] = useState(false);
+  const [showPaqueteCustomItemsModal, setShowPaqueteCustomItemsModal] = useState(false);
   const [showDurationScopeModal, setShowDurationScopeModal] = useState(false);
+  const [isSavingAsPaquete, setIsSavingAsPaquete] = useState(false);
   const [pendingSavePublish, setPendingSavePublish] = useState<boolean>(false);
   const [pendingSaveNombreOverride, setPendingSaveNombreOverride] = useState<string | undefined>(undefined);
   /** Duración de la promesa al abrir el modal (para copy explícito). */
@@ -417,6 +421,7 @@ export function CotizacionForm({
           
           if (cotizacionData.items && Array.isArray(cotizacionData.items)) {
             cotizacionData.items.forEach((item: { 
+              id: string;
               item_id: string | null; 
               quantity: number;
               name?: string | null;
@@ -426,7 +431,7 @@ export function CotizacionForm({
               expense?: number | null;
               billing_type?: string | null;
               categoria_id?: string | null;
-              original_item_id?: string | null; // ID del item original que reemplaza
+              original_item_id?: string | null;
             }) => {
               if (item.item_id && item.quantity > 0) {
                 // Item del catálogo - verificar si hay un custom item que lo reemplace
@@ -453,9 +458,10 @@ export function CotizacionForm({
                   expense: item.expense || 0,
                   quantity: item.quantity,
                   billing_type: (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
-                  tipoUtilidad: 'servicio', // Default, se puede inferir de otros campos si es necesario
+                  tipoUtilidad: 'servicio',
                   categoriaId: categoriaId,
-                  originalItemId: item.original_item_id || null, // Cargar originalItemId desde DB
+                  originalItemId: item.original_item_id || null,
+                  cotizacionItemId: item.id,
                 });
               }
             });
@@ -1649,6 +1655,102 @@ export function CotizacionForm({
     });
   };
 
+  // Promocionar ítem personalizado al catálogo (Fase 2.1)
+  const handleGuardarEnCatalogo = async (index: number) => {
+    const custom = customItems[index];
+    if (!custom) return;
+    const ci = custom;
+    if (cotizacionId && ci.cotizacionItemId) {
+      const result = await promocionarItemAlCatalogo(studioSlug, { cotizacion_item_id: ci.cotizacionItemId });
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al guardar en catálogo');
+        return;
+      }
+      toast.success('Ítem guardado en el catálogo');
+      const res = await getCotizacionById(cotizacionId, studioSlug);
+      if (!res.success || !res.data?.items) return;
+      const cotizacionItems: { [id: string]: number } = {};
+      const customFromApi: typeof customItems = [];
+      const primeraCategoriaId = catalogoFiltrado.length > 0 && catalogoFiltrado[0].categorias?.length
+        ? catalogoFiltrado[0].categorias[0].id
+        : null;
+      res.data.items.forEach((item: { id: string; item_id: string | null; quantity: number; name?: string | null; description?: string | null; unit_price?: number; cost?: number | null; expense?: number | null; billing_type?: string | null; categoria_id?: string | null; original_item_id?: string | null }) => {
+        if (item.item_id && item.quantity > 0) {
+          cotizacionItems[item.item_id] = item.quantity;
+        } else if (!item.item_id && item.name && item.unit_price !== undefined) {
+          const catId = item.categoria_id || primeraCategoriaId;
+          if (catId) {
+            customFromApi.push({
+              name: item.name,
+              description: item.description ?? null,
+              unit_price: item.unit_price,
+              cost: item.cost ?? 0,
+              expense: item.expense ?? 0,
+              quantity: item.quantity,
+              billing_type: (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+              tipoUtilidad: 'servicio',
+              categoriaId: catId,
+              originalItemId: item.original_item_id ?? null,
+              cotizacionItemId: item.id,
+            });
+          }
+        }
+      });
+      setItems(prev => ({ ...prev, ...cotizacionItems }));
+      setCustomItems(customFromApi);
+    } else {
+      const result = await promocionarItemAlCatalogo(studioSlug, {
+        name: ci.name,
+        description: ci.description ?? null,
+        cost: ci.cost ?? 0,
+        expense: ci.expense ?? 0,
+        billing_type: ci.billing_type ?? 'SERVICE',
+        categoria_id: ci.categoriaId,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? 'Error al guardar en catálogo');
+        return;
+      }
+      toast.success('Ítem guardado en el catálogo');
+      setItems(prev => ({ ...prev, [result.data!.item_id]: ci.quantity }));
+      setCustomItems(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const runGuardarComoPaquete = async () => {
+    if (!cotizacionId) return;
+    setIsSavingAsPaquete(true);
+    setShowPaqueteCustomItemsModal(false);
+    try {
+      const result = await guardarCotizacionComoPaquete(studioSlug, cotizacionId);
+      if (result.success && result.data?.paqueteId) {
+        toast.success('Paquete creado', {
+          description: 'Puedes configurarlo y publicarlo cuando quieras.',
+          action: {
+            label: 'Configurar paquete',
+            onClick: () => router.push(`/${studioSlug}/studio/commercial/paquetes/${result.data!.paqueteId}/editar`),
+          },
+        });
+      } else {
+        toast.error(result.error ?? 'Error al crear el paquete');
+      }
+    } finally {
+      setIsSavingAsPaquete(false);
+    }
+  };
+
+  const handleGuardarComoPaqueteClick = () => {
+    if (!cotizacionId) {
+      toast.info('Guarda primero la cotización como borrador para poder convertirla en paquete.');
+      return;
+    }
+    if (customItems.length > 0) {
+      setShowPaqueteCustomItemsModal(true);
+      return;
+    }
+    runGuardarComoPaquete();
+  };
+
   // Redirigir a returnPath (cierre o detalle de promesa) para evitar fallos con historial vacío en nueva pestaña
   const goToPromiseDetailOrBack = () => {
     if (returnPath) {
@@ -2211,6 +2313,7 @@ export function CotizacionForm({
           onEditCustomItem={handleEditCustomItem}
           onDeleteCustomItem={handleDeleteCustomItem}
           onUpdateCustomItemQuantity={handleUpdateCustomItemQuantity}
+          onGuardarEnCatalogo={handleGuardarEnCatalogo}
           serviciosSeleccionados={serviciosSeleccionados}
           configuracionPrecios={configuracionPrecios}
           baseHours={durationHours}
@@ -2220,19 +2323,88 @@ export function CotizacionForm({
         />
       </div>
 
-      {/* Columna 2: Configuración — sticky, scroll en el contenedor; botones debajo del contenido */}
-      <div
-        className={
-          focusMode
-            ? 'lg:col-span-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto pl-3 pr-6 py-6'
-            : 'lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2'
+      {/* Columna 2: Configuración — CommercialConfigSidebar (Fase 3) */}
+      <CommercialConfigSidebar
+        context="cotizacion"
+        title="Configuración"
+        accordionValue={accordionValue}
+        onAccordionChange={handleAccordionChange}
+        focusMode={focusMode}
+        onSubmit={(e) => { e.preventDefault(); handleSave(false); }}
+        hideActionButtons={hideActionButtons}
+        actionButtons={
+          customActionButtons ??
+          (hideActionButtons ? null : (
+            <CommercialConfigActionButtons
+              onGuardarComoPaquete={handleGuardarComoPaqueteClick}
+              isSavingAsPaquete={isSavingAsPaquete}
+              loading={loading}
+              isDisabled={isDisabled}
+              onRequestPreview={onRequestPreview}
+              isEditMode={isEditMode}
+              visibleToClient={visibleToClient}
+              condicionIdsVisiblesSize={condicionIdsVisibles.size}
+              onSaveDraft={() => handleSave(false)}
+              onSavePublish={() => handleSave(true)}
+              onCancel={handleCancelClick}
+              savingIntent={savingIntent}
+              saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
+            />
+          ))
         }
+        extraContent={isPreAutorizada && condicionComercialPreAutorizada ? (
+          <div className="mt-4">
+            <ZenCard variant="outlined" className="bg-blue-500/5 border-blue-500/20">
+              <ZenCardContent className="p-4">
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-zinc-400">Condición Comercial</h3>
+                      <ZenBadge size="sm" className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] px-1.5 py-0.5 rounded-full">Pre autorizada</ZenBadge>
+                    </div>
+                    <h4 className="text-base font-semibold text-white">{condicionComercialPreAutorizada.name}</h4>
+                    {condicionComercialPreAutorizada.description && (
+                      <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{condicionComercialPreAutorizada.description}</p>
+                    )}
+                  </div>
+                  {(condicionComercialPreAutorizada.advance_type || condicionComercialPreAutorizada.discount_percentage) && (
+                    <div className="pt-2 border-t border-zinc-700/50">
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        {condicionComercialPreAutorizada.advance_type === 'fixed_amount' && condicionComercialPreAutorizada.advance_amount ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-zinc-500">Anticipo:</span>
+                            <span className="font-semibold text-emerald-400">
+                              ${condicionComercialPreAutorizada.advance_amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ) : condicionComercialPreAutorizada.advance_percentage ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-zinc-500">Anticipo:</span>
+                            <span className="font-semibold text-emerald-400">{condicionComercialPreAutorizada.advance_percentage}%</span>
+                          </div>
+                        ) : null}
+                        {condicionComercialPreAutorizada.discount_percentage ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-zinc-500">Descuento:</span>
+                            <span className="font-semibold text-blue-400">{condicionComercialPreAutorizada.discount_percentage}%</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                  {onAutorizar && !isAlreadyAuthorized && (
+                    <div className="pt-2">
+                      <ZenButton type="button" variant="primary" size="sm" onClick={onAutorizar} disabled={isAutorizando || loading} loading={isAutorizando} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                        Autorizar ahora
+                      </ZenButton>
+                    </div>
+                  )}
+                </div>
+              </ZenCardContent>
+            </ZenCard>
+          </div>
+        ) : null}
       >
-        <form onSubmit={(e) => { e.preventDefault(); handleSave(false); }} className="space-y-4">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white mb-4">Configuración</h3>
-
-            <Accordion type="multiple" value={accordionValue} onValueChange={handleAccordionChange} className="space-y-0">
               <AccordionItem value="base" id="cotizacion-form-section-base">
                 <AccordionHeader
                   ref={sectionBaseRef}
@@ -2348,214 +2520,39 @@ export function CotizacionForm({
               </Sheet>
             </div>
 
-            {/* 2. Ajustes de Negociación */}
-              <AccordionItem value="negociacion" id="cotizacion-form-section-negociacion">
-                <AccordionHeader
-                  ref={sectionNegociacionRef}
-                  className={cn(
-                    'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
-                    accordionValue.includes('negociacion') ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
-                  )}
-                >
-                  <AccordionTrigger
-                    className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5"
-                    onClick={() => accordionValue.includes('negociacion') && requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 w-full">
-                      {accordionValue.includes('negociacion') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                      <span>Ajustes de negociación</span>
-                    </div>
-                    {!accordionValue.includes('negociacion') && (
-                      <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
-                        {(() => {
-                          const parts: string[] = [];
-                          if (bonoEspecial > 0) parts.push(`Bono: ${formatearMoneda(bonoEspecial)}`);
-                          if (itemsCortesia.size > 0) parts.push(`${itemsCortesia.size} Cortesía${itemsCortesia.size !== 1 ? 's' : ''}`);
-                          return parts.length > 0 ? parts.join(' · ') : 'Cortesías y bono';
-                        })()}
-                      </span>
-                    )}
-                  </AccordionTrigger>
-                  {esNegociacionModificada ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const ini = negociacionInicialRef.current;
-                        if (!ini) return;
-                        setBonoEspecial(ini.bono);
-                        setItemsCortesia(new Set(ini.itemsCortesia));
-                        userHasChangedServicesOrAjustesRef.current = true;
-                        setPendingSyncFromAjustes(true);
-                        toast.success('Ajustes restaurados a la versión guardada');
-                      }}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors shrink-0 mr-3 pr-0.5"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Restaurar
-                    </button>
-                  ) : null}
-                </AccordionHeader>
-                <AccordionContent>
-                  <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-800/30 p-3">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-[auto_1fr] gap-3">
-                    <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block">Cortesías</label>
-                      <ZenButton
-                        type="button"
-                        variant={isCourtesyMode ? 'secondary' : 'outline'}
-                        size="sm"
-                        onClick={() => {
-                          if (!isCourtesyMode) setAccordionValue((prev) => prev.filter((x) => x !== 'base'));
-                          setIsCourtesyMode((prev) => !prev);
-                        }}
-                        className={cn(
-                          'w-full justify-center gap-1.5 rounded-lg border backdrop-blur-sm h-9 text-xs',
-                          isCourtesyMode
-                            ? 'bg-purple-800 border-purple-700/80 text-white hover:bg-purple-700'
-                            : 'bg-zinc-800/30 border-zinc-600/80 text-zinc-300 hover:bg-zinc-800/50'
-                        )}
-                      >
-                        {isCourtesyMode ? (<><Gift className="w-3.5 h-3.5 shrink-0" /> Finalizar modo cortesía</>) : (<><Gift className="w-3.5 h-3.5 shrink-0" /> Habilitar modo cortesía</>)}
-                      </ZenButton>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block">Bono Especial</label>
-                      <ZenInput
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={bonoEspecial === 0 ? '' : bonoEspecial}
-                        onChange={(e) => {
-                          userHasChangedServicesOrAjustesRef.current = true;
-                          const v = e.target.value;
-                          if (v === '') { setBonoEspecial(0); return; }
-                          const n = parseFloat(v);
-                          if (!Number.isNaN(n) && n >= 0) setBonoEspecial(n);
-                        }}
-                        onFocus={() => { bonoOnFocusRef.current = bonoEspecial; }}
-                        onBlur={(e) => {
-                          if (e.target.value === '') setBonoEspecial(0);
-                          const tieneAjustes = itemsCortesia.size > 0 || bonoEspecial > 0 || bonoOnFocusRef.current > 0;
-                          if (tieneAjustes && bonoEspecial !== bonoOnFocusRef.current) triggerShake();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.preventDefault();
-                        }}
-                        placeholder="0"
-                        className="mt-0 h-9 text-sm rounded-lg border-zinc-700/50 bg-zinc-800/20 focus:bg-zinc-800/40"
-                      />
-                    </div>
-                  </div>
-                  <Separator className="my-3 bg-zinc-700/50" />
-                  {(() => {
-                    const hasCortesias = itemsCortesia.size > 0;
-                    const hasBono = bonoEspecial > 0;
-                    const showTotal = hasCortesias && hasBono;
-                    if (!hasCortesias && !hasBono) {
-                      return <p className="text-[10px] text-zinc-600">Sin ajustes. Precio sugerido = Precio calculado.</p>;
-                    }
-                    return (
-                      <>
-                        {hasCortesias && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="text-zinc-400">Cortesías ({itemsCortesia.size})</span>
-                            <div className="flex items-center gap-1">
-                              <span className="tabular-nums text-purple-400">-{formatearMoneda(calculoPrecio.montoCortesias)}</span>
-                              <ZenButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setConfirmClearDiscountMode('cortesias');
-                                  setConfirmClearCortesiasOpen(true);
-                                }}
-                                className="h-8 w-8 p-0 text-purple-400/80 hover:text-purple-300 hover:bg-purple-500/10"
-                                title="Eliminar todas las cortesías"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </ZenButton>
-                            </div>
-                          </div>
-                        )}
-                        {hasBono && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="text-zinc-400">Bono Especial</span>
-                            <div className="flex items-center gap-1">
-                              <span className="tabular-nums text-emerald-400/90">-{formatearMoneda(bonoEspecial)}</span>
-                              <ZenButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const bonoActual = Number(bonoEspecial) || 0;
-                                  setBonoEspecial(0);
-                                  userHasChangedServicesOrAjustesRef.current = true;
-                                  const nuevoSubtotalProyectado = (calculoPrecio.subtotalProyectado ?? 0) + bonoActual;
-                                  const valorCierre = Math.max(0, nuevoSubtotalProyectado);
-                                  setPrecioPersonalizado(valorCierre);
-                                  setShowPrecioSincronizadoBadge(true);
-                                  setRingPrecioSincronizadoVisible(true);
-                                }}
-                                className="h-8 w-8 p-0 text-zinc-500 hover:text-destructive hover:bg-destructive/10"
-                                title="Eliminar bono especial"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </ZenButton>
-                            </div>
-                          </div>
-                        )}
-                        {showTotal && (
-                          <>
-                            <Separator className="my-3 bg-zinc-700/50" />
-                            <div className="flex items-center justify-between gap-2 text-sm font-medium">
-                              <span className="text-zinc-300">Descuento total</span>
-                              <div className="flex items-center gap-1">
-                                <span className="tabular-nums font-semibold text-red-400">
-                                  -{formatearMoneda(calculoPrecio.montoCortesias + bonoEspecial)}
-                                </span>
-                                <ZenButton
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setConfirmClearDiscountMode('all');
-                                    setConfirmClearCortesiasOpen(true);
-                                  }}
-                                  className="h-8 w-8 p-0 text-zinc-500 hover:text-destructive hover:bg-destructive/10"
-                                  title="Eliminar todos los descuentos"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </ZenButton>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-            <ZenConfirmModal
-              isOpen={confirmClearCortesiasOpen}
-              onClose={() => setConfirmClearCortesiasOpen(false)}
-              onConfirm={() => {
+            <AjustesNegociacionAccordion
+              accordionValue={accordionValue}
+              isCourtesyMode={isCourtesyMode}
+              setIsCourtesyMode={setIsCourtesyMode}
+              bonoEspecial={bonoEspecial}
+              setBonoEspecial={setBonoEspecial}
+              itemsCortesiaSize={itemsCortesia.size}
+              montoCortesias={calculoPrecio.montoCortesias ?? 0}
+              subtotalProyectado={calculoPrecio.subtotalProyectado ?? calculoPrecio.subtotal ?? 0}
+              setPrecioPersonalizado={(v) => setPrecioPersonalizado(v === '' ? '' : v)}
+              setAccordionValue={setAccordionValue}
+              onConfirmClearCortesias={(mode) => {
                 userHasChangedServicesOrAjustesRef.current = true;
                 setItemsCortesia(new Set());
-                if (confirmClearDiscountMode === 'all') setBonoEspecial(0);
-                setConfirmClearCortesiasOpen(false);
+                if (mode === 'all') setBonoEspecial(0);
               }}
-              title={confirmClearDiscountMode === 'all' ? 'Eliminar todos los descuentos' : 'Eliminar cortesías'}
-              description={confirmClearDiscountMode === 'all'
-                ? '¿Deseas eliminar todos los descuentos (cortesías y bono especial)? Los ítems seguirán en la cotización pero dejarán de ser regalo y el bono se pondrá en cero.'
-                : '¿Deseas eliminar todas las cortesías seleccionadas? Los ítems seguirán en la cotización pero dejarán de ser regalo.'}
-              confirmText={confirmClearDiscountMode === 'all' ? 'Eliminar todos' : 'Eliminar todas'}
-              cancelText="Cancelar"
-              variant="destructive"
+              showRestaurar={esNegociacionModificada}
+              onRestaurar={() => {
+                const ini = negociacionInicialRef.current;
+                if (!ini) return;
+                setBonoEspecial(ini.bono);
+                setItemsCortesia(new Set(ini.itemsCortesia));
+                userHasChangedServicesOrAjustesRef.current = true;
+                setPendingSyncFromAjustes(true);
+                toast.success('Ajustes restaurados a la versión guardada');
+              }}
+              sectionRef={sectionNegociacionRef}
+              onScrollIntoView={() => accordionValue.includes('negociacion') && requestAnimationFrame(() => sectionNegociacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
+              onBonoFocus={() => { bonoOnFocusRef.current = bonoEspecial; }}
+              onBonoBlur={() => {
+                const tieneAjustes = itemsCortesia.size > 0 || bonoEspecial > 0 || bonoOnFocusRef.current > 0;
+                if (tieneAjustes && bonoEspecial !== bonoOnFocusRef.current) triggerShake();
+              }}
             />
 
             {/* Precio Final de Cierre — editable libre; placeholder = sugerido; onBlur formatea a 2 decimales */}
@@ -2604,345 +2601,34 @@ export function CotizacionForm({
               <p className="text-[11px] text-zinc-500">Este es el monto real que se le cobrará al prospecto.</p>
             </div>
 
-            {/* 3. Condiciones de cierre */}
-              <AccordionItem value="condiciones" id="cotizacion-form-section-condiciones">
-                <AccordionHeader
-                  ref={sectionCondicionesRef}
-                  className={cn(
-                    'w-full items-center gap-2 border border-zinc-700/50 bg-zinc-800/20',
-                    accordionValue.includes('condiciones') ? 'rounded-t-lg border-b border-zinc-700/50' : 'rounded-lg'
-                  )}
-                >
-                  <AccordionTrigger
-                    className="min-w-0 data-[state=open]:rounded-t-lg data-[state=closed]:flex-col data-[state=closed]:items-stretch data-[state=closed]:gap-0.5"
-                    onClick={() => accordionValue.includes('condiciones') && requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 w-full">
-                      {accordionValue.includes('condiciones') ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                      <span>Condiciones de cierre</span>
-                    </div>
-                    {!accordionValue.includes('condiciones') && (
-                      <span className="text-sm text-emerald-400 normal-case font-medium pl-5 truncate w-full block leading-tight text-left">
-                        {(() => {
-                          const condicionActiva = condicionNegociacion ?? (selectedCondicionComercialId ? condicionesComerciales.find(c => c.id === selectedCondicionComercialId) ?? null : null);
-                          if (!condicionActiva) return `${condicionIdsVisibles.size} ${condicionIdsVisibles.size === 1 ? 'visible' : 'visibles'} para cierre`;
-                          const adv = condicionActiva.advance_type === 'fixed_amount' && condicionActiva.advance_amount != null
-                            ? formatearMoneda(condicionActiva.advance_amount)
-                            : `${condicionActiva.advance_percentage ?? 0}%`;
-                          return `${condicionActiva.name} · Anticipo ${adv}`;
-                        })()}
-                      </span>
-                    )}
-                  </AccordionTrigger>
-                  <div className="flex items-center gap-1 shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
-                    <ZenButton
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setAuditoriaRentabilidadOpen(true)}
-                      disabled={condicionIdsVisibles.size === 0}
-                      title="Análisis de Rentabilidad"
-                      className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <BarChart3 className="h-4 w-4" />
-                    </ZenButton>
-                    <ZenDropdownMenu>
-                      <ZenDropdownMenuTrigger asChild>
-                        <ZenButton
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </ZenButton>
-                      </ZenDropdownMenuTrigger>
-                      <ZenDropdownMenuContent align="end">
-                        <ZenDropdownMenuItem
-                          onClick={() => {
-                            setEditingCondicionId(null);
-                            setCreateCondicionEspecialMode(false);
-                            setShowCondicionesManager(true);
-                          }}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          Gestionar condiciones
-                        </ZenDropdownMenuItem>
-                        <ZenDropdownMenuItem
-                          onClick={() => {
-                            setCreateCondicionEspecialMode(true);
-                            setEditingCondicionId(null);
-                            setShowCondicionesManager(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Crear condición especial
-                        </ZenDropdownMenuItem>
-                      </ZenDropdownMenuContent>
-                    </ZenDropdownMenu>
-                  </div>
-                </AccordionHeader>
-                <AccordionContent>
-                  <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-900/50 p-3">
-                <div>
-                  <p className="text-[11px] text-zinc-500 mb-3">
-                    Puedes habilitar u ocultar las condiciones de contratación que el prospecto podrá elegir para esta cotización.
-                  </p>
-                  {tieneAjustesNegociacion && (
-                    <p className="text-[11px] text-amber-600 mt-1 mb-3">
-                      Se ocultaron condiciones con descuento por los ajustes de negociación (cortesías/bono). Puedes activarlas si lo deseas.
-                    </p>
-                  )}
-                  <div className="grid grid-cols-1 gap-3">
-                  {condicionesComerciales.map((cond) => {
-                    const isVisible = condicionIdsVisibles.has(cond.id);
-                    const isSimulacion = condicionSimulacionId === cond.id;
-                    const descuentoPct = cond.discount_percentage ?? 0;
-                    const dobleBeneficio = tieneAjustesNegociacion && descuentoPct > 0 && (isSimulacion || isVisible);
-                    const totalCosto = calculoPrecio.totalCosto ?? 0;
-                    const totalGasto = calculoPrecio.totalGasto ?? 0;
-                    const comisionRatio = configuracionPrecios ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta) : 0.05;
-                    const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
-                    const totalRecibirCond = Math.max(0, precioCierreBase - (precioCierreBase * descuentoPct) / 100);
-                    const utilidadCond = totalRecibirCond - totalCosto - totalGasto - totalRecibirCond * comisionRatio;
-                    const margenCond = totalRecibirCond > 0 ? (utilidadCond / totalRecibirCond) * 100 : 0;
-                    const saludCond = margenCond < 15 ? 'destructive' : margenCond < 25 ? 'amber' : 'emerald';
-                    return (
-                      <div
-                        key={cond.id}
-                        className={cn(
-                          'rounded-lg border transition-all duration-200 ease-out relative',
-                          dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
-                          !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
-                          !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/5',
-                          !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
-                        )}
-                      >
-                        {/* Cabecera: nombre + etiqueta Visible/Oculto + lápiz */}
-                        <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/30' : 'border-zinc-700/50')}>
-                          <span className={cn('font-medium text-sm min-w-0 truncate', isSimulacion ? 'text-white' : 'text-zinc-300')}>{cond.name}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCondicionIdsVisibles((prev) => {
-                                const next = new Set(prev);
-                                if (isVisible) next.delete(cond.id); else next.add(cond.id);
-                                return next;
-                              });
-                            }}
-                            className={cn(
-                              'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                              isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
-                            )}
-                            aria-label={isVisible ? 'Ocultar para el prospecto' : 'Visible para el prospecto'}
-                          >
-                            {isVisible ? 'Visible' : 'Oculto'}
-                          </button>
-                          {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
-                          {cond.type === 'offer' && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full shrink-0">OFERTA</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCreateCondicionEspecialMode(false);
-                              setEditingCondicionId(cond.id);
-                              setShowCondicionesManager(true);
-                            }}
-                            className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80"
-                            title="Editar condición"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        {/* Cuerpo: clic = simulación */}
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id))}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === cond.id ? null : cond.id)); } }}
-                          className={cn(
-                            'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
-                            isSimulacion && 'bg-amber-500/5',
-                            isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
-                            !isVisible && 'hover:bg-zinc-800/30'
-                          )}
-                        >
-                          {cond.description && <p className="text-xs text-zinc-500">{cond.description}</p>}
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1 text-zinc-400">
-                            <span>Anticipo: {cond.advance_type === 'fixed_amount' && cond.advance_amount != null ? formatearMoneda(cond.advance_amount) : `${cond.advance_percentage ?? 0}%`}</span>
-                            <span>Descuento: {descuentoPct}%</span>
-                          </div>
-                          <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : 'border-zinc-700/40')}>
-                            <div className="flex justify-between items-center text-[10px]">
-                              <span className="text-zinc-500">Utilidad real</span>
-                              <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
-                            </div>
-                            <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
-                              <div
-                                className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
-                                style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
-                              />
-                            </div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
-                          </div>
-                          {dobleBeneficio && (
-                            <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
-                              <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {condicionNegociacion && (() => {
-                    const isVisible = condicionIdsVisibles.has(condicionNegociacion.id);
-                    const isSimulacion = condicionSimulacionId === condicionNegociacion.id;
-                    const descuentoPct = condicionNegociacion.discount_percentage ?? 0;
-                    const dobleBeneficio = tieneAjustesNegociacion && descuentoPct > 0 && (isSimulacion || isVisible);
-                    const totalCosto = calculoPrecio.totalCosto ?? 0;
-                    const totalGasto = calculoPrecio.totalGasto ?? 0;
-                    const comisionRatio = configuracionPrecios ? (configuracionPrecios.comision_venta > 1 ? configuracionPrecios.comision_venta / 100 : configuracionPrecios.comision_venta) : 0.05;
-                    const precioCierreBase = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
-                    const totalRecibirCond = Math.max(0, precioCierreBase - (precioCierreBase * descuentoPct) / 100);
-                    const utilidadCond = totalRecibirCond - totalCosto - totalGasto - totalRecibirCond * comisionRatio;
-                    const margenCond = totalRecibirCond > 0 ? (utilidadCond / totalRecibirCond) * 100 : 0;
-                    const saludCond = margenCond < 15 ? 'destructive' : margenCond < 25 ? 'amber' : 'emerald';
-                    return (
-                      <div
-                        className={cn(
-                          'rounded-lg border transition-all duration-200 ease-out relative',
-                          dobleBeneficio && 'ring-1 ring-amber-500/50 border-amber-500/80 bg-amber-950/30',
-                          !dobleBeneficio && isSimulacion && 'ring-1 ring-amber-500/80 border border-amber-500/80 bg-amber-950/20',
-                          !dobleBeneficio && !isSimulacion && isVisible && 'ring-1 ring-emerald-500/50 border border-emerald-500/40 bg-emerald-500/10',
-                          !dobleBeneficio && !isSimulacion && !isVisible && 'border border-zinc-800 bg-zinc-900/50 opacity-60'
-                        )}
-                      >
-                        <div className={cn('flex items-center gap-2 px-3 py-2 border-b', isSimulacion ? 'border-amber-500/40' : isVisible ? 'border-emerald-500/20' : 'border-zinc-700/50')}>
-                          <div className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                          </div>
-                          <span className="font-medium text-sm text-white min-w-0 truncate">{condicionNegociacion.name}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCondicionIdsVisibles((prev) => {
-                                const next = new Set(prev);
-                                if (isVisible) next.delete(condicionNegociacion.id); else next.add(condicionNegociacion.id);
-                                return next;
-                              });
-                            }}
-                            className={cn(
-                              'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                              isVisible ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
-                            )}
-                            aria-label={isVisible ? 'Ocultar para el prospecto' : 'Visible para el prospecto'}
-                          >
-                            {isVisible ? 'Visible' : 'Oculto'}
-                          </button>
-                          {isSimulacion && <span className="text-[10px] text-amber-500 shrink-0">[Simulando]</span>}
-                          <span className="text-[10px] text-emerald-400/80 shrink-0">Condición especial</span>
-                          <span className="ml-auto" />
-                        </div>
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id))}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCondicionSimulacionId((prev) => (prev === condicionNegociacion.id ? null : condicionNegociacion.id)); } }}
-                          className={cn(
-                            'px-3 py-2.5 cursor-pointer transition-colors duration-200 text-left',
-                            isSimulacion && 'bg-amber-500/5',
-                            isVisible && !isSimulacion && 'hover:bg-emerald-500/10',
-                            !isVisible && 'hover:bg-zinc-800/30'
-                          )}
-                        >
-                          <div className="text-xs text-zinc-400">Descuento: {condicionNegociacion.discount_percentage ?? 0}%</div>
-                          <div className={cn('mt-2 pt-2 border-t', isSimulacion ? 'border-amber-500/30' : isVisible ? 'border-emerald-500/20' : 'border-zinc-700/40')}>
-                            <div className="flex justify-between items-center text-[10px]">
-                              <span className="text-zinc-500">Utilidad real</span>
-                              <span className={cn('tabular-nums font-medium', utilidadCond >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90')}>{formatearMoneda(utilidadCond)}</span>
-                            </div>
-                            <div className="mt-1 h-1 rounded-full bg-zinc-700/60 overflow-hidden">
-                              <div
-                                className={cn('h-full rounded-full transition-all duration-300', saludCond === 'destructive' && 'bg-destructive', saludCond === 'amber' && 'bg-amber-500', saludCond === 'emerald' && 'bg-emerald-500')}
-                                style={{ width: `${Math.min(100, Math.max(0, margenCond))}%` }}
-                              />
-                            </div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">{margenCond.toFixed(1)}% margen</div>
-                          </div>
-                          {dobleBeneficio && (
-                            <div className="mt-2 text-[10px] text-amber-400/90 flex items-center gap-1">
-                              <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Resumen de Pago Simulado — animación entrada/salida y scroll suave */}
-                {condicionSimulacionId && (() => {
-                  const condSim = condicionesComerciales.find(c => c.id === condicionSimulacionId)
-                    ?? (condicionNegociacion?.id === condicionSimulacionId ? condicionNegociacion : null);
-                  const precioCierre = precioPersonalizado !== '' && Number(precioPersonalizado) >= 0 ? Number(precioPersonalizado) : (calculoPrecio.subtotalProyectado ?? 0) - (calculoPrecio.montoDescuentoCondicion ?? 0);
-                  const pct = (condSim as { discount_percentage?: number | null } | null)?.discount_percentage ?? 0;
-                  const descuentoMonto = (precioCierre * pct) / 100;
-                  const totalRecibir = Math.max(0, precioCierre - descuentoMonto);
-                  const advanceType = (condSim as { advance_type?: string | null; advance_percentage?: number | null; advance_amount?: number | null } | null)?.advance_type ?? 'percentage';
-                  const advancePct = (condSim as { advance_percentage?: number | null } | null)?.advance_percentage ?? 0;
-                  const advanceFixed = (condSim as { advance_amount?: number | null } | null)?.advance_amount ?? 0;
-                  const anticipoBruto = advanceType === 'fixed_amount' && advanceFixed != null ? advanceFixed : (totalRecibir * (advancePct / 100));
-                  const anticipoRedondo = Math.round(anticipoBruto);
-                  const diferido = totalRecibir - anticipoRedondo;
-                  const anticipoLabel = advanceType === 'fixed_amount' && advanceFixed != null ? formatearMoneda(advanceFixed) : `${advancePct}%`;
-                  return (
-                    <div
-                      ref={simulacionBlockRef}
-                      className={cn(
-                        'overflow-hidden transition-all duration-300 ease-out',
-                        simulacionBlockExpanded ? 'mt-3 max-h-[400px] opacity-100' : 'max-h-0 opacity-0 mt-0'
-                      )}
-                    >
-                      <div className="rounded-lg border border-amber-500/40 bg-zinc-800/20 p-3 ring-1 ring-amber-500/30">
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">Simulación: El cliente pagará</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between text-zinc-300">
-                            <span>Precio de Cierre</span>
-                            <span className="tabular-nums">{formatearMoneda(precioCierre)}</span>
-                          </div>
-                          <div className="flex justify-between text-amber-400/90">
-                            <span>Descuento aplicado ({pct}%)</span>
-                            <span className="tabular-nums">-{formatearMoneda(descuentoMonto)}</span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-white pt-1 border-t border-zinc-700/50">
-                            <span>Total real a recibir</span>
-                            <span className="tabular-nums">{formatearMoneda(totalRecibir)}</span>
-                          </div>
-                          <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 space-y-1">
-                            <div className="flex justify-between text-zinc-400 text-xs">
-                              <span>Anticipo requerido ({anticipoLabel})</span>
-                              <span className="tabular-nums">{formatearMoneda(anticipoRedondo)}</span>
-                            </div>
-                            <div className="flex justify-between text-zinc-400 text-xs">
-                              <span>Saldo diferido</span>
-                              <span className="tabular-nums">{formatearMoneda(diferido)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+            <CondicionesCierreAccordion
+              context="cotizacion"
+              accordionValue={accordionValue}
+              condicionesComerciales={condicionesComerciales}
+              condicionIdsVisibles={condicionIdsVisibles}
+              setCondicionIdsVisibles={setCondicionIdsVisibles}
+              condicionSimulacionId={condicionSimulacionId}
+              setCondicionSimulacionId={setCondicionSimulacionId}
+              condicionNegociacion={condicionNegociacion}
+              calculoPrecio={{
+                totalCosto: calculoPrecio.totalCosto ?? 0,
+                totalGasto: calculoPrecio.totalGasto ?? 0,
+                subtotalProyectado: calculoPrecio.subtotalProyectado ?? 0,
+                montoDescuentoCondicion: calculoPrecio.montoDescuentoCondicion ?? 0,
+              }}
+              configuracionPrecios={configuracionPrecios}
+              precioPersonalizado={precioPersonalizado}
+              tieneAjustesNegociacion={tieneAjustesNegociacion}
+              onAuditoriaClick={() => setAuditoriaRentabilidadOpen(true)}
+              onGestionarCondiciones={() => { setEditingCondicionId(null); setCreateCondicionEspecialMode(false); setShowCondicionesManager(true); }}
+              onCreateCondicionEspecial={() => { setCreateCondicionEspecialMode(true); setEditingCondicionId(null); setShowCondicionesManager(true); }}
+              onEditCondicion={(condId) => { setCreateCondicionEspecialMode(false); setEditingCondicionId(condId); setShowCondicionesManager(true); }}
+              sectionRef={sectionCondicionesRef}
+              onScrollIntoView={() => accordionValue.includes('condiciones') && requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
+              selectedCondicionComercialId={selectedCondicionComercialId}
+            />
             </div>
-            </Accordion>
+      </CommercialConfigSidebar>
 
             {/* Modal compartido: crear o editar condiciones comerciales (igual que en negociación) */}
             <CondicionesComercialesManager
@@ -3031,308 +2717,135 @@ export function CotizacionForm({
               const explicacionSalud = ratioAlObjetivo >= 0.9 ? 'Estás al 90% o más de tu meta de margen para este mix.' : ratioAlObjetivo >= 0.7 ? 'Estás entre 70% y 89% de tu meta; margen aceptable pero mejorable.' : 'El margen está por debajo del 70% de la meta para este mix de ítems.';
 
               return (
-                <Sheet open={auditoriaRentabilidadOpen} onOpenChange={setAuditoriaRentabilidadOpen}>
-                  <SheetContent side="right" className="flex flex-col w-full max-w-md bg-zinc-900 border-zinc-800 overflow-y-auto">
-                    <SheetHeader className="border-b border-zinc-800/50 pb-4">
-                      <SheetTitle className="text-left text-white">Auditoría de Rentabilidad</SheetTitle>
-                    </SheetHeader>
-                    <div className="px-6 py-4 space-y-6">
-                      {/* Bloque 1: Escenario del Sistema */}
-                      <div>
-                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Escenario del sistema</h3>
-                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-1.5 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">Ingreso sugerido</span>
-                            <span className="tabular-nums text-zinc-200">{formatearMoneda(calculoPrecio.subtotalProyectado ?? 0)}</span>
-                          </div>
-                          {(calculoPrecio.montoDescuentoCondicion ?? 0) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-zinc-500">(−) Descuento por Condición Comercial</span>
-                              <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.montoDescuentoCondicion ?? 0)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">(−) Costos de producción</span>
-                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalCosto)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">(−) Gastos</span>
-                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalGasto)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">(−) Comisión sugerida ({pctComision}%)</span>
-                            <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionSugerido)}</span>
-                          </div>
-                          <Separator className="bg-zinc-700/50 my-1.5" />
-                          <div className="flex justify-between font-medium">
-                            <span className="text-zinc-300">Utilidad sugerida</span>
-                            <span className="tabular-nums text-emerald-500/90">{formatearMoneda(calculoPrecio.utilidadSinDescuento)}</span>
-                          </div>
-                        </div>
+                <AuditoriaRentabilidadSheet
+                  open={auditoriaRentabilidadOpen}
+                  onOpenChange={setAuditoriaRentabilidadOpen}
+                  title="Auditoría de Rentabilidad"
+                  total={calculoPrecio.total ?? 0}
+                  totalCosto={totalCosto}
+                  totalGasto={totalGasto}
+                  utilidadNeta={utilidadProyectada}
+                >
+                  {/* Escenario del sistema */}
+                  <div>
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Escenario del sistema</h3>
+                    <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Ingreso sugerido</span>
+                        <span className="tabular-nums text-zinc-200">{formatearMoneda(calculoPrecio.subtotalProyectado ?? 0)}</span>
                       </div>
-
-                      {/* COMPARATIVA DE CIERRE: un bloque por cada condición visible */}
-                      {condicionIdsVisibles.size > 0 && (
-                        <div>
-                          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Comparativa de cierre</h3>
-                          <div className="space-y-3">
-                            {Array.from(condicionIdsVisibles).map((id) => {
-                              const c = condicionesComerciales.find((x) => x.id === id) ?? (condicionNegociacion?.id === id ? condicionNegociacion : null);
-                              if (!c) return null;
-                              const pct = (c as { discount_percentage?: number | null }).discount_percentage ?? 0;
-                              const descuentoMonto = (precioCierreBase * pct) / 100;
-                              const ingreso = Math.max(0, precioCierreBase - descuentoMonto);
-                              const comisionEsc = ingreso * comisionRatio;
-                              const utilidadNetaReal = ingreso - totalCosto - totalGasto - comisionEsc;
-                              const nombre = (c as { name?: string }).name ?? 'Condición';
-                              const esSimulando = id === condicionSimulacionId;
-                              return (
-                                <div
-                                  key={id}
-                                  className={cn(
-                                    'rounded-lg border p-3 space-y-1.5 text-sm',
-                                    esSimulando ? 'border-amber-500/40 bg-zinc-800/10 ring-1 ring-amber-500/30' : 'border-zinc-700/50 bg-zinc-800/10'
-                                  )}
-                                >
-                                  <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-                                    Escenario: {nombre}
-                                    {esSimulando && <span className="ml-1.5 text-amber-400/90">(simulando)</span>}
-                                  </h4>
-                                  <div className="flex justify-between">
-                                    <span className="text-zinc-500">Ingreso (Precio cierre − Descuento)</span>
-                                    <span className="tabular-nums text-zinc-200">{formatearMoneda(ingreso)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-zinc-500">(−) Costos</span>
-                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalCosto)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-zinc-500">(−) Gastos</span>
-                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalGasto)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-zinc-500">(−) Comisión ({pctComision}%)</span>
-                                    <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionEsc)}</span>
-                                  </div>
-                                  <Separator className="bg-zinc-700/50 my-1.5" />
-                                  <div className="flex justify-between font-medium">
-                                    <span className="text-zinc-300">Utilidad neta real</span>
-                                    <span className={cn(
-                                      'tabular-nums',
-                                      utilidadNetaReal >= 0 && (utilidadNetaReal / (ingreso || 1)) * 100 >= 25 ? 'text-emerald-400' : utilidadNetaReal >= 0 ? 'text-amber-400' : 'text-destructive'
-                                    )}>
-                                      {formatearMoneda(utilidadNetaReal)}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                      {(calculoPrecio.montoDescuentoCondicion ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">(−) Descuento por Condición Comercial</span>
+                          <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.montoDescuentoCondicion ?? 0)}</span>
                         </div>
                       )}
-
-                      {/* Salud Financiera — usa margen de la simulación activa si hay condición simulada */}
-                      <div>
-                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Salud financiera</h3>
-                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-2 text-sm">
-                          <p className="text-[11px] text-zinc-500 leading-relaxed">
-                            Meta de margen ponderada según tu mix de productos y servicios: <strong className="text-zinc-300">{margenObjetivoPct.toFixed(1)}%</strong>. (Servicios {(metaServicio * 100).toFixed(0)}%, productos {(metaProducto * 100).toFixed(0)}%.)
-                          </p>
-                          <p className="text-[11px] text-zinc-500 leading-relaxed">
-                            {condicionSimulacionId ? (
-                              <>Tu margen con la simulación activa es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
-                            ) : (
-                              <>Tu margen de cierre es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
-                            )}
-                            <span className={cn(saludColor === 'destructive' && 'text-destructive', saludColor === 'amber' && 'text-amber-400', saludColor === 'emerald' && 'text-emerald-400')}>
-                              {saludColor === 'destructive' ? 'rojo' : saludColor === 'amber' ? 'ámbar' : 'verde'}
-                            </span>.
-                          </p>
-                        </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">(−) Costos de producción</span>
+                        <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalCosto)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">(−) Gastos</span>
+                        <span className="tabular-nums text-zinc-400">-{formatearMoneda(calculoPrecio.totalGasto)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">(−) Comisión sugerida ({pctComision}%)</span>
+                        <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionSugerido)}</span>
+                      </div>
+                      <Separator className="bg-zinc-700/50 my-1.5" />
+                      <div className="flex justify-between font-medium">
+                        <span className="text-zinc-300">Utilidad sugerida</span>
+                        <span className="tabular-nums text-emerald-500/90">
+                          {formatearMoneda(
+                            (ingresoSugeridoConCondicion > 0 && (calculoPrecio.utilidadSinDescuento ?? 0) === 0)
+                              ? Math.max(0, ingresoSugeridoConCondicion - totalCosto - totalGasto - comisionSugerido)
+                              : (calculoPrecio.utilidadSinDescuento ?? 0)
+                          )}
+                        </span>
                       </div>
                     </div>
-                  </SheetContent>
-                </Sheet>
+                  </div>
+
+                  {condicionIdsVisibles.size > 0 && (
+                    <div>
+                      <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Comparativa de cierre</h3>
+                      <div className="space-y-3">
+                        {Array.from(condicionIdsVisibles).map((id) => {
+                          const c = condicionesComerciales.find((x) => x.id === id) ?? (condicionNegociacion?.id === id ? condicionNegociacion : null);
+                          if (!c) return null;
+                          const pct = (c as { discount_percentage?: number | null }).discount_percentage ?? 0;
+                          const descuentoMonto = (precioCierreBase * pct) / 100;
+                          const ingreso = Math.max(0, precioCierreBase - descuentoMonto);
+                          const comisionEsc = ingreso * comisionRatio;
+                          const utilidadNetaReal = ingreso - totalCosto - totalGasto - comisionEsc;
+                          const nombre = (c as { name?: string }).name ?? 'Condición';
+                          const esSimulando = id === condicionSimulacionId;
+                          return (
+                            <div
+                              key={id}
+                              className={cn(
+                                'rounded-lg border p-3 space-y-1.5 text-sm',
+                                esSimulando ? 'border-amber-500/40 bg-zinc-800/10 ring-1 ring-amber-500/30' : 'border-zinc-700/50 bg-zinc-800/10'
+                              )}
+                            >
+                              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                                Escenario: {nombre}
+                                {esSimulando && <span className="ml-1.5 text-amber-400/90">(SIMULANDO)</span>}
+                              </h4>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Ingreso (Precio cierre − Descuento)</span>
+                                <span className="tabular-nums text-zinc-200">{formatearMoneda(ingreso)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">(−) Costos</span>
+                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalCosto)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">(−) Gastos</span>
+                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(totalGasto)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">(−) Comisión ({pctComision}%)</span>
+                                <span className="tabular-nums text-zinc-400">-{formatearMoneda(comisionEsc)}</span>
+                              </div>
+                              <Separator className="bg-zinc-700/50 my-1.5" />
+                              <div className="flex justify-between font-medium">
+                                <span className="text-zinc-300">Utilidad neta real</span>
+                                <span className={cn(
+                                  'tabular-nums',
+                                  utilidadNetaReal >= 0 && (utilidadNetaReal / (ingreso || 1)) * 100 >= 25 ? 'text-emerald-400' : utilidadNetaReal >= 0 ? 'text-amber-400' : 'text-destructive'
+                                )}>
+                                  {formatearMoneda(utilidadNetaReal)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Salud financiera</h3>
+                    <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/10 p-3 space-y-2 text-sm">
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        Meta de margen ponderada según tu mix de productos y servicios: <strong className="text-zinc-300">{margenObjetivoPct.toFixed(1)}%</strong>. (Servicios {(metaServicio * 100).toFixed(0)}%, productos {(metaProducto * 100).toFixed(0)}%.)
+                      </p>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        {condicionSimulacionId ? (
+                          <>Tu margen con la simulación activa es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
+                        ) : (
+                          <>Tu margen de cierre es <strong className="text-zinc-200">{margenCierre.toFixed(1)}%</strong>. {explicacionSalud} Por eso el indicador aparece en{' '}</>
+                        )}
+                        <span className={cn(saludColor === 'destructive' && 'text-destructive', saludColor === 'amber' && 'text-amber-400', saludColor === 'emerald' && 'text-emerald-400')}>
+                          {saludColor === 'destructive' ? 'rojo' : saludColor === 'amber' ? 'ámbar' : 'verde'}
+                        </span>.
+                      </p>
+                    </div>
+                  </div>
+                </AuditoriaRentabilidadSheet>
               );
             })()}
-
-          {/* Ficha de Condición Comercial Pre-Autorizada */}
-          {isPreAutorizada && condicionComercialPreAutorizada && (
-            <div className="mt-4">
-              <ZenCard variant="outlined" className="bg-blue-500/5 border-blue-500/20">
-                <ZenCardContent className="p-4">
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-zinc-400">
-                            Condición Comercial
-                          </h3>
-                          <ZenBadge
-                            size="sm"
-                            className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] px-1.5 py-0.5 rounded-full">
-                            Pre autorizada
-                          </ZenBadge>
-                        </div>
-                      </div>
-                      <h4 className="text-base font-semibold text-white">
-                        {condicionComercialPreAutorizada.name}
-                      </h4>
-                      {condicionComercialPreAutorizada.description && (
-                        <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                          {condicionComercialPreAutorizada.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Detalles de la condición */}
-                    {(condicionComercialPreAutorizada.advance_type || condicionComercialPreAutorizada.discount_percentage) && (
-                      <div className="pt-2 border-t border-zinc-700/50">
-                        <div className="flex flex-wrap items-center gap-3 text-xs">
-                          {condicionComercialPreAutorizada.advance_type === 'fixed_amount' && condicionComercialPreAutorizada.advance_amount ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-zinc-500">Anticipo:</span>
-                              <span className="font-semibold text-emerald-400">
-                                ${condicionComercialPreAutorizada.advance_amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          ) : condicionComercialPreAutorizada.advance_percentage ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-zinc-500">Anticipo:</span>
-                              <span className="font-semibold text-emerald-400">
-                                {condicionComercialPreAutorizada.advance_percentage}%
-                              </span>
-                            </div>
-                          ) : null}
-                          {condicionComercialPreAutorizada.discount_percentage ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-zinc-500">Descuento:</span>
-                              <span className="font-semibold text-blue-400">
-                                {condicionComercialPreAutorizada.discount_percentage}%
-                              </span>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Botón de autorizar */}
-                    {onAutorizar && !isAlreadyAuthorized && (
-                      <div className="pt-2">
-                        <ZenButton
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          onClick={onAutorizar}
-                          disabled={isAutorizando || loading}
-                          loading={isAutorizando}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          Autorizar ahora
-                        </ZenButton>
-                      </div>
-                    )}
-                  </div>
-                </ZenCardContent>
-              </ZenCard>
-            </div>
-          )}
-
-          </div>
-
-          {/* Botones debajo del contenido (mismo flujo, sin scroll interno) */}
-          {customActionButtons ? (
-            <div className="border-t border-zinc-700 pt-3 mt-4">
-              {customActionButtons}
-            </div>
-          ) : !hideActionButtons ? (
-            (() => {
-              const isCurrentlyVisible = visibleToClient;
-              return (
-                <div className="border-t border-zinc-700 pt-3 mt-4 space-y-2">
-                  {onRequestPreview && (
-                    <ZenButton
-                      type="button"
-                      variant="outline"
-                      onClick={onRequestPreview}
-                      disabled={loading || isDisabled}
-                      className="w-full gap-1.5 border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/70"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      Vista previa
-                    </ZenButton>
-                  )}
-                  {isEditMode ? (
-                    <>
-                      <ZenButton
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleSave(false)}
-                        loading={loading && savingIntent === 'draft'}
-                        loadingText="Guardando..."
-                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                        className="w-full"
-                      >
-                        {isCurrentlyVisible ? 'Cambiar a borrador' : 'Guardar cambios'}
-                      </ZenButton>
-                      <ZenButton
-                        type="button"
-                        variant="primary"
-                        onClick={() => handleSave(true)}
-                        loading={loading && savingIntent === 'publish'}
-                        loadingText={isCurrentlyVisible ? 'Guardando...' : 'Publicando...'}
-                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                        className="w-full"
-                      >
-                        {isCurrentlyVisible ? 'Guardar cambios' : 'Publicar ahora'}
-                      </ZenButton>
-                    </>
-                  ) : (
-                    <>
-                      <ZenButton
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleSave(false)}
-                        loading={loading && savingIntent === 'draft'}
-                        loadingText="Guardando..."
-                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                        className="w-full"
-                      >
-                        Guardar borrador
-                      </ZenButton>
-                      <ZenButton
-                        type="button"
-                        variant="primary"
-                        onClick={() => handleSave(true)}
-                        loading={loading && savingIntent === 'publish'}
-                        loadingText="Publicando..."
-                        disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
-                        title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
-                        className="w-full"
-                      >
-                        Crear y Publicar
-                      </ZenButton>
-                    </>
-                  )}
-                  <ZenButton
-                    type="button"
-                    variant="secondary"
-                    onClick={handleCancelClick}
-                    disabled={loading || isDisabled}
-                    className="w-full"
-                  >
-                    Cancelar
-                  </ZenButton>
-                </div>
-              );
-            })()
-          ) : null}
-        </form>
-      </div>
 
       {/* Modal de resolución de nombre duplicado (Fase 11.2) */}
       <Dialog open={showNameConflictModal} onOpenChange={(open) => { setShowNameConflictModal(open); if (!open) setConflictSuggestedName(''); }}>
@@ -3373,6 +2886,43 @@ export function CotizacionForm({
               className="flex-1"
             >
               Confirmar y Guardar
+            </ZenButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: ítems personalizados al guardar como paquete (Fase 2.2) */}
+      <Dialog open={showPaqueteCustomItemsModal} onOpenChange={setShowPaqueteCustomItemsModal}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Ítems personalizados en la cotización</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Hay {customItems.length} ítem(s) personalizado(s) que no están en el catálogo. El paquete se creará solo con los ítems de catálogo. Para incluirlos después, usa &quot;Guardar en catálogo&quot; en cada ítem y vuelve a crear el paquete si lo necesitas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-48 overflow-y-auto space-y-1">
+            {customItems.map((ci, idx) => {
+              const seccion = catalogoFiltrado.find(s => s.categorias?.some(c => c.id === ci.categoriaId));
+              const categoria = seccion?.categorias?.find(c => c.id === ci.categoriaId);
+              const seccionNombre = seccion?.nombre ?? '—';
+              const categoriaNombre = categoria?.nombre ?? '—';
+              return (
+                <div key={idx} className="text-sm text-zinc-300 py-1 border-b border-zinc-700/50 last:border-0">
+                  <span className="text-zinc-500">{seccionNombre}</span>
+                  <span className="text-zinc-500 mx-1">›</span>
+                  <span className="text-zinc-400">{categoriaNombre}</span>
+                  <span className="text-zinc-500 mx-1">›</span>
+                  <span className="text-white">{ci.name}</span>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter className="flex gap-2">
+            <ZenButton variant="secondary" onClick={() => setShowPaqueteCustomItemsModal(false)} className="flex-1">
+              Cancelar
+            </ZenButton>
+            <ZenButton variant="primary" onClick={runGuardarComoPaquete} disabled={isSavingAsPaquete} loading={isSavingAsPaquete} className="flex-1">
+              Crear paquete igualmente
             </ZenButton>
           </DialogFooter>
         </DialogContent>

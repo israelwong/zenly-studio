@@ -196,7 +196,7 @@ export function PaqueteCoverDropzone({
     const currentMedia = media[0] as MediaItem | undefined;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-2">
             {/* Mensaje de error */}
             {error && (
                 <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm animate-in slide-in-from-top-2">
@@ -221,7 +221,7 @@ export function PaqueteCoverDropzone({
             <div
                 className={cn(
                     "grid rounded-lg border-2 border-dashed transition-all duration-200 bg-zinc-800/30 overflow-hidden",
-                    currentMedia ? "grid-cols-[120px_1fr] gap-0" : "grid-cols-1",
+                    currentMedia ? "grid-cols-[88px_1fr] gap-0" : "grid-cols-1",
                     isDragging
                         ? "border-emerald-500 bg-emerald-500/20"
                         : "border-zinc-700 hover:border-emerald-500/50"
@@ -233,7 +233,7 @@ export function PaqueteCoverDropzone({
             >
                 {/* Preview thumbnail - compacto */}
                 {currentMedia && (
-                    <div className="relative bg-zinc-900 overflow-hidden group pt-1" style={{ height: '120px', width: '120px', margin: 0 }}>
+                    <div className="relative bg-zinc-900 overflow-hidden group pt-0.5" style={{ height: '88px', width: '88px', margin: 0 }}>
                         {currentMedia.file_type === 'video' ? (
                             <video
                                 src={currentMedia.file_url}
@@ -253,7 +253,7 @@ export function PaqueteCoverDropzone({
                                 alt={currentMedia.filename}
                                 fill
                                 className="object-cover"
-                                sizes="120px"
+                                sizes="88px"
                             />
                         )}
 
@@ -312,29 +312,29 @@ export function PaqueteCoverDropzone({
                     }}
                     disabled={isUploading}
                     className={cn(
-                        "relative flex items-center justify-center p-3 rounded-lg text-center transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed",
-                        currentMedia ? "h-full min-h-[120px]" : "h-32",
+                        "relative flex items-center justify-center p-2 rounded-lg text-center transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed",
+                        currentMedia ? "h-full min-h-[88px]" : "h-24",
                         isDragging && "bg-emerald-500/10"
                     )}
                 >
-                    <div className="flex flex-col items-center gap-1.5">
+                    <div className="flex flex-col items-center gap-1">
                         {isUploading ? (
                             <>
-                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent"></div>
-                                <div className="text-sm text-emerald-400 font-medium">Subiendo...</div>
+                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-400 border-t-transparent"></div>
+                                <div className="text-xs text-emerald-400 font-medium">Subiendo...</div>
                             </>
                         ) : (
                             <>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                     {isDragging ? (
-                                        <Upload className="h-8 w-8 text-emerald-400 animate-bounce" />
+                                        <Upload className="h-6 w-6 text-emerald-400 animate-bounce" />
                                     ) : currentMedia?.file_type === 'video' ? (
-                                        <Film className="h-6 w-6 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                                        <Film className="h-5 w-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
                                     ) : (
-                                        <ImageIcon className="h-6 w-6 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                                        <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
                                     )}
                                 </div>
-                                <div className="text-sm font-medium text-zinc-300">
+                                <div className="text-xs font-medium text-zinc-300">
                                     {isDragging
                                         ? 'Suelta el archivo aquí'
                                         : currentMedia
