@@ -808,18 +808,17 @@ export async function obtenerPaquetePorId(
         // Transformar Decimal a number y Json a tipo correcto (Fase 9.0)
         const transformedPaquete: PaqueteFromDB = {
             ...paquete,
-            bono_especial: paquete.bono_especial ? Number(paquete.bono_especial) : null,
+            bono_especial: paquete.bono_especial != null ? Number(paquete.bono_especial) : null,
             items_cortesia: Array.isArray(paquete.items_cortesia) 
                 ? (paquete.items_cortesia as string[]) 
                 : null,
         };
 
-        // DEBUG: Log de transformación (Fase 9.1)
+        // DEBUG: Log de carga desde DB (Fase 9.2)
+        console.log('[DEBUG] Paquete desde DB:', paquete.name, paquete.bono_especial, paquete.items_cortesia);
         console.log('[PAQUETE DEBUG] Datos transformados para cliente:', {
             paquete_id: transformedPaquete.id,
-            bono_especial_raw: paquete.bono_especial,
             bono_especial_transformed: transformedPaquete.bono_especial,
-            items_cortesia_raw: paquete.items_cortesia,
             items_cortesia_transformed: transformedPaquete.items_cortesia,
         });
 

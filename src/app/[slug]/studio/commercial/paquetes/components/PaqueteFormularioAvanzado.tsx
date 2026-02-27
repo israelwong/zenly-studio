@@ -205,16 +205,15 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             }
             const paq = paquete as { bono_especial?: number | null; items_cortesia?: string[] | null };
             
-            // DEBUG: Log de hidratación (Fase 9.1)
+            // DEBUG: Log de hidratación (Fase 9.2)
             console.log('[FRONTEND DEBUG] Hidratando negociaciones:', {
                 paquete_id: paquete.id,
                 bono_especial_received: paq.bono_especial,
                 items_cortesia_received: paq.items_cortesia,
-                is_array: Array.isArray(paq.items_cortesia),
             });
             
-            if (paq.bono_especial != null) setBonoEspecial(Number(paq.bono_especial));
-            if (Array.isArray(paq.items_cortesia)) setItemsCortesia(new Set(paq.items_cortesia));
+            setBonoEspecial(paq.bono_especial != null ? Number(paq.bono_especial) : 0);
+            setItemsCortesia(Array.isArray(paq.items_cortesia) ? new Set(paq.items_cortesia) : new Set());
             if (onPublishedChange) {
                 onPublishedChange(paquete.status === 'active');
             } else {

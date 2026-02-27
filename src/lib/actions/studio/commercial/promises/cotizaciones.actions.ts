@@ -1646,17 +1646,22 @@ export async function guardarCotizacionComoPaquete(
         throw new Error('No hay ítems válidos para crear el paquete');
       }
 
-      // FASE 3: Mapear items_cortesia a IDs del catálogo global (Fase 9.0 Fix)
+      // FASE 3: Mapear items_cortesia a IDs del catálogo global (Fase 9.2 Fix)
       let itemsCortesiaValidos: string[] = [];
       if (Array.isArray(cotizacion.items_cortesia)) {
         const itemsCortesiaFromCotizacion = cotizacion.items_cortesia as string[];
         
+        console.log('[PAQUETE DEBUG] Cortesías raw desde cotización:', itemsCortesiaFromCotizacion);
+        console.log('[PAQUETE DEBUG] IDs cotizacion_items:', cotizacion.cotizacion_items.map(i => ({ id: i.id, item_id: i.item_id, is_custom: i.is_custom })));
+        
         itemsCortesiaValidos = itemsCortesiaFromCotizacion
           .map(cotizacionItemId => {
-            // Buscar el item en la cotización
-            const cotizacionItem = cotizacion.cotizacion_items.find(i => i.id === cotizacionItemId);
+            // Buscar por id del snapshot O por item_id del catálogo
+            const cotizacionItem = cotizacion.cotizacion_items.find(
+              i => i.id === cotizacionItemId || i.item_id === cotizacionItemId
+            );
             if (!cotizacionItem) {
-              console.warn(`[PAQUETE] item_cortesia ID ${cotizacionItemId} no existe en cotización, omitido`);
+              console.warn(`[PAQUETE] item_cortesia ID ${cotizacionItemId} no encontrado por id ni item_id, omitido`);
               return null;
             }
             
@@ -1664,7 +1669,7 @@ export async function guardarCotizacionComoPaquete(
             if (cotizacionItem.is_custom === true || cotizacionItem.item_id === null) {
               const newItemId = customItemIdMap.get(cotizacionItem.id);
               if (!newItemId) {
-                console.warn(`[PAQUETE] Custom item cortesía ${cotizacionItemId} no se persistió correctamente, omitido`);
+                console.warn(`[PAQUETE] Custom item cortesía ${cotizacionItemId} no se persistió, omitido`);
                 return null;
               }
               return newItemId;
@@ -1674,6 +1679,8 @@ export async function guardarCotizacionComoPaquete(
             return cotizacionItem.item_id;
           })
           .filter((id): id is string => id !== null);
+        
+        console.log('[PAQUETE DEBUG] Cortesías mapeadas a catálogo:', itemsCortesiaValidos);
       }
 
       // FASE 4: Obtener order máximo para el paquete
@@ -1706,7 +1713,7 @@ export async function guardarCotizacionComoPaquete(
           cover_url: options?.coverPhotoUrl ?? null,
           status: 'active',
           order: newOrder,
-          bono_especial: cotizacion.bono_especial ? new Prisma.Decimal(Number(cotizacion.bono_especial)) : null,
+          bono_especial: cotizacion.bono_especial != null ? new Prisma.Decimal(Number(cotizacion.bono_especial)) : null,
           items_cortesia: itemsCortesiaValidos.length > 0 ? itemsCortesiaValidos : null,
         },
       });
