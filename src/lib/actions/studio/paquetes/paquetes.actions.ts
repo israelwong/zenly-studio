@@ -729,16 +729,16 @@ export async function obtenerPaqueteParaEditar(
             };
         }
 
-        const transformed: PaqueteFromDB = {
-            ...paquete,
-            bono_especial: paquete.bono_especial != null ? Number(paquete.bono_especial) : null,
-            items_cortesia: Array.isArray(paquete.items_cortesia)
-                ? (paquete.items_cortesia as string[])
-                : null,
-        };
+        // Serializar a plain object para evitar Decimal/BigInt en Client Components
+        const transformed = JSON.parse(JSON.stringify(paquete, (_, v) =>
+            typeof v === 'bigint' ? Number(v) : v
+        )) as PaqueteFromDB;
+        transformed.bono_especial = paquete.bono_especial != null ? Number(paquete.bono_especial) : null;
+        transformed.items_cortesia = Array.isArray(paquete.items_cortesia)
+            ? (paquete.items_cortesia as string[])
+            : null;
 
-        // DEBUG: Verificar datos antes de enviar al cliente (Fase 9.3)
-        console.log('[SERVER DEBUG] Paquete cargado para editor:', transformed.name, transformed.bono_especial, transformed.items_cortesia);
+        console.log('[SERVER DEBUG] Paquete para editor:', transformed.name, transformed.bono_especial, transformed.items_cortesia);
 
         return {
             success: true,
@@ -816,22 +816,16 @@ export async function obtenerPaquetePorId(
             };
         }
 
-        // Transformar Decimal a number y Json a tipo correcto (Fase 9.0)
-        const transformedPaquete: PaqueteFromDB = {
-            ...paquete,
-            bono_especial: paquete.bono_especial != null ? Number(paquete.bono_especial) : null,
-            items_cortesia: Array.isArray(paquete.items_cortesia) 
-                ? (paquete.items_cortesia as string[]) 
-                : null,
-        };
+        // Serializar a plain object para evitar Decimal/BigInt en Client Components
+        const transformedPaquete = JSON.parse(JSON.stringify(paquete, (_, v) =>
+            typeof v === 'bigint' ? Number(v) : v
+        )) as PaqueteFromDB;
+        transformedPaquete.bono_especial = paquete.bono_especial != null ? Number(paquete.bono_especial) : null;
+        transformedPaquete.items_cortesia = Array.isArray(paquete.items_cortesia)
+            ? (paquete.items_cortesia as string[])
+            : null;
 
-        // DEBUG: Log de carga desde DB (Fase 9.2)
-        console.log('[DEBUG] Paquete desde DB:', paquete.name, paquete.bono_especial, paquete.items_cortesia);
-        console.log('[PAQUETE DEBUG] Datos transformados para cliente:', {
-            paquete_id: transformedPaquete.id,
-            bono_especial_transformed: transformedPaquete.bono_especial,
-            items_cortesia_transformed: transformedPaquete.items_cortesia,
-        });
+        console.log('[DEBUG] Paquete desde DB:', transformedPaquete.name, transformedPaquete.bono_especial, transformedPaquete.items_cortesia);
 
         return {
             success: true,
