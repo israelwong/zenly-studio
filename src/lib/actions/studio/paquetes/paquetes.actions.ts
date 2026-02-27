@@ -37,6 +37,9 @@ export async function getPaquetesShell(
     cover_storage_bytes: bigint | null;
     description: string | null;
     base_hours: number | null;
+    visibility: string | null;
+    bono_especial: number | null;
+    items_cortesia: string[] | null;
     event_types: {
         id: string;
         name: string;
@@ -72,6 +75,9 @@ export async function getPaquetesShell(
                 cover_storage_bytes: true,
                 description: true,
                 base_hours: true,
+                visibility: true,
+                bono_especial: true,
+                items_cortesia: true,
                 event_types: {
                     select: {
                         id: true,
@@ -79,7 +85,6 @@ export async function getPaquetesShell(
                         order: true,
                     },
                 },
-                // NO incluir paquete_items - solo se cargan cuando se edita
             },
             orderBy: { order: "asc" },
         });
@@ -98,6 +103,9 @@ export async function getPaquetesShell(
                 cover_storage_bytes: p.cover_storage_bytes,
                 description: p.description,
                 base_hours: p.base_hours,
+                visibility: p.visibility,
+                bono_especial: p.bono_especial != null ? Number(p.bono_especial) : null,
+                items_cortesia: Array.isArray(p.items_cortesia) ? (p.items_cortesia as string[]) : null,
                 event_types: p.event_types,
             })),
         };
@@ -705,6 +713,7 @@ export async function obtenerPaqueteParaEditar(
                         order: true,
                         created_at: true,
                         updated_at: true,
+                        visibility: true,
                         bono_especial: true,
                         items_cortesia: true,
                         event_types: {

@@ -44,6 +44,8 @@ interface PaqueteFormularioAvanzadoProps {
     initialEventTypeId?: string;
     initialCatalogo?: SeccionData[];
     initialPreciosConfig?: ConfiguracionPrecios | null;
+    externalVisibility?: 'public' | 'private';
+    onVisibilityChange?: (v: 'public' | 'private') => void;
 }
 
 export interface PaqueteFormularioRef {
@@ -61,14 +63,17 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     onCancel,
     initialEventTypeId,
     initialCatalogo,
-    initialPreciosConfig
+    initialPreciosConfig,
+    externalVisibility,
+    onVisibilityChange
 }, ref) => {
     // Estado del formulario
     const [nombre, setNombre] = useState(paquete?.name || '');
     const [descripcion, setDescripcion] = useState('');
     const [baseHours, setBaseHours] = useState<number | ''>((paquete as { base_hours?: number | null })?.base_hours || '');
     const [isFeaturedInternal, setIsFeaturedInternal] = useState((paquete as { is_featured?: boolean })?.is_featured || false);
-    const [visibility, setVisibility] = useState<'public' | 'private'>((paquete as { visibility?: string })?.visibility === 'private' ? 'private' : 'public');
+    const visibility = externalVisibility ?? ((paquete as { visibility?: string })?.visibility === 'private' ? 'private' : 'public');
+    const setVisibility = onVisibilityChange ?? (() => {});
     const [precioPersonalizado, setPrecioPersonalizado] = useState<string | number>('');
     const [isPublishedInternal, setIsPublishedInternal] = useState(paquete?.status === 'active' || false);
 
@@ -183,7 +188,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             } else {
                 setIsFeaturedInternal((paquete as { is_featured?: boolean }).is_featured || false);
             }
-            setVisibility((paquete as { visibility?: string }).visibility === 'private' ? 'private' : 'public');
+            if (onVisibilityChange) {
+                onVisibilityChange((paquete as { visibility?: string }).visibility === 'private' ? 'private' : 'public');
+            }
             setPrecioPersonalizado(paquete.precio || '');
 
             // Cargar cover si existe
@@ -1378,65 +1385,6 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                         }}
                                         isUploading={isUploading}
                                     />
-                                </div>
-                                {/* Tarjetas de estatus y visibilidad — compactas, info en popover grande y legible */}
-                                <div className="mt-4 pt-4 border-t border-zinc-700/50 flex flex-col gap-2">
-                                    <ZenCard variant="outlined" padding="none" className="border-zinc-700/50">
-                                        <ZenCardContent className="p-2">
-                                            <div className="flex items-center justify-between gap-4">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="text-sm font-medium text-zinc-200 shrink-0">
-                                                        {visibility === 'public' ? 'Visibilidad pública' : 'Visibilidad privada'}
-                                                    </span>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 rounded p-0.5">
-                                                                <Info className="h-3.5 w-3.5" aria-hidden />
-                                                            </button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="top" className="max-w-[320px] p-4 text-sm text-zinc-300 bg-zinc-800 border-zinc-700">
-                                                            Visible para prospectos en la promesa pública para que puedan seleccionarlo. Si es privado, solo se usará internamente.
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                                <ZenSwitch
-                                                    checked={visibility === 'public'}
-                                                    onCheckedChange={(checked) => setVisibility(checked ? 'public' : 'private')}
-                                                    label=""
-                                                    variant="emerald"
-                                                    className="!mt-0 !space-x-0 shrink-0"
-                                                />
-                                            </div>
-                                        </ZenCardContent>
-                                    </ZenCard>
-                                    <ZenCard variant="outlined" padding="none" className="border-zinc-700/50">
-                                        <ZenCardContent className="p-2">
-                                            <div className="flex items-center justify-between gap-4">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="text-sm font-medium text-zinc-200 shrink-0">
-                                                        {isFeatured ? 'Paquete destacado' : 'No destacado'}
-                                                    </span>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 rounded p-0.5">
-                                                                <Info className="h-3.5 w-3.5" aria-hidden />
-                                                            </button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="top" className="max-w-[320px] p-4 text-sm text-zinc-300 bg-zinc-800 border-zinc-700">
-                                                            Se mostrará una sugerencia de &quot;Recomendado&quot; sobre este paquete en la vista pública para llamar la atención del prospecto.
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                                <ZenSwitch
-                                                    checked={isFeatured}
-                                                    onCheckedChange={setIsFeatured}
-                                                    label=""
-                                                    variant="amber"
-                                                    className="!mt-0 !space-x-0 shrink-0"
-                                                />
-                                            </div>
-                                        </ZenCardContent>
-                                    </ZenCard>
                                 </div>
                             </div>
                         </AccordionContent>

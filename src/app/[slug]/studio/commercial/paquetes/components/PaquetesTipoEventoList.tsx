@@ -5,7 +5,7 @@ import { startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive, Clock } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive, Clock, Lock, Gift, Tag } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -1468,23 +1468,39 @@ export function PaquetesTipoEventoList({
                         className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <div className="flex-1">
-                            <div className="flex items-center gap-1.5">
-                                {/* Indicadores de estado */}
-                                {paquete.status === 'active' && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {paquete.status === 'active' ? (
                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-600/30">
                                         <CheckCircle className="h-2.5 w-2.5" />
                                         Publicado
                                     </span>
-                                )}
-                                {paquete.status !== 'active' && (
+                                ) : (
                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-600/20 text-zinc-400 border border-zinc-600/30">
                                         <XCircle className="h-2.5 w-2.5" />
                                         No publicado
                                     </span>
                                 )}
+                                {paquete.visibility === 'private' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-600/20 text-red-400 border border-red-600/30">
+                                        <Lock className="h-2.5 w-2.5" />
+                                        Privado
+                                    </span>
+                                )}
                                 {paquete.is_featured && (
                                     <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-600/20 border border-amber-600/30">
                                         <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                    </span>
+                                )}
+                                {Array.isArray(paquete.items_cortesia) && paquete.items_cortesia.length > 0 && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-500/10 text-purple-400/70 border border-purple-500/20">
+                                        <Gift className="h-2.5 w-2.5" />
+                                        {paquete.items_cortesia.length}
+                                    </span>
+                                )}
+                                {typeof paquete.bono_especial === 'number' && paquete.bono_especial > 0 && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400/70 border border-amber-500/20">
+                                        <Tag className="h-2.5 w-2.5" />
+                                        -${paquete.bono_especial.toLocaleString()}
                                     </span>
                                 )}
                             </div>

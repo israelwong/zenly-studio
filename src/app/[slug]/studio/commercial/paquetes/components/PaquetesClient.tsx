@@ -17,6 +17,9 @@ interface PaqueteShell {
     cover_storage_bytes: bigint | null;
     description: string | null;
     base_hours: number | null;
+    visibility: string | null;
+    bono_especial: number | null;
+    items_cortesia: string[] | null;
     event_types: {
         id: string;
         name: string;
@@ -55,7 +58,10 @@ export function PaquetesClient({
         order: p.order, // Mantener order para compatibilidad con PaquetesTipoEventoList
         created_at: new Date(),
         updated_at: new Date(),
-        paquete_items: undefined, // No cargados en shell
+        bono_especial: p.bono_especial ?? null,
+        items_cortesia: p.items_cortesia ?? null,
+        visibility: p.visibility ?? 'public',
+        paquete_items: undefined,
         event_types: p.event_types ? {
             id: p.event_types.id,
             name: p.event_types.name,
@@ -101,6 +107,9 @@ export function PaquetesClient({
                 order: p.order,
                 created_at: new Date(),
                 updated_at: new Date(),
+                bono_especial: p.bono_especial ?? null,
+                items_cortesia: p.items_cortesia ?? null,
+                visibility: p.visibility ?? 'public',
                 paquete_items: undefined,
                 event_types: p.event_types ? {
                     id: p.event_types.id,

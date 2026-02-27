@@ -74,6 +74,7 @@ export type PaqueteFromDB = {
     position: number;
     created_at: Date;
     updated_at: Date;
+    visibility?: string | null;
     bono_especial?: number | null;
     items_cortesia?: string[] | null;
 } & {

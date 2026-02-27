@@ -13,6 +13,7 @@ import {
   ZenDropdownMenuTrigger,
   ZenDropdownMenuContent,
   ZenDropdownMenuItem,
+  ZenDropdownMenuLabel,
   ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
 import {
@@ -77,7 +78,7 @@ export function PromiseQuotesPanel({
   initialCotizaciones = [], // ✅ OPTIMIZACIÓN: Usar datos iniciales del servidor
 }: PromiseQuotesPanelProps) {
   const router = useRouter();
-  const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null }>>([]);
+  const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null; visibility?: string }>>([]);
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cotizaciones, setCotizaciones] = useState<CotizacionListItem[]>(initialCotizaciones); // ✅ OPTIMIZACIÓN: Inicializar con datos del servidor
@@ -123,19 +124,18 @@ export function PromiseQuotesPanel({
       try {
         const result = await obtenerPaquetes(studioSlug);
         if (result.success && result.data) {
-          // Filtrar paquetes por tipo de evento si está disponible
           const filteredPackages = result.data
             .filter((pkg: PaqueteFromDB) => {
-              // Si el paquete tiene event_types, filtrar por eventTypeId
               if (pkg.event_types) {
                 return pkg.event_types.id === eventTypeId;
               }
-              return true; // Si no tiene tipo de evento, incluir todos
+              return true;
             })
             .map((pkg: PaqueteFromDB) => ({
               id: pkg.id,
               name: pkg.name,
               precio: pkg.precio || null,
+              visibility: (pkg as { visibility?: string }).visibility ?? 'public',
             }));
           setPackages(filteredPackages);
         }
@@ -404,6 +404,15 @@ export function PromiseQuotesPanel({
   }, [cotizaciones]);
 
   const isMenuDisabled = !eventTypeId || !isSaved || hasApprovedQuote;
+
+  const paquetesPublicos = React.useMemo(
+    () => packages.filter((p) => p.visibility !== 'private'),
+    [packages]
+  );
+  const paquetesPrivados = React.useMemo(
+    () => packages.filter((p) => p.visibility === 'private'),
+    [packages]
+  );
 
   // Obtener la cotización en cierre o autorizada para el card de cierre (solo si tiene evento activo)
   const approvedQuote = cotizaciones.find(
@@ -789,21 +798,51 @@ export function PromiseQuotesPanel({
                           </div>
                         ) : packages.length > 0 ? (
                           <>
-                            {packages.map((pkg) => (
-                              <ZenDropdownMenuItem
-                                key={pkg.id}
-                                onClick={() => handleCreateFromPackage(pkg.id)}
-                              >
-                                <Package className="h-4 w-4 mr-2" />
-                                <span className="flex-1">{pkg.name}</span>
-                                {pkg.precio !== null && (
-                                  <span className="text-xs text-zinc-400 ml-2">
-                                    ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                  </span>
-                                )}
-                              </ZenDropdownMenuItem>
-                            ))}
-                            <ZenDropdownMenuSeparator />
+                            {paquetesPublicos.length > 0 && (
+                              <>
+                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
+                                  PÚBLICOS
+                                </ZenDropdownMenuLabel>
+                                {paquetesPublicos.map((pkg) => (
+                                  <ZenDropdownMenuItem
+                                    key={pkg.id}
+                                    onClick={() => handleCreateFromPackage(pkg.id)}
+                                  >
+                                    <Package className="h-4 w-4 mr-2" />
+                                    <span className="flex-1">{pkg.name}</span>
+                                    {pkg.precio !== null && (
+                                      <span className="text-xs text-zinc-400 ml-2">
+                                        ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    )}
+                                  </ZenDropdownMenuItem>
+                                ))}
+                              </>
+                            )}
+                            {paquetesPrivados.length > 0 && (
+                              <>
+                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
+                                  PRIVADOS
+                                </ZenDropdownMenuLabel>
+                                {paquetesPrivados.map((pkg) => (
+                                  <ZenDropdownMenuItem
+                                    key={pkg.id}
+                                    onClick={() => handleCreateFromPackage(pkg.id)}
+                                  >
+                                    <Package className="h-4 w-4 mr-2" />
+                                    <span className="flex-1">{pkg.name}</span>
+                                    {pkg.precio !== null && (
+                                      <span className="text-xs text-zinc-400 ml-2">
+                                        ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    )}
+                                  </ZenDropdownMenuItem>
+                                ))}
+                              </>
+                            )}
+                            {(paquetesPublicos.length > 0 || paquetesPrivados.length > 0) && (
+                              <ZenDropdownMenuSeparator />
+                            )}
                             <ZenDropdownMenuItem onClick={handleCreateCustom}>
                               <Sparkles className="h-4 w-4 mr-2" />
                               Personalizada
