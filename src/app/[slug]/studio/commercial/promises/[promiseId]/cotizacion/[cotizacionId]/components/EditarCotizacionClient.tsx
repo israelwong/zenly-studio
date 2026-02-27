@@ -3,8 +3,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle, Settings2, PackagePlus } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
+import { ArrowLeft, CheckCircle, Settings2, PackagePlus, MoreHorizontal } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
 import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
 import { PromiseShareOptionsModal } from '../../../components/PromiseShareOptionsModal';
@@ -218,28 +218,7 @@ export function EditarCotizacionClient({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <ZenButton
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => guardarComoPaqueteRef.current?.()}
-          disabled={isFormLoading || isSavingAsPaquete}
-          className="gap-1.5"
-        >
-          <PackagePlus className="h-4 w-4" />
-          {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
-        </ZenButton>
-        <ZenButton
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowShareOptionsModal(true)}
-          className="gap-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-        >
-          <Settings2 className="h-4 w-4" />
-          Visualización y automatización
-        </ZenButton>
-        {false && canShowPasarACierre && (
+        {canShowPasarACierre && false && (
           <ZenButton
             variant="primary"
             size="md"
@@ -252,6 +231,35 @@ export function EditarCotizacionClient({
             Pasar a Cierre
           </ZenButton>
         )}
+        <ZenDropdownMenu>
+          <ZenDropdownMenuTrigger asChild>
+            <ZenButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              disabled={isFormLoading || isSavingAsPaquete}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              Herramientas
+            </ZenButton>
+          </ZenDropdownMenuTrigger>
+          <ZenDropdownMenuContent align="end" className="w-56">
+            <ZenDropdownMenuItem
+              onClick={() => setShowShareOptionsModal(true)}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Visualización y automatización
+            </ZenDropdownMenuItem>
+            <ZenDropdownMenuItem
+              onClick={() => guardarComoPaqueteRef.current?.()}
+              disabled={isSavingAsPaquete}
+            >
+              <PackagePlus className="h-4 w-4 mr-2" />
+              {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+            </ZenDropdownMenuItem>
+          </ZenDropdownMenuContent>
+        </ZenDropdownMenu>
       </div>
     </div>
   );
