@@ -705,6 +705,8 @@ export async function getCotizacionById(
     contact_name?: string | null;
     items_cortesia?: string[];
     bono_especial?: number;
+    event_type_id?: string | null;
+    event_type_name?: string | null;
     items: Array<{
       item_id: string | null; // null para custom items
       quantity: number;
@@ -777,6 +779,7 @@ export async function getCotizacionById(
         items_cortesia: true,
         bono_especial: true,
         condiciones_visibles: true,
+        event_type_id: true,
         condicion_comercial_negociacion: {
           select: {
             id: true,
@@ -787,6 +790,12 @@ export async function getCotizacionById(
             advance_type: true,
             advance_amount: true,
             is_temporary: true,
+          },
+        },
+        event_types: {
+          select: {
+            id: true,
+            name: true,
           },
         },
         promise: {
@@ -921,6 +930,8 @@ export async function getCotizacionById(
         items_cortesia: Array.isArray(cotizacion.items_cortesia) ? (cotizacion.items_cortesia as string[]) : [],
         bono_especial: cotizacion.bono_especial !== null && cotizacion.bono_especial !== undefined ? Number(cotizacion.bono_especial) : 0,
         condiciones_visibles: Array.isArray(cotizacion.condiciones_visibles) ? (cotizacion.condiciones_visibles as string[]) : null,
+        event_type_id: cotizacion.event_type_id ?? null,
+        event_type_name: cotizacion.event_types?.name ?? null,
         condicion_comercial_negociacion: cotizacion.condicion_comercial_negociacion
           ? {
               id: cotizacion.condicion_comercial_negociacion.id,
@@ -1508,6 +1519,11 @@ export async function guardarCotizacionComoPaquete(
             task_type: true,
             internal_delivery_days: true,
             order: true,
+            items: {
+              select: {
+                service_category_id: true,
+              },
+            },
           },
         },
         promise: {
@@ -1522,6 +1538,19 @@ export async function guardarCotizacionComoPaquete(
 
     if (cotizacion.cotizacion_items.length === 0) {
       return { success: false, error: 'La cotización no tiene ítems' };
+    }
+
+    // Validar nombre único del paquete (Fase 8.6)
+    const paqueteName = options?.name ?? `${cotizacion.name} (Paquete)`;
+    const existingPaquete = await prisma.studio_paquetes.findFirst({
+      where: {
+        studio_id: studio.id,
+        name: paqueteName,
+      },
+      select: { id: true },
+    });
+    if (existingPaquete) {
+      return { success: false, error: 'Ya existe un paquete con este nombre en tu catálogo.' };
     }
 
     // Obtener config de precios para calcular precio de custom items
@@ -1548,10 +1577,17 @@ export async function guardarCotizacionComoPaquete(
         // Mapear task_type (snapshot) → operational_category (catálogo)
         const operational_category = taskTypeToOperationalCategory(customItem.task_type);
         
+        // Validar que tenga service_category_id (requerido para studio_items)
+        if (!customItem.service_category_id) {
+          console.warn(`[PAQUETE] Custom item ${customItem.id} sin service_category_id, omitido`);
+          continue;
+        }
+        
         // Crear ítem en catálogo global
         const nuevoItem = await tx.studio_items.create({
           data: {
             studio_id: studio.id,
+            service_category_id: customItem.service_category_id,
             name: customItem.name ?? 'Servicio personalizado',
             cost: customItem.cost ?? 0,
             utility_type: (customItem.profit_type === 'producto' || customItem.profit_type === 'product') ? 'product' : 'service',
@@ -1579,10 +1615,18 @@ export async function guardarCotizacionComoPaquete(
           };
         } else {
           // Item de catálogo: usar ID existente
-          if (!item.item_id || !item.service_category_id) return null;
+          if (!item.item_id) return null;
+          
+          // Obtener service_category_id del snapshot o del item del catálogo
+          const categoryId = item.service_category_id ?? item.items?.service_category_id;
+          if (!categoryId) {
+            console.warn(`[PAQUETE] Item ${item.item_id} sin service_category_id, omitido`);
+            return null;
+          }
+          
           return {
             item_id: item.item_id,
-            service_category_id: item.service_category_id,
+            service_category_id: categoryId,
             quantity: item.quantity,
           };
         }
@@ -1594,19 +1638,34 @@ export async function guardarCotizacionComoPaquete(
         throw new Error('No hay ítems válidos para crear el paquete');
       }
 
-      // FASE 3: Validar items_cortesia (que los IDs existan en la cotización)
+      // FASE 3: Mapear items_cortesia a IDs del catálogo global (Fase 9.0 Fix)
       let itemsCortesiaValidos: string[] = [];
       if (Array.isArray(cotizacion.items_cortesia)) {
         const itemsCortesiaFromCotizacion = cotizacion.items_cortesia as string[];
-        const cotizacionItemIds = new Set(cotizacion.cotizacion_items.map(i => i.id));
         
-        itemsCortesiaValidos = itemsCortesiaFromCotizacion.filter(itemId => {
-          if (cotizacionItemIds.has(itemId)) {
-            return true;
-          }
-          console.warn(`[PAQUETE] item_cortesia ID ${itemId} no existe en cotización, omitido`);
-          return false;
-        });
+        itemsCortesiaValidos = itemsCortesiaFromCotizacion
+          .map(cotizacionItemId => {
+            // Buscar el item en la cotización
+            const cotizacionItem = cotizacion.cotizacion_items.find(i => i.id === cotizacionItemId);
+            if (!cotizacionItem) {
+              console.warn(`[PAQUETE] item_cortesia ID ${cotizacionItemId} no existe en cotización, omitido`);
+              return null;
+            }
+            
+            // Si es custom item, usar el nuevo ID del catálogo
+            if (cotizacionItem.is_custom === true || cotizacionItem.item_id === null) {
+              const newItemId = customItemIdMap.get(cotizacionItem.id);
+              if (!newItemId) {
+                console.warn(`[PAQUETE] Custom item cortesía ${cotizacionItemId} no se persistió correctamente, omitido`);
+                return null;
+              }
+              return newItemId;
+            }
+            
+            // Si es item de catálogo, usar su item_id
+            return cotizacionItem.item_id;
+          })
+          .filter((id): id is string => id !== null);
       }
 
       // FASE 4: Obtener order máximo para el paquete
@@ -1627,7 +1686,7 @@ export async function guardarCotizacionComoPaquete(
           precio: Number(cotizacion.price),
           base_hours: options?.baseHours !== undefined ? options.baseHours : (cotizacion.event_duration ?? null),
           visibility: options?.visibility ?? 'private',
-          cover_photo_url: options?.coverPhotoUrl ?? null,
+          cover_url: options?.coverPhotoUrl ?? null,
           status: 'active',
           order: newOrder,
           bono_especial: cotizacion.bono_especial ? new Prisma.Decimal(Number(cotizacion.bono_especial)) : null,

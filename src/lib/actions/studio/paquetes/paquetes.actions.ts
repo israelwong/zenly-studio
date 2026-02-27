@@ -805,9 +805,18 @@ export async function obtenerPaquetePorId(
             };
         }
 
+        // Transformar Decimal a number y Json a tipo correcto (Fase 9.0)
+        const transformedPaquete: PaqueteFromDB = {
+            ...paquete,
+            bono_especial: paquete.bono_especial ? Number(paquete.bono_especial) : null,
+            items_cortesia: Array.isArray(paquete.items_cortesia) 
+                ? (paquete.items_cortesia as string[]) 
+                : null,
+        };
+
         return {
             success: true,
-            data: paquete as unknown as PaqueteFromDB,
+            data: transformedPaquete,
         };
     } catch (error: unknown) {
         console.error("[obtenerPaquetePorId] Error:", error);
@@ -900,6 +909,8 @@ export async function duplicarPaquete(
                 expense: paqueteOriginal.expense,
                 utilidad: paqueteOriginal.utilidad,
                 precio: paqueteOriginal.precio,
+                bono_especial: paqueteOriginal.bono_especial,
+                items_cortesia: paqueteOriginal.items_cortesia,
                 order: newPosition,
                 status: "inactive", // Paquete duplicado siempre inactivo por defecto
                 is_featured: false, // No destacar el duplicado

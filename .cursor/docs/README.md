@@ -138,6 +138,7 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | [FASE_8_3_MODAL_ARMONICO.md](features/FASE_8_3_MODAL_ARMONICO.md) | Refactor estético modal paquetes |
 | [FASE_8_3_BOTON_HEADER.md](features/FASE_8_3_BOTON_HEADER.md) | Reubicación botón "Guardar como paquete" |
 | [FASE_8_5_FIX_BOTON_CERRAR.md](features/FASE_8_5_FIX_BOTON_CERRAR.md) | Fix botón X del modal |
+| [FASE_9_0_AUDITORIA_PERSISTENCIA.md](features/FASE_9_0_AUDITORIA_PERSISTENCIA.md) | Auditoría persistencia bono y cortesías |
 
 ---
 
@@ -372,6 +373,14 @@ git log --since="1 month ago" -- .cursor/docs/
 ---
 
 ## 📅 Historial de Cambios
+
+### 27 de febrero de 2026 (Fase 9.0)
+- ✅ Creado `FASE_9_0_AUDITORIA_PERSISTENCIA.md` - Auditoría completa de persistencia bono/cortesías
+- ✅ **FIX CRÍTICO:** Cortesías ahora usan IDs de catálogo global (no temporales de cotización)
+- ✅ Transformación segura de `Decimal` → `number` y `Json` → `string[]`
+- ✅ Actualizado tipo `PaqueteFromDB` con `bono_especial` e `items_cortesia`
+- ✅ Agregados campos en `duplicarPaquete()`
+- ✅ Verificada hidratación correcta en el editor de paquetes
 
 ### 27 de febrero de 2026 (Fase 8.5)
 - ✅ Creado `FASE_8_5_FIX_BOTON_CERRAR.md` - Fix botón X del modal "Crear Paquete"
