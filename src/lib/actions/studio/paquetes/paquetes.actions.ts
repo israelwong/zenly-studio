@@ -694,6 +694,8 @@ export async function obtenerPaqueteParaEditar(
                         order: true,
                         created_at: true,
                         updated_at: true,
+                        bono_especial: true,
+                        items_cortesia: true,
                         event_types: {
                             select: {
                                 id: true,
@@ -703,11 +705,9 @@ export async function obtenerPaqueteParaEditar(
                         },
                         paquete_items: {
                             select: {
-                                item_id: true,      // Solo necesario
-                                quantity: true,     // Solo necesario
-                                order: true,        // Necesario para mantener orden
-                                // NO cargar: id, position, visible_to_client, status, created_at, updated_at
-                                // NO cargar relaciones: items, service_categories
+                                item_id: true,
+                                quantity: true,
+                                order: true,
                             },
                             orderBy: { order: 'asc' },
                         },
@@ -729,9 +729,20 @@ export async function obtenerPaqueteParaEditar(
             };
         }
 
+        const transformed: PaqueteFromDB = {
+            ...paquete,
+            bono_especial: paquete.bono_especial != null ? Number(paquete.bono_especial) : null,
+            items_cortesia: Array.isArray(paquete.items_cortesia)
+                ? (paquete.items_cortesia as string[])
+                : null,
+        };
+
+        // DEBUG: Verificar datos antes de enviar al cliente (Fase 9.3)
+        console.log('[SERVER DEBUG] Paquete cargado para editor:', transformed.name, transformed.bono_especial, transformed.items_cortesia);
+
         return {
             success: true,
-            data: paquete as unknown as PaqueteFromDB,
+            data: transformed,
         };
     } catch (error: unknown) {
         console.error("[obtenerPaqueteParaEditar] Error:", error);
