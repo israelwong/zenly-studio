@@ -123,10 +123,10 @@ export function CondicionesCierreAccordion({
       <AccordionHeader
         ref={sectionRef as React.RefObject<HTMLDivElement>}
         className={cn(
-          'w-full items-center gap-2 border border-zinc-800 transition-all duration-300',
+          'w-full items-center gap-2 border transition-all duration-300',
           isExpanded
-            ? 'rounded-t-lg bg-zinc-950/40 border-l-2 border-l-[#FB7185]/40'
-            : 'rounded-lg bg-zinc-800/20'
+            ? 'rounded-t-lg bg-zinc-950/40 border-rose-900/30 border-l-2 border-l-[#FB7185]/40'
+            : 'rounded-lg bg-zinc-800/20 border-rose-900/30'
         )}
       >
         <AccordionTrigger
@@ -175,7 +175,7 @@ export function CondicionesCierreAccordion({
         </div>
       </AccordionHeader>
       <AccordionContent>
-        <div className="rounded-b-lg border border-t-0 border-zinc-800 border-l-2 border-l-[#FB7185]/40 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
+        <div className="rounded-b-lg border border-t-0 border-rose-900/30 border-l-2 border-l-[#FB7185]/40 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
           <p className="text-[11px] text-zinc-500 mb-3">{descriptionText}</p>
           {tieneAjustesNegociacion && context === 'cotizacion' && (
             <p className="text-[11px] text-amber-600 mt-1 mb-3">
