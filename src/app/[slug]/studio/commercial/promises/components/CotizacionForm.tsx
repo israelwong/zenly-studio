@@ -261,6 +261,8 @@ export function CotizacionForm({
   const [paqueteVisibility, setPaqueteVisibility] = useState<'public' | 'private'>('private');
   const [paqueteCoverMedia, setPaqueteCoverMedia] = useState<Array<{ file_url: string; file_type: string; filename: string; file_size?: number }>>([]);
   const [isPaqueteCoverUploading, setIsPaqueteCoverUploading] = useState(false);
+  const [paqueteEventTypeName, setPaqueteEventTypeName] = useState<string | null>(null);
+  const [paqueteNombreError, setPaqueteNombreError] = useState<string | null>(null);
   const { uploadFiles } = useMediaUpload();
   
   // Estados para ItemEditorModal
@@ -388,6 +390,8 @@ export function CotizacionForm({
           const precioInicial = precioCierreInicial != null && Number(precioCierreInicial) > 0 ? Number(precioCierreInicial) : cotizacionData.price;
           setPrecioPersonalizado(precioInicial);
           setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? false);
+          // Guardar event_type_name para el modal de paquete (Fase 8.6)
+          setPaqueteEventTypeName((cotizacionData as { event_type_name?: string | null }).event_type_name ?? null);
           const itemsCortesiaInicial = cotizacionData.items_cortesia ?? [];
           const bonoInicial = Number(cotizacionData.bono_especial) || 0;
           setItemsCortesia(new Set(itemsCortesiaInicial));
@@ -627,6 +631,7 @@ export function CotizacionForm({
         setPaqueteHoras(durationHours);
         setPaqueteVisibility('private');
         setPaqueteCoverMedia([]);
+        setPaqueteNombreError(null);
         setShowPaqueteModal(true);
       };
     }
@@ -1774,8 +1779,11 @@ export function CotizacionForm({
 
   const runGuardarComoPaquete = async () => {
     if (!cotizacionId) return;
+    
+    // Limpiar errores previos (Fase 8.6)
+    setPaqueteNombreError(null);
+    
     setIsSavingAsPaquete(true);
-    setShowPaqueteModal(false);
     try {
       const coverUrl = paqueteCoverMedia.length > 0 ? paqueteCoverMedia[0].file_url : null;
       const result = await guardarCotizacionComoPaquete(studioSlug, cotizacionId, {
@@ -1786,6 +1794,7 @@ export function CotizacionForm({
         coverPhotoUrl: coverUrl,
       });
       if (result.success && result.data?.paqueteId) {
+        setShowPaqueteModal(false);
         const customCount = result.data.customItemsCount ?? 0;
         const visibilityText = paqueteVisibility === 'public' ? 'público' : 'privado';
         toast.success('Paquete creado', {
@@ -1798,7 +1807,15 @@ export function CotizacionForm({
           },
         });
       } else {
-        toast.error(result.error ?? 'Error al crear el paquete');
+        // Error: verificar si es nombre duplicado (Fase 8.6)
+        const errorMessage = result.error ?? 'Error al crear el paquete';
+        if (errorMessage.includes('Ya existe un paquete con este nombre')) {
+          setPaqueteNombreError(errorMessage);
+          // NO cerrar el modal, dejar que el usuario corrija el nombre
+        } else {
+          setShowPaqueteModal(false);
+          toast.error(errorMessage);
+        }
       }
     } finally {
       setIsSavingAsPaquete(false);
@@ -1816,6 +1833,7 @@ export function CotizacionForm({
     setPaqueteHoras(durationHours);
     setPaqueteVisibility('private');
     setPaqueteCoverMedia([]);
+    setPaqueteNombreError(null);
     setShowPaqueteModal(true);
   };
 
@@ -3046,14 +3064,28 @@ export function CotizacionForm({
               <div className="space-y-1.5">
                 <ZenLabel htmlFor="paquete-nombre" className="block text-zinc-300">
                   Nombre del paquete
+                  {paqueteEventTypeName && (
+                    <span className="ml-2 text-xs text-emerald-400 font-normal">
+                      Categoría {paqueteEventTypeName}
+                    </span>
+                  )}
                 </ZenLabel>
                 <ZenInput
                   id="paquete-nombre"
                   value={paqueteNombre}
-                  onChange={(e) => setPaqueteNombre(e.target.value)}
+                  onChange={(e) => {
+                    setPaqueteNombre(e.target.value);
+                    setPaqueteNombreError(null);
+                  }}
                   placeholder="Ej: Paquete Boda Premium"
                   className="w-full"
                 />
+                {paqueteNombreError && (
+                  <p className="text-xs text-red-400 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    {paqueteNombreError}
+                  </p>
+                )}
               </div>
 
               {/* Descripción del paquete */}

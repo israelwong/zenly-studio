@@ -1502,7 +1502,15 @@ export async function guardarCotizacionComoPaquete(
 
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: { id: cotizacionId, studio_id: studio.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        event_type_id: true,
+        event_duration: true,
+        bono_especial: true,
+        items_cortesia: true,
         cotizacion_items: {
           orderBy: { order: 'asc' },
           select: {
@@ -1675,6 +1683,15 @@ export async function guardarCotizacionComoPaquete(
         select: { order: true },
       });
       const newOrder = (maxOrderResult?.order ?? -1) + 1;
+
+      // DEBUG: Log de negociaciones antes de crear paquete (Fase 9.1)
+      console.log('[PAQUETE DEBUG] Datos de negociación:', {
+        bono_especial_raw: cotizacion.bono_especial,
+        bono_especial_parsed: cotizacion.bono_especial ? Number(cotizacion.bono_especial) : null,
+        items_cortesia_raw: cotizacion.items_cortesia,
+        items_cortesia_validos: itemsCortesiaValidos,
+        cotizacion_id: cotizacion.id,
+      });
 
       // FASE 5: Crear paquete con bono y cortesías validadas (Fase 8.2: opciones personalizables)
       const paquete = await tx.studio_paquetes.create({

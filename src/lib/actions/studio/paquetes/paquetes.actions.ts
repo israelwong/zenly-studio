@@ -814,6 +814,15 @@ export async function obtenerPaquetePorId(
                 : null,
         };
 
+        // DEBUG: Log de transformación (Fase 9.1)
+        console.log('[PAQUETE DEBUG] Datos transformados para cliente:', {
+            paquete_id: transformedPaquete.id,
+            bono_especial_raw: paquete.bono_especial,
+            bono_especial_transformed: transformedPaquete.bono_especial,
+            items_cortesia_raw: paquete.items_cortesia,
+            items_cortesia_transformed: transformedPaquete.items_cortesia,
+        });
+
         return {
             success: true,
             data: transformedPaquete,
