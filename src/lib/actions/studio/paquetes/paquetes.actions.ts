@@ -738,8 +738,6 @@ export async function obtenerPaqueteParaEditar(
             ? (paquete.items_cortesia as string[])
             : null;
 
-        console.log('[SERVER DEBUG] Paquete para editor:', transformed.name, transformed.bono_especial, transformed.items_cortesia);
-
         return {
             success: true,
             data: transformed,
@@ -824,8 +822,6 @@ export async function obtenerPaquetePorId(
         transformedPaquete.items_cortesia = Array.isArray(paquete.items_cortesia)
             ? (paquete.items_cortesia as string[])
             : null;
-
-        console.log('[DEBUG] Paquete desde DB:', transformedPaquete.name, transformedPaquete.bono_especial, transformedPaquete.items_cortesia);
 
         return {
             success: true,

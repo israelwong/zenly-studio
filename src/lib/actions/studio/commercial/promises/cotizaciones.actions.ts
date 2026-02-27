@@ -1587,7 +1587,6 @@ export async function guardarCotizacionComoPaquete(
         
         // Validar que tenga service_category_id (requerido para studio_items)
         if (!customItem.service_category_id) {
-          console.warn(`[PAQUETE] Custom item ${customItem.id} sin service_category_id, omitido`);
           continue;
         }
         
@@ -1628,7 +1627,6 @@ export async function guardarCotizacionComoPaquete(
           // Obtener service_category_id del snapshot o del item del catálogo
           const categoryId = item.service_category_id ?? item.items?.service_category_id;
           if (!categoryId) {
-            console.warn(`[PAQUETE] Item ${item.item_id} sin service_category_id, omitido`);
             return null;
           }
           
@@ -1651,9 +1649,6 @@ export async function guardarCotizacionComoPaquete(
       if (Array.isArray(cotizacion.items_cortesia)) {
         const itemsCortesiaFromCotizacion = cotizacion.items_cortesia as string[];
         
-        console.log('[PAQUETE DEBUG] Cortesías raw desde cotización:', itemsCortesiaFromCotizacion);
-        console.log('[PAQUETE DEBUG] IDs cotizacion_items:', cotizacion.cotizacion_items.map(i => ({ id: i.id, item_id: i.item_id, is_custom: i.is_custom })));
-        
         itemsCortesiaValidos = itemsCortesiaFromCotizacion
           .map(cotizacionItemId => {
             // Buscar por id del snapshot O por item_id del catálogo
@@ -1661,7 +1656,6 @@ export async function guardarCotizacionComoPaquete(
               i => i.id === cotizacionItemId || i.item_id === cotizacionItemId
             );
             if (!cotizacionItem) {
-              console.warn(`[PAQUETE] item_cortesia ID ${cotizacionItemId} no encontrado por id ni item_id, omitido`);
               return null;
             }
             
@@ -1669,7 +1663,6 @@ export async function guardarCotizacionComoPaquete(
             if (cotizacionItem.is_custom === true || cotizacionItem.item_id === null) {
               const newItemId = customItemIdMap.get(cotizacionItem.id);
               if (!newItemId) {
-                console.warn(`[PAQUETE] Custom item cortesía ${cotizacionItemId} no se persistió, omitido`);
                 return null;
               }
               return newItemId;
@@ -1679,8 +1672,6 @@ export async function guardarCotizacionComoPaquete(
             return cotizacionItem.item_id;
           })
           .filter((id): id is string => id !== null);
-        
-        console.log('[PAQUETE DEBUG] Cortesías mapeadas a catálogo:', itemsCortesiaValidos);
       }
 
       // FASE 4: Obtener order máximo para el paquete
@@ -1690,15 +1681,6 @@ export async function guardarCotizacionComoPaquete(
         select: { order: true },
       });
       const newOrder = (maxOrderResult?.order ?? -1) + 1;
-
-      // DEBUG: Log de negociaciones antes de crear paquete (Fase 9.1)
-      console.log('[PAQUETE DEBUG] Datos de negociación:', {
-        bono_especial_raw: cotizacion.bono_especial,
-        bono_especial_parsed: cotizacion.bono_especial ? Number(cotizacion.bono_especial) : null,
-        items_cortesia_raw: cotizacion.items_cortesia,
-        items_cortesia_validos: itemsCortesiaValidos,
-        cotizacion_id: cotizacion.id,
-      });
 
       // FASE 5: Crear paquete con bono y cortesías validadas (Fase 8.2: opciones personalizables)
       const paquete = await tx.studio_paquetes.create({

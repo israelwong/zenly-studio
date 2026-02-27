@@ -204,14 +204,6 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 setCoverMedia([]);
             }
             const paq = paquete as { bono_especial?: number | null; items_cortesia?: string[] | null };
-            
-            // DEBUG: Log de hidratación (Fase 9.2)
-            console.log('[FRONTEND DEBUG] Hidratando negociaciones:', {
-                paquete_id: paquete.id,
-                bono_especial_received: paq.bono_especial,
-                items_cortesia_received: paq.items_cortesia,
-            });
-            
             setBonoEspecial(paq.bono_especial != null ? Number(paq.bono_especial) : 0);
             setItemsCortesia(Array.isArray(paq.items_cortesia) ? new Set(paq.items_cortesia) : new Set());
             if (onPublishedChange) {
