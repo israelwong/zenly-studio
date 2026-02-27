@@ -800,7 +800,7 @@ export function PromiseQuotesPanel({
                           <>
                             {paquetesPublicos.length > 0 && (
                               <>
-                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
+                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 pb-1 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
                                   PÚBLICOS
                                 </ZenDropdownMenuLabel>
                                 {paquetesPublicos.map((pkg) => (
@@ -821,7 +821,7 @@ export function PromiseQuotesPanel({
                             )}
                             {paquetesPrivados.length > 0 && (
                               <>
-                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
+                                <ZenDropdownMenuLabel className="text-[9px] font-bold tracking-[0.15em] text-zinc-500 px-2.5 py-0.5 pb-1 mt-2 rounded-full bg-zinc-800/40 w-fit first:mt-2">
                                   PRIVADOS
                                 </ZenDropdownMenuLabel>
                                 {paquetesPrivados.map((pkg) => (
