@@ -189,6 +189,9 @@ export async function crearPaquete(
             precio?: number;
             status?: string;
             is_featured?: boolean;
+            visibility?: string;
+            bono_especial?: number | null;
+            items_cortesia?: string[] | null;
             servicios?: Array<{
                 servicioId: string;
                 cantidad: number;
@@ -274,6 +277,9 @@ export async function crearPaquete(
                 order: newPosition,
                 status: paqueteData.status || "active",
                 is_featured: paqueteData.is_featured || false,
+                visibility: paqueteData.visibility ?? "public",
+                bono_especial: paqueteData.bono_especial ?? null,
+                items_cortesia: paqueteData.items_cortesia ?? null,
                 // Crear paquete_items si existen servicios
                 paquete_items: paqueteData.servicios && paqueteData.servicios.length > 0 ? {
                     create: paqueteData.servicios.map((servicio, index) => ({
@@ -369,6 +375,9 @@ export async function actualizarPaquete(
             precio?: number;
             status?: string;
             is_featured?: boolean;
+            visibility?: string;
+            bono_especial?: number | null;
+            items_cortesia?: string[] | null;
             servicios?: Array<{
                 servicioId: string;
                 cantidad: number;
@@ -499,7 +508,7 @@ export async function actualizarPaquete(
             }
         }
 
-        // Preparar datos de actualizaciรณn (sin event_type_id, se actualiza por separado si es necesario)
+        // Preparar datos de actualización (sin event_type_id, se actualiza por separado si es necesario)
         const updateData: {
             name?: string;
             description?: string | null;
@@ -512,6 +521,9 @@ export async function actualizarPaquete(
             precio?: number | null;
             status?: string;
             is_featured?: boolean;
+            visibility?: string;
+            bono_especial?: number | null;
+            items_cortesia?: string[] | null;
         } = {};
 
         // Actualizar event_type_id en una operaciรณn separada si es necesario
@@ -537,7 +549,9 @@ export async function actualizarPaquete(
         if (typeof paqueteData.precio === "number") updateData.precio = paqueteData.precio;
         // Siempre actualizar status si viene en los datos
         if (paqueteData.status !== undefined) updateData.status = paqueteData.status;
-        // Actualizar is_featured si viene en los datos
+        if (paqueteData.visibility !== undefined) updateData.visibility = paqueteData.visibility;
+        if (paqueteData.bono_especial !== undefined) updateData.bono_especial = paqueteData.bono_especial;
+        if (paqueteData.items_cortesia !== undefined) updateData.items_cortesia = paqueteData.items_cortesia;
         if (paqueteData.is_featured !== undefined) {
             // Si se marca como recomendado, desactivar otros paquetes del mismo tipo de evento
             if (paqueteData.is_featured) {

@@ -184,9 +184,9 @@ export async function getStudioProfileBasicData(
                         return { success: false, error: 'Studio not found' };
                     }
 
-                    // Paquetes separados (ligero)
+                    // Paquetes separados (ligero) — solo públicos
                     const paquetes = await prisma.studio_paquetes.findMany({
-                        where: { studio_id: studio.id, status: "active" },
+                        where: { studio_id: studio.id, status: "active", visibility: "public" },
                 select: {
                     id: true,
                     name: true,
@@ -1127,11 +1127,12 @@ export async function getStudioProfileBySlug(
                 };
             });
 
-            // Obtener paquetes del estudio
+            // Obtener paquetes del estudio (solo públicos)
             const paquetes = await prisma.studio_paquetes.findMany({
                 where: {
                     studio_id: studio.id,
                     status: "active",
+                    visibility: "public",
                 },
                 select: {
                     id: true,

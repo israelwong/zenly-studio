@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash, ListMinus, Cloud, Package, Timer } from 'lucide-react';
+import { GripVertical, MoreHorizontal, Eye, EyeOff, Copy, MoveVertical, Trash2, Link, X, Clock, DollarSign, Hash, ListMinus, Cloud, Package, Timer, Pencil } from 'lucide-react';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
     ZenDropdownMenu,
     ZenDropdownMenuContent,
@@ -274,51 +275,82 @@ export function CatalogSortableItem({
             <div className="relative z-20 flex items-center gap-3">
                 <div className="flex items-center gap-1">
                     {(isParent || (isChild && parentName)) && groupDisplayName && (
-                        <span
-                            data-catalog-badge-link
-                            className="relative z-30 inline-flex cursor-pointer items-center gap-0.5 rounded-md border border-emerald-600/60 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                            title="Editar vínculo"
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onEditLinkFromBadge(item);
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onEditLinkFromBadge(item);
-                                }
-                            }}
-                        >
-                            <Link className="h-2.5 w-2.5 shrink-0 pointer-events-none" />
-                            {truncateGroupName(groupDisplayName)}
-                            <button
-                                type="button"
-                                className="relative z-10 ml-0.5 inline-flex h-5 w-5 min-w-5 shrink-0 cursor-pointer items-center justify-center rounded p-0 text-zinc-400 hover:bg-emerald-500/20 hover:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50"
-                                title="Romper vínculo"
-                                aria-label="Romper vínculo"
-                                onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    const id = item.id;
-                                    void (async () => {
-                                        try {
-                                            await onClearLinksForItem(id);
-                                        } catch {
-                                            toast.error('Error al romper vínculo');
-                                        }
-                                    })();
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                }}
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <span
+                                    data-catalog-badge-link
+                                    className="relative z-30 inline-flex cursor-pointer items-center gap-0.5 rounded-md border border-emerald-600/60 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                                    title="Ver vínculos (smart link)"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+                                    }}
+                                >
+                                    <Link className="h-2.5 w-2.5 shrink-0 pointer-events-none" />
+                                    {truncateGroupName(groupDisplayName)}
+                                    <button
+                                        type="button"
+                                        className="relative z-10 ml-0.5 inline-flex h-5 w-5 min-w-5 shrink-0 cursor-pointer items-center justify-center rounded p-0 text-zinc-400 hover:bg-emerald-500/20 hover:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50"
+                                        title="Romper vínculo"
+                                        aria-label="Romper vínculo"
+                                        onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            const id = item.id;
+                                            void (async () => {
+                                                try {
+                                                    await onClearLinksForItem(id);
+                                                } catch {
+                                                    toast.error('Error al romper vínculo');
+                                                }
+                                            })();
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                        }}
+                                    >
+                                        <X className="h-2.5 w-2.5 pointer-events-none" />
+                                    </button>
+                                </span>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                align="end"
+                                side="bottom"
+                                className="w-64 bg-zinc-900 border-zinc-700 p-3 shadow-xl"
+                                onClick={(e) => e.stopPropagation()}
                             >
-                                <X className="h-2.5 w-2.5 pointer-events-none" />
-                            </button>
-                        </span>
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Vínculos del grupo</p>
+                                    <ul className="text-sm text-zinc-300 space-y-1 max-h-32 overflow-y-auto">
+                                        {groupIds.map((id) => {
+                                            const linkedItem = allItemsFlat.find((i) => i.id === id);
+                                            return linkedItem ? (
+                                                <li key={id} className="truncate flex items-center gap-1.5">
+                                                    <Link className="h-3 w-3 shrink-0 text-emerald-500/80" />
+                                                    {linkedItem.name}
+                                                </li>
+                                            ) : null;
+                                        })}
+                                    </ul>
+                                    <ZenButton
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full gap-1.5 border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 text-xs"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onEditLinkFromBadge(item);
+                                        }}
+                                    >
+                                        <Pencil className="h-3 w-3" />
+                                        Editar vínculos
+                                    </ZenButton>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     )}
                     <ZenDropdownMenu>
                         <ZenDropdownMenuTrigger asChild>

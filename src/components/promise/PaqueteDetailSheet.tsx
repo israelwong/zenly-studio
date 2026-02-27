@@ -317,10 +317,10 @@ export function PaqueteDetailSheet({
         onClick={onClose}
       />
 
-      {/* Sheet */}
-      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] overflow-y-auto shadow-2xl">
+      {/* Sheet: flex + contenido con scroll para no bloquear lista de servicios */}
+      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] shadow-2xl flex flex-col h-full">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
+        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h2 className="text-lg sm:text-xl font-semibold text-zinc-100 truncate">
@@ -342,8 +342,8 @@ export function PaqueteDetailSheet({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-4 sm:p-6 space-y-6">
+        {/* Content: h-full overflow-y-auto para scroll sin restricción */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Precio principal */}
           <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
             <div className="flex items-end justify-between gap-4">
@@ -422,7 +422,7 @@ export function PaqueteDetailSheet({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 pt-4 pb-6 mt-6">
+        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 pt-4 pb-6">
           <div className="flex gap-3">
             <ZenButton
               variant="outline"

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket, PackagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -34,6 +34,7 @@ import {
   cancelarCotizacion,
   cancelarCotizacionYEvento,
   pasarACierre,
+  guardarCotizacionComoPaquete,
   type CotizacionListItem,
   type PasarACierreOptions,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -109,6 +110,7 @@ export function PromiseQuotesPanelCard({
     description?: string | null;
   } | null>(null);
   const [loadingReminder, setLoadingReminder] = useState(false);
+  const [isSavingAsPaquete, setIsSavingAsPaquete] = useState(false);
 
   // Sincronizar editingName y editingDescription cuando cambie cotizacion (solo si el modal no está abierto)
   useEffect(() => {
@@ -282,6 +284,29 @@ export function PromiseQuotesPanelCard({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuardarComoPaquete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSavingAsPaquete || loading || isDuplicating) return;
+    setIsSavingAsPaquete(true);
+    const promise = guardarCotizacionComoPaquete(studioSlug, cotizacion.id).finally(() => setIsSavingAsPaquete(false));
+    toast.promise(promise, {
+      loading: 'Creando paquete desde la cotización...',
+      success: (result) => {
+        if (result.success && result.data?.paqueteId) {
+          return {
+            description: 'Paquete creado. Puedes configurarlo y publicarlo cuando quieras.',
+            action: {
+              label: 'Configurar paquete',
+              onClick: () => router.push(`/${studioSlug}/studio/commercial/paquetes/${result.data!.paqueteId}/editar`),
+            },
+          };
+        }
+        throw new Error(result.error ?? 'Error al crear el paquete');
+      },
+      error: (err: Error) => err?.message ?? 'Error al crear el paquete',
+    });
   };
 
   const handleArchive = async () => {
@@ -862,7 +887,7 @@ export function PromiseQuotesPanelCard({
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
-                        disabled={loading || isDuplicating}
+                        disabled={loading || isDuplicating || isSavingAsPaquete}
                       >
                         <MoreVertical className="h-4 w-4 text-zinc-400" />
                       </ZenButton>
@@ -888,6 +913,10 @@ export function PromiseQuotesPanelCard({
                               Duplicar
                             </ZenDropdownMenuItem>
                           )}
+                          <ZenDropdownMenuItem onClick={handleGuardarComoPaquete} disabled={loading || isDuplicating || isSavingAsPaquete}>
+                            <PackagePlus className="h-4 w-4 mr-2" />
+                            Guardar como paquete
+                          </ZenDropdownMenuItem>
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -941,6 +970,10 @@ export function PromiseQuotesPanelCard({
                               Duplicar
                             </ZenDropdownMenuItem>
                           )}
+                          <ZenDropdownMenuItem onClick={handleGuardarComoPaquete} disabled={loading || isDuplicating || isSavingAsPaquete}>
+                            <PackagePlus className="h-4 w-4 mr-2" />
+                            Guardar como paquete
+                          </ZenDropdownMenuItem>
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -977,7 +1010,7 @@ export function PromiseQuotesPanelCard({
                         </>
                       ) : isArchivada ? (
                         <>
-                          {/* Archivada: solo desarchivar y eliminar */}
+                          {/* Archivada: solo desarchivar, guardar como paquete y eliminar */}
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -987,6 +1020,10 @@ export function PromiseQuotesPanelCard({
                           >
                             <ArchiveRestore className="h-4 w-4 mr-2" />
                             Desarchivar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuItem onClick={handleGuardarComoPaquete} disabled={loading || isDuplicating || isSavingAsPaquete}>
+                            <PackagePlus className="h-4 w-4 mr-2" />
+                            Guardar como paquete
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem
@@ -1019,6 +1056,10 @@ export function PromiseQuotesPanelCard({
                               Duplicar
                             </ZenDropdownMenuItem>
                           )}
+                          <ZenDropdownMenuItem onClick={handleGuardarComoPaquete} disabled={loading || isDuplicating || isSavingAsPaquete}>
+                            <PackagePlus className="h-4 w-4 mr-2" />
+                            Guardar como paquete
+                          </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem
                             onClick={(e) => {

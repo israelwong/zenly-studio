@@ -1442,10 +1442,200 @@ export async function duplicateCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error duplicando cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error duplicando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al duplicar cotizaciรณn',
+      error: error instanceof Error ? error.message : 'Error al duplicar cotización',
+    };
+  }
+}
+
+/**
+ * Guardar cotización como paquete (Fase 2).
+ * Clona ítems de catálogo (item_id + service_category_id) a un nuevo studio_paquetes.
+ * El paquete se crea con visibility: 'private' para que el socio decida si lo hace público.
+ */
+export async function guardarCotizacionComoPaquete(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; data?: { paqueteId: string }; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      include: {
+        cotizacion_items: {
+          where: {
+            item_id: { not: null },
+            service_category_id: { not: null },
+          },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    const itemsValidos = cotizacion.cotizacion_items.filter(
+      (i): i is typeof i & { item_id: string; service_category_id: string } =>
+        i.item_id != null && i.service_category_id != null
+    );
+
+    const maxOrderResult = await prisma.studio_paquetes.findFirst({
+      where: { studio_id: studio.id },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    });
+    const newOrder = (maxOrderResult?.order ?? -1) + 1;
+
+    const paquete = await prisma.studio_paquetes.create({
+      data: {
+        studio_id: studio.id,
+        event_type_id: cotizacion.event_type_id,
+        name: `${cotizacion.name} (Paquete)`,
+        description: cotizacion.description ?? null,
+        precio: Number(cotizacion.price),
+        base_hours: cotizacion.event_duration ?? null,
+        visibility: 'private',
+        status: 'active',
+        order: newOrder,
+        bono_especial: cotizacion.bono_especial ?? null,
+        items_cortesia: cotizacion.items_cortesia ?? null,
+      },
+    });
+
+    if (itemsValidos.length > 0) {
+      await prisma.studio_paquete_items.createMany({
+        data: itemsValidos.map((item, idx) => ({
+          paquete_id: paquete.id,
+          item_id: item.item_id!,
+          service_category_id: item.service_category_id!,
+          quantity: item.quantity,
+          order: idx,
+        })),
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+    return { success: true, data: { paqueteId: paquete.id } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error guardarCotizacionComoPaquete:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al crear el paquete desde la cotización',
+    };
+  }
+}
+
+/**
+ * Promocionar ítem personalizado al catálogo maestro (Fase 2.1).
+ * - Con cotizacion_item_id (edición): crea studio_items desde el ítem de cotización y vincula la fila.
+ * - Con payload (creación): solo crea studio_items y devuelve item_id para que el form actualice estado.
+ */
+export async function promocionarItemAlCatalogo(
+  studioSlug: string,
+  options:
+    | { cotizacion_item_id: string }
+    | {
+        name: string;
+        description?: string | null;
+        cost: number;
+        expense: number;
+        billing_type: 'HOUR' | 'SERVICE' | 'UNIT';
+        categoria_id: string;
+      }
+): Promise<{ success: boolean; data?: { item_id: string; service_category_id: string }; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    let name: string;
+    let cost: number;
+    let expense: number;
+    let billing_type: 'HOUR' | 'SERVICE' | 'UNIT';
+    let service_category_id: string;
+
+    if ('cotizacion_item_id' in options) {
+      const row = await prisma.studio_cotizacion_items.findFirst({
+        where: {
+          id: options.cotizacion_item_id,
+          cotizaciones: { studio_id: studio.id },
+        },
+        include: { cotizaciones: { select: { studio_id: true } } },
+      });
+      if (!row || row.item_id != null) {
+        return { success: false, error: 'Ítem no encontrado o ya está en el catálogo' };
+      }
+      if (!row.service_category_id) {
+        return { success: false, error: 'El ítem personalizado no tiene categoría asignada' };
+      }
+      name = (row.name_snapshot || row.name || '').trim() || 'Servicio personalizado';
+      cost = Number(row.cost ?? 0);
+      expense = Number(row.expense ?? 0);
+      billing_type = (row.billing_type as 'HOUR' | 'SERVICE' | 'UNIT') ?? 'SERVICE';
+      service_category_id = row.service_category_id;
+    } else {
+      name = options.name.trim() || 'Servicio personalizado';
+      cost = Number(options.cost ?? 0);
+      expense = Number(options.expense ?? 0);
+      billing_type = options.billing_type ?? 'SERVICE';
+      service_category_id = options.categoria_id;
+    }
+
+    const maxOrder = await prisma.studio_items.findFirst({
+      where: { service_category_id },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    });
+    const newOrder = (maxOrder?.order ?? -1) + 1;
+
+    const newItem = await prisma.studio_items.create({
+      data: {
+        studio_id: studio.id,
+        service_category_id,
+        name,
+        cost,
+        expense,
+        billing_type,
+        order: newOrder,
+      },
+    });
+
+    if ('cotizacion_item_id' in options) {
+      await prisma.studio_cotizacion_items.update({
+        where: { id: options.cotizacion_item_id },
+        data: { item_id: newItem.id, service_category_id: newItem.service_category_id },
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+    return {
+      success: true,
+      data: { item_id: newItem.id, service_category_id: newItem.service_category_id },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error promocionarItemAlCatalogo:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al guardar en catálogo',
     };
   }
 }

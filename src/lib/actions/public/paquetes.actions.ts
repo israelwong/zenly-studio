@@ -56,6 +56,7 @@ export async function solicitarPaquetePublico(
         id: paqueteId,
         studio_id: promise.studio.id,
         status: "active",
+        visibility: "public",
       },
       include: {
         paquete_items: {

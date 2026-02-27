@@ -1253,6 +1253,12 @@ model studio_paquetes {
   cover_storage_bytes BigInt?
   is_featured         Boolean                @default(false)
   base_hours          Int?
+  /** public = visible en ofertas/landing; private = solo studio; draft = borrador. */
+  visibility          String                 @default("public")
+  /** Bono especial heredado de cotización (Fase 2.3). */
+  bono_especial       Decimal?               @db.Decimal(10, 2)
+  /** IDs de ítems en cortesía (JSON array), heredado de cotización. */
+  items_cortesia      Json?
   cotizaciones        studio_cotizaciones[]
   notifications       studio_notifications[]
   paquete_items       studio_paquete_items[]
@@ -1261,6 +1267,7 @@ model studio_paquetes {
 
   @@index([studio_id, status])
   @@index([studio_id, is_featured])
+  @@index([studio_id, visibility])
 }
 
 model studio_paquete_items {

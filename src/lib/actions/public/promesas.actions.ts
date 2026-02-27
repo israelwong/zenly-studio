@@ -1161,6 +1161,7 @@ export async function getPublicPromisePendientes(
               studio_id: studio.id,
               ...(promise.event_type_id ? { event_type_id: promise.event_type_id } : {}),
               status: 'active',
+              visibility: 'public',
             },
             select: {
               id: true,
@@ -2262,6 +2263,7 @@ export async function getPublicPromiseAvailablePackages(
             studio_id: studio.id,
             ...(promiseBasic.event_type_id != null && { event_type_id: promiseBasic.event_type_id }),
             status: 'active',
+            visibility: 'public',
           },
           select: {
             id: true,
@@ -4070,6 +4072,7 @@ export async function getPublicPromiseData(
           studio_id: studio.id,
           event_type_id: promise.event_type_id,
           status: 'active',
+          visibility: 'public',
         },
         select: {
           id: true,

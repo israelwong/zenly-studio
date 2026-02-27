@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
@@ -477,7 +478,7 @@ export function CotizacionDetailSheet({
 
   if (!isOpen) return null;
 
-  return (
+  const sheetContent = (
     <>
       {/* Overlay */}
       <div
@@ -485,13 +486,10 @@ export function CotizacionDetailSheet({
         onClick={onClose}
       />
 
-      {/* Sheet: ref para forzar scrollTop=0 al abrir */}
-      <div
-        ref={sheetContainerRef}
-        className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] overflow-y-auto shadow-2xl"
-      >
+      {/* Sheet: fixed sobre toda la pantalla (Portal en body); misma jerarquía en Studio y Promesa */}
+      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] shadow-2xl flex flex-col h-full">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
+        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h2 className="text-lg sm:text-xl font-semibold text-zinc-100 truncate">
@@ -513,8 +511,8 @@ export function CotizacionDetailSheet({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-4 sm:p-6 space-y-6">
+        {/* Content: h-full overflow-y-auto para scroll sin restricción; ref para scrollTop=0 al abrir */}
+        <div ref={sheetContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Precio principal: precio de lista (calculado) + total a pagar (cierre) */}
           <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
             <div className="flex items-end justify-between gap-4">
@@ -692,7 +690,7 @@ export function CotizacionDetailSheet({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 pt-4 pb-6 mt-6">
+        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 pt-4 pb-6">
           <div className="flex gap-3">
             <ZenButton
               variant="outline"
@@ -821,5 +819,7 @@ export function CotizacionDetailSheet({
       )}
     </>
   );
+
+  return typeof document !== 'undefined' ? createPortal(sheetContent, document.body) : null;
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2, Plus, Trash2, Gift } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2, Plus, Trash2, Gift, BookmarkPlus } from 'lucide-react';
 import { ZenBadge, ZenButton } from '@/components/ui/zen';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -40,6 +40,8 @@ interface CatalogoServiciosTreeProps {
     onEditCustomItem?: (index: number) => void;
     onDeleteCustomItem?: (index: number) => void;
     onUpdateCustomItemQuantity?: (index: number, quantity: number) => void;
+    /** Promocionar ítem personalizado al catálogo (solo visible para custom items). */
+    onGuardarEnCatalogo?: (index: number) => void;
 
     // Datos calculados
     serviciosSeleccionados: ServiciosSeleccionados;
@@ -73,6 +75,7 @@ export function CatalogoServiciosTree({
     onEditCustomItem,
     onDeleteCustomItem,
     onUpdateCustomItemQuantity,
+    onGuardarEnCatalogo,
     serviciosSeleccionados,
     configuracionPrecios,
     baseHours,
@@ -249,6 +252,21 @@ export function CatalogoServiciosTree({
                                                                                                     title="Editar ítem"
                                                                                                 >
                                                                                                     <Edit2 className="w-3 h-3" />
+                                                                                                </ZenButton>
+                                                                                            )}
+                                                                                            {onGuardarEnCatalogo && (
+                                                                                                <ZenButton
+                                                                                                    type="button"
+                                                                                                    variant="ghost"
+                                                                                                    size="sm"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        onGuardarEnCatalogo(globalIndex);
+                                                                                                    }}
+                                                                                                    className="w-5 h-5 p-0 opacity-40 hover:opacity-100 transition-opacity text-emerald-400 hover:text-emerald-300 ml-1"
+                                                                                                    title="Guardar en catálogo"
+                                                                                                >
+                                                                                                    <BookmarkPlus className="w-3 h-3" />
                                                                                                 </ZenButton>
                                                                                             )}
                                                                                         </div>
@@ -607,6 +625,21 @@ export function CatalogoServiciosTree({
                                                                                                 title="Editar ítem"
                                                                                             >
                                                                                                 <Edit2 className="w-3 h-3" />
+                                                                                            </ZenButton>
+                                                                                        )}
+                                                                                        {onGuardarEnCatalogo && (
+                                                                                            <ZenButton
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    onGuardarEnCatalogo(globalIndex);
+                                                                                                }}
+                                                                                                className="w-5 h-5 p-0 opacity-40 hover:opacity-100 transition-opacity text-emerald-400 hover:text-emerald-300 ml-1"
+                                                                                                title="Guardar en catálogo"
+                                                                                            >
+                                                                                                <BookmarkPlus className="w-3 h-3" />
                                                                                             </ZenButton>
                                                                                         )}
                                                                                     </div>

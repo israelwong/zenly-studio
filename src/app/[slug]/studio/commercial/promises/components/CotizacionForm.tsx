@@ -2243,6 +2243,7 @@ export function CotizacionForm({
   }
 
   return (
+    <>
     <div
       className={
         focusMode
@@ -3049,5 +3050,6 @@ export function CotizacionForm({
         />
       )}
     </div>
+    </>
   );
 }

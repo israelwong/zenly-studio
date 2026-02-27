@@ -31,6 +31,7 @@ export const customItemSchema = z.object({
   tipoUtilidad: z.enum(['servicio', 'producto']).optional().default('servicio'),
   categoriaId: z.string().min(1, 'La categoría es requerida'),
   originalItemId: z.string().optional().nullable(), // ID del item del catálogo que reemplaza (null para items "puros")
+  cotizacionItemId: z.string().optional(), // ID de studio_cotizacion_items en edición, para promocionar al catálogo
 });
 
 export type CustomItemData = z.infer<typeof customItemSchema>;

@@ -29,7 +29,7 @@ export interface CommercialConfigSidebarProps {
   modalsAndSheets?: React.ReactNode;
   /** Bloque de botones de acción (Guardar como paquete, Vista previa, Guardar/Cancelar). */
   actionButtons: React.ReactNode;
-  /** Si true, no se muestra el bloque de botones (el padre usa customActionButtons). */
+  /** Si true, no se muestra el bloque de botones (ej. padre usa customActionButtons o toolbar flotante). */
   hideActionButtons?: boolean;
   /** Contenido opcional debajo del accordion y encima de los botones (ej. ficha pre-autorizada). */
   extraContent?: React.ReactNode;
