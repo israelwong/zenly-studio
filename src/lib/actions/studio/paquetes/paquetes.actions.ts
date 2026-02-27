@@ -6,6 +6,19 @@ import { withRetry } from "@/lib/database/retry-helper";
 import type { PaqueteFromDB } from "@/lib/actions/schemas/paquete-schemas";
 import type { ActionResponse } from "@/lib/actions/schemas/catalogo-schemas";
 
+function serializePaquete<T extends Record<string, unknown>>(paquete: T): PaqueteFromDB {
+    const plain = JSON.parse(JSON.stringify(paquete, (_, v) =>
+        typeof v === 'bigint' ? Number(v) : v
+    )) as PaqueteFromDB;
+    plain.bono_especial = (paquete as { bono_especial?: unknown }).bono_especial != null
+        ? Number((paquete as { bono_especial: unknown }).bono_especial)
+        : null;
+    plain.items_cortesia = Array.isArray((paquete as { items_cortesia?: unknown }).items_cortesia)
+        ? ((paquete as { items_cortesia: unknown[] }).items_cortesia as string[])
+        : null;
+    return plain;
+}
+
 /**
  * Obtiene paquetes optimizados para lista (sin paquete_items)
  * Solo carga campos necesarios para mostrar en la lista
@@ -140,7 +153,7 @@ export async function obtenerPaquetes(
 
         return {
             success: true,
-            data: paquetes as unknown as PaqueteFromDB[],
+            data: paquetes.map(p => serializePaquete(p as unknown as Record<string, unknown>)),
         };
     } catch (error) {
         console.error("[obtenerPaquetes] Error:", error);
@@ -304,13 +317,12 @@ export async function crearPaquete(
             items_count: paquete.paquete_items.length
         });
 
-        // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
         revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
-            data: paquete as unknown as PaqueteFromDB,
+            data: serializePaquete(paquete as unknown as Record<string, unknown>),
         };
     } catch (error) {
         console.error("[crearPaquete] Error:", error);
@@ -592,13 +604,12 @@ export async function actualizarPaquete(
             items_count: updatedPaquete.paquete_items.length
         });
 
-        // Invalidar caché del catálogo
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
         revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
-            data: updatedPaquete as unknown as PaqueteFromDB,
+            data: serializePaquete(updatedPaquete as unknown as Record<string, unknown>),
         };
     } catch (error) {
         console.error("[actualizarPaquete] Error:", error);
@@ -729,18 +740,9 @@ export async function obtenerPaqueteParaEditar(
             };
         }
 
-        // Serializar a plain object para evitar Decimal/BigInt en Client Components
-        const transformed = JSON.parse(JSON.stringify(paquete, (_, v) =>
-            typeof v === 'bigint' ? Number(v) : v
-        )) as PaqueteFromDB;
-        transformed.bono_especial = paquete.bono_especial != null ? Number(paquete.bono_especial) : null;
-        transformed.items_cortesia = Array.isArray(paquete.items_cortesia)
-            ? (paquete.items_cortesia as string[])
-            : null;
-
         return {
             success: true,
-            data: transformed,
+            data: serializePaquete(paquete as unknown as Record<string, unknown>),
         };
     } catch (error: unknown) {
         console.error("[obtenerPaqueteParaEditar] Error:", error);
@@ -814,18 +816,9 @@ export async function obtenerPaquetePorId(
             };
         }
 
-        // Serializar a plain object para evitar Decimal/BigInt en Client Components
-        const transformedPaquete = JSON.parse(JSON.stringify(paquete, (_, v) =>
-            typeof v === 'bigint' ? Number(v) : v
-        )) as PaqueteFromDB;
-        transformedPaquete.bono_especial = paquete.bono_especial != null ? Number(paquete.bono_especial) : null;
-        transformedPaquete.items_cortesia = Array.isArray(paquete.items_cortesia)
-            ? (paquete.items_cortesia as string[])
-            : null;
-
         return {
             success: true,
-            data: transformedPaquete,
+            data: serializePaquete(paquete as unknown as Record<string, unknown>),
         };
     } catch (error: unknown) {
         console.error("[obtenerPaquetePorId] Error:", error);
@@ -946,7 +939,7 @@ export async function duplicarPaquete(
 
         return {
             success: true,
-            data: paqueteDuplicado as unknown as PaqueteFromDB,
+            data: serializePaquete(paqueteDuplicado as unknown as Record<string, unknown>),
         };
     } catch (error) {
         console.error("[duplicarPaquete] Error:", error);
