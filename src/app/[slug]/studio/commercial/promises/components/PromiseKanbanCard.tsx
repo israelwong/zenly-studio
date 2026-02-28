@@ -383,7 +383,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 <ZenDropdownMenuTrigger asChild>
                                     <button
                                         onClick={(e) => e.stopPropagation()}
-                                        className="p-1 rounded-md bg-zinc-800/60 hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
+                                        className="p-1 rounded-md hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
                                         title="Opciones"
                                         suppressHydrationWarning
                                     >
@@ -432,7 +432,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                         <ZenDropdownMenuTrigger asChild>
                                             <button
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="p-1 rounded-md bg-zinc-800/60 hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
+                                                className="p-1 rounded-md hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
                                                 title="Más opciones"
                                                 suppressHydrationWarning
                                             >

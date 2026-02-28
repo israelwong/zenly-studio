@@ -141,11 +141,10 @@ export async function getConversionMetrics(
                 },
             }),
 
-            // Promesas pendientes
+            // Promesas (no de prueba) - studio_promises no tiene campo status
             prisma.studio_promises.count({
                 where: {
                     studio_id: studioId,
-                    status: 'pending',
                     is_test: false,
                 },
             }),
