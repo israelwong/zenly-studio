@@ -214,7 +214,7 @@ export function PromiseDetailToolbar({
               variant="ghost"
               size="sm"
               onClick={onOpenAutomationOptions}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
             >
               Visualización y automatización
             </ZenButton>

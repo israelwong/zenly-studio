@@ -266,11 +266,18 @@ export function ImageCarousel({
                 </div>
             )}
 
-            {/* Skeleton mientras cargan las imágenes */}
+            {/* Skeleton: [peek izq] [slide principal] [peek der] como el slider real */}
             {!imagesReady && (
-                <div className="w-full aspect-video bg-zinc-800 rounded-lg animate-pulse flex items-center justify-center gap-3">
-                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
-                    <span className="text-xs text-zinc-500">Cargando galería...</span>
+                <div className="w-full overflow-hidden rounded-lg">
+                    <div className="flex gap-1.5 sm:gap-2 w-full items-stretch min-h-[280px] sm:min-h-[320px]">
+                        <div className="w-12 sm:w-16 shrink-0 min-h-[280px] sm:min-h-[320px] bg-zinc-700/90 rounded-l-lg animate-pulse" aria-hidden />
+                        <div className="flex-1 min-w-0 min-h-[280px] sm:min-h-[320px] bg-zinc-800 rounded-lg animate-pulse shrink-0" aria-hidden />
+                        <div className="w-14 sm:w-20 shrink-0 min-h-[280px] sm:min-h-[320px] bg-zinc-700/90 rounded-r-lg animate-pulse" aria-hidden />
+                    </div>
+                    <div className="mt-2 flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin shrink-0" />
+                        <span className="text-xs text-zinc-500">Cargando galería...</span>
+                    </div>
                 </div>
             )}
 
