@@ -10,12 +10,14 @@ interface PortfolioNudgeProps {
   hasPortfolios: boolean;
   /** Si el prospecto ya interactuó con portafolio (click en nudge o en card): no volver a mostrar en esta sesión */
   hasEngagedWithPortfolio?: boolean;
+  /** Ocultar cuando hay un portafolio abierto (modal o slug en URL) */
+  isPortfolioOpen?: boolean;
 }
 
-export function PortfolioNudge({ hasPortfolios, hasEngagedWithPortfolio = false }: PortfolioNudgeProps) {
+export function PortfolioNudge({ hasPortfolios, hasEngagedWithPortfolio = false, isPortfolioOpen = false }: PortfolioNudgeProps) {
   const searchParams = useSearchParams();
   const portfolioSlug = searchParams.get('portfolio');
-  const shouldHide = hasEngagedWithPortfolio || !!portfolioSlug;
+  const shouldHide = hasEngagedWithPortfolio || !!portfolioSlug || isPortfolioOpen;
 
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);

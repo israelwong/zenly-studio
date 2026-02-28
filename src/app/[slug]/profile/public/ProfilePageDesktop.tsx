@@ -218,6 +218,7 @@ export function ProfilePageDesktop({ profileData, studioSlug, offers = [], logic
                 studioId={studio.id}
                 ownerUserId={studio.owner_id}
                 isOpen={!!selectedPortfolioSlug}
+                loading={!!selectedPortfolioSlug && !selectedPortfolio}
                 onClose={handleCloseModal}
                 onNext={handleNextPortfolio}
                 onPrev={handlePrevPortfolio}

@@ -48,6 +48,7 @@ export function ProfileContent({
     studioLogoUrl,
     isOwner = false
 }: ProfileContentProps) {
+    const { user } = useAuth();
     // Skeleton loading state
     if (loading) {
         return (

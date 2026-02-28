@@ -133,10 +133,11 @@ export function PortfolioDetailModal({
 
     if (!isOpen) return null;
 
-    // Cargando: skeleton; error: mensaje "no disponible"
+    // Sin datos: skeleton mientras carga; "no disponible" solo cuando la carga terminó y no hay datos
     if (!portfolio) {
+        const showSkeleton = loading !== false;
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center">
                 <div
                     className="absolute inset-0 bg-black/80 backdrop-blur-md"
                     onClick={onClose}
@@ -144,11 +145,11 @@ export function PortfolioDetailModal({
 
                 <div className="relative w-full h-full lg:w-[480px] lg:h-[85vh] lg:max-h-[95vh] lg:mx-auto lg:p-4 flex items-center justify-center">
                     <div className="relative w-full h-full lg:w-full lg:h-full lg:max-h-[95vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl lg:rounded-lg flex flex-col lg:border lg:border-zinc-800/50 lg:shadow-2xl">
-                        {/* Header skeleton */}
+                        {/* Header: skeleton o título genérico */}
                         <div className="shrink-0 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/50 p-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex-1 min-w-0 mr-3">
-                                    {loading ? (
+                                    {showSkeleton ? (
                                         <>
                                             <div className="h-5 w-3/4 bg-zinc-800 animate-pulse rounded mb-2" />
                                             <div className="h-3 w-1/3 bg-zinc-800 animate-pulse rounded" />
@@ -167,9 +168,9 @@ export function PortfolioDetailModal({
                             </div>
                         </div>
 
-                        {/* Body */}
+                        {/* Body: skeleton de carga o mensaje de error solo cuando la carga finalizó sin datos */}
                         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
-                            {loading ? (
+                            {showSkeleton ? (
                                 <div className="space-y-4 animate-pulse">
                                     <div className="w-full aspect-video bg-zinc-800 rounded-lg" />
                                     <div className="h-4 w-full bg-zinc-800 rounded" />
@@ -210,7 +211,7 @@ export function PortfolioDetailModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
             {/* Overlay */}
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-md lg:bg-black/80"

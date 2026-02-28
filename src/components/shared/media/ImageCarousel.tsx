@@ -281,9 +281,9 @@ export function ImageCarousel({
                 </div>
             )}
 
-            {/* Glide Carousel - visible solo cuando las imágenes cargaron */}
-            <div ref={glideRef} className={`glide relative w-full ${imagesReady ? '' : 'h-0 overflow-hidden'}`}>
-                <div className="overflow-hidden" data-glide-el="track">
+            {/* Glide Carousel - visible solo cuando las imágenes cargaron; touch-pan-y libera scroll vertical */}
+            <div ref={glideRef} className={`glide relative w-full touch-pan-y ${imagesReady ? '' : 'h-0 overflow-hidden'}`}>
+                <div className="overflow-hidden touch-pan-y" data-glide-el="track">
                     <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility:hidden] [transform-style:preserve-3d] touch-pan-y [will-change:transform] relative flex w-full overflow-hidden p-0">
                         {media.map((item, index) => (
                             <li key={item.id} className="glide__slide">

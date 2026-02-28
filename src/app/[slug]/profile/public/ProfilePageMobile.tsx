@@ -98,12 +98,9 @@ export function ProfilePageMobile({ profileData, studioSlug, offers = [], logic 
 
         const updateCSSVariables = () => {
             const header = document.querySelector('header.sticky');
-            const vabar = document.querySelector('.lg\\:hidden.fixed.bottom-0');
             const headerHeight = header ? header.getBoundingClientRect().height : 72;
-            const vabarHeight = vabar ? vabar.getBoundingClientRect().height : 80;
-
             document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
-            document.documentElement.style.setProperty('--vabar-height', `${vabarHeight}px`);
+            document.documentElement.style.setProperty('--vabar-height', '80px');
         };
 
         const timeoutId = setTimeout(updateCSSVariables, 100);
@@ -128,7 +125,28 @@ export function ProfilePageMobile({ profileData, studioSlug, offers = [], logic 
 
     return (
         <div className="h-dvh w-full flex flex-col overflow-hidden bg-zinc-950">
-            <main className="flex-1 w-full relative overflow-hidden">
+            {/* Navigation Tabs - Mobile: debajo del ProfileHeader (sticky del page) */}
+            <div
+                className="fixed left-0 right-0 z-40 h-14 min-h-14 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 flex items-center"
+                style={{ top: 'var(--header-height, 72px)', '--vabar-height': '56px' } as React.CSSProperties}
+            >
+                <ProfileNavTabs
+                    activeTab={activeTab}
+                    onTabChange={handleTabChange}
+                    onSearchClick={() => setIsSearchOpen(true)}
+                    hasActiveFAQs={hasActiveFAQs}
+                    isOwner={isOwner}
+                    studioSlug={studioSlug}
+                    onCreatePost={() => {
+                        setEditingPostId(undefined);
+                        setIsPostEditorOpen(true);
+                    }}
+                />
+            </div>
+
+            <main
+                className="flex-1 w-full relative overflow-hidden pt-14"
+            >
                 <div className="h-full w-full">
                     <div className="flex flex-col h-full w-full min-h-0 min-w-0 relative overflow-hidden">
                         <div className="flex-1 w-full relative overflow-hidden min-h-0">
@@ -150,22 +168,6 @@ export function ProfilePageMobile({ profileData, studioSlug, offers = [], logic 
                     </div>
                 </div>
             </main>
-
-            {/* Navigation Tabs - Mobile: Fixed bottom */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800" style={{ '--vabar-height': '80px' } as React.CSSProperties}>
-                <ProfileNavTabs
-                    activeTab={activeTab}
-                    onTabChange={handleTabChange}
-                    onSearchClick={() => setIsSearchOpen(true)}
-                    hasActiveFAQs={hasActiveFAQs}
-                    isOwner={isOwner}
-                    studioSlug={studioSlug}
-                    onCreatePost={() => {
-                        setEditingPostId(undefined);
-                        setIsPostEditorOpen(true);
-                    }}
-                />
-            </div>
 
             {/* PromoIsland - Overlay fixed sobre navbar */}
             {offers.length > 0 && (
@@ -215,6 +217,7 @@ export function ProfilePageMobile({ profileData, studioSlug, offers = [], logic 
                 studioId={studio.id}
                 ownerUserId={studio.owner_id}
                 isOpen={!!selectedPortfolioSlug}
+                loading={!!selectedPortfolioSlug && !selectedPortfolio}
                 onClose={handleCloseModal}
                 onNext={handleNextPortfolio}
                 onPrev={handlePrevPortfolio}
