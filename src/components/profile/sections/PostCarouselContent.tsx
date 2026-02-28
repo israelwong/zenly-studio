@@ -267,12 +267,12 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 .post-carousel-glide .glide__track {
                     transform: translateZ(0);
                     -webkit-transform: translateZ(0);
-                    touch-action: pan-x pan-y !important;
+                    touch-action: pan-y !important;
                     -webkit-overflow-scrolling: touch;
                     overscroll-behavior-x: contain;
                 }
                 .post-carousel-glide .glide__slides {
-                    touch-action: pan-x pan-y !important;
+                    touch-action: pan-y !important;
                     -webkit-overflow-scrolling: touch;
                     overscroll-behavior-x: contain;
                 }
@@ -283,11 +283,11 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 }
                 @media (max-width: 640px) {
                     .post-carousel-glide .glide__track {
-                        touch-action: pan-x pan-y !important;
+                        touch-action: pan-y !important;
                         overscroll-behavior-x: contain;
                     }
                     .post-carousel-glide .glide__slides {
-                        touch-action: pan-x pan-y !important;
+                        touch-action: pan-y !important;
                         overscroll-behavior-x: contain;
                     }
                     .post-carousel-glide .glide__slide {
@@ -296,7 +296,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                         -webkit-backface-visibility: hidden;
                     }
                     .post-carousel-glide .glide__slide > div {
-                        touch-action: pan-x pan-y !important;
+                        touch-action: pan-y !important;
                     }
                 }
             `}</style>
