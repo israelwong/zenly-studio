@@ -22,6 +22,7 @@ import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { createStageNameMap, getCotizacionStatusDisplayName, isTerminalStage, getTerminalColor } from '@/lib/utils/pipeline-stage-names';
 import { getPromisePath } from '@/lib/utils/promise-navigation';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 
 interface PromiseKanbanCardProps {
     promise: PromiseWithContact;
@@ -119,6 +120,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     // Días restantes usando fecha local del usuario (getRelativeDateDiffDays)
     const daysRemaining = eventDate ? getRelativeDateDiffDays(eventDate) : null;
     const isExpired = daysRemaining !== null && daysRemaining < 0;
+
+    /** Publicada = mismo criterio que PromiseDetailToolbar. Boolean() evita LED verde con datos en caché sin el campo. */
+    const isPublished = Boolean(promise.published_at);
 
     // Determinar color de fecha según días restantes
     const getDateColor = (): string => {
@@ -540,6 +544,18 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                         <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2">
                                 <h3 className={`font-medium text-white leading-tight truncate ${isCompact ? 'text-xs' : 'text-sm'}`} title={promise.name}>{getDisplayName(promise.name)}</h3>
+                                {/* Indicador Publicado / No publicado (LED). Propiedad: isPublished = promise.published_at != null */}
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span
+                                            className={`shrink-0 w-2 h-2 rounded-full ${isPublished ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-zinc-500'}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" sideOffset={4}>
+                                        {isPublished ? 'Promesa publicada' : 'Promesa no publicada'}
+                                    </TooltipContent>
+                                </Tooltip>
                                 {/* Badge de prueba */}
                                 {promise.is_test && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-400/30 shrink-0">

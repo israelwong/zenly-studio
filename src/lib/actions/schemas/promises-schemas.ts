@@ -133,6 +133,8 @@ export interface PromiseWithContact {
   defined_date: Date | string | null; // Fecha definida del evento (legacy) - puede venir como Date o string YYYY-MM-DD desde server
   promise_pipeline_stage_id: string | null;
   is_test: boolean; // Marca si es una promesa de prueba del preview
+  /** Si tiene valor = publicada (cliente tiene acceso al portal); null = borrador */
+  published_at: Date | null;
   // Datos de adquisición
   acquisition_channel_id: string | null;
   acquisition_channel_name?: string | null;

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { startTransition } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
@@ -45,6 +47,7 @@ export function PromiseDetailToolbar({
   onCopyLink,
   onOpenAutomationOptions,
 }: PromiseDetailToolbarProps) {
+  const router = useRouter();
   const basePublicUrl = typeof window !== 'undefined' ? `${window.location.origin}/${studioSlug}/promise/${promiseId}` : '';
   const [linkCopied, setLinkCopied] = useState(false);
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
@@ -71,6 +74,7 @@ export function PromiseDetailToolbar({
       if (result.success) {
         setShowUnpublishConfirm(false);
         onUnpublishSuccess?.();
+        startTransition(() => router.refresh());
         toast.success('Publicación apagada');
       } else {
         toast.error(result.error || 'Error al apagar publicación');

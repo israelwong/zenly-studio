@@ -82,6 +82,7 @@ export async function getPromises(
         event_location_id: true,
         is_test: true,
         updated_at: true,
+        published_at: true,
         // ✅ Contact: Solo campos usados en la card
         contact: {
           select: {
@@ -289,6 +290,7 @@ export async function getPromises(
           : null,
         promise_pipeline_stage_id: promise.pipeline_stage_id,
         is_test: promise.is_test || false,
+        published_at: promise.published_at ?? null,
         acquisition_channel_id: null, // ✅ No se usa en card del kanban
         social_network_id: null, // ✅ No se usa en card del kanban
         referrer_contact_id: null, // ✅ No se usa en card del kanban
@@ -562,6 +564,7 @@ export async function getPromiseByIdAsPromiseWithContact(
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
       is_test: promise.is_test || false,
+      published_at: promise.published_at ?? null,
       acquisition_channel_id: promise.contact.acquisition_channel_id,
       acquisition_channel_name: promise.contact.acquisition_channel?.name || null,
       social_network_id: promise.contact.social_network_id,
@@ -803,6 +806,7 @@ export async function createPromise(
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
       is_test: promise.is_test, // ✅ Incluir flag de prueba
+      published_at: promise.published_at ?? null,
       acquisition_channel_id: contact.acquisition_channel_id,
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
@@ -1345,6 +1349,7 @@ export async function updatePromise(
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
       is_test: promise.is_test,
+      published_at: promise.published_at ?? null,
       acquisition_channel_id: contact.acquisition_channel_id,
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
@@ -1637,6 +1642,7 @@ export async function movePromise(
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
       is_test: promise.is_test, // ✅ Incluir flag de prueba
+      published_at: promise.published_at ?? null,
       acquisition_channel_id: contact.acquisition_channel_id,
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
@@ -1897,7 +1903,7 @@ export async function setPromisePublished(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    revalidateTag(`promises-list-${studioSlug}`);
+    revalidateTag(`promises-list-${studioSlug}`, 'max');
     return { success: true, data: { published_at: updated.published_at } };
   } catch (error) {
     console.error('[PROMISES] Error actualizando published_at:', error);
