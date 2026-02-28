@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MoreVertical, Edit, Archive, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
 import { archivePost, deletePost } from '@/lib/actions/studio/archive.actions';
 
 interface PostCardMenuProps {
@@ -13,26 +12,23 @@ interface PostCardMenuProps {
     studioSlug: string;
     isPublished: boolean;
     onEdit?: (postId: string) => void; // Callback para abrir sheet de edición
+    /** Solo renderizar menú si el usuario es dueño del estudio (autorización explícita) */
+    isOwner?: boolean;
 }
 
 /**
- * PostCardMenu - Menú contextual para acciones de post
- * Solo visible si el usuario está autenticado
- * Acciones: Editar, Archivar, Eliminar
+ * PostCardMenu - Menú contextual para acciones de post (Editar, Archivar, Eliminar)
+ * Solo se renderiza si isOwner es true. Usuario invitado o no logueado no ve el menú.
  */
-export function PostCardMenu({ postId, postSlug, studioSlug, isPublished, onEdit }: PostCardMenuProps) {
+export function PostCardMenu({ postId, postSlug, studioSlug, isPublished, onEdit, isOwner = false }: PostCardMenuProps) {
     const router = useRouter();
-    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isArchiving, setIsArchiving] = useState(false);
 
-    // No mostrar si no hay usuario
-    if (!user) {
-        return null;
-    }
+    if (!isOwner) return null;
 
     const handleEdit = () => {
         if (onEdit) {

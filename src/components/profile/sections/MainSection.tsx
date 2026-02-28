@@ -36,13 +36,16 @@ interface MainSectionProps {
     studioId?: string;
     ownerUserId?: string | null;
     isDesktop?: boolean;
+    studioName?: string | null;
+    studioLogoUrl?: string | null;
+    isOwner?: boolean;
 }
 
 /**
  * MainSection - Feed de inicio con posts (Virtual Scrolling)
  * Renderiza solo posts visibles en viewport + overscan para mejor performance
  */
-export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, studioId, ownerUserId, isDesktop = false }: MainSectionProps) {
+export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, studioId, ownerUserId, isDesktop = false, studioName, studioLogoUrl, isOwner = false }: MainSectionProps) {
     const publishedPosts = posts.filter(post => post.is_published);
 
     const getPostType = (post: PublicPost): 'photo' | 'video' | 'mixed' => {
@@ -137,6 +140,9 @@ export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, st
                             ownerUserId={ownerUserId}
                             onPostClick={onPostClick}
                             onEditPost={onEditPost}
+                            studioName={studioName}
+                            studioLogoUrl={studioLogoUrl}
+                            isOwner={isOwner}
                         />
                     </React.Fragment>
                 ))}
@@ -162,6 +168,9 @@ export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, st
                             ownerUserId={ownerUserId}
                             onPostClick={onPostClick}
                             onEditPost={onEditPost}
+                            studioName={studioName}
+                            studioLogoUrl={studioLogoUrl}
+                            isOwner={isOwner}
                         />
                     </React.Fragment>
                 )}

@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { CaptionWithLinks } from '@/components/shared/CaptionWithLinks';
 import { PostCarouselContent } from './PostCarouselContent';
 import { PostCardMenu } from './PostCardMenu';
@@ -35,8 +34,13 @@ interface PostFeedCardProps {
         view_count?: number;
     };
     onPostClick?: (postId: string) => void;
-    onEditPost?: (postId: string) => void; // Callback para editar post
-    onMediaClick?: (mediaId: string) => void; // Callback para tracking de clicks en media
+    onEditPost?: (postId: string) => void;
+    onMediaClick?: (mediaId: string) => void;
+    /** Logo y nombre del estudio para cabecera de marca */
+    studioName?: string | null;
+    studioLogoUrl?: string | null;
+    /** Solo si true se muestra el menú Editar/Archivar/Eliminar */
+    isOwner?: boolean;
 }
 
 /**
@@ -47,10 +51,9 @@ interface PostFeedCardProps {
  * - Galería con carousel y lightbox completo
  * - Click en caption abre modal de post detalle
  */
-export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: PostFeedCardProps) {
+export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick, studioName, studioLogoUrl, isOwner = false }: PostFeedCardProps) {
     const params = useParams();
     const studioSlug = params?.slug as string;
-    const { user } = useAuth();
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [isClient, setIsClient] = useState(false);
     const firstMedia = post.media?.[0];
@@ -134,34 +137,64 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
 
     return (
         <div className="space-y-3 py-6">
-            {/* Encabezado: título, tiempo, estrella y menú contextual */}
+            {/* Cabecera de marca: logo + nombre estudio; debajo título/tiempo/destacado */}
             <div className="flex items-center justify-between gap-2 px-4">
-                <div className="flex items-center gap-2 flex-wrap flex-1">
-                    {hasTitle && (
-                        <h3 className="text-zinc-300 font-medium text-sm">
-                            {post.title}
-                        </h3>
-                    )}
-                    {post.published_at && isClient && relativeTime && (
-                        <span className="text-zinc-500 text-xs">
-                            {relativeTime}
-                        </span>
-                    )}
-                    {post.is_featured && (
-                        <span className="flex items-center" title="Post destacado">
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        </span>
-                    )}
+                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                        {studioLogoUrl ? (
+                            <Image
+                                src={studioLogoUrl}
+                                alt={studioName || 'Estudio'}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full object-cover shrink-0"
+                                unoptimized
+                            />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">
+                                <span className="text-zinc-300 font-semibold text-xs">
+                                    {studioName ? studioName.charAt(0).toUpperCase() : '?'}
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex flex-col gap-0 min-w-0">
+                            <span className="font-semibold text-zinc-100 text-sm truncate">
+                                {studioName || 'Estudio'}
+                            </span>
+                            {/* Título a la izquierda · tiempo a la derecha · destacado */}
+                            {(hasTitle || (post.published_at && isClient && relativeTime) || post.is_featured) && (
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                    {hasTitle && (
+                                        <span className="text-xs text-zinc-400 truncate min-w-0">
+                                            {post.title}
+                                        </span>
+                                    )}
+                                    {post.published_at && isClient && relativeTime && (
+                                        <span className="text-zinc-500 text-xs shrink-0">
+                                            <span className="text-zinc-600 mr-1">·</span>
+                                            {relativeTime}
+                                        </span>
+                                    )}
+                                    {post.is_featured && (
+                                        <span className="flex items-center shrink-0" title="Post destacado">
+                                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-
-                {/* Menú contextual - Solo si está autenticado */}
-                <PostCardMenu
-                    postId={post.id}
-                    postSlug={post.slug}
-                    studioSlug={studioSlug}
-                    isPublished={post.is_published}
-                    onEdit={onEditPost}
-                />
+                {isOwner && (
+                    <PostCardMenu
+                        postId={post.id}
+                        postSlug={post.slug}
+                        studioSlug={studioSlug}
+                        isPublished={post.is_published}
+                        onEdit={onEditPost}
+                        isOwner={isOwner}
+                    />
+                )}
             </div>
 
             {/* Descripción con links, sin saltos de línea, truncada - clickeable para abrir modal */}
@@ -272,22 +305,19 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
                 </>
             )}
 
-            {/* Palabras clave */}
+            {/* Hashtags al final, estilo minimalista */}
             {hasTags && (
-                <div className="flex flex-wrap gap-2 px-4">
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-4">
                     {post.tags!.map((tag, index) => (
-                        <span
-                            key={index}
-                            className="text-zinc-600 text-sm"
-                        >
+                        <span key={index} className="text-zinc-500 text-xs">
                             #{tag}
                         </span>
                     ))}
                 </div>
             )}
 
-            {/* Footer con analytics - Solo visible si usuario autenticado */}
-            {user && (
+            {/* Footer con analytics - Solo visible para dueño */}
+            {isOwner && (
                 <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/50 px-4">
                     {/* Vistas */}
                     <div className="flex items-center gap-1.5 text-zinc-500 text-xs">

@@ -51,9 +51,10 @@ interface PostRendererProps {
   onClose?: () => void;
   isArchived?: boolean;
   onRestore?: () => void;
+  isOwner?: boolean;
 }
 
-export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, onPrev, hasNext, hasPrev, onClose, isArchived = false, onRestore }: PostRendererProps) {
+export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, onPrev, hasNext, hasPrev, onClose, isArchived = false, onRestore, isOwner = false }: PostRendererProps) {
   const [linkCopied, setLinkCopied] = React.useState(false);
 
   // Analytics hook para tracking
@@ -172,8 +173,8 @@ export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, 
                 </span>
               </div>
             )}
-            <div>
-              <h1 className="font-semibold text-zinc-100">
+            <div className="min-w-0">
+              <h1 className="font-semibold text-zinc-100 truncate">
                 {post.studio.studio_name}
               </h1>
               <p className="text-xs text-zinc-400">
@@ -271,15 +272,20 @@ export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, 
 
       {/* Content - Con scroll interno solo si excede altura */}
       <div className="flex-shrink-0 max-h-[40vh] overflow-y-auto overflow-x-hidden p-4 space-y-4">
-        {/* Actions - Minimalista */}
+        {/* Título del post (discreto, debajo del header de marca) */}
+        {post.title && (
+          <h2 className="text-sm text-zinc-400">
+            {post.title}
+          </h2>
+        )}
+
+        {/* Actions - Solo para dueño */}
+        {isOwner && (
         <div className="flex items-center justify-between">
-          {/* Vistas */}
           <div className="flex items-center gap-2 text-sm text-zinc-500">
             <Eye className="w-4 h-4" />
             <span>{post.view_count} vistas</span>
           </div>
-
-          {/* Botón condicional: Restaurar o Copiar link */}
           {isArchived && onRestore ? (
             <button
               onClick={onRestore}
@@ -301,14 +307,10 @@ export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, 
             </button>
           )}
         </div>
+        )}
 
-        {/* Title and Caption */}
+        {/* Caption */}
         <div className="space-y-2">
-          {post.title && (
-            <h2 className="font-semibold text-zinc-100 text-lg">
-              {post.title}
-            </h2>
-          )}
           {post.caption && (
             <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
               {post.caption}
@@ -316,14 +318,11 @@ export function PostRenderer({ post, studioSlug, studioId, ownerUserId, onNext, 
           )}
         </div>
 
-        {/* Tags */}
+        {/* Hashtags - estilo minimalista */}
         {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
             {post.tags.map((tag: string, index: number) => (
-              <span
-                key={index}
-                className="text-zinc-500 text-sm"
-              >
+              <span key={index} className="text-zinc-500 text-xs">
                 #{tag}
               </span>
             ))}

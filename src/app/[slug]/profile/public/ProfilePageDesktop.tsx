@@ -107,6 +107,7 @@ export function ProfilePageDesktop({ profileData, studioSlug, offers = [], logic
                                 ownerUserId={studio.owner_id}
                                 studioSlug={studioSlug}
                                 isDesktop={true}
+                                isOwner={isOwner}
                             />
                         </div>
                     </div>
@@ -192,6 +193,7 @@ export function ProfilePageDesktop({ profileData, studioSlug, offers = [], logic
                 hasNext={hasNextPost}
                 hasPrev={hasPrevPost}
                 isArchived={selectedPost?.is_published === false}
+                isOwner={isOwner}
                 onRestore={selectedPost?.is_published === false ? async () => {
                     const { restorePost } = await import('@/lib/actions/studio/archive.actions');
                     const result = await restorePost(selectedPost.id, studioSlug);

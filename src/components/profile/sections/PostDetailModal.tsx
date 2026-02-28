@@ -48,6 +48,7 @@ interface PostDetailModalProps {
     hasPrev?: boolean;
     isArchived?: boolean;
     onRestore?: () => void;
+    isOwner?: boolean;
 }
 
 /**
@@ -230,6 +231,7 @@ export function PostDetailModal({
                         onClose={onClose}
                         isArchived={isArchived}
                         onRestore={onRestore}
+                        isOwner={isOwner}
                     />
 
                     {/* Footer con botón cerrar discreto - Menos alto */}

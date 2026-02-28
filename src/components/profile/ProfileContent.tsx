@@ -16,8 +16,11 @@ interface ProfileContentProps {
     onEditPost?: (postId: string) => void;
     studioId?: string;
     ownerUserId?: string | null;
-    studioSlug?: string; // Para FAQs editables
-    isDesktop?: boolean; // Para ajustar scroll en desktop
+    studioSlug?: string;
+    isDesktop?: boolean;
+    studioName?: string | null;
+    studioLogoUrl?: string | null;
+    isOwner?: boolean;
 }
 
 /**
@@ -40,9 +43,11 @@ export function ProfileContent({
     studioId,
     ownerUserId,
     studioSlug,
-    isDesktop = false
+    isDesktop = false,
+    studioName,
+    studioLogoUrl,
+    isOwner = false
 }: ProfileContentProps) {
-    const { user } = useAuth();
     // Skeleton loading state
     if (loading) {
         return (
@@ -85,7 +90,7 @@ export function ProfileContent({
         if (variant === 'inicio' || (variant === 'posts' && !data?.portfolios)) {
             return (
                 <div className="h-full overflow-hidden">
-                    <MainSection posts={posts as Parameters<typeof MainSection>[0]['posts']} filter={filter} onPostClick={onPostClick} onEditPost={onEditPost} studioId={studioId} ownerUserId={ownerUserId} isDesktop={isDesktop} />
+                    <MainSection posts={posts as Parameters<typeof MainSection>[0]['posts']} filter={filter} onPostClick={onPostClick} onEditPost={onEditPost} studioId={studioId} ownerUserId={ownerUserId} isDesktop={isDesktop} studioName={studioName} studioLogoUrl={studioLogoUrl} isOwner={isOwner} />
                 </div>
             );
         }

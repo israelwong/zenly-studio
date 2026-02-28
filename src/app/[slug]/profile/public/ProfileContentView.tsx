@@ -27,7 +27,8 @@ interface ProfileContentViewProps {
     studioId?: string;
     ownerUserId?: string | null;
     studioSlug?: string;
-    isDesktop?: boolean; // Para ajustar scroll en desktop
+    isDesktop?: boolean;
+    isOwner?: boolean;
 }
 
 /**
@@ -35,7 +36,7 @@ interface ProfileContentViewProps {
  * Renders the appropriate view based on active tab
  * Handles tab switching logic and post/portfolio modals
  */
-export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId, studioSlug, isDesktop = false }: ProfileContentViewProps) {
+export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId, studioSlug, isDesktop = false, isOwner = false }: ProfileContentViewProps) {
     const { studio, contactInfo, socialNetworks, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
@@ -56,6 +57,9 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
                         studioId={studioId}
                         ownerUserId={ownerUserId}
                         isDesktop={isDesktop}
+                        studioName={studio?.studio_name}
+                        studioLogoUrl={studio?.logo_url}
+                        isOwner={isOwner}
                     />
                 </div>
             );

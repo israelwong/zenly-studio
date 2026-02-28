@@ -30,6 +30,9 @@ interface PostFeedCardWithTrackingProps {
     ownerUserId?: string | null;
     onPostClick?: (postSlug: string) => void;
     onEditPost?: (postId: string) => void;
+    studioName?: string | null;
+    studioLogoUrl?: string | null;
+    isOwner?: boolean;
 }
 
 /**
@@ -46,7 +49,10 @@ export function PostFeedCardWithTracking({
     studioId,
     ownerUserId,
     onPostClick,
-    onEditPost
+    onEditPost,
+    studioName,
+    studioLogoUrl,
+    isOwner = false
 }: PostFeedCardWithTrackingProps) {
     const cardRef = useRef<HTMLDivElement>(null);
     const hasTrackedView = useRef(false);
@@ -114,6 +120,9 @@ export function PostFeedCardWithTracking({
                 onPostClick={onPostClick}
                 onEditPost={onEditPost}
                 onMediaClick={handleMediaClick}
+                studioName={studioName}
+                studioLogoUrl={studioLogoUrl}
+                isOwner={isOwner}
             />
         </div>
     );
