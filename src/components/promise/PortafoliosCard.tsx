@@ -195,14 +195,15 @@ export function PortafoliosCard({ portafolios, studioSlug, studioId, onPortfolio
         </div>
       </section>
 
-      {/* Modal de portafolio */}
-      {selectedPortfolio && (
+      {/* Modal de portafolio – se abre inmediatamente con skeleton mientras carga */}
+      {selectedPortfolioSlug && (
         <PortfolioDetailModal
           portfolio={selectedPortfolio}
           studioSlug={studioSlug}
           studioId={studioId}
           isOpen={!!selectedPortfolioSlug}
           onClose={handleCloseModal}
+          loading={loadingPortfolio}
           hideShareButton={true}
         />
       )}

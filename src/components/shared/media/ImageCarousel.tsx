@@ -40,6 +40,16 @@ export function ImageCarousel({
     const videoRefsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
+    const [imagesReady, setImagesReady] = useState(false);
+    const loadedCountRef = useRef(0);
+    const totalImages = media.filter(m => m.file_type !== 'video').length;
+
+    const handleImageLoaded = () => {
+        loadedCountRef.current += 1;
+        if (loadedCountRef.current >= totalImages) {
+            setImagesReady(true);
+        }
+    };
 
     // Intentar usar el context, pero no fallar si no existe
     let setColors: ((colors: { primary: string; accent: string }) => void) | undefined;
@@ -121,8 +131,28 @@ export function ImageCarousel({
         };
     });
 
+    // Fallback: si las imágenes tardan más de 3s, montar Glide de todas formas
     useEffect(() => {
-        if (!glideRef.current || !media.length) return;
+        if (imagesReady || totalImages === 0) return;
+        const timer = setTimeout(() => setImagesReady(true), 3000);
+        return () => clearTimeout(timer);
+    }, [imagesReady, totalImages]);
+
+    // Si no hay imágenes (solo videos), marcar ready de inmediato
+    useEffect(() => {
+        if (totalImages === 0 && media.length > 0) {
+            setImagesReady(true);
+        }
+    }, [totalImages, media.length]);
+
+    // Reset al cambiar media
+    useEffect(() => {
+        loadedCountRef.current = 0;
+        setImagesReady(totalImages === 0);
+    }, [media, totalImages]);
+
+    useEffect(() => {
+        if (!glideRef.current || !media.length || !imagesReady) return;
 
         const glideInstance = new Glide(glideRef.current, {
             type: 'carousel',
@@ -171,7 +201,7 @@ export function ImageCarousel({
                 glideInstanceRef.current = null;
             }
         };
-    }, [media, autoplay, setColors]);
+    }, [media, autoplay, setColors, imagesReady]);
 
     const handleImageClick = (index: number) => {
         if (enableLightbox) {
@@ -236,8 +266,16 @@ export function ImageCarousel({
                 </div>
             )}
 
-            {/* Glide Carousel - Estilo Threads */}
-            <div ref={glideRef} className="glide relative w-full">
+            {/* Skeleton mientras cargan las imágenes */}
+            {!imagesReady && (
+                <div className="w-full aspect-video bg-zinc-800 rounded-lg animate-pulse flex items-center justify-center gap-3">
+                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
+                    <span className="text-xs text-zinc-500">Cargando galería...</span>
+                </div>
+            )}
+
+            {/* Glide Carousel - visible solo cuando las imágenes cargaron */}
+            <div ref={glideRef} className={`glide relative w-full ${imagesReady ? '' : 'h-0 overflow-hidden'}`}>
                 <div className="overflow-hidden" data-glide-el="track">
                     <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility:hidden] [transform-style:preserve-3d] touch-pan-y [will-change:transform] relative flex w-full overflow-hidden p-0">
                         {media.map((item, index) => (
@@ -252,7 +290,6 @@ export function ImageCarousel({
                                             onVideoRef={setVideoRef(index)}
                                             limitHeight={hasMultipleVideos}
                                             onPlay={() => {
-                                                // Pausar otros videos cuando este se reproduce
                                                 videoRefsRef.current.forEach((vid, idx) => {
                                                     if (vid && idx !== index) {
                                                         vid.pause();
@@ -270,6 +307,8 @@ export function ImageCarousel({
                                             sizes="(max-width: 768px) 100vw, 80vw"
                                             priority={index === 0}
                                             unoptimized
+                                            onLoad={handleImageLoaded}
+                                            onError={handleImageLoaded}
                                         />
                                     )}
                                 </div>

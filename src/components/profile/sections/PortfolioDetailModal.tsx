@@ -15,6 +15,7 @@ interface PortfolioDetailModalProps {
     ownerUserId?: string | null;
     isOpen: boolean;
     onClose: () => void;
+    loading?: boolean;
     onNext?: () => void;
     onPrev?: () => void;
     hasNext?: boolean;
@@ -35,6 +36,7 @@ export function PortfolioDetailModal({
     ownerUserId,
     isOpen,
     onClose,
+    loading = false,
     onNext,
     onPrev,
     hasNext = false,
@@ -131,62 +133,75 @@ export function PortfolioDetailModal({
 
     if (!isOpen) return null;
 
-    // Si el modal está abierto pero no hay portfolio, mostrar mensaje de "no disponible"
+    // Cargando: skeleton; error: mensaje "no disponible"
     if (!portfolio) {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
-                {/* Overlay */}
                 <div
                     className="absolute inset-0 bg-black/80 backdrop-blur-md"
                     onClick={onClose}
                 />
 
-                {/* Modal de "Portafolio no disponible" */}
-                <div className="relative w-full max-w-md mx-auto p-4 flex items-center justify-center">
-                    <div className="relative w-full bg-zinc-900/95 backdrop-blur-xl rounded-lg border border-zinc-800/50 shadow-2xl p-6">
-                        {/* Icono de alerta */}
-                        <div className="flex flex-col items-center text-center space-y-4">
-                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
-                                <AlertCircle className="w-8 h-8 text-red-500" />
-                            </div>
-
-                            {/* Título */}
-                            <div className="space-y-2">
-                                <h3 className="text-xl font-semibold text-zinc-100">
-                                    Portafolio no disponible
-                                </h3>
-                                <p className="text-sm text-zinc-400">
-                                    Este portafolio fue eliminado, movido o ya no está disponible públicamente.
-                                </p>
-                            </div>
-
-                            {/* Acciones */}
-                            <div className="w-full space-y-3 pt-4">
-                                <Link
-                                    href={`/${studioSlug}`}
-                                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition-colors"
-                                    onClick={onClose}
-                                >
-                                    <Home className="w-4 h-4" />
-                                    <span>Ver perfil</span>
-                                </Link>
-
-                                <Link
-                                    href={`/${studioSlug}?section=portafolio`}
-                                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-transparent border border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 rounded-lg transition-colors"
-                                    onClick={onClose}
-                                >
-                                    <ImageIcon className="w-4 h-4" />
-                                    <span>Ver otros portafolios</span>
-                                </Link>
-
+                <div className="relative w-full h-full lg:w-[480px] lg:h-[85vh] lg:max-h-[95vh] lg:mx-auto lg:p-4 flex items-center justify-center">
+                    <div className="relative w-full h-full lg:w-full lg:h-full lg:max-h-[95vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl lg:rounded-lg flex flex-col lg:border lg:border-zinc-800/50 lg:shadow-2xl">
+                        {/* Header skeleton */}
+                        <div className="shrink-0 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0 mr-3">
+                                    {loading ? (
+                                        <>
+                                            <div className="h-5 w-3/4 bg-zinc-800 animate-pulse rounded mb-2" />
+                                            <div className="h-3 w-1/3 bg-zinc-800 animate-pulse rounded" />
+                                        </>
+                                    ) : (
+                                        <h1 className="font-semibold text-zinc-100 text-lg">Portafolio</h1>
+                                    )}
+                                </div>
                                 <button
                                     onClick={onClose}
-                                    className="w-full px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                                    className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+                                    aria-label="Cerrar"
                                 >
-                                    Cerrar
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
+                            {loading ? (
+                                <div className="space-y-4 animate-pulse">
+                                    <div className="w-full aspect-video bg-zinc-800 rounded-lg" />
+                                    <div className="h-4 w-full bg-zinc-800 rounded" />
+                                    <div className="h-4 w-5/6 bg-zinc-800 rounded" />
+                                    <div className="h-4 w-2/3 bg-zinc-800 rounded" />
+                                    <div className="w-full aspect-video bg-zinc-800 rounded-lg" />
+                                    <div className="h-4 w-4/5 bg-zinc-800 rounded" />
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center text-center space-y-4 py-8">
+                                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
+                                        <AlertCircle className="w-8 h-8 text-red-500" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-xl font-semibold text-zinc-100">Portafolio no disponible</h3>
+                                        <p className="text-sm text-zinc-400">
+                                            Este portafolio fue eliminado, movido o ya no está disponible públicamente.
+                                        </p>
+                                    </div>
+                                    <div className="w-full space-y-3 pt-4 max-w-sm">
+                                        <Link href={`/${studioSlug}`} className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition-colors" onClick={onClose}>
+                                            <Home className="w-4 h-4" />
+                                            <span>Ver perfil</span>
+                                        </Link>
+                                        <Link href={`/${studioSlug}?section=portafolio`} className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-transparent border border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 rounded-lg transition-colors" onClick={onClose}>
+                                            <ImageIcon className="w-4 h-4" />
+                                            <span>Ver otros portafolios</span>
+                                        </Link>
+                                        <button onClick={onClose} className="w-full px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors">Cerrar</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -202,8 +217,8 @@ export function PortfolioDetailModal({
                 onClick={handleClose}
             />
 
-            {/* Modal Container - Full screen en mobile, centrado en desktop */}
-            <div className="relative w-full h-full lg:w-auto lg:h-auto lg:max-w-md lg:mx-auto lg:p-4 flex items-center justify-center">
+            {/* Modal Container - Full screen en mobile, ancho fijo smartphone en desktop */}
+            <div className="relative w-full h-full lg:w-[480px] lg:h-auto lg:max-h-[95vh] lg:mx-auto lg:p-4 flex items-center justify-center">
                 <div className="relative w-full h-full lg:w-full lg:h-auto lg:max-h-[95vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl lg:rounded-lg flex flex-col lg:border lg:border-zinc-800/50 lg:shadow-2xl">
                     {/* Header - Fixed con backdrop-blur */}
                     <div className="shrink-0 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/50 p-4">
