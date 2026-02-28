@@ -132,8 +132,10 @@ export function ImageCarousel({
             autoplay: autoplay > 0 ? autoplay : false,
             animationDuration: 200,
             gap: 12,
-            dragThreshold: 80,
-            swipeThreshold: 80,
+            dragThreshold: 15,
+            swipeThreshold: 15,
+            touchAngle: 45,
+            touchRatio: 1.5,
             throttle: 16,
             classes: {
                 activeNav: '[&>*]:bg-white',
@@ -237,7 +239,7 @@ export function ImageCarousel({
             {/* Glide Carousel - Estilo Threads */}
             <div ref={glideRef} className="glide relative w-full">
                 <div className="overflow-hidden" data-glide-el="track">
-                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-x pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0">
+                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility:hidden] [transform-style:preserve-3d] touch-pan-y [will-change:transform] relative flex w-full overflow-hidden p-0">
                         {media.map((item, index) => (
                             <li key={item.id} className="glide__slide">
                                 <div

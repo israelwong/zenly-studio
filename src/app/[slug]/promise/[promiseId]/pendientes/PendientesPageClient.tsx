@@ -111,6 +111,7 @@ export function PendientesPageClient({
 
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
+  const [hasEngagedWithPortfolio, setHasEngagedWithPortfolio] = useState(false);
 
   // ⚠️ TAREA 3: Comparación de datos en el cliente (versiones de cotizaciones)
   const cotizacionesVersionsRef = useRef<Map<string, string>>(new Map());
@@ -287,6 +288,7 @@ export function PendientesPageClient({
           portafolios={portafolios}
           studioSlug={studioSlug}
           studioId={studio.id}
+          onPortfolioEngaged={() => setHasEngagedWithPortfolio(true)}
         />
       )}
 
@@ -303,7 +305,7 @@ export function PendientesPageClient({
 
       {/* Nudge proactivo para portafolios */}
       {shareSettings.portafolios && portafolios && portafolios.length > 0 && (
-        <PortfolioNudge hasPortfolios={portafolios.length > 0} />
+        <PortfolioNudge hasPortfolios={portafolios.length > 0} hasEngagedWithPortfolio={hasEngagedWithPortfolio} />
       )}
     </>
   );

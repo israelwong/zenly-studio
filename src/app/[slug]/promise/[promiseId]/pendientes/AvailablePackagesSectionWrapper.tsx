@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { AvailablePackagesSection } from './AvailablePackagesSection';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import { PortfolioNudge } from '@/components/promise/PortfolioNudge';
@@ -132,6 +132,7 @@ export function AvailablePackagesSectionWrapper({
   const activeQuoteData = activeQuoteResult.success && activeQuoteResult.data ? activeQuoteResult.data : null;
   const hasActiveQuote = activeQuoteData && activeQuoteData.cotizaciones.length > 0;
   const paquetesData = availablePackagesResult.success && availablePackagesResult.data ? availablePackagesResult.data : null;
+  const [hasEngagedWithPortfolio, setHasEngagedWithPortfolio] = useState(false);
 
   // Sección paquetes: fuente de verdad = promesa (promise.duration_hours).
   const promiseDurationHours = activeQuoteData?.promise?.duration_hours ?? basicPromise.promise.duration_hours ?? null;
@@ -175,9 +176,9 @@ export function AvailablePackagesSectionWrapper({
             portafolios={paquetesData.portafolios}
             studioSlug={studioSlug}
             studioId={basicPromise.studio.id}
+            onPortfolioEngaged={() => setHasEngagedWithPortfolio(true)}
           />
-          {/* Nudge proactivo para portafolios */}
-          <PortfolioNudge hasPortfolios={paquetesData.portafolios.length > 0} />
+          <PortfolioNudge hasPortfolios={paquetesData.portafolios.length > 0} hasEngagedWithPortfolio={hasEngagedWithPortfolio} />
         </>
       )}
     </>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Image as ImageIcon, ChevronRight, FolderOpen } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
@@ -21,14 +22,24 @@ interface PortafoliosCardProps {
   }>;
   studioSlug: string;
   studioId?: string;
+  /** Se llama cuando el prospecto abre un portafolio; el nudge no se vuelve a mostrar en esta sesión */
+  onPortfolioEngaged?: () => void;
 }
 
-export function PortafoliosCard({ portafolios, studioSlug, studioId }: PortafoliosCardProps) {
+export function PortafoliosCard({ portafolios, studioSlug, studioId, onPortfolioEngaged }: PortafoliosCardProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [selectedPortfolioSlug, setSelectedPortfolioSlug] = useState<string | null>(null);
   const [selectedPortfolio, setSelectedPortfolio] = useState<PublicPortfolio | null>(null);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
 
   const handlePortfolioClick = async (slug: string) => {
+    onPortfolioEngaged?.();
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('portfolio', slug);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
     setSelectedPortfolioSlug(slug);
     setLoadingPortfolio(true);
 
@@ -102,6 +113,10 @@ export function PortafoliosCard({ portafolios, studioSlug, studioId }: Portafoli
   };
 
   const handleCloseModal = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('portfolio');
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
     setSelectedPortfolioSlug(null);
     setSelectedPortfolio(null);
   };

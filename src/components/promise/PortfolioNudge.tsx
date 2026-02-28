@@ -1,15 +1,22 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Smartphone, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PortfolioNudgeProps {
   /** Si hay portafolios disponibles para mostrar */
   hasPortfolios: boolean;
+  /** Si el prospecto ya interactuó con portafolio (click en nudge o en card): no volver a mostrar en esta sesión */
+  hasEngagedWithPortfolio?: boolean;
 }
 
-export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
+export function PortfolioNudge({ hasPortfolios, hasEngagedWithPortfolio = false }: PortfolioNudgeProps) {
+  const searchParams = useSearchParams();
+  const portfolioSlug = searchParams.get('portfolio');
+  const shouldHide = hasEngagedWithPortfolio || !!portfolioSlug;
+
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -28,10 +35,8 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
   }, [isVisible]);
 
   useEffect(() => {
-    // Solo mostrar si hay portafolios disponibles
-    if (!hasPortfolios || isDismissed) return;
+    if (!hasPortfolios || isDismissed || shouldHide) return;
 
-    // Mostrar después de 5 segundos sin condiciones adicionales
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
     }, 5000);
@@ -39,7 +44,7 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [hasPortfolios, isDismissed]);
+  }, [hasPortfolios, isDismissed, shouldHide]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -64,8 +69,7 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
     setIsDismissed(true);
   };
 
-  // Renderizar siempre para que el timeout funcione, pero solo mostrar contenido si es visible
-  if (!hasPortfolios) return null;
+  if (!hasPortfolios || shouldHide) return null;
 
   return (
     <>
@@ -91,7 +95,7 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
         <div
           className={cn(
             'fixed bottom-6 right-6 z-[9999] max-w-sm portfolio-nudge-enter',
-            'transition-all'
+            'transition-all duration-200 ease-out'
           )}
         >
         <div
