@@ -5,7 +5,7 @@ import { startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive, Clock, Lock, Gift, Tag } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive, Clock, Lock, Gift, Tag, Settings2 } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -1693,11 +1693,11 @@ export function PaquetesTipoEventoList({
                     <ZenButton
                         variant="outline"
                         size="sm"
-                        onClick={handleCreateTipoEvento}
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-gestionar-tipo-eventos-modal'))}
                         className="flex items-center gap-2"
                     >
-                        <Plus className="w-4 h-4" />
-                        Nuevo tipo de evento
+                        <Settings2 className="w-4 h-4" />
+                        Gestionar tipos de evento
                     </ZenButton>
                 </div>
 

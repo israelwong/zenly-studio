@@ -129,6 +129,7 @@ function StudioLayoutContent({
     const handleOpenStudioData = () => setShowStudioDataModal(true);
     const handleOpenEventTypes = () => setShowEventTypesModal(true);
     const handleOpenCapacidad = () => setShowCapacidadModal(true);
+    const handleOpenGestionarTiposEventos = () => setShowEventTypesModal(true);
 
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
@@ -139,6 +140,7 @@ function StudioLayoutContent({
     window.addEventListener('open-studio-data-modal', handleOpenStudioData);
     window.addEventListener('open-event-types-modal', handleOpenEventTypes);
     window.addEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
+    window.addEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
 
     return () => {
       window.removeEventListener('open-terminos-modal', handleOpenTerminos);
@@ -150,6 +152,7 @@ function StudioLayoutContent({
       window.removeEventListener('open-studio-data-modal', handleOpenStudioData);
       window.removeEventListener('open-event-types-modal', handleOpenEventTypes);
       window.removeEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
+      window.removeEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
     };
   }, []);
 
