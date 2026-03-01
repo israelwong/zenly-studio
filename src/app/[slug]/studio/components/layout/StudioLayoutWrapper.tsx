@@ -16,9 +16,10 @@ import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/Tar
 import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideSheet';
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
+import { CapacidadOperativaModal } from '@/components/shared/configuracion/CapacidadOperativaModal';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ZenDialog } from '@/components/ui/zen';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent } from 'lucide-react';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent, CalendarDays } from 'lucide-react';
 import { LocationManagerModal } from '@/components/shared/agenda/LocationManagerModal';
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -99,6 +100,7 @@ function StudioLayoutContent({
   const [showAutomationModal, setShowAutomationModal] = useState(false);
   const [showLocationsManagerModal, setShowLocationsManagerModal] = useState(false);
   const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
+  const [showCapacidadModal, setShowCapacidadModal] = useState(false);
 
   // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
   const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
@@ -126,6 +128,7 @@ function StudioLayoutContent({
     const handleOpenContracts = () => setShowContractsModal(true);
     const handleOpenStudioData = () => setShowStudioDataModal(true);
     const handleOpenEventTypes = () => setShowEventTypesModal(true);
+    const handleOpenCapacidad = () => setShowCapacidadModal(true);
 
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
@@ -135,6 +138,7 @@ function StudioLayoutContent({
     window.addEventListener('open-contracts-modal', handleOpenContracts);
     window.addEventListener('open-studio-data-modal', handleOpenStudioData);
     window.addEventListener('open-event-types-modal', handleOpenEventTypes);
+    window.addEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
 
     return () => {
       window.removeEventListener('open-terminos-modal', handleOpenTerminos);
@@ -145,6 +149,7 @@ function StudioLayoutContent({
       window.removeEventListener('open-contracts-modal', handleOpenContracts);
       window.removeEventListener('open-studio-data-modal', handleOpenStudioData);
       window.removeEventListener('open-event-types-modal', handleOpenEventTypes);
+      window.removeEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
     };
   }, []);
 
@@ -233,6 +238,19 @@ function StudioLayoutContent({
           isFullWidth: true,
           tags: ['Capacidad', 'Conflictos de fecha', 'WhatsApp', 'Notificaciones', 'Recordatorios', 'Disponibilidad', 'Agenda', 'Flujos'],
           keywords: ['capacidad', 'conflictos de fecha', 'whatsapp', 'notificaciones', 'mensajes automáticos', 'recordatorios', 'reglas de negocio', 'disponibilidad', 'agenda', 'flujos', 'automatización', 'automatizacion', 'promesas', 'prospecto', 'cotización', 'cupos', 'contrato', 'correo', 'etapas'],
+        },
+        {
+          id: 'capacidad-operativa',
+          title: 'Capacidad Operativa',
+          description: 'Máximo de eventos que puedes agendar por día en el estudio',
+          icon: CalendarDays,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-capacidad-operativa-modal'));
+            }, 100);
+          },
+          category: 'comercial',
+          keywords: ['capacidad', 'cupo', 'límite', 'agenda', 'máximo', 'eventos por día'],
         },
         {
           id: 'condiciones',
@@ -537,6 +555,12 @@ function StudioLayoutContent({
           onClose={() => setShowRentabilidadModal(false)}
         />
       </ZenDialog>
+
+      <CapacidadOperativaModal
+        isOpen={showCapacidadModal}
+        onClose={() => setShowCapacidadModal(false)}
+        studioSlug={studioSlug}
+      />
 
       <PromiseShareOptionsModal
         key="global"

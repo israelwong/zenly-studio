@@ -100,3 +100,28 @@ export async function checkDateConflict(
     };
   }
 }
+
+/**
+ * Comprueba conflicto de capacidad por studio slug (para uso en client con solo slug).
+ */
+export async function checkDateConflictBySlug(
+  studioSlug: string,
+  date: Date
+): Promise<{ success: boolean; data?: CheckDateConflictResult; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+    return checkDateConflict(studio.id, date);
+  } catch (error) {
+    console.error("[checkDateConflictBySlug] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al comprobar conflicto de fecha",
+    };
+  }
+}

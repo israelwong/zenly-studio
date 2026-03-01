@@ -15,6 +15,8 @@ import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/even
 import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact, checkPhoneExists } from '@/lib/actions/studio/commercial/contacts';
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
+import { checkDateConflictBySlug, type CheckDateConflictResult } from '@/lib/utils/booking-conflict';
+import { CAPACIDAD_UPDATED_EVENT } from '@/components/shared/configuracion/CapacidadOperativaModal';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
 import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEventoEnrichedModal';
@@ -209,6 +211,7 @@ export function EventFormModal({
         comision_venta: string;
     } | null>(null);
     const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
+    const [capacityResult, setCapacityResult] = useState<CheckDateConflictResult | null>(null);
     const referrerSyncedRef = useRef(false);
     const [showCreateReferrerModal, setShowCreateReferrerModal] = useState(false);
     const [newReferrerName, setNewReferrerName] = useState('');
@@ -596,42 +599,63 @@ export function EventFormModal({
         }
     }, [selectedDates]);
 
-    // Verificar disponibilidad cuando cambian las fechas seleccionadas
+    // Verificar disponibilidad y capacidad operativa cuando cambian las fechas seleccionadas
     useEffect(() => {
         const verificarDisponibilidad = async () => {
             if (selectedDates.length === 0) {
                 setConflictosPorFecha(new Map());
+                setCapacityResult(null);
                 return;
             }
 
             const nuevosConflictos = new Map<string, AgendaItem[]>();
+            const date = selectedDates[0];
+            const dateKey = date.toISOString().split('T')[0];
 
             try {
-                // Solo verificar disponibilidad de la primera fecha (única fecha permitida)
-                if (selectedDates.length > 0) {
-                    const date = selectedDates[0];
-                    const dateKey = date.toISOString().split('T')[0];
-                    const result = await verificarDisponibilidadFecha(
+                const [disponibilidadResult, capacityRes] = await Promise.all([
+                    verificarDisponibilidadFecha(
                         studioSlug,
                         date,
                         undefined,
                         initialData?.id || undefined,
                         undefined
-                    );
+                    ),
+                    checkDateConflictBySlug(studioSlug, date),
+                ]);
 
-                    if (result.success && result.data && result.data.length > 0) {
-                        nuevosConflictos.set(dateKey, result.data);
-                    }
+                if (disponibilidadResult.success && disponibilidadResult.data && disponibilidadResult.data.length > 0) {
+                    nuevosConflictos.set(dateKey, disponibilidadResult.data);
                 }
-
                 setConflictosPorFecha(nuevosConflictos);
+
+                if (capacityRes.success && capacityRes.data) {
+                    setCapacityResult(capacityRes.data);
+                } else {
+                    setCapacityResult(null);
+                }
             } catch (error) {
-                console.error('Error verificando disponibilidad:', error);
+                console.error('Error verificando disponibilidad/capacidad:', error);
+                setCapacityResult(null);
             }
         };
 
         verificarDisponibilidad();
     }, [selectedDates, studioSlug, initialData?.id]);
+
+    // Revalidar capacidad cuando el usuario guarda en el modal atómico (Ajustar capacidad)
+    useEffect(() => {
+        const handleCapacidadUpdated = () => {
+            if (selectedDates.length > 0 && studioSlug) {
+                checkDateConflictBySlug(studioSlug, selectedDates[0]).then((res) => {
+                    if (res.success && res.data) setCapacityResult(res.data);
+                    else setCapacityResult(null);
+                });
+            }
+        };
+        window.addEventListener(CAPACIDAD_UPDATED_EVENT, handleCapacidadUpdated);
+        return () => window.removeEventListener(CAPACIDAD_UPDATED_EVENT, handleCapacidadUpdated);
+    }, [selectedDates, studioSlug]);
 
     // Sincronizar referrerInputValue cuando hay referrer_contact_id pero no referrer_name
     useEffect(() => {
@@ -1159,6 +1183,29 @@ export function EventFormModal({
                         <p className="text-xs text-zinc-400 mt-1">
                             {context === 'event' ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible' : 'Selecciona una fecha de interés para la promesa'}
                         </p>
+                        {selectedDates.length > 0 && capacityResult?.isFull && (
+                            <ZenCard variant="outlined" className="bg-amber-900/25 border-amber-600/60 mt-2">
+                                <ZenCardContent className="p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                                        <div className="flex-1">
+                                            <span className="text-xs font-medium text-amber-200">
+                                                ⚠️ Capacidad operativa alcanzada. Esta fecha ya tiene el límite máximo de eventos permitidos ({capacityResult.limit} eventos).{' '}
+                                                <ZenButton
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-800/30 inline-flex h-auto py-0.5 px-1 -my-0.5 align-baseline"
+                                                    onClick={() => window.dispatchEvent(new CustomEvent('open-capacidad-operativa-modal'))}
+                                                >
+                                                    Ajustar capacidad
+                                                </ZenButton>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </ZenCardContent>
+                            </ZenCard>
+                        )}
                         {selectedDates.length > 0 && (() => {
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
