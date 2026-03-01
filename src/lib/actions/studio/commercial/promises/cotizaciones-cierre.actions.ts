@@ -29,6 +29,7 @@ interface RegistroCierreData {
   contract_template_id?: string | null;
   contract_content?: string | null;
   contrato_definido?: boolean;
+  pago_confirmado_estudio?: boolean;
   pago_registrado?: boolean;
   pago_concepto?: string | null;
   pago_monto?: number | null;
@@ -215,6 +216,7 @@ export async function obtenerRegistroCierre(
         contract_version: registro.contract_version,
         contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
+        pago_confirmado_estudio: registro.pago_confirmado_estudio,
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
         pago_monto: registro.pago_monto ? Number(registro.pago_monto) : null,
@@ -574,6 +576,7 @@ export async function obtenerDatosPagoCierre(
 ): Promise<{
   success: boolean;
   data?: {
+    pago_confirmado_estudio?: boolean;
     pago_registrado?: boolean;
     pago_concepto?: string | null;
     pago_monto?: number | null;
@@ -607,6 +610,7 @@ export async function obtenerDatosPagoCierre(
     const registro = await prisma.studio_cotizaciones_cierre.findUnique({
       where: { cotizacion_id: cotizacionId },
       select: {
+        pago_confirmado_estudio: true,
         pago_registrado: true,
         pago_concepto: true,
         pago_monto: true,
@@ -634,6 +638,7 @@ export async function obtenerDatosPagoCierre(
     return {
       success: true,
       data: {
+        pago_confirmado_estudio: registro.pago_confirmado_estudio,
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
         pago_monto: registro.pago_monto ? Number(registro.pago_monto) : null,

@@ -2446,6 +2446,7 @@ model studio_cotizaciones_cierre {
   contract_version                  Int       @default(1)
   contrato_definido                 Boolean   @default(false)
   contract_signed_at                DateTime?
+  pago_confirmado_estudio           Boolean   @default(false)
   pago_registrado                   Boolean   @default(false)
   pago_concepto                     String?
   pago_monto                        Decimal?  @db.Decimal(10, 2)

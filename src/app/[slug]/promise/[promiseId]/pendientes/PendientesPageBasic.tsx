@@ -58,7 +58,7 @@ export function PendientesPageBasic({
     <>
       <PromiseRouteSync studioSlug={studioSlug} promiseId={promiseId} />
       {dateSoldOut && (
-        <div className="mx-4 mt-6 max-w-2xl rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-8 flex flex-col items-center gap-4 text-center">
+        <div className="mx-auto mt-6 max-w-2xl px-4 rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-8 flex flex-col items-center gap-4 text-center">
           <div className="p-3 rounded-full bg-amber-500/10">
             <CalendarX2 className="h-8 w-8 text-amber-400" />
           </div>

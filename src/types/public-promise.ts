@@ -116,6 +116,10 @@ export interface PublicCotizacion {
     content: string;
     version?: number;
     signed_at?: Date | null;
+    /** Fase 28.0: El estudio confirmó que ya recibió el anticipo */
+    pago_confirmado_estudio?: boolean;
+    /** Fase 28.0: Monto confirmado del anticipo por el estudio (SSOT si está presente) */
+    pago_monto?: number | null;
     condiciones_comerciales: {
       id: string;
       name: string;

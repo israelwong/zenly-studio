@@ -31,6 +31,8 @@ export interface ResumenPagoProps {
   renderAnticipoActions?: () => React.ReactNode;
   /** Si true, el monto de anticipo se muestra en ámbar (ajuste manual respecto a la condición). */
   anticipoModificado?: boolean;
+  /** Fase 28.4: Si true, muestra badge de "PAGADO" en el anticipo. */
+  pagoConfirmado?: boolean;
 }
 
 /** Formateador SSOT: 2 decimales, mismo que contrato digital (evita discrepancia Resumen vs Contrato). */
@@ -63,6 +65,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
       title = 'Resumen de Pago',
       renderAnticipoActions,
       anticipoModificado = false,
+      pagoConfirmado = false,
     },
     ref
   ) => {
@@ -202,14 +205,19 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
           </div>
           {anticipoDisplay > 0 && (
             <>
-              <div className="flex justify-between items-center pt-2 gap-1">
+              <div className="flex justify-between items-center pt-1 gap-1">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  {renderAnticipoActions?.()}
                   <span className="text-sm text-zinc-400">
                     {advanceType === 'fixed_amount'
                       ? 'Anticipo'
                       : `Anticipo (${anticipoPorcentaje ?? 0}%)`}
                   </span>
+                  {renderAnticipoActions?.()}
+                  {pagoConfirmado && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      PAGADO
+                    </span>
+                  )}
                 </div>
                 <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>
                   {formatPrecioCierre(anticipoDisplay)}

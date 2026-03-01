@@ -3394,6 +3394,8 @@ export async function getPublicPromiseCierre(
             contract_signed_at: true,
             condiciones_comerciales_id: true,
             condiciones_comerciales_definidas: true,
+            pago_confirmado_estudio: true,
+            pago_monto: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -3676,6 +3678,8 @@ export async function getPublicPromiseCierre(
           content: cierre.contract_content || null,
           version: cierre.contract_version ?? 1,
           signed_at: cierre.contract_signed_at || null,
+          pago_confirmado_estudio: cierre.pago_confirmado_estudio || false,
+          pago_monto: cierre.pago_monto != null ? Number(cierre.pago_monto) : null,
           condiciones_comerciales: condC,
         };
       })(),

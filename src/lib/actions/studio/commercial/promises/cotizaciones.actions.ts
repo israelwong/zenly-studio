@@ -3616,6 +3616,10 @@ export interface PasarACierreOptions {
     advance_amount?: number | null;
     discount_percentage?: number | null;
   };
+  /** Fase 28.0: El estudio confirma que ya recibió el anticipo */
+  pago_confirmado_estudio?: boolean;
+  /** Fase 28.0: Monto confirmado del anticipo (sobreescribe el calculado por condición) */
+  pago_monto_confirmado?: number;
 }
 
 /**
@@ -3730,6 +3734,12 @@ export async function pasarACierre(
       const registroCondicionId = ajuste ? null : condicionId;
       const registroCondicionDefinidas = !!registroCondicionId || !!ajuste;
 
+      // Fase 28.0: Pago confirmado por estudio
+      const pagoConfirmado = options?.pago_confirmado_estudio ?? false;
+      const pagoMontoConfirmado = options?.pago_monto_confirmado != null 
+        ? new Prisma.Decimal(options.pago_monto_confirmado) 
+        : null;
+
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
         create: {
@@ -3737,6 +3747,8 @@ export async function pasarACierre(
           previous_status: previousStatus,
           condiciones_comerciales_id: registroCondicionId,
           condiciones_comerciales_definidas: registroCondicionDefinidas,
+          pago_confirmado_estudio: pagoConfirmado,
+          pago_monto: pagoMontoConfirmado,
         },
         update: {
           previous_status: previousStatus,
@@ -3745,9 +3757,10 @@ export async function pasarACierre(
           contract_template_id: null,
           contract_content: null,
           contrato_definido: false,
+          pago_confirmado_estudio: pagoConfirmado,
           pago_registrado: false,
           pago_concepto: null,
-          pago_monto: null,
+          pago_monto: pagoMontoConfirmado,
           pago_fecha: null,
           pago_metodo_id: null,
           updated_at: new Date(),
@@ -3868,12 +3881,21 @@ export async function cancelarCierre(
         },
       });
 
-      // 3. Eliminar registro de cierre
+      // 3. Fase 28.2: Eliminar condición pactada/negociación (antes de borrar el cierre)
+      // Esto evita que queden condiciones huérfanas en el sistema
+      await tx.studio_condiciones_comerciales_negociacion.deleteMany({
+        where: { 
+          cotizacion_id: cotizacionId,
+          studio_id: studio.id,
+        },
+      });
+
+      // 4. Eliminar registro de cierre
       await tx.studio_cotizaciones_cierre.deleteMany({
         where: { cotizacion_id: cotizacionId },
       });
 
-      // 3. Opcionalmente desarchivar otras cotizaciones
+      // 5. Opcionalmente desarchivar otras cotizaciones
       if (desarchivarOtras && cotizacion.promise_id) {
         await tx.studio_cotizaciones.updateMany({
           where: {

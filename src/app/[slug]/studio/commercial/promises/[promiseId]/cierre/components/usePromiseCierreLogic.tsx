@@ -35,6 +35,7 @@ interface RegistroCierreLoadData {
     change_type: string;
     created_at: Date;
   } | null;
+  pago_confirmado_estudio?: boolean;
   pago_registrado?: boolean;
   pago_concepto?: string | null;
   pago_monto?: number | null;
@@ -147,6 +148,7 @@ export function usePromiseCierreLogic({
   } | null>(null);
 
   const [pagoData, setPagoData] = useState<{
+    pago_confirmado_estudio?: boolean;
     pago_registrado?: boolean;
     pago_concepto?: string | null;
     pago_monto?: number | null;
@@ -230,6 +232,7 @@ export function usePromiseCierreLogic({
         });
 
         setPagoData({
+          pago_confirmado_estudio: data.pago_confirmado_estudio,
           pago_registrado: data.pago_registrado,
           pago_concepto: data.pago_concepto,
           pago_monto: data.pago_monto,
@@ -521,6 +524,7 @@ export function usePromiseCierreLogic({
     if (result.success) {
       toast.success('Pago eliminado');
       setPagoData({
+        pago_confirmado_estudio: false,
         pago_registrado: false,
         pago_concepto: null,
         pago_monto: null,

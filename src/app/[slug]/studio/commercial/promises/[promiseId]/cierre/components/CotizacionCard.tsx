@@ -42,7 +42,10 @@ interface CotizacionCardProps {
     cortesias_count: number;
   } | null;
   /** Anticipo guardado en registro cierre (pago_monto); SSOT para resumen unificado */
-  pagoData?: { pago_monto?: number | null } | null;
+  pagoData?: { 
+    pago_confirmado_estudio?: boolean;
+    pago_monto?: number | null;
+  } | null;
   onAnticipoUpdated?: () => void;
   onPreviewClick: () => void;
   loadingCotizacion: boolean;
@@ -229,9 +232,9 @@ function CotizacionCardInner({
                   <ResumenPago
                     title="Resumen de Cierre"
                     compact
-precioBase={totalFinalCierre}
-                descuentoCondicion={0}
-                precioConDescuento={totalFinalCierre}
+                    precioBase={totalFinalCierre}
+                    descuentoCondicion={0}
+                    precioConDescuento={totalFinalCierre}
                     advanceType={advanceType}
                     anticipoPorcentaje={anticipoPorcentaje}
                     anticipo={anticipo}
@@ -244,6 +247,7 @@ precioBase={totalFinalCierre}
                     ajusteCierre={ajusteCierre}
                     tieneConcesiones
                     anticipoModificado={anticipoModificado}
+                    pagoConfirmado={pagoData?.pago_confirmado_estudio ?? false}
                     renderAnticipoActions={
                       ajusteFino !== null
                         ? () => (

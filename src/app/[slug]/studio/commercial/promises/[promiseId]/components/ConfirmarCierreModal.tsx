@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ZenDialog, ZenButton, ZenInput } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { Loader2, Lock, Globe, Pencil } from 'lucide-react';
+import { Switch } from '@/components/ui/shadcn/switch';
+import { Loader2, Lock, Globe, Pencil, DollarSign } from 'lucide-react';
 import { getDatosConfirmarCierre, getAuditoriaRentabilidadCierre, limpiarCondicionPactadaAlCancelarCierre, actualizarAnticipoCondicionNegociacionCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { ResumenPago } from '@/components/shared/precio';
-import { SeparadorZen } from '@/components/ui/zen';
 import { toast } from 'sonner';
 
 const NEGOCIACION_ID = '__negociacion__';
@@ -126,10 +126,19 @@ export function ConfirmarCierreModal({
   const confirmadoRef = useRef(false);
   /** Snapshot de ajusteFino al abrir el popover; Cancelar restaura este valor sin persistir. */
   const popoverAjusteSnapshotRef = useRef<{ advance_type: 'percentage' | 'fixed_amount'; advance_percentage: number | null; advance_amount: number | null; editing: boolean } | null>(null);
+  
+  /** Fase 28.0: Confirmación de pago directo */
+  const [pagoConfirmado, setPagoConfirmado] = useState(false);
+  const [pagoMontoConfirmado, setPagoMontoConfirmado] = useState<string>('');
+  /** Fase 28.3: Trackear si el usuario editó manualmente el monto */
+  const isManualEditRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
+      setPagoConfirmado(false);
+      setPagoMontoConfirmado('');
+      isManualEditRef.current = false;
       getDatosConfirmarCierre(studioSlug, cotizacionId)
         .then((res) => {
           if (res.success && res.data) {
@@ -189,12 +198,22 @@ export function ConfirmarCierreModal({
     : 0;
   const diferido = Math.max(0, totalAPagar - anticipo);
 
+  // Fase 28.3: Sincronización automática del monto de anticipo
+  useEffect(() => {
+    // Si el pago está confirmado y el usuario NO ha editado manualmente, sincronizar con el anticipo calculado
+    if (pagoConfirmado && !isManualEditRef.current && anticipo > 0) {
+      setPagoMontoConfirmado(anticipo.toString());
+    }
+  }, [anticipo, pagoConfirmado]);
+
   const buildPayload = (): PasarACierreOptions => {
+    let basePayload: PasarACierreOptions;
+    
     if (selectedId === NEGOCIACION_ID) {
       const neg = cotizacion?.condicion_comercial_negociacion;
       const name = neg?.name ?? 'Condición Pactada';
       if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
-        return {
+        basePayload = {
           condicion_negociacion_ajuste: {
             name,
             advance_type: ajusteFino.advance_type,
@@ -203,12 +222,12 @@ export function ConfirmarCierreModal({
             discount_percentage: neg?.discount_percentage ?? null,
           },
         };
+      } else {
+        basePayload = {};
       }
-      return {};
-    }
-    if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
+    } else if (ajusteFino?.editing && (ajusteFino.advance_percentage != null || ajusteFino.advance_amount != null)) {
       const c = condiciones.find((x) => x.id === selectedId);
-      return {
+      basePayload = {
         condicion_negociacion_ajuste: {
           name: c?.name ?? 'Ajuste personalizado',
           advance_type: ajusteFino.advance_type,
@@ -217,8 +236,20 @@ export function ConfirmarCierreModal({
           discount_percentage: c?.discount_percentage ?? null,
         },
       };
+    } else {
+      basePayload = { condiciones_comerciales_id: selectedId };
     }
-    return { condiciones_comerciales_id: selectedId };
+    
+    // Fase 28.0: Añadir pago confirmado
+    if (pagoConfirmado) {
+      basePayload.pago_confirmado_estudio = true;
+      const monto = parseFloat(pagoMontoConfirmado);
+      if (!isNaN(monto) && monto > 0) {
+        basePayload.pago_monto_confirmado = monto;
+      }
+    }
+    
+    return basePayload;
   };
 
   const handleConfirm = async () => {
@@ -379,8 +410,9 @@ export function ConfirmarCierreModal({
               </div>
             </div>
 
-            <Popover open={ajusteFinoPopoverOpen} onOpenChange={handleAjustePopoverOpenChange}>
-              <ResumenPago
+            <div className="-mt-2">
+              <Popover open={ajusteFinoPopoverOpen} onOpenChange={handleAjustePopoverOpenChange}>
+                <ResumenPago
                 compact
                 precioBase={totalAPagar}
                 descuentoCondicion={0}
@@ -477,23 +509,66 @@ export function ConfirmarCierreModal({
                   </ZenButton>
                 </div>
               </PopoverContent>
-            </Popover>
+              </Popover>
+            </div>
+
+            {/* Fase 28.0: Confirmación de Pago Inicial */}
+            <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-1">
+                    Registro de Pago Inicial
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    ¿Ya recibiste el anticipo del cliente? Activa esta opción para registrarlo.
+                  </p>
+                </div>
+                <Switch
+                  checked={pagoConfirmado}
+                  onCheckedChange={(checked) => {
+                    setPagoConfirmado(checked);
+                    if (checked && anticipo > 0) {
+                      // Fase 28.3: Al activar el switch, llenar automáticamente con el anticipo calculado
+                      setPagoMontoConfirmado(anticipo.toString());
+                      isManualEditRef.current = false;
+                    }
+                  }}
+                  className="data-[state=checked]:bg-emerald-500"
+                />
+              </div>
+              {pagoConfirmado && (
+                <div className="pt-3 border-t border-zinc-700/50">
+                  <ZenInput
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    label="Monto del anticipo recibido"
+                    placeholder={`Anticipo calculado: ${formatearMoneda(anticipo)}`}
+                    value={pagoMontoConfirmado}
+                    onChange={(e) => {
+                      setPagoMontoConfirmado(e.target.value);
+                      // Fase 28.3: Marcar como edición manual cuando el usuario modifica el valor
+                      isManualEditRef.current = true;
+                    }}
+                    icon={DollarSign}
+                    hint="Si el monto es diferente al calculado, ajústalo aquí"
+                  />
+                </div>
+              )}
+            </div>
 
             {auditoria != null && (
-              <>
-                <SeparadorZen variant="subtle" spacing="md" />
-                <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 p-3 ring-2 ring-amber-500/30">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">
-                    AUDITORÍA DE RENTABILIDAD (VISIBLE PARA STUDIO)
+              <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 p-2 ring-2 ring-amber-500/30">
+                  <p className="text-xs text-zinc-500 font-medium mb-1.5">
+                    Auditoría de rentabilidad visible solo para estudio
                   </p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-400">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm text-zinc-400">
                     <span>Utilidad Neta</span>
                     <span className="text-right font-medium text-zinc-300">{formatearMoneda(auditoria.utilidadNeta)}</span>
                     <span>Margen %</span>
                     <span className="text-right font-medium text-zinc-300">{auditoria.margenPorcentaje.toFixed(1)}%</span>
                   </div>
                 </div>
-              </>
             )}
           </>
         )}

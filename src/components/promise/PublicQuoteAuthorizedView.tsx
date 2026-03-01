@@ -720,6 +720,8 @@ export function PublicQuoteAuthorizedView({
                       // ⚠️ FIX: Usar selected_by_prospect como indicador real de flujo
                       const isAutomaticFlow = cotizacion.selected_by_prospect === true;
                       const shouldAutoGenerate = shareSettings?.auto_generate_contract ?? true;
+                      // Fase 28.0: Verificar si el estudio confirmó recepción de pago
+                      const pagoConfirmado = cotizacion.contract?.pago_confirmado_estudio ?? false;
                       
                       // ⚠️ SAFETY CHECK: Solo mostrar spinner si es flujo AUTOMÁTICO
                       if (showInitialSpinner && isAutomaticFlow && shouldAutoGenerate) {
@@ -743,6 +745,30 @@ export function PublicQuoteAuthorizedView({
                                       <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse w-3/4" />
                                     </div>
                                   </div>
+                                </div>
+                              </div>
+                            </div>
+                          </ZenCard>
+                        );
+                      }
+                      
+                      // Fase 28.0: Mensaje de confirmación de pago si el estudio lo marcó
+                      if (pagoConfirmado) {
+                        return (
+                          <ZenCard>
+                            <div className="p-6">
+                              <div className="flex items-start gap-4">
+                                <div className="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
+                                  <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-emerald-400" />
+                                    Pago Confirmado
+                                  </h4>
+                                  <p className="text-sm text-zinc-400 leading-relaxed">
+                                    ¡Excelente! {studio.studio_name} confirmó la recepción de tu anticipo. El contrato estará disponible en breve para tu revisión y firma.
+                                  </p>
                                 </div>
                               </div>
                             </div>
