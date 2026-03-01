@@ -2029,11 +2029,22 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.5. Registrar pago inicial solo si el cliente pidió pago Y monto > 0 (nunca usar registro residual)
+      // 8.5. Fase 28.5: Registrar pago inicial desde pago_confirmado_estudio o desde cliente
       let pagoRegistrado = false;
+      
+      // Prioridad 1: Pago confirmado por el estudio (Fase 28.0/28.5)
+      const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
+      const montoConfirmado = pagoConfirmadoEstudio && registroCierre.pago_monto != null 
+        ? Number(registroCierre.pago_monto) 
+        : 0;
+      
+      // Prioridad 2: Pago solicitado desde cliente (flujo original)
       const clientePidioPago = options?.registrarPago === true;
       const montoCliente = options?.montoInicial ?? 0;
-      const montoEfectivo = clientePidioPago && montoCliente > 0 ? montoCliente : 0;
+      
+      // Usar monto confirmado si existe, sino el del cliente
+      const montoEfectivo = montoConfirmado > 0 ? montoConfirmado : (clientePidioPago && montoCliente > 0 ? montoCliente : 0);
+      
       if (montoEfectivo > 0) {
         const montoInicial = montoEfectivo;
         // Obtener nombre del m?todo de pago dentro de la transacci?n
@@ -2195,7 +2206,12 @@ export async function autorizarYCrearEvento(
         logContent += ` - ${eventoFecha}`;
       }
       if (pagoRegistrado) {
-        logContent += ' (con pago inicial registrado)';
+        // Fase 28.5: Diferenciar si el pago viene de confirmación del estudio
+        if (pagoConfirmadoEstudio) {
+          logContent += ' (anticipo confirmado y validado)';
+        } else {
+          logContent += ' (con pago inicial registrado)';
+        }
       }
       if (registroCierre.contract_signed_at) {
         logContent += ' (contrato firmado)';
@@ -2218,6 +2234,7 @@ export async function autorizarYCrearEvento(
             contract_signed: !!registroCierre.contract_signed_at,
             pago_registrado: pagoRegistrado,
             pago_monto: pagoRegistrado ? montoEfectivo : null,
+            pago_confirmado_estudio: pagoConfirmadoEstudio,
           },
         },
       });
