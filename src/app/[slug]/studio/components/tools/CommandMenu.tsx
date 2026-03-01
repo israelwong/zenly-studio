@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Briefcase } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CommandDialog,
   CommandEmpty,
@@ -22,14 +21,25 @@ import {
   Users,
   DollarSign,
   FileText,
-  UserCog,
   Megaphone,
-  Mail,
-  ImageIcon,
   HelpCircle,
   Search,
+  Settings,
+  Percent,
+  CreditCard,
+  FileCheck,
+  Package,
+  FolderOpen,
+  CalendarDays,
+  Receipt,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import {
+  getCommandRegistry,
+  COMMAND_CATEGORY_ORDER,
+  type CommandEntry,
+  type CommandCategory,
+} from '@/lib/config/command-registry';
 
 interface CommandMenuProps {
   studioSlug: string;
@@ -39,6 +49,41 @@ interface CommandMenuProps {
   onPersonalClick: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+}
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  'capacidad-operativa': CalendarDays,
+  'rentabilidad': Percent,
+  'condiciones': Receipt,
+  'pagos': CreditCard,
+  'contratos': FileCheck,
+  'tipos-evento': Package,
+  'agenda': Calendar,
+  'contactos': ContactRound,
+  'zen-magic': Sparkles,
+  'personal': Users,
+  'dashboard': Home,
+  'business': File,
+  'promesas': File,
+  'catalogo': ShoppingBag,
+  'paquetes': Package,
+  'portafolios': FolderOpen,
+  'contratos-nav': FileText,
+  'finanzas': DollarSign,
+  'ofertas': Megaphone,
+  'analytics': BarChart3,
+  'documentacion': HelpCircle,
+  'atajos': Search,
+};
+const DEFAULT_ICON = Settings;
+
+function getIcon(entry: CommandEntry) {
+  return ICON_MAP[entry.id] ?? DEFAULT_ICON;
+}
+
+/** Texto buscable: label + description + keywords para que cmdk filtre */
+function getSearchValue(entry: CommandEntry): string {
+  return [entry.label, entry.description, ...entry.keywords].filter(Boolean).join(' ').toLowerCase();
 }
 
 export function CommandMenu({
@@ -55,156 +100,103 @@ export function CommandMenu({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const router = useRouter();
+  const executedRef = useRef(false);
 
-  // Detectar si es Mac
+  const registry = useMemo(() => getCommandRegistry(studioSlug), [studioSlug]);
+
+  const groupedByCategory = useMemo(() => {
+    const map = new Map<CommandCategory, CommandEntry[]>();
+    for (const cat of COMMAND_CATEGORY_ORDER) {
+      map.set(cat, []);
+    }
+    for (const entry of registry) {
+      const list = map.get(entry.category);
+      if (list) list.push(entry);
+    }
+    return COMMAND_CATEGORY_ORDER.map((cat) => ({ category: cat, items: map.get(cat) ?? [] })).filter(
+      (g) => g.items.length > 0
+    );
+  }, [registry]);
+
   useEffect(() => {
     setIsMac(typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform));
   }, []);
 
-  // Listener para Cmd+K (Mac) / Ctrl+K (Windows/Linux)
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((open) => !open);
+        setOpen((o) => !o);
       }
     };
-
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
-  }, []);
+  }, [setOpen]);
 
-  const handleNavigate = (href: string) => {
-    router.push(href);
-    setOpen(false);
-  };
+  const executeAction = (entry: CommandEntry) => {
+    if (executedRef.current) return;
+    executedRef.current = true;
+    setTimeout(() => {
+      executedRef.current = false;
+    }, 300);
 
-  const navigationItems = [
-    {
-      category: 'Herramientas Rápidas',
-      items: [
-        {
-          label: 'Agenda',
-          icon: Calendar,
-          action: () => {
+    switch (entry.actionType) {
+      case 'modal':
+        window.dispatchEvent(new CustomEvent(entry.action));
+        break;
+      case 'route':
+        router.push(entry.action);
+        break;
+      case 'callback':
+        switch (entry.action) {
+          case 'agenda':
             onAgendaClick();
-            setOpen(false);
-          },
-        },
-        {
-          label: 'Contactos',
-          icon: ContactRound,
-          action: () => {
+            break;
+          case 'contacts':
             onContactsClick();
-            setOpen(false);
-          },
-        },
-        {
-          label: 'ZEN Magic',
-          icon: Sparkles,
-          action: () => {
+            break;
+          case 'magic':
             onMagicClick();
-            setOpen(false);
-          },
-        },
-      ],
-    },
-    {
-      category: 'Navegación',
-      items: [
-        {
-          label: 'Dashboard',
-          icon: Home,
-          href: `/${studioSlug}/studio/commercial/dashboard`,
-        },
-        {
-          label: 'Business',
-          icon: Briefcase,
-          href: `/${studioSlug}/studio/business/events`,
-        },
-        {
-          label: 'Promesas',
-          icon: File,
-          href: `/${studioSlug}/studio/commercial/promises`,
-        },
-        {
-          label: 'Oferta Comercial',
-          icon: Users,
-          href: `/${studioSlug}/studio/commercial/catalogo`,
-        },
-        {
-          label: 'Personal',
-          icon: Users,
-          action: () => {
+            break;
+          case 'personal':
             onPersonalClick();
-            setOpen(false);
-          },
-        },
-        {
-          label: 'Contratos',
-          icon: FileText,
-          href: `/${studioSlug}/studio/config/contratos`,
-        },
-        {
-          label: 'Finanzas',
-          icon: DollarSign,
-          href: `/${studioSlug}/studio/business/finanzas`,
-        },
-        {
-          label: 'Ofertas',
-          icon: Megaphone,
-          href: `/${studioSlug}/studio/commercial/ofertas`,
-        },
-        {
-          label: 'Analytics',
-          icon: BarChart3,
-          href: `/${studioSlug}/studio/commercial/dashboard`,
-        },
-      ],
-    },
-    {
-      category: 'Ayuda',
-      items: [
-        {
-          label: 'Documentación',
-          icon: HelpCircle,
-          href: '#help-docs',
-        },
-        {
-          label: 'Atajos de Teclado',
-          icon: Search,
-          href: '#help-shortcuts',
-        },
-      ],
-    },
-  ];
+            break;
+          default:
+            break;
+        }
+        break;
+    }
+    requestAnimationFrame(() => setOpen(false));
+  };
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Buscar herramientas, páginas..." />
+      <CommandInput placeholder="Buscar herramientas, páginas, cupo, capacidad..." />
       <CommandList>
         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-        {navigationItems.map((group, idx) => (
+        {groupedByCategory.map((group, idx) => (
           <React.Fragment key={group.category}>
             <CommandGroup heading={group.category}>
-              {group.items.map((item) => (
-                <CommandItem
-                  key={item.label}
-                  onSelect={() => {
-                    if (item.href) {
-                      handleNavigate(item.href);
-                    } else if ('action' in item) {
-                      item.action();
-                    }
-                  }}
-                  className="cursor-pointer"
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </CommandItem>
-              ))}
+              {group.items.map((entry) => {
+                const Icon = getIcon(entry);
+                return (
+                  <CommandItem
+                    key={entry.id}
+                    value={getSearchValue(entry)}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      executeAction(entry);
+                    }}
+                    onSelect={() => executeAction(entry)}
+                    className="cursor-pointer pointer-events-auto rounded-md transition-colors duration-150 hover:bg-zinc-800/80 aria-selected:bg-zinc-800/90 active:bg-zinc-700/80"
+                  >
+                    <Icon className="mr-2 h-4 w-4 shrink-0" />
+                    <span>{entry.label}</span>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
-            {idx < navigationItems.length - 1 && <CommandSeparator />}
+            {idx < groupedByCategory.length - 1 && <CommandSeparator />}
           </React.Fragment>
         ))}
       </CommandList>
@@ -214,4 +206,3 @@ export function CommandMenu({
     </CommandDialog>
   );
 }
-
