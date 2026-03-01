@@ -2,14 +2,16 @@
 
 import { useState, useCallback, useEffect, useRef, startTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch } from 'lucide-react';
+import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
 import { ContractStepCardSkeleton } from '@/app/[slug]/promise/[promiseId]/cierre/CierrePageSkeleton';
 import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
+import { ResumenPago } from '@/components/shared/precio';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
@@ -79,6 +81,9 @@ export function PublicQuoteAuthorizedView({
   const [bankInfo, setBankInfo] = useState<{ banco?: string | null; titular?: string | null; clabe?: string | null } | null>(null);
   const [loadingBankInfo, setLoadingBankInfo] = useState(false);
   const [copiedClabe, setCopiedClabe] = useState(false);
+  
+  // Fase 28.1: Inspección de servicios contratados
+  const [showServicesSheet, setShowServicesSheet] = useState(false);
   
   // Estado de actualización para notificaciones (solo insert/delete, no cambios de estatus)
   const [pendingUpdate, setPendingUpdate] = useState<{ 
@@ -177,6 +182,21 @@ export function PublicQuoteAuthorizedView({
         discount_percentage: cotizacion.condiciones_comerciales.discount_percentage ?? null,
       }
       : null);
+
+  // Fase 28.1: Detectar si hay datos placeholder que necesitan actualización
+  const hasPlaceholderData = useMemo(() => {
+    const addressLower = (promise.contact_address || '').toLowerCase();
+    const emailLower = (promise.contact_email || '').toLowerCase();
+    
+    return (
+      addressLower.includes('proporcionada') ||
+      addressLower.includes('placeholder') ||
+      addressLower.includes('cliente)') ||
+      emailLower.includes('@placeholder') ||
+      !promise.contact_address ||
+      !promise.contact_email
+    );
+  }, [promise.contact_address, promise.contact_email]);
 
   // Actualizar solo el contrato localmente (sin recargar toda la cotización)
   const updateContractLocally = useCallback(async () => {
@@ -752,27 +772,156 @@ export function PublicQuoteAuthorizedView({
                         );
                       }
                       
-                      // Fase 28.0: Mensaje de confirmación de pago si el estudio lo marcó
+                      // Fase 28.1: Check-in de contratación con ResumenPago y inspección de ítems
                       if (pagoConfirmado) {
+                        // Calcular valores para ResumenPago desde contract o cotización
+                        const totalAPagar = cotizacion.totalAPagar ?? cotizacion.price;
+                        const pagoMonto = cotizacion.contract?.pago_monto ?? cotizacion.anticipo ?? 0;
+                        const diferido = totalAPagar - pagoMonto;
+                        const condComerciales = cotizacion.contract?.condiciones_comerciales || cotizacion.condiciones_comerciales;
+                        const advanceType = condComerciales?.advance_type === 'fixed_amount' || condComerciales?.advance_type === 'amount' 
+                          ? 'fixed_amount' as const 
+                          : 'percentage' as const;
+                        const anticipoPorcentaje = condComerciales?.advance_percentage ?? null;
+
                         return (
-                          <ZenCard>
-                            <div className="p-6">
-                              <div className="flex items-start gap-4">
-                                <div className="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
-                                  <CheckCircle2 className="h-6 w-6 text-emerald-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
-                                    <FileText className="h-5 w-5 text-emerald-400" />
-                                    Pago Confirmado
-                                  </h4>
-                                  <p className="text-sm text-zinc-400 leading-relaxed">
-                                    ¡Excelente! {studio.studio_name} confirmó la recepción de tu anticipo. El contrato estará disponible en breve para tu revisión y firma.
-                                  </p>
+                          <div className="space-y-4">
+                            {/* Mensaje de bienvenida */}
+                            <ZenCard>
+                              <div className="p-6">
+                                <div className="flex items-start gap-4">
+                                  <div className="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
+                                    <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+                                      <FileText className="h-5 w-5 text-emerald-400" />
+                                      Pago Confirmado
+                                    </h4>
+                                    <p className="text-sm text-zinc-400 leading-relaxed">
+                                      ¡Excelente! {studio.studio_name} confirmó la recepción de tu anticipo. Revisa el resumen financiero y los servicios contratados antes de firmar.
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </ZenCard>
+                            </ZenCard>
+
+                            {/* Resumen de Pago con badge PAGADO */}
+                            <ZenCard>
+                              <div className="p-6">
+                                <h4 className="text-sm font-medium text-zinc-400 mb-4">Resumen Financiero</h4>
+                                <ResumenPago
+                                  precioBase={totalAPagar}
+                                  descuentoCondicion={0}
+                                  precioConDescuento={totalAPagar}
+                                  advanceType={advanceType}
+                                  anticipoPorcentaje={anticipoPorcentaje}
+                                  anticipo={pagoMonto}
+                                  diferido={diferido}
+                                  precioFinalCierre={totalAPagar}
+                                  compact
+                                  pagoConfirmado
+                                />
+                              </div>
+                            </ZenCard>
+
+                            {/* Inspección de servicios contratados */}
+                            <Sheet open={showServicesSheet} onOpenChange={setShowServicesSheet}>
+                              <SheetTrigger asChild>
+                                <ZenCard className="cursor-pointer hover:border-zinc-600 transition-colors">
+                                  <div className="p-6">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
+                                          <Package className="h-5 w-5 text-blue-400" />
+                                        </div>
+                                        <div>
+                                          <h4 className="text-sm font-medium text-zinc-200">
+                                            Revisar detalle de servicios contratados
+                                          </h4>
+                                          <p className="text-xs text-zinc-500 mt-1">
+                                            Valida alcance y especificaciones
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <FileSearch className="h-5 w-5 text-zinc-400" />
+                                    </div>
+                                  </div>
+                                </ZenCard>
+                              </SheetTrigger>
+                              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                                <SheetHeader>
+                                  <SheetTitle>Servicios Contratados</SheetTitle>
+                                </SheetHeader>
+                                <div className="mt-6 space-y-6">
+                                  {cotizacion.servicios.map((seccion) => (
+                                    <div key={seccion.id}>
+                                      <h3 className="text-sm font-semibold text-zinc-300 mb-3">{seccion.nombre}</h3>
+                                      {seccion.categorias.map((categoria) => (
+                                        <div key={categoria.id} className="mb-4">
+                                          <h4 className="text-xs font-medium text-zinc-400 mb-2">{categoria.nombre}</h4>
+                                          <div className="space-y-2">
+                                            {categoria.servicios.map((servicio) => (
+                                              <div key={servicio.id} className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-zinc-200">{servicio.name}</p>
+                                                    {servicio.description && (
+                                                      <p className="text-xs text-zinc-400 mt-1">{servicio.description}</p>
+                                                    )}
+                                                    {servicio.quantity && servicio.quantity > 1 && (
+                                                      <p className="text-xs text-zinc-500 mt-1">Cantidad: {servicio.quantity}</p>
+                                                    )}
+                                                  </div>
+                                                  {servicio.is_courtesy && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                                      CORTESÍA
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </SheetContent>
+                            </Sheet>
+
+                            {/* Fase 28.1: Información de Contratación - solo si hay datos placeholder o faltan datos */}
+                            {hasPlaceholderData && !isContractSigned && (
+                              <ZenCard className="border-amber-500/30 bg-amber-950/20">
+                                <div className="p-6">
+                                  <div className="flex items-start gap-4 mb-4">
+                                    <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center">
+                                      <FileText className="h-5 w-5 text-amber-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="text-sm font-medium text-zinc-200 mb-1">
+                                        Información de Contratación
+                                      </h4>
+                                      <p className="text-xs text-zinc-400">
+                                        Actualiza tus datos para poder generar y firmar tu contrato
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <ZenButton
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      window.dispatchEvent(new CustomEvent('close-overlays'));
+                                      setShowEditDataModal(true);
+                                    }}
+                                    className="w-full"
+                                  >
+                                    Completar datos requeridos
+                                  </ZenButton>
+                                </div>
+                              </ZenCard>
+                            )}
+                          </div>
                         );
                       }
                       
