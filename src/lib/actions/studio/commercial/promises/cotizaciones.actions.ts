@@ -3801,9 +3801,11 @@ export async function pasarACierre(
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`, 'layout');
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/pendientes`, 'layout');
       revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'layout');
-      // Invalidar tag específico para forzar revalidación del estado de la promesa
+      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'page');
+      // Invalidar tags específicos para forzar revalidación del estado de la promesa
       revalidateTag(`promise-state-${cotizacion.promise_id}`, 'max');
       revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');
+      revalidateTag(`public-promise-cierre-${cotizacion.promise_id}`, 'max');
     }
 
     return {

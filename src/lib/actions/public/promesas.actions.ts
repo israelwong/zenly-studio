@@ -3324,6 +3324,8 @@ export async function getPublicPromiseCierre(
                 contract_signed_at: true,
                 condiciones_comerciales_id: true,
                 condiciones_comerciales_definidas: true,
+                pago_confirmado_estudio: true,
+                pago_monto: true,
                 condiciones_comerciales: {
                   select: {
                     id: true,

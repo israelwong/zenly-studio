@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, startTransition, useMemo } fr
 import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
@@ -12,6 +12,7 @@ import { ContractStepCardSkeleton } from '@/app/[slug]/promise/[promiseId]/cierr
 import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { ResumenPago } from '@/components/shared/precio';
+import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
@@ -822,6 +823,22 @@ export function PublicQuoteAuthorizedView({
                                   compact
                                   pagoConfirmado
                                 />
+                                
+                                {/* Fase 28.7: Next Step CTA */}
+                                {hasPlaceholderData && !isContractSigned && (
+                                  <div className="mt-6 pt-6 border-t border-zinc-700">
+                                    <ZenButton
+                                      size="lg"
+                                      onClick={() => {
+                                        window.dispatchEvent(new CustomEvent('close-overlays'));
+                                        setShowEditDataModal(true);
+                                      }}
+                                      className="w-full"
+                                    >
+                                      Continuar con mi información
+                                    </ZenButton>
+                                  </div>
+                                )}
                               </div>
                             </ZenCard>
 
@@ -849,43 +866,61 @@ export function PublicQuoteAuthorizedView({
                                   </div>
                                 </ZenCard>
                               </SheetTrigger>
-                              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                              <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
                                 <SheetHeader>
                                   <SheetTitle>Servicios Contratados</SheetTitle>
+                                  <SheetDescription>
+                                    Revisa el detalle completo de los servicios incluidos en tu cotización
+                                  </SheetDescription>
                                 </SheetHeader>
-                                <div className="mt-6 space-y-6">
-                                  {cotizacion.servicios.map((seccion) => (
-                                    <div key={seccion.id}>
-                                      <h3 className="text-sm font-semibold text-zinc-300 mb-3">{seccion.nombre}</h3>
-                                      {seccion.categorias.map((categoria) => (
-                                        <div key={categoria.id} className="mb-4">
-                                          <h4 className="text-xs font-medium text-zinc-400 mb-2">{categoria.nombre}</h4>
-                                          <div className="space-y-2">
-                                            {categoria.servicios.map((servicio) => (
-                                              <div key={servicio.id} className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
-                                                <div className="flex items-start justify-between gap-2">
-                                                  <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-zinc-200">{servicio.name}</p>
-                                                    {servicio.description && (
-                                                      <p className="text-xs text-zinc-400 mt-1">{servicio.description}</p>
-                                                    )}
-                                                    {servicio.quantity && servicio.quantity > 1 && (
-                                                      <p className="text-xs text-zinc-500 mt-1">Cantidad: {servicio.quantity}</p>
-                                                    )}
-                                                  </div>
-                                                  {servicio.is_courtesy && (
-                                                    <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                                      CORTESÍA
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
+                                <div className="mt-6">
+                                  <ResumenCotizacion
+                                    cotizacion={{
+                                      id: cotizacion.id,
+                                      name: cotizacion.name,
+                                      description: cotizacion.description,
+                                      price: cotizacion.price,
+                                      status: cotizacion.status || 'en_cierre',
+                                      precio_calculado: cotizacion.precio_calculado,
+                                      bono_especial: cotizacion.bono_especial,
+                                      items: cotizacion.servicios.flatMap(seccion =>
+                                        seccion.categorias.flatMap(categoria =>
+                                          categoria.servicios.map(servicio => ({
+                                            item_id: servicio.id,
+                                            id: servicio.id,
+                                            quantity: servicio.quantity || 1,
+                                            unit_price: servicio.price || 0,
+                                            subtotal: (servicio.price || 0) * (servicio.quantity || 1),
+                                            cost: 0,
+                                            expense: 0,
+                                            name: servicio.name,
+                                            description: servicio.description,
+                                            category_name: categoria.nombre,
+                                            seccion_name: seccion.nombre,
+                                            billing_type: servicio.billing_type || 'SERVICE',
+                                            is_courtesy: servicio.is_courtesy || false,
+                                            name_snapshot: servicio.name_snapshot,
+                                            description_snapshot: servicio.description_snapshot,
+                                          }))
+                                        )
+                                      ),
+                                    }}
+                                    hideSubtotals
+                                    showCategorySubtotals={false}
+                                    resumenCierreOverride={{
+                                      precioLista: totalAPagar,
+                                      montoCortesias: 0,
+                                      cortesiasCount: 0,
+                                      montoBono: 0,
+                                      ajusteCierre: 0,
+                                      tieneConcesiones: false,
+                                      advanceType,
+                                      anticipoPorcentaje,
+                                      anticipo: pagoMonto,
+                                      diferido,
+                                      anticipoModificado: false,
+                                    }}
+                                  />
                                 </div>
                               </SheetContent>
                             </Sheet>
