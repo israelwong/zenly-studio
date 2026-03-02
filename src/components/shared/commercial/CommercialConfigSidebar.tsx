@@ -134,6 +134,8 @@ export interface CommercialConfigActionButtonsProps {
   autorizarNode?: React.ReactNode;
   /** Si true, no se muestra el botón "Guardar como paquete" (ej. en editor de paquete). */
   hideGuardarComoPaquete?: boolean;
+  /** Si true, en la barra lateral solo se muestran "Vista previa" y "Cancelar" (acciones de guardado se mueven al footer del modal de vista previa). */
+  sidebarOnlyPreviewAndCancel?: boolean;
 }
 
 /**
@@ -158,6 +160,7 @@ export function CommercialConfigActionButtons({
   saveDisabledTitle,
   autorizarNode,
   hideGuardarComoPaquete = false,
+  sidebarOnlyPreviewAndCancel = false,
 }: CommercialConfigActionButtonsProps) {
   if (customActionButtons) {
     return <>{customActionButtons}</>;
@@ -171,7 +174,7 @@ export function CommercialConfigActionButtons({
 
   return (
     <div className="space-y-2">
-      {!hideGuardarComoPaquete && (
+      {!sidebarOnlyPreviewAndCancel && !hideGuardarComoPaquete && (
         <ZenButton
           type="button"
           variant="outline"
@@ -195,62 +198,66 @@ export function CommercialConfigActionButtons({
           Vista previa
         </ZenButton>
       )}
-      {isEditMode ? (
+      {!sidebarOnlyPreviewAndCancel && (
         <>
-          <ZenButton
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            loading={loading && savingIntent === 'draft'}
-            loadingText="Guardando..."
-            disabled={loading || isDisabled || condicionDisabled}
-            title={saveDisabledTitle}
-            className="w-full"
-          >
-            {isCurrentlyVisible ? 'Cambiar a borrador' : 'Guardar cambios'}
-          </ZenButton>
-          <ZenButton
-            type="button"
-            variant="primary"
-            onClick={onSavePublish}
-            loading={loading && savingIntent === 'publish'}
-            loadingText={isCurrentlyVisible ? 'Guardando...' : 'Publicando...'}
-            disabled={loading || isDisabled || condicionDisabled}
-            title={saveDisabledTitle}
-            className="w-full"
-          >
-            {isCurrentlyVisible ? 'Guardar cambios' : 'Publicar ahora'}
-          </ZenButton>
-        </>
-      ) : (
-        <>
-          <ZenButton
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            loading={loading && savingIntent === 'draft'}
-            loadingText="Guardando..."
-            disabled={loading || isDisabled || condicionDisabled}
-            title={saveDisabledTitle}
-            className="w-full"
-          >
-            Guardar borrador
-          </ZenButton>
-          <ZenButton
-            type="button"
-            variant="primary"
-            onClick={onSavePublish}
-            loading={loading && savingIntent === 'publish'}
-            loadingText="Publicando..."
-            disabled={loading || isDisabled || condicionDisabled}
-            title={saveDisabledTitle}
-            className="w-full"
-          >
-            Crear y Publicar
-          </ZenButton>
+          {isEditMode ? (
+            <>
+              <ZenButton
+                type="button"
+                variant="outline"
+                onClick={onSaveDraft}
+                loading={loading && savingIntent === 'draft'}
+                loadingText="Guardando..."
+                disabled={loading || isDisabled || condicionDisabled}
+                title={saveDisabledTitle}
+                className="w-full"
+              >
+                {isCurrentlyVisible ? 'Cambiar a borrador' : 'Guardar cambios'}
+              </ZenButton>
+              <ZenButton
+                type="button"
+                variant="primary"
+                onClick={onSavePublish}
+                loading={loading && savingIntent === 'publish'}
+                loadingText={isCurrentlyVisible ? 'Guardando...' : 'Publicando...'}
+                disabled={loading || isDisabled || condicionDisabled}
+                title={saveDisabledTitle}
+                className="w-full"
+              >
+                {isCurrentlyVisible ? 'Guardar cambios' : 'Publicar ahora'}
+              </ZenButton>
+            </>
+          ) : (
+            <>
+              <ZenButton
+                type="button"
+                variant="outline"
+                onClick={onSaveDraft}
+                loading={loading && savingIntent === 'draft'}
+                loadingText="Guardando..."
+                disabled={loading || isDisabled || condicionDisabled}
+                title={saveDisabledTitle}
+                className="w-full"
+              >
+                Guardar borrador
+              </ZenButton>
+              <ZenButton
+                type="button"
+                variant="primary"
+                onClick={onSavePublish}
+                loading={loading && savingIntent === 'publish'}
+                loadingText="Publicando..."
+                disabled={loading || isDisabled || condicionDisabled}
+                title={saveDisabledTitle}
+                className="w-full"
+              >
+                Crear y Publicar
+              </ZenButton>
+            </>
+          )}
+          {autorizarNode}
         </>
       )}
-      {autorizarNode}
       <ZenButton
         type="button"
         variant="secondary"

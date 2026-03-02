@@ -3735,11 +3735,46 @@ export async function pasarACierre(
       const registroCondicionId = ajuste ? null : condicionId;
       const registroCondicionDefinidas = !!registroCondicionId || !!ajuste;
 
-      // Fase 28.0: Pago confirmado por estudio
+      // Fase 28.0: Pago confirmado por estudio. Si pago_confirmado_estudio = true, pago_monto es obligatorio (origen Studio).
       const pagoConfirmado = options?.pago_confirmado_estudio ?? false;
-      const pagoMontoConfirmado = options?.pago_monto_confirmado != null 
-        ? new Prisma.Decimal(options.pago_monto_confirmado) 
+      let pagoMontoConfirmado: Prisma.Decimal | null = options?.pago_monto_confirmado != null
+        ? new Prisma.Decimal(options.pago_monto_confirmado)
         : null;
+
+      if (pagoConfirmado && pagoMontoConfirmado == null) {
+        const precioBase = cotizacion.price ?? 0;
+        if (ajuste) {
+          const ant = ajuste.advance_type === 'fixed_amount' && ajuste.advance_amount != null
+            ? ajuste.advance_amount
+            : Math.round(precioBase * ((ajuste.advance_percentage ?? 0) / 100));
+          pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+        } else if (registroCondicionId) {
+          const cond = await tx.studio_condiciones_comerciales.findUnique({
+            where: { id: registroCondicionId },
+            select: { advance_type: true, advance_percentage: true, advance_amount: true },
+          });
+          if (cond) {
+            const isFixed = cond.advance_type === 'fixed_amount' || cond.advance_type === 'amount';
+            const ant = isFixed && cond.advance_amount != null
+              ? Number(cond.advance_amount)
+              : Math.round(precioBase * ((cond.advance_percentage ?? 0) / 100));
+            pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+          }
+        }
+        if (pagoMontoConfirmado == null) {
+          const neg = await tx.studio_condiciones_comerciales_negociacion.findUnique({
+            where: { cotizacion_id: cotizacionId },
+            select: { advance_type: true, advance_percentage: true, advance_amount: true },
+          });
+          if (neg) {
+            const isFixed = neg.advance_type === 'fixed_amount' || neg.advance_type === 'amount';
+            const ant = isFixed && neg.advance_amount != null
+              ? Number(neg.advance_amount)
+              : Math.round(precioBase * ((neg.advance_percentage ?? 0) / 100));
+            pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+          }
+        }
+      }
 
       // Fase 29.9.5: checkin_completed = true cuando el estudio autoriza/pasa a cierre (validación hecha por estudio)
       await tx.studio_cotizaciones_cierre.upsert({

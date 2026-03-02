@@ -1490,14 +1490,17 @@ export async function cancelarEvento(
         });
       }
 
-      // 2.1. Limpiar registro de cierre si existe (para eventos legacy)
-      if (evento.cotizacion_id) {
+      // 2.1. Fase 30.9.5: Limpiar registros de cierre y condiciones fantasma de TODAS las cotizaciones asociadas al evento
+      if (todasLasCotizaciones.length > 0) {
+        const cotizacionIds = todasLasCotizaciones.map((c) => c.id);
         await tx.studio_cotizaciones_cierre.deleteMany({
+          where: { cotizacion_id: { in: cotizacionIds } },
+        });
+        await tx.studio_condiciones_comerciales_negociacion.deleteMany({
           where: {
-            cotizacion_id: evento.cotizacion_id,
+            cotizacion_id: { in: cotizacionIds },
+            studio_id: studio.id,
           },
-        }).catch((_error) => {
-          // Ignorar error si no existe registro de cierre
         });
       }
 

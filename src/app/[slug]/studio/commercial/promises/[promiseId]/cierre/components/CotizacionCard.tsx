@@ -352,12 +352,36 @@ function CotizacionCardInner({
                         {ajusteFino.advance_type === 'percentage' ? (
                           <div>
                             <label className="text-xs text-zinc-500 block mb-1">Anticipo %</label>
-                            <ZenInput type="number" min={0} max={100} step={0.5} value={ajusteFino.advance_percentage ?? ''} onChange={(e) => setAjusteFino((a) => (a ? { ...a, advance_percentage: e.target.value === '' ? null : parseFloat(e.target.value) } : null))} />
+                            <ZenInput
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.5}
+                              value={ajusteFino.advance_percentage ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value === '' ? null : parseFloat(e.target.value);
+                                const capped = raw != null && !Number.isNaN(raw) ? Math.min(100, Math.max(0, raw)) : raw;
+                                setAjusteFino((a) => (a ? { ...a, advance_percentage: capped } : null));
+                              }}
+                              hint="Máximo 100%"
+                            />
                           </div>
                         ) : (
                           <div>
                             <label className="text-xs text-zinc-500 block mb-1">Anticipo ($)</label>
-                            <ZenInput type="number" min={0} step={1} value={ajusteFino.advance_amount ?? ''} onChange={(e) => setAjusteFino((a) => (a ? { ...a, advance_amount: e.target.value === '' ? null : parseInt(e.target.value, 10) || 0 } : null))} />
+                            <ZenInput
+                              type="number"
+                              min={0}
+                              max={totalFinalCierre}
+                              step={1}
+                              value={ajusteFino.advance_amount ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value === '' ? null : parseInt(e.target.value, 10) || 0;
+                                const capped = totalFinalCierre > 0 && raw != null ? Math.min(raw, totalFinalCierre) : raw;
+                                setAjusteFino((a) => (a ? { ...a, advance_amount: capped } : null));
+                              }}
+                              hint={`Máximo: ${formatearMoneda(totalFinalCierre)} (total a pagar)`}
+                            />
                           </div>
                         )}
                         <div className="flex gap-2 justify-end mt-4 pt-3 border-t border-zinc-700">

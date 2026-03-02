@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
-import { updatePublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { updatePublicPromiseData, updateCierreCheckinCompleted } from '@/lib/actions/public/promesas.actions';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
 
 interface ProgressOverlayWrapperProps {
@@ -88,8 +88,54 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Fase 29.2/29.9: Modo Cierre — solo actualizar datos; no llamar autorizarCotizacionPublica (evita duplicado)
+        // Fase 29.2/29.9.5: Modo Cierre — actualizar datos, marcar check-in completado y generar contrato
         if (isModoCierre) {
+          await updateCierreCheckinCompleted(authStudioSlug, cotizacionId);
+          
+          // ⚠️ FIX CRÍTICO: Ejecutar autorización para generar el contrato
+          setProgressStep('registering');
+
+          let result;
+          try {
+            result = await autorizarCotizacionPublica(
+              authPromiseId,
+              cotizacionId,
+              authStudioSlug,
+              condicionesComercialesId,
+              condicionesComercialesMetodoPagoId
+            );
+          } catch (error) {
+            setProgressError(error instanceof Error ? error.message : 'Error desconocido');
+            setProgressStep('error');
+            setIsAuthorizationInProgress(false);
+            (window as any).__IS_AUTHORIZING = false;
+            setAuthorizationData(null);
+            isProcessing = false;
+            return;
+          }
+
+          if (!result.success) {
+            const isDateOccupied = result.error === 'DATE_OCCUPIED';
+            const message = isDateOccupied
+              ? 'Lo sentimos, esta fecha ya fue reservada por otro cliente. Agradecemos tu interés y te invitamos a contactarnos para elegir otra fecha.'
+              : (result.error || 'Error al generar contrato');
+            setProgressError(message);
+            setProgressStep('error');
+            setIsAuthorizationInProgress(false);
+            (window as any).__IS_AUTHORIZING = false;
+            setAuthorizationData(null);
+            if (isDateOccupied) {
+              toast.error(message, { duration: 6000 });
+            }
+            isProcessing = false;
+            return;
+          }
+
+          if (shouldGenerateContract) {
+            setProgressStep('generating_contract');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+
           setProgressStep('completed');
           isProcessing = false;
           return;

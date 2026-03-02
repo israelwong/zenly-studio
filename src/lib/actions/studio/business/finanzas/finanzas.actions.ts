@@ -440,7 +440,7 @@ export async function obtenerKPIsFinancieros(
             },
             select: {
                 id: true,
-                duration_hours: true,
+                promise: { select: { duration_hours: true } },
                 cotizaciones: {
                     where: {
                         status: { in: ['autorizada', 'aprobada', 'approved'] },
@@ -476,7 +476,7 @@ export async function obtenerKPIsFinancieros(
                     const cantidadEfectiva = calcularCantidadEfectiva(
                         (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         item.quantity,
-                        evento.duration_hours
+                        evento.promise?.duration_hours ?? null
                     );
                     
                     totalProductionCosts += costo * cantidadEfectiva;
@@ -557,9 +557,7 @@ export async function obtenerRentabilidadPorEvento(
             },
             select: {
                 id: true,
-                name: true,
                 event_date: true,
-                duration_hours: true,
                 cotizaciones: {
                     where: {
                         status: { in: ['autorizada', 'aprobada', 'approved'] },
@@ -584,6 +582,7 @@ export async function obtenerRentabilidadPorEvento(
                 promise: {
                     select: {
                         contact_name: true,
+                        duration_hours: true,
                     },
                 },
             },
@@ -612,7 +611,7 @@ export async function obtenerRentabilidadPorEvento(
                     const cantidadEfectiva = calcularCantidadEfectiva(
                         (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         item.quantity,
-                        evento.duration_hours
+                        evento.promise?.duration_hours ?? null
                     );
 
                     totalCost += costo * cantidadEfectiva;

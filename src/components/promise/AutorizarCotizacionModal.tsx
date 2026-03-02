@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { CheckCircle2, ChevronRight, Check, Shield, CalendarX2 } from 'lucide-react';
 import { ZenButton, ZenConfirmModal } from '@/components/ui/zen';
@@ -86,6 +86,10 @@ interface AutorizarCotizacionModalProps {
   };
   /** true cuando la fecha ya alcanzó cupo (max_events_per_day): deshabilitar Confirmar reserva */
   dateSoldOut?: boolean;
+  /** Fase 30.7.1: Draft de sesión para persistir al cerrar y reabrir el modal */
+  initialDraft?: Partial<BookingFormData> | null;
+  /** Fase 30.7.1: Callback para que el padre guarde el draft en cada cambio */
+  onDraftChange?: (data: Partial<BookingFormData>) => void;
 }
 
 type ProgressStep = 'validating' | 'sending' | 'registering' | 'collecting' | 'generating_contract' | 'preparing' | 'completed' | 'error';
@@ -93,21 +97,16 @@ type ProgressStep = 'validating' | 'sending' | 'registering' | 'collecting' | 'g
 // Booking Wizard - Estados del wizard
 type WizardStep = 1 | 2 | 3;
 
-// Datos del formulario acumulado durante el wizard
-interface BookingFormData {
-  // Paso 1: Identidad
+// Datos del formulario acumulado durante el wizard (exportado para draft en padre, Fase 30.7.1)
+export interface BookingFormData {
   contact_name: string;
   contact_phone: string;
   contact_email: string;
-
-  // Paso 2: Detalles del Evento
+  contact_address: string;
   event_name: string;
   event_location: string;
   event_date: Date | null;
   event_type_name: string | null;
-
-  // Paso 3: Resumen (derivado)
-  contact_address: string;
 }
 
 // Componente interno: Barra de progreso del wizard
@@ -228,6 +227,8 @@ export function AutorizarCotizacionModal({
   isFromNegociacion = false,
   promiseData: promiseDataProp,
   dateSoldOut = false,
+  initialDraft = null,
+  onDraftChange,
 }: AutorizarCotizacionModalProps) {
   // Fase 29.2: Modo Cierre = promesa ya en cierre o pago confirmado por estudio; solo confirmar datos, no cambiar condición
   const isModoCierre =
@@ -242,6 +243,8 @@ export function AutorizarCotizacionModal({
   const [initialPromiseData, setInitialPromiseData] = useState<BookingFormData | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  /** Fase 30.7.1: Solo sembrar formData una vez por promiseId/sesión; evita que re-renders del padre (promiseDataProp nuevo) borren el draft al volver al paso 1. Se resetea solo al confirmar reserva con éxito. */
+  const lastSeededPromiseIdRef = useRef<string | null>(null);
 
   const {
     onPreparing: onPreparingContext,
@@ -255,54 +258,61 @@ export function AutorizarCotizacionModal({
   // Usar prop si está disponible, sino usar contexto
   const onPreparing = onPreparingProp || onPreparingContext;
 
-  // ⚡ OPTIMIZACIÓN: Usar promiseData de props si está disponible (sin fetch)
+  // ⚡ OPTIMIZACIÓN + Fase 30.7.1: Sembrar formData solo cuando aún no hemos sembrado para este promiseId (evita que re-renders del padre borren el draft al navegar entre pasos). Al confirmar reserva se resetea lastSeededPromiseIdRef.
   useEffect(() => {
-    if (isOpen && promiseId && studioSlug) {
-      // Si los datos vienen en props, usarlos directamente (instantáneo)
-      if (promiseDataProp) {
-        const initialData: BookingFormData = {
-          contact_name: promiseDataProp.contact_name || '',
-          contact_phone: promiseDataProp.contact_phone || '',
-          contact_email: promiseDataProp.contact_email || '',
-          contact_address: promiseDataProp.contact_address || '',
-          event_name: promiseDataProp.event_name || '',
-          event_location: promiseDataProp.event_location || '',
-          event_date: promiseDataProp.event_date,
-          event_type_name: promiseDataProp.event_type_name,
-        };
-        setInitialPromiseData(initialData);
-        setFormData(initialData);
-        setIsLoadingData(false);
-        return;
-      }
-
-      // Fallback: Si no hay props, hacer fetch (legacy behavior)
-      setIsLoadingData(true);
-      getPublicPromiseData(studioSlug, promiseId).then((result) => {
-        
-        if (result.success && result.data?.promise) {
-          const promise = result.data.promise;
-          const initialData: BookingFormData = {
-            contact_name: promise.contact_name || '',
-            contact_phone: promise.contact_phone || '',
-            contact_email: promise.contact_email || '',
-            contact_address: promise.contact_address || '',
-            event_name: promise.event_name || '',
-            event_location: promise.event_location || '',
-            event_date: promise.event_date ? new Date(promise.event_date) : null,
-            event_type_name: promise.event_type_name || null,
-          };
-          
-          setInitialPromiseData(initialData);
-          setFormData(initialData);
-        }
-      }).finally(() => {
-        setIsLoadingData(false);
-      });
-    } else {
+    if (!isOpen || !promiseId || !studioSlug) {
       setIsLoadingData(false);
+      return;
     }
-  }, [isOpen, promiseId, studioSlug, promiseDataProp]);
+    if (lastSeededPromiseIdRef.current === promiseId) {
+      setIsLoadingData(false);
+      return;
+    }
+
+    const mergeWithDraft = (data: BookingFormData) => ({ ...data, ...(initialDraft ?? {}) });
+
+    if (promiseDataProp) {
+      const initialData: BookingFormData = {
+        contact_name: promiseDataProp.contact_name || '',
+        contact_phone: promiseDataProp.contact_phone || '',
+        contact_email: promiseDataProp.contact_email || '',
+        contact_address: promiseDataProp.contact_address || '',
+        event_name: promiseDataProp.event_name || '',
+        event_location: promiseDataProp.event_location || '',
+        event_date: promiseDataProp.event_date,
+        event_type_name: promiseDataProp.event_type_name,
+      };
+      const merged = mergeWithDraft(initialData);
+      setInitialPromiseData(initialData);
+      setFormData(merged);
+      lastSeededPromiseIdRef.current = promiseId;
+      setIsLoadingData(false);
+      return;
+    }
+
+    setIsLoadingData(true);
+    getPublicPromiseData(studioSlug, promiseId).then((result) => {
+      if (result.success && result.data?.promise) {
+        const promise = result.data.promise;
+        const initialData: BookingFormData = {
+          contact_name: promise.contact_name || '',
+          contact_phone: promise.contact_phone || '',
+          contact_email: promise.contact_email || '',
+          contact_address: promise.contact_address || '',
+          event_name: promise.event_name || '',
+          event_location: promise.event_location || '',
+          event_date: promise.event_date ? new Date(promise.event_date) : null,
+          event_type_name: promise.event_type_name || null,
+        };
+        const merged = mergeWithDraft(initialData);
+        setInitialPromiseData(initialData);
+        setFormData(merged);
+        lastSeededPromiseIdRef.current = promiseId;
+      }
+    }).finally(() => {
+      setIsLoadingData(false);
+    });
+  }, [isOpen, promiseId, studioSlug, promiseDataProp, initialDraft]);
 
   // Fase 29.3: Sincronizar paso inicial desde URL al abrir
   useEffect(() => {
@@ -311,18 +321,15 @@ export function AutorizarCotizacionModal({
     }
   }, [isOpen, initialStep]);
 
-  // Resetear wizard cuando se cierra el modal
+  // Fase 30.7.1: Al cerrar (Cancelar) solo reseteamos paso/errores/terms; NO formData — el draft persiste para si vuelve a abrir. Limpieza formal solo en confirmación exitosa o F5.
   useEffect(() => {
     if (!isOpen) {
       setCurrentStep(1);
       setErrors({});
       setIsSubmitting(false);
       setTermsAccepted(false);
-      if (initialPromiseData) {
-        setFormData(initialPromiseData);
-      }
     }
-  }, [isOpen, initialPromiseData]);
+  }, [isOpen]);
 
 
   // Validación por paso
@@ -443,6 +450,7 @@ export function AutorizarCotizacionModal({
       });
 
       flushSync(() => {
+        lastSeededPromiseIdRef.current = null;
         onCloseDetailSheet?.();
         (onSuccessContext || onSuccess)?.(trimmedFormData, authData);
         (onPreparingContext || onPreparing)?.();
@@ -524,7 +532,11 @@ export function AutorizarCotizacionModal({
     }
   };
 
-  // Renderizado condicional del contenido por paso
+  const handleFormChange = (data: Partial<BookingFormData>) => {
+    setFormData(data);
+    onDraftChange?.(data);
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -532,7 +544,7 @@ export function AutorizarCotizacionModal({
           <Step1Identity
             formData={formData}
             errors={errors}
-            onChange={setFormData}
+            onChange={handleFormChange}
             isLoading={isLoadingData}
             studioSlug={studioSlug}
           />
@@ -542,7 +554,7 @@ export function AutorizarCotizacionModal({
           <Step2EventDetails
             formData={formData}
             errors={errors}
-            onChange={setFormData}
+            onChange={handleFormChange}
             isLoading={isLoadingData}
           />
         );

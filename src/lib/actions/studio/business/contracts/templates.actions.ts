@@ -114,12 +114,14 @@ export async function getDefaultContractTemplate(
       return { success: false, error: "Studio no encontrado" };
     }
 
-    // Buscar plantilla específica del tipo de evento si se proporciona
+    // Fase 29.9.9: Buscar siempre plantilla con is_default === true (obligatorio para generación)
+    // Primero tipo de evento si aplica, luego general (event_type_id null)
     if (eventTypeId) {
       const template = await prisma.studio_contract_templates.findFirst({
         where: {
           studio_id: studio.id,
           event_type_id: eventTypeId,
+          is_default: true,
           is_active: true,
         },
       });
@@ -129,8 +131,8 @@ export async function getDefaultContractTemplate(
       }
     }
 
-    // Buscar plantilla por defecto
-    const defaultTemplate = await prisma.studio_contract_templates.findFirst({
+    // Plantilla por defecto general (is_default === true)
+    let defaultTemplate = await prisma.studio_contract_templates.findFirst({
       where: {
         studio_id: studio.id,
         is_default: true,
@@ -138,13 +140,26 @@ export async function getDefaultContractTemplate(
       },
     });
 
+    // Fase 29.9.10: Fallback — primera plantilla activa del estudio si no hay marcada por defecto
     if (!defaultTemplate) {
-      return { success: false, error: "No hay plantilla por defecto configurada" };
+      defaultTemplate = await prisma.studio_contract_templates.findFirst({
+        where: {
+          studio_id: studio.id,
+          is_active: true,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+    }
+
+    if (!defaultTemplate) {
+      console.error('[getDefaultContractTemplate] No se encontró plantilla activa para:', studioSlug);
+      throw new Error("No se encontró una plantilla de contrato por defecto para el estudio");
     }
 
     return { success: true, data: defaultTemplate as ContractTemplate };
   } catch (error) {
-    console.error("Error al obtener plantilla por defecto:", error);
+    console.error('[getDefaultContractTemplate] Error:', error);
+    if (error instanceof Error && error.message.startsWith("No se encontró")) throw error;
     return { success: false, error: "Error al obtener plantilla por defecto" };
   }
 }
@@ -742,6 +757,7 @@ export async function createDefaultTemplateForStudio(
 
     const validation = await validateStudioContractData(studioDataResult.data);
     if (!validation.isValid) {
+      console.error('[createDefaultTemplateForStudio] Validación falló:', validation.errors);
       return { success: false, error: "Los datos del estudio no están completos" };
     }
 
@@ -759,6 +775,8 @@ export async function createDefaultTemplateForStudio(
         created_by: userId,
       },
     });
+
+    console.log('[createDefaultTemplateForStudio] ✅ Plantilla creada:', defaultTemplate.id);
 
     revalidatePath(`/${studioSlug}/studio/config/contratos`);
 

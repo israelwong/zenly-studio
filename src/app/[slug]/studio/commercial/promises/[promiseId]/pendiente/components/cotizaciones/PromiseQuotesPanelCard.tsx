@@ -1043,7 +1043,7 @@ export function PromiseQuotesPanelCard({
                         </>
                       ) : isCancelada ? (
                         <>
-                          {/* Cancelada: quitar cancelación, duplicar, eliminar */}
+                          {/* Cancelada: solo quitar cancelación y eliminar (sin Duplicar ni Guardar como paquete) */}
                           <ZenDropdownMenuItem
                             onClick={handleQuitarCancelacion}
                             disabled={loading || isDuplicating}
@@ -1051,17 +1051,6 @@ export function PromiseQuotesPanelCard({
                           >
                             <RotateCcw className="h-4 w-4 mr-2" />
                             Quitar cancelación
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          {!isRevision && (
-                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicar
-                            </ZenDropdownMenuItem>
-                          )}
-                          <ZenDropdownMenuItem onClick={handleGuardarComoPaquete} disabled={loading || isDuplicating || isSavingAsPaquete}>
-                            <PackagePlus className="h-4 w-4 mr-2" />
-                            Guardar como paquete
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem

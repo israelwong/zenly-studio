@@ -26,8 +26,10 @@ interface PromiseShareOptionsModalProps {
   promiseId?: string;
   /** global = configuración del estudio (Kanban); single = esta promesa (detalle) */
   scope?: 'global' | 'single';
-  /** Modo "Confirmar y Publicar": botón principal publica la promesa tras guardar opciones */
+  /** Modo "Confirmar y Publicar": botón principal publica la promesa tras guardar opciones (legacy, usa intent si no se pasa) */
   mode?: 'default' | 'publish';
+  /** intent='publish': botón "Confirmar y Publicar", habilitado por defecto. intent='configure': "Guardar cambios", habilitado solo si hay cambios en switches. */
+  intent?: 'publish' | 'configure';
   /** Llamado tras guardar (esta promesa o global) para refrescar la vista / invalidar cache */
   onSuccess?: () => void;
   /** Llamado tras publicar con éxito (solo cuando mode === 'publish'); ej. copiar URL + toast en el padre */
@@ -45,11 +47,14 @@ export function PromiseShareOptionsModal({
   promiseId,
   scope = 'single',
   mode = 'default',
+  intent: intentProp,
   onSuccess,
   onPublishSuccess,
   contactName = null,
   defaultTab: _defaultTab,
 }: PromiseShareOptionsModalProps) {
+  const intent = intentProp ?? (mode === 'publish' ? 'publish' : 'configure');
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingScope, setSavingScope] = useState<'all' | 'single' | null>(null);
@@ -409,7 +414,7 @@ export function PromiseShareOptionsModal({
             disabled={
               (() => {
                 const snap = lastLoadedSnapshotRef.current;
-                const hasChanges = !snap
+                const isDirty = !snap
                   ? false
                   : isGlobal
                     ? (showPackages !== snap.show_packages ||
@@ -436,16 +441,15 @@ export function PromiseShareOptionsModal({
                         allowRecalc !== snap.allow_recalc ||
                         roundingMode !== snap.rounding_mode ||
                         saveScope !== (snap.saveScope ?? 'single'));
-                return (
-                  !hasChanges ||
-                  minDaysToHire < 1 ||
-                  saving ||
-                  (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)))
-                );
+                const invalidValues = minDaysToHire < 1 || saving || (isGlobal && (maxEventsPerDay < 1 || Number.isNaN(maxEventsPerDay)));
+                if (intent === 'publish') {
+                  return invalidValues;
+                }
+                return !isDirty || invalidValues;
               })()
             }
           >
-            {saving ? (mode === 'publish' ? 'Publicando…' : 'Guardando…') : (mode === 'publish' && !isGlobal ? 'Confirmar y Publicar' : 'Guardar cambios')}
+            {saving ? (intent === 'publish' ? 'Publicando…' : 'Guardando…') : (intent === 'publish' ? 'Confirmar y Publicar' : 'Guardar cambios')}
           </ZenButton>
         </div>
       }

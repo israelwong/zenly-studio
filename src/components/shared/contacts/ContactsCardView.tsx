@@ -27,6 +27,12 @@ export function ContactsCardView({
 }: ContactsCardViewProps) {
   const [phoneMenuOpen, setPhoneMenuOpen] = React.useState<string | null>(null);
 
+  // Deduplicar por id para evitar keys duplicadas (ej. mismo contacto en múltiples promesas). Siempre arriba para no romper orden de Hooks.
+  const uniqueContacts = React.useMemo(
+    () => Array.from(new Map(contacts.map((c) => [c.id, c])).values()),
+    [contacts]
+  );
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'success' | 'destructive'> = {
       prospecto: 'default',
@@ -90,7 +96,7 @@ export function ContactsCardView({
     );
   }
 
-  if (contacts.length === 0) {
+  if (uniqueContacts.length === 0) {
     return (
       <div className="text-center py-12">
         <ContactRound className="h-12 w-12 mx-auto text-zinc-600 mb-4" />
@@ -101,7 +107,7 @@ export function ContactsCardView({
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      {contacts.map((contact) => {
+      {uniqueContacts.map((contact) => {
         const initials = contact.name
           .split(' ')
           .map((n) => n[0])

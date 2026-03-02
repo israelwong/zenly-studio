@@ -12,7 +12,7 @@ import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { ResumenPago } from '@/components/shared/precio';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
-import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
+import { AutorizarCotizacionModal, type BookingFormData } from './AutorizarCotizacionModal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +32,7 @@ import {
   getAjusteCierre,
 } from '@/lib/utils/promise-public-financials';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
-import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
+import { regeneratePublicContract, regenerateContractContentIfEmpty } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import type { CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
@@ -111,15 +111,18 @@ export function PublicQuoteAuthorizedView({
   const checkinFromUrl = isCierrePath && searchParams?.get('checkin') === 'true';
   const stepParam = searchParams?.get('step');
   const checkinStep = stepParam ? Math.min(3, Math.max(1, parseInt(stepParam, 10) || 1)) : 1;
-  // Fase 29.4: Cierre optimista — ocultar modal al instante antes de limpiar URL
   const [exitConfirmed, setExitConfirmed] = useState(false);
   const showAutorizarModal = checkinFromUrl && !exitConfirmed;
+  // Fase 30.7.1: Draft del check-in para persistir al cerrar y reabrir; se limpia solo al confirmar reserva o F5
+  const [bookingDraft, setBookingDraft] = useState<Partial<BookingFormData> | null>(null);
   // Fase 29.4: Feedback de clic inmediato en botón Continuar
   const [isTransitioning, setIsTransitioning] = useState(false);
   // Fase 29.3: Safe exit — AlertDialog antes de salir del check-in
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  const { setAuthorizationData, setIsAuthorizationInProgress } = usePromisePageContext();
+  const { setAuthorizationData, setIsAuthorizationInProgress, authorizationData, setStayOnCierreAfterSign } = usePromisePageContext();
+  // Fase 29.9.8: Cliente ya dio "Confirmar" en el link público (para títulos y check-in de cortesía)
+  const isClientValidated = authorizationData?.cotizacionId === initialCotizacion.id;
 
   // Fase 29.8: Sincronización agresiva — URL sin checkin implica resetear salida
   useEffect(() => {
@@ -153,10 +156,10 @@ export function PublicQuoteAuthorizedView({
   }, []);
 
   const handleConfirmExitCheckin = useCallback((_formData?: unknown, authData?: AuthorizationData | null) => {
-    // Fase 29.9.1: Persistir estado de cierre en el padre (overlay no depende del modal)
     if (authData != null && setAuthorizationData && setIsAuthorizationInProgress) {
       setAuthorizationData(authData);
       setIsAuthorizationInProgress(true);
+      setBookingDraft(null);
     }
     const cleanPath = pathname ?? '';
     router.push(cleanPath, { scroll: false });
@@ -252,6 +255,36 @@ export function PublicQuoteAuthorizedView({
   // ⚠️ Usar useMemo para asegurar estabilidad de valores entre renders
   const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
   const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
+  /** Fase 29.9.5: Check-in completado por cliente o estudio; no forzar validación de datos */
+  const checkinCompleted = cotizacion.contract?.checkin_completed ?? false;
+  /** Fase 29.9.8: Flujo manual = estudio pasó a cierre sin que el cliente haya autorizado desde el link */
+  const isManualFlow = cotizacion.selected_by_prospect !== true;
+
+  // Fase 29.9.6: Refrescar una vez si check-in completado pero contrato aún no cargado (recién generado)
+  const refreshedForContractRef = useRef(false);
+  useEffect(() => {
+    if (!checkinCompleted || hasContract || hasContractTemplate || refreshedForContractRef.current) return;
+    refreshedForContractRef.current = true;
+    router.refresh();
+  }, [checkinCompleted, hasContract, hasContractTemplate, router]);
+
+  // Fase 29.9.7: Regenerar contenido si el contrato está "hueco" (template_id pero content null)
+  const regeneratingHoleRef = useRef(false);
+  useEffect(() => {
+    if (!checkinCompleted || !(isEnCierre || isContractGenerated)) return;
+    const needsContent = (currentContract?.template_id && !currentContract?.content) || (!currentContract?.content && (hasContractTemplate || cotizacion.status === 'contract_generated'));
+    if (!needsContent || regeneratingHoleRef.current) return;
+    regeneratingHoleRef.current = true;
+    regenerateContractContentIfEmpty(studioSlug, cotizacion.id, promiseId)
+      .then((res) => {
+        if (res.success) {
+          router.refresh();
+        }
+      })
+      .finally(() => {
+        regeneratingHoleRef.current = false;
+      });
+  }, [checkinCompleted, isEnCierre, isContractGenerated, currentContract?.template_id, currentContract?.content, hasContractTemplate, cotizacion.status, cotizacion.id, promiseId, studioSlug, router]);
 
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
@@ -793,49 +826,40 @@ export function PublicQuoteAuthorizedView({
 
         {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
-          {/* PASO PRINCIPAL: Firma de Contrato - solo si el estudio tiene habilitado auto_generate_contract */}
+          {/* Contrato / cierre (sin número de paso) */}
           {(isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
             <div className="relative">
-              <div className="flex items-start gap-4">
-                {/* Número del paso - más grande y destacado */}
-                <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center relative z-10 transition-all duration-300 ${isContractSigned
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500 scale-110'
-                  : 'bg-blue-500/20 border-2 border-blue-500 ring-2 ring-blue-500/30'
-                  }`}>
-                  {isContractSigned ? (
-                    <CheckCircle2 className="h-6 w-6 text-emerald-400" />
-                  ) : (
-                    <span className="text-base font-bold text-blue-400">1</span>
-                  )}
-                </div>
-
-                {/* Título y subtítulo */}
-                <div className="flex-1 min-w-0">
-                  <div className="mb-4">
-                    <h3 className="text-xl font-bold text-zinc-100 mb-1">
-                      {isContractSigned
-                        ? 'Contrato Firmado'
+              <div className="mb-4">
+                <h3 className="text-xl font-bold text-zinc-100 mb-1">
+                  {isContractSigned
+                    ? 'Contrato Firmado'
+                    : checkinCompleted && hasContract
+                      ? 'Contrato pendiente por firma'
+                      : checkinCompleted && !hasContract
+                        ? (isManualFlow && !isClientValidated ? 'Revisión de Datos' : 'Preparando tu Contrato')
                         : isDataPending
                           ? 'Validación de Información'
                           : hasContract
                             ? 'Firma tu Contrato Digital'
                             : 'Preparando tu Contrato'}
-                    </h3>
-                    <p className="text-sm text-zinc-400">
-                      {isContractSigned
-                        ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
+                </h3>
+                <p className="text-sm text-zinc-400">
+                  {isContractSigned
+                    ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
+                    : checkinCompleted && hasContract
+                      ? 'Tus datos ya están validados. Revisa y firma tu contrato para oficializar tu reserva.'
+                      : checkinCompleted && !hasContract
+                        ? (isManualFlow && !isClientValidated
+                            ? 'Revisa que tus datos sean correctos y confirma para continuar con el proceso.'
+                            : 'Estamos generando el documento final con tu información verificada.')
                         : isDataPending
                           ? 'Completa tus datos requeridos para generar tu contrato.'
                           : hasContract
                             ? 'Revisa y firma tu contrato para oficializar tu reserva.'
                             : 'Estamos generando el documento final con tu información verificada.'}
-                    </p>
-                  </div>
-                </div>
+                </p>
               </div>
-
-              {/* Cards a ancho completo (sin indentación respecto al contenedor) */}
-              <div className="w-full mt-0">
+              <div className="w-full">
                 {hasContract ? (
                     // Sub-condition A: Contrato disponible - mostrar preview para firma
                     <div data-contract-card>
@@ -851,6 +875,15 @@ export function PublicQuoteAuthorizedView({
                         onViewContract={() => {
                           window.dispatchEvent(new CustomEvent('close-overlays'));
                           setShowContractView(true);
+                        }}
+                        onViewSignedContract={() => {
+                          window.dispatchEvent(new CustomEvent('close-overlays'));
+                          setShowContractView(true);
+                        }}
+                        onGoToPortal={() => {
+                          window.dispatchEvent(new CustomEvent('close-overlays'));
+                          setStayOnCierreAfterSign(false);
+                          router.push(`/${studioSlug}/cliente/login`);
                         }}
                       />
                     </div>
@@ -971,11 +1004,12 @@ export function PublicQuoteAuthorizedView({
                                 </div>
                               </div>
                             </ZenCard>
+
                           </div>
                         );
                       }
                       
-                      // Mensaje diferente según flujo (automático vs manual)
+                      // Mensaje diferente según flujo (automático vs manual). Fase 29.9.8: manual = revisión de datos primero.
                       return (
                         <ZenCard>
                           <div className="p-6">
@@ -986,7 +1020,7 @@ export function PublicQuoteAuthorizedView({
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
                                   <FileText className="h-5 w-5 text-blue-400" />
-                                  {isAutomaticFlow ? 'Generando tu contrato' : 'El estudio está preparando tu contrato'}
+                                  {isAutomaticFlow ? 'Generando tu contrato' : 'Revisión de datos'}
                                 </h4>
                                 {isAutomaticFlow ? (
                                   // Scenario A: Flujo automático (cliente autorizó)
@@ -994,17 +1028,17 @@ export function PublicQuoteAuthorizedView({
                                     Estamos generando tu contrato con los servicios que seleccionaste. Te notificaremos en cuanto esté listo para tu revisión y firma.
                                   </p>
                                 ) : (
-                                  // Scenario B: Flujo manual (estudio movió a cierre)
+                                  // Scenario B: Flujo manual (estudio movió a cierre) — Fase 29.9.8: invitar a confirmar datos
                                   <p className="text-sm text-zinc-400 leading-relaxed">
-                                    El estudio está preparando tu contrato para revisión. Te notificaremos vía email o WhatsApp en cuanto esté listo para tu revisión y firma.
+                                    El estudio cargó tu información. Revisa que todo sea correcto y haz clic en &quot;Continuar&quot; para confirmar y seguir con el proceso. Cuando tu contrato esté listo, podrás firmarlo aquí.
                                   </p>
                                 )}
                                 
-                                {/* ⚠️ EMERGENCY: Force refresh button - solo en flujo automático */}
-                                {isAutomaticFlow && shouldAutoGenerate && showForceRefresh && (
+                                {/* Fase 29.9.6: Reintentar carga si check-in completado pero contrato aún no visible */}
+                                {(checkinCompleted || (isAutomaticFlow && shouldAutoGenerate && showForceRefresh)) && (
                                   <div className="mt-4 pt-4 border-t border-zinc-800">
                                     <p className="text-xs text-zinc-500 mb-3">
-                                      ¿No ves tu contrato? Intenta actualizar la página:
+                                      {checkinCompleted ? 'Si tu contrato ya está listo, actualiza para cargarlo:' : '¿No ves tu contrato? Intenta actualizar la página:'}
                                     </p>
                                     <ZenButton
                                       size="sm"
@@ -1019,7 +1053,7 @@ export function PublicQuoteAuthorizedView({
                                           Actualizando...
                                         </>
                                       ) : (
-                                        'Actualizar página'
+                                        'Reintentar carga'
                                       )}
                                     </ZenButton>
                                   </div>
@@ -1038,28 +1072,20 @@ export function PublicQuoteAuthorizedView({
             </div>
           )}
 
-          {/* PASO 2: Realiza tu Pago - SOLO visible si el contrato está firmado */}
-          {isContractSigned && (
+          {/* Realiza tu Anticipo / Datos bancarios - Sin numeración (Fase 30.8.5); oculto si pago ya confirmado (Fase 30.8.2) */}
+          {isContractSigned && !(cotizacion.contract?.pago_confirmado_estudio) && (
             <div className="relative">
-              <div className="flex items-start gap-4">
-                {/* Número del paso */}
-                <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center relative z-10">
-                  <span className="text-sm font-bold text-blue-400">2</span>
-                </div>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-zinc-100 mb-1">
+                  Realiza tu Anticipo
+                </h3>
+                <p className="text-sm text-zinc-400">
+                  Transfiere el monto mínimo para formalizar tu reserva
+                </p>
+              </div>
 
-                {/* Contenido */}
-                <div className="flex-1 min-w-0">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-zinc-100 mb-1">
-                      Realiza tu Anticipo
-                    </h3>
-                    <p className="text-sm text-zinc-400">
-                      Transfiere el monto mínimo para formalizar tu reserva
-                    </p>
-                  </div>
-
-                  {/* Tarjeta de Monto Destacado */}
-                  <ZenCard className="mb-4">
+              {/* Tarjeta de Monto Destacado - Anticipo de cotización (Fase 29.10.1) */}
+              <ZenCard className="mb-4">
                     <div className="p-6 space-y-4">
                       {/* Monto Mínimo Requerido */}
                       {(() => {
@@ -1145,10 +1171,10 @@ export function PublicQuoteAuthorizedView({
                         );
                       })()}
                     </div>
-                  </ZenCard>
+              </ZenCard>
 
-                  {/* Información Bancaria */}
-                  <ZenCard>
+              {/* Datos bancarios */}
+              <ZenCard>
                     <div className="p-6">
                       {loadingBankInfo ? (
                         <div className="flex items-center justify-center py-8">
@@ -1242,23 +1268,21 @@ export function PublicQuoteAuthorizedView({
                         </div>
                       )}
                     </div>
-                  </ZenCard>
-                  
-                  {/* Mensaje de Confirmación */}
-                  <div className="mt-4 space-y-3">
-                    <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-300 mb-1">
-                            Próximos pasos
-                          </p>
-                          <p className="text-xs text-blue-400/80 leading-relaxed">
-                            Una vez que realices tu transferencia, el estudio confirmará tu pago y tendrás acceso 
-                            completo a tu portal de cliente donde podrás dar seguimiento a tu evento.
-                          </p>
-                        </div>
-                      </div>
+              </ZenCard>
+
+              {/* Próximos pasos */}
+              <div className="mt-4 space-y-3">
+                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-300 mb-1">
+                        Próximos pasos
+                      </p>
+                      <p className="text-xs text-blue-400/80 leading-relaxed">
+                        Una vez que realices tu transferencia, el estudio confirmará tu pago y tendrás acceso 
+                        completo a tu portal de cliente donde podrás dar seguimiento a tu evento.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1267,8 +1291,8 @@ export function PublicQuoteAuthorizedView({
           )}
         </div>
 
-        {/* Fase 29.1: Mismo ancho que las cards; desktop botón a la derecha, mobile ancho completo */}
-        {!isContractSigned && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
+        {/* Fase 29.9.8: Mostrar Continuar si no hay firma y (check-in pendiente o contrato aún no listo); permite check-in de cortesía cuando el estudio pasó a cierre */}
+        {!isContractSigned && (!checkinCompleted || !hasContract) && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
           <div className="mt-8 flex justify-end">
             <ZenButton
               size="lg"
@@ -1294,6 +1318,7 @@ export function PublicQuoteAuthorizedView({
           isOpen={showContractView}
           onClose={() => setShowContractView(false)}
           onContractSigned={handleContractSigned}
+          onBeforeConfirmSign={() => pathname?.includes('/cierre') && setStayOnCierreAfterSign(true)}
           onContractSignedOptimistic={handleContractSignedOptimistic}
           onContractSignedRollback={handleContractSignedRollback}
           cotizacionId={cotizacion.id}
@@ -1402,6 +1427,8 @@ export function PublicQuoteAuthorizedView({
             event_date: promise.event_date ?? null,
             event_type_name: promise.event_type_name ?? null,
           }}
+          initialDraft={bookingDraft}
+          onDraftChange={setBookingDraft}
           condicionesComercialesId={condicionesComercialesIdCierre}
           condicionesComercialesMetodoPagoId={null}
           precioLista={precioListaModal}

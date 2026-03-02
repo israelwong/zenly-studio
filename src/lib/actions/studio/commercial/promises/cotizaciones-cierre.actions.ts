@@ -1710,21 +1710,28 @@ export async function autorizarYCrearEvento(
       // Si est?n definidas, se guardar?n en snapshots (sin requerir firma)
       // No requiere validaciones adicionales
     } else {
-      // Cliente nuevo (selected_by_prospect === true): requiere condiciones comerciales y contrato
-      if (
-        !registroCierre.condiciones_comerciales_definidas ||
-        !registroCierre.condiciones_comerciales_id
-      ) {
+      // Cliente nuevo (selected_by_prospect === true). Fase 30.9.4: condiciones válidas si hay ID, snapshot, o cotización en cierre (ya pactado)
+      const hasCondicionesId = !!registroCierre.condiciones_comerciales_id;
+      const hasCondicionesDefinidas = !!registroCierre.condiciones_comerciales_definidas;
+      const hasCondicionesSnapshot = !!(
+        registroCierre.condiciones_comerciales &&
+        (registroCierre.condiciones_comerciales.name || registroCierre.condiciones_comerciales.description)
+      );
+      const isEnCierre = cotizacion.status === 'en_cierre';
+      const condicionesOk =
+        hasCondicionesId || hasCondicionesDefinidas || hasCondicionesSnapshot || isEnCierre;
+      if (!condicionesOk) {
         return {
           success: false,
           error: 'Debe definir las condiciones comerciales',
         };
       }
 
-      if (
-        !registroCierre.contrato_definido ||
-        !registroCierre.contract_template_id
-      ) {
+      // Fase 30.9.4: contrato válido si está definido Y (hay plantilla O contenido personalizado)
+      const hasContratoDefinido = !!registroCierre.contrato_definido;
+      const hasTemplateOrContent =
+        !!registroCierre.contract_template_id || !!registroCierre.contract_content;
+      if (!hasContratoDefinido || !hasTemplateOrContent) {
         return { success: false, error: 'Debe definir el contrato' };
       }
 
@@ -1783,6 +1790,7 @@ export async function autorizarYCrearEvento(
       return { success: false, error: conflictResult.error ?? 'Error al comprobar disponibilidad' };
     }
     if (conflictResult.data?.isFull && !options?.forceBooking) {
+      console.log('❌ FALLO: CAPACIDAD ALCANZADA');
       return {
         success: false,
         error: 'DATE_OCCUPIED',
@@ -1838,6 +1846,7 @@ export async function autorizarYCrearEvento(
     }
 
     // 7. TRANSACCI?N AT?MICA
+    console.log('🔍 VALIDANDO REGLAS DE NEGOCIO PARA:', promiseId);
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacci?n para evitar race conditions)
       const eventoExistente = await tx.studio_events.findFirst({
@@ -1886,18 +1895,18 @@ export async function autorizarYCrearEvento(
         }
         : null;
 
-      // 7.3. Crear snapshots de contrato (si est? definido)
-      // Para clientes manuales es opcional, pero si est? definido debe guardarse
-      // Si hay template_id pero no content personalizado, usar el contenido de la plantilla
-      const contratoSnapshot = registroCierre.contrato_definido && registroCierre.contract_template_id
+      // 7.3. Crear snapshots de contrato (si está definido). Fase 30.9.4: admite plantilla O contenido personalizado
+      const hasContratoParaSnapshot =
+        registroCierre.contrato_definido &&
+        (!!registroCierre.contract_template_id || !!registroCierre.contract_content);
+      const contratoSnapshot = hasContratoParaSnapshot
         ? {
-          template_id: registroCierre.contract_template_id,
+          template_id: registroCierre.contract_template_id || null,
           template_name: registroCierre.contract_template?.name || null,
-          // Priorizar contenido personalizado, si no existe usar el de la plantilla
           content: registroCierre.contract_content || registroCierre.contract_template?.content || null,
           version: registroCierre.contract_version || 1,
-          signed_at: registroCierre.contract_signed_at, // Puede ser null para clientes manuales
-          signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
+          signed_at: registroCierre.contract_signed_at,
+          signed_ip: null,
         }
         : null;
 
@@ -2034,16 +2043,21 @@ export async function autorizarYCrearEvento(
       
       // Prioridad 1: Pago confirmado por el estudio (Fase 28.0/28.5)
       const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
-      const montoConfirmado = pagoConfirmadoEstudio && registroCierre.pago_monto != null 
-        ? Number(registroCierre.pago_monto) 
-        : 0;
-      
-      // Prioridad 2: Pago solicitado desde cliente (flujo original)
+      const rawMontoCierre = registroCierre.pago_monto;
+      const montoConfirmado =
+        pagoConfirmadoEstudio && rawMontoCierre != null
+          ? typeof rawMontoCierre === "number"
+            ? rawMontoCierre
+            : Number(String(rawMontoCierre))
+          : 0;
+
+      // Prioridad 2: Pago solicitado desde cliente / firma pública (Fase 30.9.6)
       const clientePidioPago = options?.registrarPago === true;
       const montoCliente = options?.montoInicial ?? 0;
-      
-      // Usar monto confirmado si existe, sino el del cliente
-      const montoEfectivo = montoConfirmado > 0 ? montoConfirmado : (clientePidioPago && montoCliente > 0 ? montoCliente : 0);
+
+      // Usar monto confirmado si existe, sino el pasado por options (ej. signPublicContract)
+      const montoEfectivo =
+        montoConfirmado > 0 ? montoConfirmado : (clientePidioPago && montoCliente > 0 ? montoCliente : 0);
       
       if (montoEfectivo > 0) {
         const montoInicial = montoEfectivo;

@@ -120,6 +120,8 @@ export interface PublicCotizacion {
     pago_confirmado_estudio?: boolean;
     /** Fase 28.0: Monto confirmado del anticipo por el estudio (SSOT si está presente) */
     pago_monto?: number | null;
+    /** Fase 29.9.5: Check-in completado (por cliente o estudio); si true, no forzar validación de datos */
+    checkin_completed?: boolean;
     condiciones_comerciales: {
       id: string;
       name: string;

@@ -240,13 +240,18 @@ export function ConfirmarCierreModal({
       basePayload = { condiciones_comerciales_id: selectedId };
     }
     
-    // Fase 28.0: Añadir pago confirmado
+    // Fase 28.0 / 30.9.10: Pago confirmado obliga a enviar pago_monto (origen Studio). Si condición es %, forzar cálculo monetario.
     if (pagoConfirmado) {
       basePayload.pago_confirmado_estudio = true;
-      const monto = parseFloat(pagoMontoConfirmado);
-      if (!isNaN(monto) && monto > 0) {
-        basePayload.pago_monto_confirmado = monto;
+      const montoInput = parseFloat(pagoMontoConfirmado);
+      let montoFinal = !isNaN(montoInput) && montoInput > 0 ? montoInput : anticipo;
+      if (montoFinal <= 0 && usarAjuste) {
+        const pct = usarAjuste.advance_percentage ?? 0;
+        const isPct = usarAjuste.advance_type !== 'fixed_amount' && usarAjuste.advance_type !== 'amount';
+        if (isPct && pct > 0) montoFinal = Math.round(totalAPagar * (pct / 100));
+        else if (!isPct && usarAjuste.advance_amount != null) montoFinal = Math.round(Number(usarAjuste.advance_amount));
       }
+      basePayload.pago_monto_confirmado = montoFinal > 0 ? montoFinal : Math.round(totalAPagar * 0.1);
     }
     
     return basePayload;
@@ -483,7 +488,12 @@ export function ConfirmarCierreModal({
                           max={100}
                           step={0.5}
                           value={ajusteFino.advance_percentage ?? ''}
-                          onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_percentage: e.target.value === '' ? null : parseFloat(e.target.value), editing: true } : null)}
+                          onChange={(e) => {
+                            const raw = e.target.value === '' ? null : parseFloat(e.target.value);
+                            const capped = raw != null && !Number.isNaN(raw) ? Math.min(100, Math.max(0, raw)) : raw;
+                            setAjusteFino((a) => a ? { ...a, advance_percentage: capped, editing: true } : null);
+                          }}
+                          hint="Máximo 100%"
                         />
                       </div>
                     ) : (
@@ -492,9 +502,15 @@ export function ConfirmarCierreModal({
                         <ZenInput
                           type="number"
                           min={0}
+                          max={totalAPagar}
                           step={1}
                           value={ajusteFino.advance_amount ?? ''}
-                          onChange={(e) => setAjusteFino((a) => a ? { ...a, advance_amount: e.target.value === '' ? null : parseInt(e.target.value, 10) || 0, editing: true } : null)}
+                          onChange={(e) => {
+                            const raw = e.target.value === '' ? null : parseInt(e.target.value, 10) || 0;
+                            const capped = totalAPagar > 0 && raw != null ? Math.min(raw, totalAPagar) : raw;
+                            setAjusteFino((a) => a ? { ...a, advance_amount: capped, editing: true } : null);
+                          }}
+                          hint={`Máximo: ${formatearMoneda(totalAPagar)} (total a pagar)`}
                         />
                       </div>
                     )}
@@ -541,17 +557,20 @@ export function ConfirmarCierreModal({
                   <ZenInput
                     type="number"
                     min={0}
+                    max={totalAPagar}
                     step={0.01}
                     label="Monto del anticipo recibido"
                     placeholder={`Anticipo calculado: ${formatearMoneda(anticipo)}`}
                     value={pagoMontoConfirmado}
                     onChange={(e) => {
-                      setPagoMontoConfirmado(e.target.value);
-                      // Fase 28.3: Marcar como edición manual cuando el usuario modifica el valor
+                      const raw = e.target.value;
+                      const num = parseFloat(raw);
+                      const capped = !raw || isNaN(num) ? raw : (num > totalAPagar ? totalAPagar.toString() : raw);
+                      setPagoMontoConfirmado(capped);
                       isManualEditRef.current = true;
                     }}
                     icon={DollarSign}
-                    hint="Si el monto es diferente al calculado, ajústalo aquí"
+                    hint={`Máximo: ${formatearMoneda(totalAPagar)} (total a pagar). Si es diferente al calculado, ajústalo aquí.`}
                   />
                 </div>
               )}

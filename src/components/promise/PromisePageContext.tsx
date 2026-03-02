@@ -41,6 +41,9 @@ interface PromisePageContextValue {
   setIsAuthorizationInProgress: (value: boolean) => void;
   authorizationData: AuthorizationData | null;
   setAuthorizationData: (data: AuthorizationData | null) => void;
+  /** Fase 30.9.6: Tras firma en /cierre, mantener usuario en la página (no redirigir a /cliente automáticamente) */
+  stayOnCierreAfterSign: boolean;
+  setStayOnCierreAfterSign: (value: boolean) => void;
 }
 
 const PromisePageContext = createContext<PromisePageContextValue>({
@@ -58,6 +61,8 @@ const PromisePageContext = createContext<PromisePageContextValue>({
   setIsAuthorizationInProgress: () => {},
   authorizationData: null,
   setAuthorizationData: () => {},
+  stayOnCierreAfterSign: false,
+  setStayOnCierreAfterSign: () => {},
 });
 
 export function PromisePageProvider({
@@ -75,6 +80,7 @@ export function PromisePageProvider({
   const [autoGenerateContract, setAutoGenerateContract] = useState(false);
   const [isAuthorizationInProgress, setIsAuthorizationInProgress] = useState(false);
   const [authorizationData, setAuthorizationData] = useState<AuthorizationData | null>(null);
+  const [stayOnCierreAfterSign, setStayOnCierreAfterSign] = useState(false);
   const onPreparingRef = useRef<(() => void) | undefined>(initialOnPreparing);
   const onSuccessRef = useRef<(() => void) | undefined>(initialOnSuccess);
 
@@ -113,6 +119,8 @@ export function PromisePageProvider({
     setIsAuthorizationInProgress,
     authorizationData,
     setAuthorizationData,
+    stayOnCierreAfterSign,
+    setStayOnCierreAfterSign,
   }), [
     onPreparing,
     setOnPreparing,
@@ -124,6 +132,7 @@ export function PromisePageProvider({
     autoGenerateContract,
     isAuthorizationInProgress,
     authorizationData,
+    stayOnCierreAfterSign,
   ]);
 
   return (

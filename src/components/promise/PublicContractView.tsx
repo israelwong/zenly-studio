@@ -12,11 +12,14 @@ import { generatePDFFromElement } from '@/lib/utils/pdf-generator';
 import { formatMoney } from '@/lib/utils/package-price-formatter';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { cn } from '@/lib/utils';
 
 interface PublicContractViewProps {
   isOpen: boolean;
   onClose: () => void;
   onContractSigned?: () => void;
+  /** Fase 30.9.9: Llamado al iniciar firma (clic en Confirmar Firma), antes de la Server Action */
+  onBeforeConfirmSign?: () => void;
   onContractSignedOptimistic?: () => void;
   onContractSignedRollback?: () => void;
   cotizacionId: string;
@@ -65,6 +68,7 @@ export function PublicContractView({
   isOpen,
   onClose,
   onContractSigned,
+  onBeforeConfirmSign,
   onContractSignedOptimistic,
   onContractSignedRollback,
   cotizacionId,
@@ -90,6 +94,11 @@ export function PublicContractView({
   const descuentoAplicado = descuentoAplicadoProp ?? 0;
   const [isSigning, setIsSigning] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  /** Fase 30.9: Stepper de progreso (0-4); solo se cierra cuando completedSteps >= 4 y servidor terminó */
+  const [completedSteps, setCompletedSteps] = useState(0);
+  const [serverDone, setServerDone] = useState(false);
+  const [autoConvertedToEvent, setAutoConvertedToEvent] = useState(false);
+  const stepperIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSignConfirmModal, setShowSignConfirmModal] = useState(false);
   const [loadingContract, setLoadingContract] = useState(false);
@@ -107,9 +116,31 @@ export function PublicContractView({
     if (!isSigned) {
       setIsSigning(false);
       setIsSuccess(false);
+      setCompletedSteps(0);
+      setServerDone(false);
+      setAutoConvertedToEvent(false);
+      if (stepperIntervalRef.current) {
+        clearInterval(stepperIntervalRef.current);
+        stepperIntervalRef.current = null;
+      }
       setShowSignConfirmModal(false);
     }
   }, [isSigned]);
+
+  // Fase 30.9: Cerrar modal solo cuando stepper completó (4 pasos) Y servidor terminó
+  useEffect(() => {
+    if (!serverDone || completedSteps < 4) return;
+    const t = setTimeout(() => {
+      setIsSuccess(true);
+      window.dispatchEvent(new CustomEvent('close-overlays'));
+      startTransition(() => {
+        setShowSignConfirmModal(false);
+        onClose();
+        onContractSigned?.();
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [serverDone, completedSteps, onClose, onContractSigned]);
 
   // Reset scroll-to-bottom al abrir/cerrar el modal
   useEffect(() => {
@@ -288,16 +319,32 @@ export function PublicContractView({
   };
 
   const handleConfirmSign = async () => {
+    onBeforeConfirmSign?.();
     setIsSigning(true);
-    // Modal de confirmación se mantiene abierto durante toda la firma; se cierra solo al éxito en startTransition
+    setCompletedSteps(0);
+    setServerDone(false);
+    setAutoConvertedToEvent(false);
+    if (stepperIntervalRef.current) {
+      clearInterval(stepperIntervalRef.current);
+      stepperIntervalRef.current = null;
+    }
+    // Fase 30.9: Avanzar stepper cada ~750ms para ~3s total (4 pasos)
+    stepperIntervalRef.current = setInterval(() => {
+      setCompletedSteps((s) => {
+        const next = Math.min(s + 1, 4);
+        if (next >= 4 && stepperIntervalRef.current) {
+          clearInterval(stepperIntervalRef.current);
+          stepperIntervalRef.current = null;
+        }
+        return next;
+      });
+    }, 750);
 
-    // OPTIMISTIC UPDATE - Actualizar estado ANTES de Server Action
     if (onContractSignedOptimistic) {
       onContractSignedOptimistic();
     }
 
     try {
-      // Obtener IP del cliente
       let clientIp = '0.0.0.0';
       try {
         const ipResponse = await fetch('https://api.ipify.org?format=json');
@@ -305,10 +352,8 @@ export function PublicContractView({
         clientIp = ipData.ip || '0.0.0.0';
       } catch (ipError) {
         console.warn('[handleConfirmSign] Error obteniendo IP:', ipError);
-        // Continuar con IP por defecto
       }
 
-      // Fecha local del cliente al firmar (YYYY-MM-DD) para guardar el día legal sin desfase por timezone
       const d = new Date();
       const signature_date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const result = await signPublicContract(studioSlug, promiseId, cotizacionId, {
@@ -317,31 +362,39 @@ export function PublicContractView({
       });
 
       if (result.success) {
-        setIsSuccess(true);
+        const fromServer = result.autoConvertedToEvent ?? false;
+        console.log('📊 FRONTEND: Resultado firma recibido del servidor', { autoConvertedToEvent: fromServer, completedSteps });
+        setServerDone(true);
+        setAutoConvertedToEvent(fromServer);
         toast.success('Contrato firmado exitosamente');
-        window.dispatchEvent(new CustomEvent('close-overlays'));
-        startTransition(() => {
-          setShowSignConfirmModal(false);
-          onClose();
-          if (onContractSigned) {
-            onContractSigned();
-          }
-        });
+        if (completedSteps < 4) {
+          setCompletedSteps(4);
+        }
+        if (stepperIntervalRef.current) {
+          clearInterval(stepperIntervalRef.current);
+          stepperIntervalRef.current = null;
+        }
       } else {
+        if (stepperIntervalRef.current) {
+          clearInterval(stepperIntervalRef.current);
+          stepperIntervalRef.current = null;
+        }
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
-        if (onContractSignedRollback) {
-          onContractSignedRollback();
-        }
+        if (onContractSignedRollback) onContractSignedRollback();
         setIsSigning(false);
+        setCompletedSteps(0);
       }
     } catch (error) {
+      if (stepperIntervalRef.current) {
+        clearInterval(stepperIntervalRef.current);
+        stepperIntervalRef.current = null;
+      }
       console.error('[handleConfirmSign] Error signing contract:', error);
       toast.error('Error al firmar contrato');
-      if (onContractSignedRollback) {
-        onContractSignedRollback();
-      }
+      if (onContractSignedRollback) onContractSignedRollback();
       setIsSigning(false);
+      setCompletedSteps(0);
     }
   };
 
@@ -554,10 +607,11 @@ onClick={onClose}
         </div>
       </ZenDialog>
 
-      {/* Modal de confirmación: isSuccess/isSigning muestran estado; cierre bloqueado hasta que se cierren tras éxito */}
+      {/* Fase 30.9: Modal de firma con stepper; sin X ni interacción externa mientras procesa */}
       <ZenDialog
         isOpen={showSignConfirmModal}
         onClose={() => !isSigning && !isSuccess && setShowSignConfirmModal(false)}
+        showCloseButton={!isSuccess && !isSigning}
         title={
           isSuccess
             ? '¡Contrato firmado con éxito!'
@@ -569,7 +623,7 @@ onClick={onClose}
           isSuccess
             ? 'Redirigiendo al resumen.'
             : isSigning
-              ? 'Un momento mientras registramos tu firma.'
+              ? 'Un momento mientras completamos los pasos.'
               : 'Al firmar este contrato, confirmas que estás de acuerdo con todas las condiciones establecidas.'
         }
         maxWidth="md"
@@ -582,9 +636,44 @@ onClick={onClose}
               <p className="text-sm font-medium text-zinc-200">¡Contrato firmado con éxito!</p>
             </div>
           ) : isSigning ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-6" aria-live="polite" aria-busy="true">
-              <Loader2 className="h-10 w-10 animate-spin text-zinc-300 shrink-0" />
-              <p className="text-sm font-medium text-zinc-200">Procesando tu firma...</p>
+            <div className="py-4 space-y-2" aria-live="polite" aria-busy="true">
+              {[
+                { label: 'Validando firma digital...', key: 0 },
+                { label: 'Sincronizando pago confirmado...', key: 1, highlight: autoConvertedToEvent },
+                { label: 'Creando expediente del evento...', key: 2 },
+                { label: 'Preparando tu Portal de Cliente...', key: 3 },
+              ].map(({ label, key, highlight }) => {
+                const done = key < completedSteps;
+                const current = key === completedSteps;
+                return (
+                  <div
+                    key={key}
+                    className={cn(
+                      'flex items-center gap-3 py-2 px-3 rounded-lg transition-colors',
+                      highlight && 'bg-emerald-500/10 border border-emerald-500/20'
+                    )}
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                    ) : current ? (
+                      <Loader2 className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-zinc-600 shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        'text-sm',
+                        done && 'text-zinc-400',
+                        current && 'text-zinc-200 font-medium',
+                        !done && !current && 'text-zinc-500',
+                        highlight && 'text-emerald-300'
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <>

@@ -20,6 +20,45 @@ import {
 import { z } from 'zod';
 import { toUtcDateOnly, dateToDateOnlyString } from '@/lib/utils/date-only';
 
+/** Primera letra de cada palabra en mayúscula (Title Case). */
+function toTitleCase(s: string): string {
+  return s
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
+}
+
+/** Solo la primera letra del string en mayúscula (Sentence Case). */
+function toSentenceCase(s: string): string {
+  const t = s.trim();
+  if (t.length === 0) return t;
+  return t[0].toUpperCase() + t.slice(1).toLowerCase();
+}
+
+/** Normaliza campos de CreatePromiseData para contrato/comunicaciones. */
+function normalizeCreatePromiseData(data: CreatePromiseData): CreatePromiseData {
+  return {
+    ...data,
+    name: data.name?.trim() ? toTitleCase(data.name.trim()) : data.name,
+    email: data.email?.trim() ? data.email.trim().toLowerCase() : data.email,
+    event_name: data.event_name?.trim() ? toTitleCase(data.event_name.trim()) : data.event_name,
+    event_location: data.event_location?.trim() ? toTitleCase(data.event_location.trim()) : data.event_location,
+    notes: data.notes?.trim() ? toSentenceCase(data.notes.trim()) : data.notes,
+  };
+}
+
+/** Normaliza solo los campos presentes en UpdatePromiseData. */
+function normalizeUpdatePromiseData(data: UpdatePromiseData): UpdatePromiseData {
+  const out = { ...data };
+  if (out.name !== undefined && out.name?.trim()) out.name = toTitleCase(out.name.trim());
+  if (out.email !== undefined && out.email?.trim()) out.email = out.email.trim().toLowerCase();
+  if (out.event_name !== undefined && out.event_name?.trim()) out.event_name = toTitleCase(out.event_name.trim());
+  if (out.event_location !== undefined && out.event_location?.trim()) out.event_location = toTitleCase(out.event_location.trim());
+  if (out.notes !== undefined && out.notes?.trim()) out.notes = toSentenceCase(out.notes.trim());
+  return out;
+}
+
 /**
  * Obtener promises con pipeline stages
  */
@@ -614,7 +653,8 @@ export async function createPromise(
   data: CreatePromiseData
 ): Promise<PromiseResponse> {
   try {
-    const validatedData = createPromiseSchema.parse(data);
+    const normalized = normalizeCreatePromiseData(data);
+    const validatedData = createPromiseSchema.parse(normalized);
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -881,7 +921,8 @@ export async function updatePromise(
   data: UpdatePromiseData
 ): Promise<PromiseResponse> {
   try {
-    const validatedData = updatePromiseSchema.parse(data);
+    const normalized = normalizeUpdatePromiseData(data);
+    const validatedData = updatePromiseSchema.parse(normalized);
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },

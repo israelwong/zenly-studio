@@ -16,6 +16,7 @@ import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 import type { PromiseStateData } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
+import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
 
 interface PromiseLayoutClientProps {
@@ -74,6 +75,27 @@ export function PromiseLayoutClient({
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('close-overlays'));
   }, []);
+
+  // Fase 30.9.5: Si el estado es autorizada pero la URL es /cierre, redirigir a /autorizada para que el staff vea la ruta correcta
+  useEffect(() => {
+    if (!pathname || stateData.state !== 'autorizada') return;
+    if (!pathname.includes('/cierre')) return;
+    const targetPath = getPromisePathFromState(studioSlug, promiseId, 'autorizada');
+    if (pathname.endsWith('/cierre') || pathname.includes('/cierre/')) {
+      router.push(targetPath);
+    }
+  }, [pathname, stateData.state, studioSlug, promiseId, router]);
+
+  // Fase 30.9.3: Al volver a la pestaña, refrescar RSC para ver estado actual (ej. conversión automática tras firma en público)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        startTransition(() => router.refresh());
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [router]);
 
   // Abrir modal de automatización desde la card "Lo que el prospecto ve"
   useEffect(() => {
@@ -360,6 +382,7 @@ export function PromiseLayoutClient({
               promiseId={promiseId}
               contactName={stateData.promiseData.contact_name ?? undefined}
               mode={shareModalMode}
+              intent={shareModalMode === 'publish' ? 'publish' : 'configure'}
               onPublishSuccess={async () => {
                 const { getOrCreateShortUrl } = await import('@/lib/actions/studio/commercial/promises/promise-short-url.actions');
                 const result = await getOrCreateShortUrl(studioSlug, promiseId);

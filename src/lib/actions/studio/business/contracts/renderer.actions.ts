@@ -131,6 +131,7 @@ export async function getPromiseContractData(
             name: true,
             phone: true,
             email: true,
+            address: true,
           },
         },
         event_type: {
@@ -339,7 +340,7 @@ export async function getPromiseContractData(
       }
     }
 
-    // Usar condiciones: 1) par?metro, 2) cotizacion_cierre, 3) condicion_comercial_negociacion, 4) condiciones_comerciales (cat?logo)
+    // Fase 29.10.1: PRIORIDAD - Condición de negociación PRIMERO (valores personalizados $5,000)
     const mapCond = (c: { id: string; name: string; description: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown }) => ({
       id: c.id,
       name: c.name,
@@ -349,41 +350,47 @@ export async function getPromiseContractData(
       advance_type: c.advance_type ?? null,
       advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
     });
-    let condiciones = condicionesComerciales ?? null;
-    if (!condiciones && cotizacion.cotizacion_cierre?.condiciones_comerciales) {
-      condiciones = mapCond(cotizacion.cotizacion_cierre.condiciones_comerciales);
-    }
-    if (!condiciones && (cotizacion as any).condicion_comercial_negociacion) {
-      condiciones = mapCond((cotizacion as any).condicion_comercial_negociacion);
-    }
-    if (!condiciones && (cotizacion as any).condiciones_comerciales) {
-      condiciones = mapCond((cotizacion as any).condiciones_comerciales);
-    }
     
-    // Si tenemos un ID de condiciones comerciales, obtener datos completos desde la base de datos
-    // Esto asegura que siempre tengamos todos los campos necesarios (advance_type, advance_amount, etc.)
-    const condicionId = condiciones?.id;
+    // PASO 1: Verificar condición de NEGOCIACIÓN (máxima prioridad)
+    let condiciones = null;
+    const condicionNegociacion = (cotizacion as any).condicion_comercial_negociacion;
     
-    if (condicionId) {
-      const condicionCompleta = await prisma.studio_condiciones_comerciales.findUnique({
-        where: { id: condicionId },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          discount_percentage: true,
-          advance_percentage: true,
-          advance_type: true,
-          advance_amount: true,
-        },
-      });
-      if (condicionCompleta) {
-        condiciones = {
-          ...condicionCompleta,
-          discount_percentage: condicionCompleta.discount_percentage ? Number(condicionCompleta.discount_percentage) : null,
-          advance_percentage: condicionCompleta.advance_percentage ? Number(condicionCompleta.advance_percentage) : null,
-          advance_amount: condicionCompleta.advance_amount ? Number(condicionCompleta.advance_amount) : null,
-        };
+    if (condicionNegociacion) {
+      condiciones = mapCond(condicionNegociacion);
+      // ⚠️ NO buscar en studio_condiciones_comerciales - la negociación es temporal
+    } else {
+      // PASO 2: Prioridad estándar si no hay negociación
+      condiciones = condicionesComerciales ?? null;
+      if (!condiciones && cotizacion.cotizacion_cierre?.condiciones_comerciales) {
+        condiciones = mapCond(cotizacion.cotizacion_cierre.condiciones_comerciales);
+      }
+      if (!condiciones && (cotizacion as any).condiciones_comerciales) {
+        condiciones = mapCond((cotizacion as any).condiciones_comerciales);
+      }
+      
+      // PASO 3: Obtener datos completos solo para condiciones estándar
+      const condicionId = condiciones?.id;
+      if (condicionId) {
+        const condicionCompleta = await prisma.studio_condiciones_comerciales.findUnique({
+          where: { id: condicionId },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            discount_percentage: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+          },
+        });
+        if (condicionCompleta) {
+          condiciones = {
+            ...condicionCompleta,
+            discount_percentage: condicionCompleta.discount_percentage ? Number(condicionCompleta.discount_percentage) : null,
+            advance_percentage: condicionCompleta.advance_percentage ? Number(condicionCompleta.advance_percentage) : null,
+            advance_amount: condicionCompleta.advance_amount ? Number(condicionCompleta.advance_amount) : null,
+          };
+        }
       }
     }
 

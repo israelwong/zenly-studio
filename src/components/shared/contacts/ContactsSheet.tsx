@@ -287,7 +287,7 @@ export function ContactsSheet({
       setTotal((prev) => Math.max(0, prev - 1));
       // Recargar para actualizar paginación
       setTimeout(() => {
-        loadContactsRef.current();
+        loadInitialRef.current();
       }, 200);
     } else if (contact) {
       // Usar el flag pasado directamente

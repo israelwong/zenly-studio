@@ -56,7 +56,10 @@ export function PromiseRouteGuard({
   const serverValidatedRef = useRef(false);
   
   // ⚠️ AUTHORIZATION LOCK: Prevenir redirecciones automáticas durante autorización
-  const { isAuthorizationInProgress } = usePromisePageContext();
+  // Fase 30.9.6: Permanecer en /cierre tras firma (no redirigir a /cliente automáticamente)
+  const { isAuthorizationInProgress, stayOnCierreAfterSign } = usePromisePageContext();
+  const stayOnCierreRef = useRef(stayOnCierreAfterSign);
+  stayOnCierreRef.current = stayOnCierreAfterSign;
 
   // Monitorear cambios en authorization lock (debug desactivado)
   // useEffect(() => {
@@ -68,10 +71,21 @@ export function PromiseRouteGuard({
   // Decisionador Único: useLayoutEffect para comparar rutas ANTES del primer render
   useLayoutEffect(() => {
     if (hasRedirectedRef.current) return;
-    
+    if (stayOnCierreAfterSign) {
+      setIsReady(true);
+      serverValidatedRef.current = true;
+      return;
+    }
     // ⚠️ AUTHORIZATION LOCK: Si hay autorización en progreso, no hacer redirecciones
     if (isAuthorizationInProgress) {
       setIsReady(true);
+      return;
+    }
+
+    // ✅ Fase 30.9.6: Tras firma en /cierre, no redirigir a /cliente; usuario permanece en la página
+    if (pathname.includes('/cierre') && serverTargetRoute?.includes('/cliente') && stayOnCierreAfterSign) {
+      setIsReady(true);
+      serverValidatedRef.current = true;
       return;
     }
 
@@ -107,6 +121,11 @@ export function PromiseRouteGuard({
           serverValidatedRef.current = true;
           return;
         }
+        if (pathname.includes('/cierre') && serverTargetRoute.includes('/cliente') && stayOnCierreAfterSign) {
+          setIsReady(true);
+          serverValidatedRef.current = true;
+          return;
+        }
         hasRedirectedRef.current = true;
         const search = typeof window !== 'undefined' ? window.location.search : '';
         router.replace(serverTargetRoute + search);
@@ -118,10 +137,11 @@ export function PromiseRouteGuard({
     }
     
     // Paciente: sin datos del servidor no marcar ready; mostrar skeleton hasta fallback 2s o sync
-  }, [pathname, serverTargetRoute, initialQuotes, router, isAuthorizationInProgress]);
+  }, [pathname, serverTargetRoute, initialQuotes, router, isAuthorizationInProgress, stayOnCierreAfterSign]);
 
   // ✅ HIDRATACIÓN GARANTIZADA: Si serverValidated es true, intentar ponerse en ready inmediatamente
   useEffect(() => {
+    if (stayOnCierreAfterSign) return;
     if (serverValidatedRef.current && serverTargetRoute && !isReady) {
       if (normalize(pathname) === normalize(serverTargetRoute)) {
         setIsReady(true);
@@ -130,11 +150,15 @@ export function PromiseRouteGuard({
           setIsReady(true);
           return;
         }
+        if (pathname.includes('/cierre') && serverTargetRoute?.includes('/cliente') && stayOnCierreAfterSign) {
+          setIsReady(true);
+          return;
+        }
         const search = typeof window !== 'undefined' ? window.location.search : '';
         router.replace(serverTargetRoute + search);
       }
     }
-  }, [pathname, serverTargetRoute, isReady, router, isAuthorizationInProgress]);
+  }, [pathname, serverTargetRoute, isReady, router, isAuthorizationInProgress, stayOnCierreAfterSign]);
 
   // 🚨 FALLBACK DE EMERGENCIA: Después de 2 segundos, forzar isReady(true) pase lo que pase
   useEffect(() => {
@@ -150,7 +174,10 @@ export function PromiseRouteGuard({
   // Función para sincronizar ruta con el servidor (solo si no tenemos datos iniciales)
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current || (initialQuotes && serverTargetRoute)) return;
-    
+    if (stayOnCierreRef.current) {
+      console.log('🛑 REDIRECCIÓN BLOQUEADA POR FLAG (handleSyncRoute)');
+      return;
+    }
     // ⚠️ AUTHORIZATION LOCK: No sincronizar/redirigir si overlay está activo
     if (isGlobalLockActive()) {
       return;
@@ -159,6 +186,10 @@ export function PromiseRouteGuard({
     try {
       const result = await syncPromiseRoute(promiseId, pathname, studioSlug);
       if (result.redirected && result.targetRoute) {
+        if (stayOnCierreRef.current) {
+          console.log('🛑 REDIRECCIÓN BLOQUEADA POR FLAG (post-fetch)');
+          return;
+        }
         hasRedirectedRef.current = true;
         const search = typeof window !== 'undefined' ? window.location.search : '';
         router.replace(result.targetRoute + search);
@@ -170,6 +201,10 @@ export function PromiseRouteGuard({
 
   // Sincronizar al cambiar de ruta (solo si no tenemos datos iniciales)
   useEffect(() => {
+    if (stayOnCierreAfterSign) {
+      console.log('🛑 REDIRECCIÓN BLOQUEADA POR FLAG (stayOnCierreAfterSign)');
+      return;
+    }
     if (initialQuotes && serverTargetRoute) return; // Bypass: ya tenemos datos del servidor
 
     // No resetear hasRedirectedRef si la ruta actual ya coincide con el target (evita bucle raíz ↔ /pendientes)
@@ -177,7 +212,7 @@ export function PromiseRouteGuard({
 
     hasRedirectedRef.current = false; // Reset solo cuando pathname cambia a una ruta distinta del target
     handleSyncRoute();
-  }, [pathname, promiseId, studioSlug, initialQuotes, serverTargetRoute]);
+  }, [pathname, promiseId, studioSlug, initialQuotes, serverTargetRoute, stayOnCierreAfterSign]);
 
   // Realtime: Reaccionar a cualquier cambio en cotizaciones (incluyendo visible_to_client)
   // Bypass de Realtime: Si ya tenemos initialQuotes, no necesita hacer fetch de 'limpieza' al inicio
@@ -287,6 +322,7 @@ export function PromiseRouteGuard({
       const newTargetRoute = determinePromiseRoute(updatedQuotes, studioSlug, promiseId);
       if (normalize(pathname) !== normalize(newTargetRoute) && !pathname.includes('/cliente')) {
         if (isGlobalLockActive()) return;
+        if (pathname.includes('/cierre') && newTargetRoute.includes('/cliente') && stayOnCierreRef.current) return;
         hasRedirectedRef.current = true;
         const search = typeof window !== 'undefined' ? window.location.search : '';
         router.replace(newTargetRoute + search);

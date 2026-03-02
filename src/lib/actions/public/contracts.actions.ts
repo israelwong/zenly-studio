@@ -26,6 +26,8 @@ export async function signPublicContract(
   data: unknown
 ): Promise<{
   success: boolean;
+  /** Fase 30.9: true cuando se ejecutó autorizarYCrearEvento (pago ya confirmado por estudio) */
+  autoConvertedToEvent?: boolean;
   error?: string;
 }> {
   try {
@@ -70,6 +72,15 @@ export async function signPublicContract(
             contrato_definido: true,
             contract_content: true,
             contract_signed_at: true,
+            pago_confirmado_estudio: true,
+            pago_monto: true,
+          },
+        },
+        condicion_comercial_negociacion: {
+          select: {
+            advance_type: true,
+            advance_percentage: true,
+            advance_amount: true,
           },
         },
       },
@@ -135,6 +146,7 @@ export async function signPublicContract(
       signedAt = parseDateOnlyToUtc(todayUtc) ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
     }
 
+    // Fase 29.9.5: Solo el cliente puede firmar; el estudio no tiene acción que escriba contract_signed_at (solo lectura o null al limpiar)
     await prisma.studio_cotizaciones_cierre.update({
       where: { cotizacion_id: cotizacionId },
       data: {
@@ -201,7 +213,70 @@ export async function signPublicContract(
     revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
     revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
 
-    return { success: true };
+    // Fase 30.9 / 30.9.3: Conversión automática cuando el estudio ya confirmó el pago.
+    // Parámetros verificados: studioSlug, promiseId, cotizacionId provienen de la cotización validada en este request.
+    // autorizarYCrearEvento ejecuta transacción atómica (commit antes de retornar); no devolvemos al cliente hasta que termine.
+    let autoConvertedToEvent = false;
+    if (cotizacion.cotizacion_cierre?.pago_confirmado_estudio === true) {
+      const rawPagoMonto = cotizacion.cotizacion_cierre?.pago_monto;
+      let montoAnticipo: number =
+        rawPagoMonto != null
+          ? typeof rawPagoMonto === "number"
+            ? rawPagoMonto
+            : Number(String(rawPagoMonto))
+          : 0;
+      if (Number.isNaN(montoAnticipo)) {
+        console.warn("[signPublicContract] pago_monto no es numérico:", rawPagoMonto);
+        montoAnticipo = 0;
+      }
+      if (montoAnticipo <= 0) {
+        const cond = cotizacion.condicion_comercial_negociacion;
+        const total = Number(cotizacion.price) || 0;
+        if (cond) {
+          const isFixed = cond.advance_type === "fixed_amount" || cond.advance_type === "amount";
+          montoAnticipo = isFixed && cond.advance_amount != null
+            ? Number(cond.advance_amount)
+            : Math.round(total * ((cond.advance_percentage ?? 0) / 100));
+        }
+        // Fase 30.9.10: último recurso para no crear evento con pago $0
+        if (montoAnticipo <= 0 && total > 0) {
+          montoAnticipo = Math.round(total * 0.1);
+        }
+      }
+      console.log("🚀 INICIANDO CONVERSIÓN AUTOMÁTICA:", {
+        promiseId,
+        cotizacionId,
+        hasConfirmedPayment: true,
+        montoAnticipo,
+        rawPagoMonto: rawPagoMonto != null ? String(rawPagoMonto) : null,
+      });
+      if (montoAnticipo <= 0) {
+        console.warn("[signPublicContract] montoAnticipo 0 tras fallbacks; no se crea evento con pago $0.");
+      } else {
+        try {
+          const { autorizarYCrearEvento } = await import(
+            '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions'
+          );
+          const authResult = await autorizarYCrearEvento(studioSlug, promiseId, cotizacionId, {
+            registrarPago: true,
+            montoInicial: montoAnticipo,
+          });
+          console.log('📊 RESULTADO DE AUTORIZACIÓN:', authResult);
+          autoConvertedToEvent = authResult.success === true;
+          if (!authResult.success) {
+            console.error('[signPublicContract] autorizarYCrearEvento después de firma:', authResult.error);
+          } else {
+            revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
+            revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+          }
+        } catch (convertErr) {
+          console.error('[signPublicContract] Error en conversión automática a evento:', convertErr);
+        }
+      }
+    }
+
+    return { success: true, autoConvertedToEvent };
   } catch (error) {
     console.error("[signPublicContract] Error:", error);
     return {

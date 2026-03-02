@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { FileText, CheckCircle2, Edit2, RefreshCw } from 'lucide-react';
+import { FileText, CheckCircle2, Edit2, RefreshCw, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardContent, ZenButton, ZenBadge } from '@/components/ui/zen';
 
 interface PublicContractCardProps {
@@ -24,6 +24,10 @@ interface PublicContractCardProps {
   isUpdatingData: boolean;
   onEditData: () => void;
   onViewContract: () => void;
+  /** Fase 30.8.4: Abre el modal del contrato cuando ya está firmado (botón secundario "Ver contrato firmado") */
+  onViewSignedContract?: () => void;
+  /** Fase 30.9.6: Navegar al portal de cliente (botón "Ir a mi Portal de Cliente"); si no se pasa, se usa onViewContract */
+  onGoToPortal?: () => void;
 }
 
 export const PublicContractCard = memo(function PublicContractCard({
@@ -33,6 +37,8 @@ export const PublicContractCard = memo(function PublicContractCard({
   isUpdatingData,
   onEditData,
   onViewContract,
+  onViewSignedContract,
+  onGoToPortal,
 }: PublicContractCardProps) {
   const hasContract = !!contract?.content;
   const hasContractTemplate = !!contract?.template_id;
@@ -117,27 +123,53 @@ export const PublicContractCard = memo(function PublicContractCard({
                 )}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row gap-3">
-              {!isContractSigned && !isRegeneratingContract && (
-                <ZenButton
-                  variant="outline"
-                  onClick={onEditData}
-                  className="w-full sm:w-auto"
-                  disabled={isUpdatingData}
-                >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Actualizar datos
-                </ZenButton>
+            <div className="flex flex-col gap-3">
+              {isContractSigned ? (
+                <>
+                  {onViewSignedContract && (
+                    <ZenButton
+                      variant="outline"
+                      onClick={onViewSignedContract}
+                      className="w-full"
+                      disabled={isRegeneratingContract}
+                    >
+                      Ver contrato firmado
+                    </ZenButton>
+                  )}
+                  <ZenButton
+                    variant="primary"
+                    onClick={onGoToPortal ?? onViewContract}
+                    className="w-full"
+                    disabled={isRegeneratingContract}
+                  >
+                    Ir a mi Portal de Cliente
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </ZenButton>
+                </>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {!isRegeneratingContract && (
+                    <ZenButton
+                      variant="outline"
+                      onClick={onEditData}
+                      className="w-full sm:w-auto"
+                      disabled={isUpdatingData}
+                    >
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      Actualizar datos
+                    </ZenButton>
+                  )}
+                  <ZenButton
+                    variant="primary"
+                    onClick={onViewContract}
+                    className="flex-1"
+                    disabled={isRegeneratingContract}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Revisar y firmar
+                  </ZenButton>
+                </div>
               )}
-              <ZenButton
-                variant="primary"
-                onClick={onViewContract}
-                className="flex-1"
-                disabled={isRegeneratingContract}
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                {isContractSigned ? 'Ver firmado' : 'Revisar y firmar'}
-              </ZenButton>
             </div>
           </div>
         ) : (

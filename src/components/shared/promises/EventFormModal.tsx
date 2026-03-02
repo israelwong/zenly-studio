@@ -16,7 +16,8 @@ import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact, 
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { checkDateConflictBySlug, type CheckDateConflictResult } from '@/lib/utils/booking-conflict';
-import { CAPACIDAD_UPDATED_EVENT } from '@/components/shared/configuracion/CapacidadOperativaModal';
+import { CapacidadOperativaModal, CAPACIDAD_UPDATED_EVENT } from '@/components/shared/configuracion/CapacidadOperativaModal';
+import { getStudioShareDefaults } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
 import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEventoEnrichedModal';
@@ -25,6 +26,7 @@ import { getStudioUsersForAttribution, getCrewMembersForAttribution } from '@/li
 import { ZenSelect } from '@/components/ui/zen/forms/ZenSelect';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/config/configuracion-precios.actions';
 import { LocationSelector, type LocationOption } from '@/components/shared/agenda/LocationSelector';
+import { deduplicateContactsByPhoneOrEmail, toTitleCase } from '@/lib/utils/text-formatting';
 
 interface EventFormModalProps {
     isOpen: boolean;
@@ -219,6 +221,8 @@ export function EventFormModal({
     const [isCreatingReferrer, setIsCreatingReferrer] = useState(false);
     const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
     const [showTipoEventoModal, setShowTipoEventoModal] = useState(false);
+    const [capacidadActual, setCapacidadActual] = useState<number | null>(null);
+    const [capacidadModalOpen, setCapacidadModalOpen] = useState(false);
     const [selectedEventLocation, setSelectedEventLocation] = useState<LocationOption | null>(null);
     const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
     const referrerInputContainerRef = useRef<HTMLDivElement>(null);
@@ -267,6 +271,15 @@ export function EventFormModal({
             console.error('Error loading event types:', error);
         }
     };
+
+    const loadCapacidad = useCallback(async () => {
+        const res = await getStudioShareDefaults(studioSlug);
+        if (res.success && res.data?.max_events_per_day != null) {
+            setCapacidadActual(res.data.max_events_per_day);
+        } else {
+            setCapacidadActual(null);
+        }
+    }, [studioSlug]);
 
     const loadAcquisitionChannels = async () => {
         try {
@@ -331,7 +344,7 @@ export function EventFormModal({
                 combined.push(...crew);
             }
 
-            setAllContacts(combined);
+            setAllContacts(deduplicateContactsByPhoneOrEmail(combined));
         } catch (error) {
             console.error('Error loading contacts and crew:', error);
         }
@@ -526,6 +539,7 @@ export function EventFormModal({
                 loadSocialNetworks(),
                 loadAllContacts(),
                 loadAttributionData(),
+                loadCapacidad(),
             ]).finally(() => {
                 setIsInitialLoading(false);
             });
@@ -646,6 +660,7 @@ export function EventFormModal({
     // Revalidar capacidad cuando el usuario guarda en el modal atómico (Ajustar capacidad)
     useEffect(() => {
         const handleCapacidadUpdated = () => {
+            loadCapacidad();
             if (selectedDates.length > 0 && studioSlug) {
                 checkDateConflictBySlug(studioSlug, selectedDates[0]).then((res) => {
                     if (res.success && res.data) setCapacityResult(res.data);
@@ -655,7 +670,14 @@ export function EventFormModal({
         };
         window.addEventListener(CAPACIDAD_UPDATED_EVENT, handleCapacidadUpdated);
         return () => window.removeEventListener(CAPACIDAD_UPDATED_EVENT, handleCapacidadUpdated);
-    }, [selectedDates, studioSlug]);
+    }, [selectedDates, studioSlug, loadCapacidad]);
+
+    // Abrir modal de capacidad desde evento global (ej. "Ajustar capacidad" en aviso de fecha llena)
+    useEffect(() => {
+        const handler = () => setCapacidadModalOpen(true);
+        window.addEventListener('open-capacidad-operativa-modal', handler);
+        return () => window.removeEventListener('open-capacidad-operativa-modal', handler);
+    }, []);
 
     // Sincronizar referrerInputValue cuando hay referrer_contact_id pero no referrer_name
     useEffect(() => {
@@ -783,13 +805,15 @@ export function EventFormModal({
     };
 
     const handleSelectContact = (contact: { id: string; name: string; phone: string; email: string | null }) => {
-        setNameInput(`@${contact.name}`);
+        const nameFormatted = toTitleCase(contact.name);
+        const emailFormatted = contact.email?.trim() ? contact.email.trim().toLowerCase() : undefined;
+        setNameInput(`@${nameFormatted}`);
         setSelectedContactId(contact.id);
         setFormData((prev) => ({
             ...prev,
-            name: contact.name,
+            name: nameFormatted,
             phone: normalizePhone(contact.phone || ''),
-            email: contact.email || undefined,
+            email: emailFormatted,
         }));
         setShowContactSuggestions(false);
         setSelectedContactIndex(-1);
@@ -807,7 +831,7 @@ export function EventFormModal({
                 if (showReferrerSuggestions && filteredReferrerContacts.length > 0) {
                 if (selectedReferrerIndex >= 0 && selectedReferrerIndex < filteredReferrerContacts.length) {
                     const contact = filteredReferrerContacts[selectedReferrerIndex];
-                    setReferrerInputValue(`@${contact.name}`);
+                    setReferrerInputValue(`@${toTitleCase(contact.name)}`);
                     
                     // ✅ Detección automática del tipo basado en contact.type
                     if (contact.type === 'crew') {
@@ -1180,86 +1204,103 @@ export function EventFormModal({
                                 </div>
                             </PopoverContent>
                         </Popover>
-                        <p className="text-xs text-zinc-400 mt-1">
-                            {context === 'event' ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible' : 'Selecciona una fecha de interés para la promesa'}
-                        </p>
-                        {selectedDates.length > 0 && capacityResult?.isFull && (
-                            <ZenCard variant="outlined" className="bg-amber-900/25 border-amber-600/60 mt-2">
-                                <ZenCardContent className="p-3">
-                                    <div className="flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-                                        <div className="flex-1">
-                                            <span className="text-xs font-medium text-amber-200">
-                                                ⚠️ Capacidad operativa alcanzada. Esta fecha ya tiene el límite máximo de eventos permitidos ({capacityResult.limit} eventos).{' '}
-                                                <ZenButton
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-800/30 inline-flex h-auto py-0.5 px-1 -my-0.5 align-baseline"
-                                                    onClick={() => window.dispatchEvent(new CustomEvent('open-capacidad-operativa-modal'))}
-                                                >
-                                                    Ajustar capacidad
-                                                </ZenButton>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </ZenCardContent>
-                            </ZenCard>
-                        )}
-                        {selectedDates.length > 0 && (() => {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const selectedDate = new Date(selectedDates[0]);
-                            selectedDate.setHours(0, 0, 0, 0);
-                            return selectedDate < today;
-                        })() && (
-                            <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
-                                <ZenCardContent className="p-3">
-                                    <div className="flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
-                                        <div className="space-y-1.5 flex-1">
-                                            <p className="text-xs font-medium text-orange-300">Has seleccionado una fecha que ya ha pasado:</p>
-                                            <p className="text-xs text-orange-200/80">• {formatDisplayDate(selectedDates[0])}</p>
-                                        </div>
-                                    </div>
-                                </ZenCardContent>
-                            </ZenCard>
-                        )}
-                        {selectedDates.length > 0 && (() => {
-                            const fecha = selectedDates[0];
-                            const dateKey = fecha.toISOString().split('T')[0];
-                            const conflictos = conflictosPorFecha.get(dateKey);
-                            if (!conflictos || conflictos.length === 0) return null;
-                            return (
-                                <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
+                        {/* Fila compacta: capacidad + Actualizar (solo en promesa). Oculta cuando la tarjeta "Capacidad alcanzada" está visible para evitar redundancia. */}
+                        {context === 'promise' && !(selectedDates.length > 0 && capacityResult?.isFull) ? (
+                            <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                                <span className="text-xs text-zinc-500">
+                                    Capacidad actual: <span className="text-zinc-400">{capacidadActual ?? '—'}</span> por día
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setCapacidadModalOpen(true)}
+                                    className="text-xs text-blue-500 hover:text-blue-400 underline focus:outline-none focus:underline"
+                                >
+                                    Actualizar
+                                </button>
+                            </div>
+                        ) : context === 'event' ? (
+                            <p className="text-xs text-zinc-500 mt-1.5">Puedes cambiar la fecha del evento siempre y cuando esté disponible</p>
+                        ) : null}
+                        {/* Mensajes de validación de fecha: debajo de la fila de capacidad, espaciado solo si hay contenido */}
+                        <div className="mt-2 space-y-2">
+                            {selectedDates.length > 0 && capacityResult?.isFull && (
+                                <ZenCard variant="outlined" className="bg-amber-900/25 border-amber-600/60">
                                     <ZenCardContent className="p-3">
                                         <div className="flex items-start gap-2">
                                             <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-                                            <div className="space-y-1.5 flex-1">
-                                                <p className="text-xs font-medium text-amber-300">
-                                                    Esta fecha ya está asociada a:
-                                                </p>
-                                                {conflictos.map((conflicto) => {
-                                                    const prospecto = conflicto.contact_name || 'Sin nombre';
-                                                    const tipoEvento = conflicto.event_type_name || (conflicto.contexto === 'promise' ? 'Promesa' : 'Evento');
-                                                    const nombreEvento = conflicto.event_name || conflicto.concept || '—';
-                                                    const linea = [prospecto, tipoEvento, nombreEvento].join(' • ');
-                                                    return (
-                                                        <p key={conflicto.id} className="text-xs text-amber-200/80">
-                                                            {linea}
-                                                            {conflicto.time && (
-                                                                <span className="text-amber-300/70 ml-1">({conflicto.time})</span>
-                                                            )}
-                                                        </p>
-                                                    );
-                                                })}
-                                                <p className="text-xs text-amber-400/80 mt-1">Es informativo; puedes crear la promesa de todos modos.</p>
+                                            <div className="flex-1">
+                                                <span className="text-xs font-medium text-amber-200">
+                                                    ⚠️ Capacidad operativa alcanzada. Esta fecha ya tiene el límite máximo de eventos permitidos ({capacityResult.limit} eventos).{' '}
+                                                    <ZenButton
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-800/30 inline-flex h-auto py-0.5 px-1 -my-0.5 align-baseline"
+                                                        onClick={() => window.dispatchEvent(new CustomEvent('open-capacidad-operativa-modal'))}
+                                                    >
+                                                        Ajustar capacidad
+                                                    </ZenButton>
+                                                </span>
                                             </div>
                                         </div>
                                     </ZenCardContent>
                                 </ZenCard>
-                            );
-                        })()}
+                            )}
+                            {selectedDates.length > 0 && (() => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const selectedDate = new Date(selectedDates[0]);
+                                selectedDate.setHours(0, 0, 0, 0);
+                                return selectedDate < today;
+                            })() && (
+                                <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50">
+                                    <ZenCardContent className="p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
+                                            <div className="space-y-1.5 flex-1">
+                                                <p className="text-xs font-medium text-orange-300">Has seleccionado una fecha que ya ha pasado:</p>
+                                                <p className="text-xs text-orange-200/80">• {formatDisplayDate(selectedDates[0])}</p>
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
+                            )}
+                            {selectedDates.length > 0 && (() => {
+                                const fecha = selectedDates[0];
+                                const dateKey = fecha.toISOString().split('T')[0];
+                                const conflictos = conflictosPorFecha.get(dateKey);
+                                if (!conflictos || conflictos.length === 0) return null;
+                                return (
+                                    <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50">
+                                        <ZenCardContent className="p-3">
+                                            <div className="flex items-start gap-2">
+                                                <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                                                <div className="space-y-1.5 flex-1">
+                                                    <p className="text-xs font-medium text-amber-300">
+                                                        Esta fecha ya está asociada a:
+                                                    </p>
+                                                    {conflictos.map((conflicto) => {
+                                                        const prospecto = conflicto.contact_name || 'Sin nombre';
+                                                        const tipoEvento = conflicto.event_type_name || (conflicto.contexto === 'promise' ? 'Promesa' : 'Evento');
+                                                        const nombreEvento = conflicto.event_name || conflicto.concept || '—';
+                                                        const linea = [prospecto, tipoEvento, nombreEvento].join(' • ');
+                                                        return (
+                                                            <p key={conflicto.id} className="text-xs text-amber-200/80">
+                                                                {linea}
+                                                                {conflicto.time && (
+                                                                    <span className="text-amber-300/70 ml-1">({conflicto.time})</span>
+                                                                )}
+                                                            </p>
+                                                        );
+                                                    })}
+                                                    <p className="text-xs text-amber-400/80 mt-1">Es informativo; puedes crear la promesa de todos modos.</p>
+                                                </div>
+                                            </div>
+                                        </ZenCardContent>
+                                    </ZenCard>
+                                );
+                            })()}
+                        </div>
                     </div>
 
                     {/* Nombre con búsqueda @ */}
@@ -1423,7 +1464,7 @@ export function EventFormModal({
                                     </option>
                                 ))}
                                 <option value="create_new" className="text-emerald-400 font-medium">
-                                    + Crear evento
+                                    + Nuevo tipo de evento
                                 </option>
                             </select>
                             {errors.event_type_id && (
@@ -1752,7 +1793,7 @@ export function EventFormModal({
                                                         type="button"
                                                         onClick={() => {
                                                             const hasAt = referrerInputValue.includes('@');
-                                                            setReferrerInputValue(hasAt ? `@${contact.name}` : contact.name);
+                                                            setReferrerInputValue(hasAt ? `@${toTitleCase(contact.name)}` : toTitleCase(contact.name));
                                                             
                                                             // Guardar el status del referido seleccionado
                                                             setSelectedReferrerStatus(contact.status);
@@ -1973,6 +2014,13 @@ export function EventFormModal({
                 onSuccess={handleTipoEventoCreated}
                 studioSlug={studioSlug}
                 zIndex={zIndex + 10}
+            />
+
+            <CapacidadOperativaModal
+                isOpen={capacidadModalOpen}
+                onClose={() => setCapacidadModalOpen(false)}
+                studioSlug={studioSlug}
+                onSaved={() => loadCapacidad()}
             />
         </ZenDialog>
     );

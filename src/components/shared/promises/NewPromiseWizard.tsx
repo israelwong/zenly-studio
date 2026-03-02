@@ -14,8 +14,11 @@ import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact }
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { getLocationsByStudioSlug } from '@/lib/actions/studio/locations/locations.actions';
+import { getStudioShareDefaults } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { CreatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEventoEnrichedModal';
+import { CapacidadOperativaModal, CAPACIDAD_UPDATED_EVENT } from '@/components/shared/configuracion/CapacidadOperativaModal';
+import { deduplicateContactsByPhoneOrEmail, toTitleCase } from '@/lib/utils/text-formatting';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 
 const STEPS = [
@@ -132,8 +135,17 @@ export function NewPromiseWizard({
   const [isCreatingReferrer, setIsCreatingReferrer] = useState(false);
   const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
   const [showTipoEventoModal, setShowTipoEventoModal] = useState(false);
+  const [capacidadActual, setCapacidadActual] = useState<number | null>(null);
+  const [capacidadModalOpen, setCapacidadModalOpen] = useState(false);
 
   const eventTypeSelectRef = useRef<HTMLSelectElement>(null);
+
+  const loadCapacidad = useCallback(async () => {
+    const res = await getStudioShareDefaults(studioSlug);
+    if (res.success && res.data?.max_events_per_day != null) {
+      setCapacidadActual(res.data.max_events_per_day);
+    }
+  }, [studioSlug]);
 
   const getReferidosChannelId = (): string | undefined =>
     acquisitionChannels.find((c) =>
@@ -187,15 +199,22 @@ export function NewPromiseWizard({
           });
         });
     }
-    setAllContacts(combined);
+    setAllContacts(deduplicateContactsByPhoneOrEmail(combined));
   }, [studioSlug]);
 
   useEffect(() => {
     if (isOpen) {
       setIsInitialLoading(true);
       Promise.all([loadCatalogues(), loadContacts()]).finally(() => setIsInitialLoading(false));
+      loadCapacidad();
     }
-  }, [isOpen, loadCatalogues, loadContacts]);
+  }, [isOpen, loadCatalogues, loadContacts, loadCapacidad]);
+
+  useEffect(() => {
+    const handler = () => loadCapacidad();
+    window.addEventListener(CAPACIDAD_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(CAPACIDAD_UPDATED_EVENT, handler);
+  }, [loadCapacidad]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -269,19 +288,21 @@ export function NewPromiseWizard({
   };
 
   const handleSelectContact = (contact: { id: string; name: string; phone: string; email: string | null }) => {
-    setNameInput(`@${contact.name}`);
+    const nameFormatted = toTitleCase(contact.name);
+    const emailFormatted = contact.email?.trim() ? contact.email.trim().toLowerCase() : undefined;
+    setNameInput(`@${nameFormatted}`);
     setFormData((prev) => ({
       ...prev,
-      name: contact.name,
+      name: nameFormatted,
       phone: normalizePhone(contact.phone || ''),
-      email: contact.email || undefined,
+      email: emailFormatted,
     }));
     setShowContactSuggestions(false);
     setSelectedContactIndex(-1);
   };
 
   const handleReferrerSelect = (contact: { id: string; name: string; phone: string; status?: string; type?: 'contact' | 'crew' }) => {
-    setReferrerInputValue(`@${contact.name}`);
+    setReferrerInputValue(`@${toTitleCase(contact.name)}`);
     const refType = contact.type === 'crew' ? 'STAFF' : 'CONTACT';
     setFormData((prev) => ({
       ...prev,
@@ -536,6 +557,18 @@ export function NewPromiseWizard({
                   </div>
                 </PopoverContent>
               </Popover>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-zinc-400">
+                  Capacidad actual: <span className="text-zinc-300 font-medium">{capacidadActual ?? '—'}</span> por día
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCapacidadModalOpen(true)}
+                  className="text-xs text-blue-400 hover:text-blue-300 underline focus:outline-none"
+                >
+                  Actualizar
+                </button>
+              </div>
               <p className="text-xs text-zinc-400">La fecha puede estar ocupada; es informativo. Puedes crear la promesa de todos modos.</p>
               {selectedDates.length > 0 && (() => {
                 const fecha = selectedDates[0];
@@ -757,7 +790,7 @@ export function NewPromiseWizard({
                 >
                   <option value="none">{eventTypes.length === 0 ? 'Cargando...' : 'Seleccionar tipo de evento'}</option>
                   {eventTypes.map((et) => <option key={et.id} value={et.id}>{et.name}</option>)}
-                  <option value="create_new" className="text-emerald-400 font-medium">+ Crear evento</option>
+                  <option value="create_new" className="text-emerald-400 font-medium">+ Nuevo tipo de evento</option>
                 </select>
                 {errors.event_type_id && <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>}
               </div>
@@ -857,6 +890,13 @@ export function NewPromiseWizard({
         onSuccess={handleTipoEventoCreated}
         studioSlug={studioSlug}
         zIndex={zIndex + 10}
+      />
+
+      <CapacidadOperativaModal
+        isOpen={capacidadModalOpen}
+        onClose={() => setCapacidadModalOpen(false)}
+        studioSlug={studioSlug}
+        onSaved={() => loadCapacidad()}
       />
     </ZenDialog>
   );

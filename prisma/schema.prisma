@@ -2446,6 +2446,8 @@ model studio_cotizaciones_cierre {
   contract_version                  Int       @default(1)
   contrato_definido                 Boolean   @default(false)
   contract_signed_at                DateTime?
+  /** Fase 29.9.5: true si el check-in (validación datos) fue completado por cliente o estudio */
+  checkin_completed                 Boolean   @default(false)
   pago_confirmado_estudio           Boolean   @default(false)
   pago_registrado                   Boolean   @default(false)
   pago_concepto                     String?

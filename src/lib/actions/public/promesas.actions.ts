@@ -3330,6 +3330,7 @@ export async function getPublicPromiseCierre(
               },
               orderBy: { order: 'asc' },
             },
+            // Fase 29.9.6: Incluir todas las relaciones necesarias para contrato firmable (content, template_id, condiciones, signed_at)
             cotizacion_cierre: {
               select: {
                 created_at: true,
@@ -3338,6 +3339,7 @@ export async function getPublicPromiseCierre(
                 contract_version: true,
                 contrato_definido: true,
                 contract_signed_at: true,
+                checkin_completed: true,
                 condiciones_comerciales_id: true,
                 condiciones_comerciales_definidas: true,
                 pago_confirmado_estudio: true,
@@ -3410,6 +3412,7 @@ export async function getPublicPromiseCierre(
             contract_version: true,
             contrato_definido: true,
             contract_signed_at: true,
+            checkin_completed: true,
             condiciones_comerciales_id: true,
             condiciones_comerciales_definidas: true,
             pago_confirmado_estudio: true,
@@ -3717,6 +3720,7 @@ export async function getPublicPromiseCierre(
           signed_at: cierre.contract_signed_at || null,
           pago_confirmado_estudio: cierre.pago_confirmado_estudio || false,
           pago_monto: cierre.pago_monto != null ? Number(cierre.pago_monto) : null,
+          checkin_completed: cierre.checkin_completed ?? false,
           condiciones_comerciales: condC,
         };
       })(),
@@ -4400,7 +4404,7 @@ export async function getPublicPromiseData(
             content: cierre?.contract_content || null,
             version: cierre?.contract_version ?? 1,
             signed_at: cierre?.contract_signed_at || null,
-            // Priorizar condiciones comerciales de cotizacion_cierre, sino usar las de la cotización directamente
+            checkin_completed: cierre?.checkin_completed ?? false,
             condiciones_comerciales: (cierre?.condiciones_comerciales ? {
               id: cierre.condiciones_comerciales.id,
               name: cierre.condiciones_comerciales.name,
@@ -4994,6 +4998,42 @@ export async function updatePublicPromiseData(
     return {
       success: false,
       error: "Error al actualizar datos",
+    };
+  }
+}
+
+/**
+ * Fase 29.9.5: Marcar check-in como completado en el registro de cierre (modo cierre: cliente validó datos en el link).
+ */
+export async function updateCierreCheckinCompleted(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: "Studio no encontrado" };
+
+    const cierre = await prisma.studio_cotizaciones_cierre.findFirst({
+      where: {
+        cotizacion_id: cotizacionId,
+        cotizacion: { studio_id: studio.id },
+      },
+      select: { cotizacion_id: true },
+    });
+    if (!cierre) return { success: false, error: "Registro de cierre no encontrado" };
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { checkin_completed: true, updated_at: new Date() },
+    });
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al actualizar check-in",
     };
   }
 }

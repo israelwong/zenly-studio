@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Skeleton reutilizable para la card de contrato (PASO 1: Firma).
+ * Skeleton reutilizable para la card de contrato.
  * Usado en CierrePageSkeleton y en PublicQuoteAuthorizedView cuando el contrato aún no tiene content.
  */
 export function ContractStepCardSkeleton() {
@@ -65,7 +65,7 @@ function CierreHeaderSkeleton() {
 
 /**
  * Skeleton específico para la página de cierre.
- * Alineado con PublicQuoteAuthorizedView: header (PublicPromisePageHeader) + pasos (Firma → Pago).
+ * Alineado con PublicQuoteAuthorizedView (sin pasos numerados): header + bloque contrato + bloque anticipo.
  * Usado como fallback de Suspense y en loading.tsx de la ruta.
  */
 export function CierrePageSkeleton() {
@@ -75,56 +75,43 @@ export function CierrePageSkeleton() {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="relative space-y-6">
-          {/* PASO 1: Firma de Contrato (w-12 h-12 como en la vista real) */}
+          {/* Bloque contrato: título + card */}
           <div className="relative">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center relative z-10 animate-pulse">
-                <div className="w-5 h-5 bg-blue-400/50 rounded-full" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="mb-4">
-                  <div className="h-6 sm:h-7 bg-zinc-800 rounded w-48 sm:w-64 mb-2 animate-pulse" />
-                  <div className="h-4 bg-zinc-800 rounded max-w-md mb-1 animate-pulse" />
-                  <div className="h-4 bg-zinc-800 rounded w-3/4 max-w-sm animate-pulse" />
-                </div>
-                <ContractStepCardSkeleton />
-              </div>
+            <div className="mb-4">
+              <div className="h-6 sm:h-7 bg-zinc-800 rounded w-48 sm:w-64 mb-2 animate-pulse" />
+              <div className="h-4 bg-zinc-800 rounded max-w-md animate-pulse" />
+            </div>
+            <div className="w-full">
+              <ContractStepCardSkeleton />
             </div>
           </div>
 
-          {/* PASO 2: Realiza tu Pago (w-10 h-10 como en la vista real) */}
+          {/* Bloque anticipo: título + card monto + próximos pasos */}
           <div className="relative">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center relative z-10 animate-pulse">
-                <div className="w-4 h-4 bg-blue-400/50 rounded-full" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="mb-4">
-                  <div className="h-5 sm:h-6 bg-zinc-800 rounded w-40 sm:w-48 mb-2 animate-pulse" />
-                  <div className="h-4 bg-zinc-800 rounded max-w-sm animate-pulse" />
+            <div className="mb-4">
+              <div className="h-5 sm:h-6 bg-zinc-800 rounded w-40 sm:w-48 mb-2 animate-pulse" />
+              <div className="h-4 bg-zinc-800 rounded max-w-sm animate-pulse" />
+            </div>
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 sm:p-6 animate-pulse mb-4">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="h-4 bg-zinc-800 rounded w-16" />
+                  <div className="h-5 bg-zinc-800 rounded w-32 sm:w-40" />
                 </div>
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 sm:p-6 animate-pulse">
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="h-4 bg-zinc-800 rounded w-16" />
-                      <div className="h-5 bg-zinc-800 rounded w-32 sm:w-40" />
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-4 bg-zinc-800 rounded w-20" />
-                      <div className="h-5 bg-zinc-800 rounded w-36 sm:w-48" />
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-4 bg-zinc-800 rounded w-28 sm:w-36" />
-                      <div className="p-3 sm:p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
-                        <div className="h-6 bg-zinc-700 rounded w-full max-w-xs" />
-                      </div>
-                    </div>
+                <div className="space-y-3">
+                  <div className="h-4 bg-zinc-800 rounded w-20" />
+                  <div className="h-5 bg-zinc-800 rounded w-36 sm:w-48" />
+                </div>
+                <div className="space-y-3">
+                  <div className="h-4 bg-zinc-800 rounded w-28 sm:w-36" />
+                  <div className="p-3 sm:p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                    <div className="h-6 bg-zinc-700 rounded w-full max-w-xs" />
                   </div>
                 </div>
-                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg animate-pulse">
-                  <div className="h-4 bg-blue-500/20 rounded w-full max-w-md mx-auto" />
-                </div>
               </div>
+            </div>
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg animate-pulse">
+              <div className="h-4 bg-blue-500/20 rounded w-full max-w-md" />
             </div>
           </div>
         </div>
