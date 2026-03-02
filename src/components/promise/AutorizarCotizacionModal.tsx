@@ -21,7 +21,7 @@ import {
   getPrecioFinalCierre,
   getAjusteCierre,
 } from '@/lib/utils/promise-public-financials';
-import { usePromisePageContext } from './PromisePageContext';
+import { usePromisePageContext, type AuthorizationData } from './PromisePageContext';
 import { cn } from '@/lib/utils';
 import { Step1Identity } from './Step1Identity';
 import { Step2EventDetails } from './Step2EventDetails';
@@ -68,7 +68,8 @@ interface AutorizarCotizacionModalProps {
   ajusteCierre?: number;
   showPackages?: boolean;
   autoGenerateContract?: boolean;
-  onSuccess?: () => void;
+  /** Fase 29.9.1: formData + authData para que el padre persista estado del overlay */
+  onSuccess?: (formData?: BookingFormData, authData?: AuthorizationData | null) => void;
   onPreparing?: () => void;
   onCloseDetailSheet?: () => void;
   isFromNegociacion?: boolean;
@@ -184,7 +185,12 @@ function WizardFooter({
           </ZenButton>
         )}
         <ZenButton
-          onClick={onNext}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onNext();
+          }}
           disabled={!canGoNext || isSubmitting || isLoadingData}
           loading={(isSubmitting && currentStep === 3) || isLoadingData}
         >
@@ -349,7 +355,9 @@ export function AutorizarCotizacionModal({
         }
         break;
       case 3:
-        // Validación final (checkbox de términos se manejará en FASE 2)
+        if (!termsAccepted) {
+          newErrors.terms = 'Debes aceptar los términos y condiciones para continuar';
+        }
         break;
     }
 
@@ -359,9 +367,8 @@ export function AutorizarCotizacionModal({
 
   // Navegación del wizard
   const handleNext = () => {
-    if (!validateCurrentStep()) {
-      return;
-    }
+    const valid = validateCurrentStep();
+    if (!valid) return;
 
     if (currentStep < 3) {
       const next = (currentStep + 1) as WizardStep;
@@ -384,61 +391,67 @@ export function AutorizarCotizacionModal({
   };
 
   // Submit final - solo activa el estado y cierra el modal
-  // La lógica de procesamiento se mueve a PendientesPageClient
   const handleFinalSubmit = () => {
+    setIsSubmitting(true);
+
     // Validar que tenemos todos los datos necesarios
     if (!formData.contact_name || !formData.contact_phone || !formData.contact_email ||
       !formData.contact_address || !formData.event_name || !formData.event_location) {
       setErrors({ general: 'Por favor completa todos los campos requeridos' });
+      setIsSubmitting(false);
       return;
     }
 
     // Validar términos aceptados
     if (!termsAccepted) {
       setErrors({ terms: 'Debes aceptar los términos y condiciones para continuar' });
+      setIsSubmitting(false);
       return;
     }
 
-    setIsSubmitting(true);
-    
-    // 🔒 LOCK SÍNCRONO GLOBAL: Establecer antes de cualquier otra operación
-    // Esto previene race conditions con actualizaciones de Realtime
-    (window as any).__IS_AUTHORIZING = true;
-    
-    // Guardar datos de autorización en el contexto
-    const authData = {
-      promiseId,
-      cotizacionId: cotizacion.id,
-      studioSlug,
-      formData: {
-        contact_name: formData.contact_name.trim(),
-        contact_phone: formData.contact_phone.trim(),
-        contact_email: formData.contact_email.trim(),
-        contact_address: formData.contact_address.trim(),
-        event_name: formData.event_name.trim(),
-        event_location: formData.event_location.trim(),
-      },
-      condicionesComercialesId,
-      condicionesComercialesMetodoPagoId,
-      autoGenerateContract: autoGenerateContract || autoGenerateContractContext,
-      isModoCierre,
-    };
-    
-    // Establecer bloqueo síncronamente ANTES de cerrar el modal
-    // Esto garantiza que el overlay se monte en el DOM antes de que el modal comience su proceso de cierre
-    flushSync(() => {
-      setAuthorizationData(authData);
-      setIsAuthorizationInProgress(true);
-      if (setAutoGenerateContract) setAutoGenerateContract(autoGenerateContract);
-    });
-    
-    // Cerrar DetailSheet y ocultar UI inmediatamente después de establecer el estado
-    flushSync(() => {
-      onCloseDetailSheet?.();
-      (onSuccessContext || onSuccess)?.();
-      (onPreparingContext || onPreparing)?.();
-      onClose(); // Cerrar el modal
-    });
+    try {
+      // 🔒 LOCK SÍNCRONO GLOBAL: Establecer antes de cualquier otra operación
+      (window as any).__IS_AUTHORIZING = true;
+
+      const trimmedFormData: BookingFormData = {
+        contact_name: formData.contact_name!.trim(),
+        contact_phone: formData.contact_phone!.trim(),
+        contact_email: formData.contact_email!.trim(),
+        contact_address: formData.contact_address!.trim(),
+        event_name: formData.event_name!.trim(),
+        event_location: formData.event_location!.trim(),
+        event_date: formData.event_date ?? null,
+        event_type_name: formData.event_type_name ?? null,
+      };
+
+      const authData = {
+        promiseId,
+        cotizacionId: cotizacion.id,
+        studioSlug,
+        formData: trimmedFormData,
+        condicionesComercialesId,
+        condicionesComercialesMetodoPagoId,
+        autoGenerateContract: autoGenerateContract || autoGenerateContractContext,
+        isModoCierre,
+      };
+
+      // Primero activar overlay (ProgressOverlayWrapper ejecuta updatePublicPromiseData siempre, también en modo cierre)
+      flushSync(() => {
+        setAuthorizationData(authData);
+        setIsAuthorizationInProgress(true);
+        if (setAutoGenerateContract) setAutoGenerateContract(autoGenerateContract);
+      });
+
+      flushSync(() => {
+        onCloseDetailSheet?.();
+        (onSuccessContext || onSuccess)?.(trimmedFormData, authData);
+        (onPreparingContext || onPreparing)?.();
+        if (!useSafeExitConfirm) onClose();
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      return;
+    }
 
     setIsSubmitting(false);
   };
@@ -457,7 +470,7 @@ export function AutorizarCotizacionModal({
     3: isModoCierre ? "Revisa y confirma tus datos antes de continuar" : "Revisa los detalles antes de confirmar",
   };
 
-  // Intento de cerrar: Fase 29.3 si useSafeExitConfirm el padre muestra AlertDialog; si no, confirmación interna
+  // Intento de cerrar: Fase 29.7 no mostrar Safe Exit si estamos enviando; Fase 29.3 si useSafeExitConfirm el padre muestra AlertDialog
   const handleCloseAttempt = () => {
     if (isSubmitting) return;
     if (useSafeExitConfirm) {
@@ -575,7 +588,7 @@ export function AutorizarCotizacionModal({
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogChange}>
         <DialogContent
-          className="h-full w-full max-w-none m-0 rounded-none max-h-[100vh] overflow-y-auto sm:h-auto sm:max-w-[450px] sm:rounded-xl sm:flex sm:flex-col sm:m-auto"
+          className="h-full w-full max-w-none m-0 rounded-none max-h-[100vh] overflow-y-auto p-0 pt-0 px-4 pb-6 top-0 translate-y-0 flex flex-col items-start sm:items-stretch sm:p-6 sm:top-[50%] sm:translate-y-[-50%] sm:h-auto sm:max-w-[450px] sm:rounded-xl sm:flex sm:flex-col sm:m-auto"
           overlayZIndex={10020}
           style={{ zIndex: 10030 }}
           onPointerDownOutside={(e) => e.preventDefault()}
@@ -583,15 +596,15 @@ export function AutorizarCotizacionModal({
         >
         {/* Fase 29.4: Skeleton mientras datos del paso / URL no están listos */}
         {isLoadingData ? (
-          <div className="pt-6 mb-0">
+          <div className="pt-2 mb-0 sm:pt-6">
             <AutorizarCotizacionSkeleton />
           </div>
         ) : (
           <>
-            {/* Header con barra de progreso */}
-            <div className="pt-6 mb-0 shrink-0">
+            {/* Header con barra de progreso — mobile: pegado arriba; sm: espaciado */}
+            <div className="pt-2 mb-0 shrink-0 sm:pt-6">
               <WizardProgressBar currentStep={currentStep} totalSteps={3} />
-              <DialogHeader className="mt-5 gap-1">
+              <DialogHeader className="mt-2 gap-1 sm:mt-5">
                 <DialogTitle className="text-xl font-semibold">
                   {stepTitles[currentStep]}
                 </DialogTitle>
@@ -606,8 +619,8 @@ export function AutorizarCotizacionModal({
               </DialogHeader>
             </div>
 
-            {/* Contenido del paso: flex-1 para centrado vertical cuando el contenido es corto */}
-            <div className="pt-2 pb-2 flex-1 flex flex-col justify-center min-h-0">
+            {/* Contenido del paso: mobile pegado arriba; sm centrado vertical */}
+            <div className="pt-2 pb-2 flex-1 flex flex-col justify-start min-h-0 sm:justify-center">
               {renderStepContent()}
 
               {/* Mostrar errores generales si existen */}

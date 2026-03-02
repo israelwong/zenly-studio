@@ -37,6 +37,7 @@ import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import type { CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
+import { usePromisePageContext, type AuthorizationData } from '@/components/promise/PromisePageContext';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { RealtimeUpdateNotification } from './RealtimeUpdateNotification';
@@ -118,11 +119,22 @@ export function PublicQuoteAuthorizedView({
   // Fase 29.3: Safe exit — AlertDialog antes de salir del check-in
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
+  const { setAuthorizationData, setIsAuthorizationInProgress } = usePromisePageContext();
+
+  // Fase 29.8: Sincronización agresiva — URL sin checkin implica resetear salida
   useEffect(() => {
-    if (!checkinFromUrl) setExitConfirmed(false);
+    if (!checkinFromUrl) {
+      setExitConfirmed(false);
+      setShowExitConfirm(false);
+    }
   }, [checkinFromUrl]);
 
   const openCheckinModal = useCallback(() => {
+    // Fase 29.8: Si la URL ya tiene checkin=true (limbo), forzar apertura del modal
+    if (checkinFromUrl) {
+      setIsTransitioning(false);
+      return;
+    }
     setIsTransitioning(true);
     startTransition(() => {
       const params = new URLSearchParams(searchParams?.toString() ?? '');
@@ -130,7 +142,7 @@ export function PublicQuoteAuthorizedView({
       params.set('step', '1');
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     });
-  }, [pathname, searchParams, router]);
+  }, [pathname, searchParams, router, checkinFromUrl]);
 
   useEffect(() => {
     if (checkinFromUrl) setIsTransitioning(false);
@@ -140,17 +152,17 @@ export function PublicQuoteAuthorizedView({
     setShowExitConfirm(true);
   }, []);
 
-  const handleConfirmExitCheckin = useCallback(() => {
+  const handleConfirmExitCheckin = useCallback((_formData?: unknown, authData?: AuthorizationData | null) => {
+    // Fase 29.9.1: Persistir estado de cierre en el padre (overlay no depende del modal)
+    if (authData != null && setAuthorizationData && setIsAuthorizationInProgress) {
+      setAuthorizationData(authData);
+      setIsAuthorizationInProgress(true);
+    }
+    const cleanPath = pathname ?? '';
+    router.push(cleanPath, { scroll: false });
     setExitConfirmed(true);
     setShowExitConfirm(false);
-    startTransition(() => {
-      const params = new URLSearchParams(searchParams?.toString() ?? '');
-      params.delete('checkin');
-      params.delete('step');
-      const q = params.toString();
-      router.replace(q ? `${pathname}?${q}` : pathname ?? '', { scroll: false });
-    });
-  }, [pathname, searchParams, router]);
+  }, [pathname, router, setAuthorizationData, setIsAuthorizationInProgress]);
 
   const handleCheckinStepChange = useCallback((step: number) => {
     startTransition(() => {

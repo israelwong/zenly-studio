@@ -122,7 +122,7 @@ export function Step3Summary({
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Datos del evento</span>
             {onEditEvent && (
-              <button type="button" onClick={onEditEvent} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs">
+              <button type="button" onClick={onEditEvent} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs font-normal">
                 <Edit className="h-3 w-3" />
                 Editar
               </button>
@@ -149,9 +149,9 @@ export function Step3Summary({
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Datos para el contrato</span>
+            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Datos de contacto</span>
             {onEditContact && (
-              <button type="button" onClick={onEditContact} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs">
+              <button type="button" onClick={onEditContact} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs font-normal">
                 <Edit className="h-3 w-3" />
                 Editar
               </button>

@@ -68,14 +68,15 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
         setProgressStep('sending');
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const updateResult = await updatePublicPromiseData(authStudioSlug, authPromiseId, {
+        const updatePayload = {
           contact_name: formData.contact_name,
           contact_phone: formData.contact_phone,
           contact_email: formData.contact_email,
           contact_address: formData.contact_address,
           event_name: formData.event_name,
           event_location: formData.event_location,
-        });
+        };
+        const updateResult = await updatePublicPromiseData(authStudioSlug, authPromiseId, updatePayload);
 
         if (!updateResult.success) {
           setProgressError(updateResult.error || 'Error al actualizar datos');
@@ -87,7 +88,7 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Fase 29.2: Modo Cierre — ya está en cierre y pago confirmado; solo actualizar datos y redirigir a cierre (no duplicar registro ni llamar autorizarCotizacionPublica)
+        // Fase 29.2/29.9: Modo Cierre — solo actualizar datos; no llamar autorizarCotizacionPublica (evita duplicado)
         if (isModoCierre) {
           setProgressStep('completed');
           isProcessing = false;

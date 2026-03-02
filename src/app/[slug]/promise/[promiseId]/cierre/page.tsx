@@ -5,6 +5,7 @@ import { unstable_cache } from 'next/cache';
 import { getPublicPromiseRouteState, getPublicPromiseCierre, getPublicPromiseMetadata, getPublicPromiseBasicData } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
+import { ProgressOverlayWrapper } from '@/components/promise/shared/ProgressOverlayWrapper';
 import { CierrePageSkeleton } from './CierrePageSkeleton';
 import { CierrePageBasic } from './CierrePageBasic';
 import { CierrePageDeferred } from './CierrePageDeferred';
@@ -57,9 +58,10 @@ export default async function CierrePage({ params }: CierrePageProps) {
 
   return (
     <PromisePageProvider>
+      {/* Fase 29.9.1: Overlay FUERA de condicionales; siempre montado para que aparezca al confirmar */}
+      <ProgressOverlayWrapper studioSlug={slug} promiseId={promiseId} />
       {/* ⚠️ STREAMING: Parte A - Instantánea (sincronización de ruta) */}
       <CierrePageBasic studioSlug={slug} promiseId={promiseId} />
-      
       {/* ⚠️ STREAMING: Parte B - Deferred (datos pesados con Suspense) */}
       <Suspense fallback={<CierrePageSkeleton />}>
         <CierrePageDeferred

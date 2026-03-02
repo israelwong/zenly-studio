@@ -4,7 +4,8 @@ import { createContext, useContext, ReactNode, useState, useRef, useCallback, us
 
 type ProgressStep = 'validating' | 'sending' | 'registering' | 'collecting' | 'generating_contract' | 'preparing' | 'completed' | 'error';
 
-interface AuthorizationData {
+/** Fase 29.9.1: Exportado para tipar onSuccess(formData, authData) en vistas que usan el modal */
+export interface AuthorizationData {
   promiseId: string;
   cotizacionId: string;
   studioSlug: string;
