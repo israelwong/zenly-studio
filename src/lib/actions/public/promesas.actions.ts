@@ -1086,6 +1086,7 @@ export async function getPublicPromisePendientes(
                 select: {
                   id: true,
                   item_id: true,
+                  service_category_id: true,
                   name_snapshot: true,
                   description_snapshot: true,
                   category_name_snapshot: true,
@@ -1101,6 +1102,18 @@ export async function getPublicPromisePendientes(
                   order: true,
                   is_courtesy: true,
                   billing_type: true,
+                  service_categories: {
+                    select: {
+                      name: true,
+                      section_categories: {
+                        select: {
+                          service_sections: {
+                            select: { name: true },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
                 orderBy: { order: 'asc' },
               },
@@ -1351,10 +1364,12 @@ export async function getPublicPromisePendientes(
       });
 
       // Incluir items del catálogo Y custom items (con snapshots)
+      console.log('📦 [Pendientes] ÍTEMS TOTALES DB:', (cot.cotizacion_items as CotizacionItem[]).length);
       const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
         // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
         return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
       });
+      console.log('📦 [Pendientes] ÍTEMS TRAS FILTRO:', itemsFiltrados.length);
 
       const estructura = construirEstructuraJerarquicaCotizacion(
         itemsFiltrados.map((item: CotizacionItem) => {
@@ -1384,6 +1399,7 @@ export async function getPublicPromisePendientes(
             seccion_name: sectionName,
             id: item.id,
             billing_type: item.billing_type,
+            is_courtesy: item.is_courtesy,
           };
         }),
         {
@@ -1404,6 +1420,7 @@ export async function getPublicPromisePendientes(
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            const fromStructure = (item as { is_courtesy?: boolean }).is_courtesy;
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización sobre promesa
@@ -1419,13 +1436,16 @@ export async function getPublicPromisePendientes(
               description_snapshot: item.descripcion || null,
               price: item.unit_price,
               quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
-              is_courtesy: originalItem?.is_courtesy || false,
+              is_courtesy: fromStructure === true || originalItem?.is_courtesy === true || (item.unit_price === 0) || false,
               billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
         })),
       }));
+
+      // DEBUG: comparación Cierre vs Pendiente — objeto RAW cotizacion.servicios (server)
+      console.log('[getPublicPromisePendientes] cotizacion.servicios RAW', JSON.stringify(servicios, null, 0).slice(0, 2000));
 
       const condicionesComerciales = (cot as any)['condiciones_comerciales'];
 
@@ -3279,6 +3299,7 @@ export async function getPublicPromiseCierre(
             condiciones_comerciales_advance_percentage_snapshot: true,
             condiciones_comerciales_advance_type_snapshot: true,
             condiciones_comerciales_advance_amount_snapshot: true,
+            items_cortesia: true,
             cotizacion_items: {
               select: {
                 id: true,
@@ -3510,10 +3531,18 @@ export async function getPublicPromiseCierre(
     });
 
     // Incluir items del catálogo Y custom items (con snapshots)
+    console.log('📦 [Cierre] ÍTEMS TOTALES DB:', (cotizacion.cotizacion_items as CotizacionItem[]).length);
     const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
       // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
       return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
     });
+    console.log('📦 [Cierre] ÍTEMS TRAS FILTRO:', itemsFiltrados.length);
+
+    // Fase 28.13: IDs de cortesía desde catálogo original (match como en Studio / ResumenCotizacion)
+    const itemsCortesiaRaw = (cotizacion as { items_cortesia?: unknown }).items_cortesia;
+    const itemsCortesiaIdsSet = new Set<string>(
+      Array.isArray(itemsCortesiaRaw) ? itemsCortesiaRaw.filter((x: unknown): x is string => typeof x === 'string') : []
+    );
 
     // ⚠️ OPTIMIZADO: Construir estructura jerárquica usando solo snapshots
     // No necesitamos el catálogo completo, los snapshots tienen toda la información necesaria
@@ -3547,6 +3576,7 @@ export async function getPublicPromiseCierre(
           seccion_name: sectionName,
           id: item.id,
           billing_type: item.billing_type,
+          is_courtesy: item.is_courtesy,
         };
       }),
       {
@@ -3566,7 +3596,19 @@ export async function getPublicPromiseCierre(
         orden: categoria.orden,
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
-            const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Fase 28.11: find robusto — id → item_id → nombre + precio 0 (cortesías)
+            const byId = itemsFiltrados.find(i => i.id === item.id);
+            const byItemId = item.item_id ? itemsFiltrados.find(i => i.item_id === item.item_id) : undefined;
+            const byNameAndZero = itemsFiltrados.find(i => (i.name_snapshot || i.name) === item.nombre && i.unit_price === 0);
+            const originalItem = byId ?? byItemId ?? byNameAndZero;
+            const fromStructure = (item as { is_courtesy?: boolean }).is_courtesy;
+            const precioCero = item.unit_price === 0;
+            // Fase 28.13: unión de tres factores (paridad con Studio / ResumenCotizacion)
+            const enCatalogoCortesia = (item.item_id && itemsCortesiaIdsSet.has(item.item_id)) || (item.id && itemsCortesiaIdsSet.has(item.id));
+            const isCourtesy = originalItem?.is_courtesy === true
+              || precioCero
+              || enCatalogoCortesia
+              || fromStructure === true;
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
@@ -3582,13 +3624,17 @@ export async function getPublicPromiseCierre(
               description_snapshot: item.descripcion || null,
               price: item.unit_price,
               quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
-              is_courtesy: originalItem?.is_courtesy || false,
+              is_courtesy: isCourtesy,
               billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
       })),
     }));
+
+    // DEBUG: comparación Cierre vs Pendiente — objeto RAW cotizacion.servicios (server)
+    const serviciosConCourtesy = servicios.flatMap(s => s.categorias.flatMap(c => c.servicios.filter(srv => srv.is_courtesy === true)));
+    console.log('[getPublicPromiseCierre] cotizacion.servicios RAW (is_courtesy en true?)', serviciosConCourtesy.length, JSON.stringify(servicios, null, 0).slice(0, 2000));
 
     const cierre = cotizacion.cotizacion_cierre as any;
     const condCierre = cierre?.condiciones_comerciales;
@@ -4262,10 +4308,6 @@ export async function getPublicPromiseData(
         }
       );
 
-      const itemsCortesiaRaw = (cot as any).items_cortesia;
-      const itemsCortesiaSet = new Set<string>(
-        Array.isArray(itemsCortesiaRaw) ? itemsCortesiaRaw.filter((x: unknown): x is string => typeof x === 'string') : []
-      );
 
       // Convertir formato de EstructuraJerarquica a PublicSeccionData[]
       const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
@@ -4279,9 +4321,6 @@ export async function getPublicPromiseData(
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
-            const esCortesia = originalItem
-              ? (originalItem.is_courtesy === true || itemsCortesiaSet.has(originalItem.id) || (!!originalItem.item_id && itemsCortesiaSet.has(originalItem.item_id)))
-              : ((item as any).is_courtesy === true);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
             const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR: prioridad duración de cotización
@@ -4297,7 +4336,7 @@ export async function getPublicPromiseData(
               description_snapshot: item.descripcion || null, // Ya viene del snapshot
               price: item.unit_price,
               quantity: cantidadEfectiva,
-              is_courtesy: esCortesia,
+              is_courtesy: originalItem?.is_courtesy || false,
               billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };

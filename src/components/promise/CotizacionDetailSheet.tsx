@@ -83,6 +83,8 @@ interface CotizacionDetailSheetProps {
   condicionesVisiblesIds?: string[] | null;
   /** Modo vista previa desde editor: datos locales (no DB), sin botón Autorizar, solo Cerrar. */
   isPreviewMode?: boolean;
+  /** Fase 28.8: Si true, oculta secciones financieras (precio, condiciones, términos) para inspección simple de servicios. */
+  hideFinancialSections?: boolean;
 }
 
 export function CotizacionDetailSheet({
@@ -105,6 +107,7 @@ export function CotizacionDetailSheet({
   dateSoldOut = false,
   condicionesVisiblesIds,
   isPreviewMode = false,
+  hideFinancialSections = false,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -514,38 +517,42 @@ export function CotizacionDetailSheet({
         {/* Content: h-full overflow-y-auto para scroll sin restricción; ref para scrollTop=0 al abrir */}
         <div ref={sheetContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Precio principal: precio de lista (calculado) + total a pagar (cierre) */}
-          <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
-            <div className="flex items-end justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                {tieneConcesiones && precioLista > 0 && (
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-zinc-400">Precio de lista</span>
-                    <span className="text-lg text-zinc-500 line-through">
-                      {formatPrice(precioLista)}
-                    </span>
-                  </div>
-                )}
-                <p className="text-sm text-zinc-400 mb-2">Total a pagar</p>
-                <p className="text-4xl font-bold text-blue-400">
-                  {formatPrice(precioFinal)}
-                </p>
-              </div>
-
-              {currentCotizacion.paquete_origen && (
-                <div className="flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20 shrink-0">
-                  <TagIcon className="h-4 w-4 text-blue-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-xs text-zinc-400">Basado en</p>
-                    <p className="text-sm font-medium text-blue-300 truncate">
-                      {currentCotizacion.paquete_origen.name}
+          {!hideFinancialSections && (
+            <>
+              <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    {tieneConcesiones && precioLista > 0 && (
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-zinc-400">Precio de lista</span>
+                        <span className="text-lg text-zinc-500 line-through">
+                          {formatPrice(precioLista)}
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-sm text-zinc-400 mb-2">Total a pagar</p>
+                    <p className="text-4xl font-bold text-blue-400">
+                      {formatPrice(precioFinal)}
                     </p>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
 
-          <SeparadorZen />
+                  {currentCotizacion.paquete_origen && (
+                    <div className="flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20 shrink-0">
+                      <TagIcon className="h-4 w-4 text-blue-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-zinc-400">Basado en</p>
+                        <p className="text-sm font-medium text-blue-300 truncate">
+                          {currentCotizacion.paquete_origen.name}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <SeparadorZen />
+            </>
+          )}
 
           {/* Servicios incluidos */}
           <div>
@@ -568,13 +575,15 @@ export function CotizacionDetailSheet({
           </div>
 
           {/* Condiciones comerciales */}
-          <SeparadorZen />
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Condiciones Comerciales
-            </h3>
-            {/* Si la cotización está en negociación, mostrar solo la condición definida */}
-            {currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id ? (
+          {!hideFinancialSections && (
+            <>
+              <SeparadorZen />
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  Condiciones Comerciales
+                </h3>
+                {/* Si la cotización está en negociación, mostrar solo la condición definida */}
+                {currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id ? (
               <>
                 {/* Mostrar condición comercial definida */}
                 <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
@@ -667,12 +676,14 @@ export function CotizacionDetailSheet({
                   />
                 )}
               </>
-            )}
-          </div>
+                )}
+              </div>
 
-          {/* Términos y condiciones - Solo mostrar si hay condiciones comerciales activas */}
-          {condicionesAMostrar.length > 0 && terminosCondiciones.length > 0 && (
-            <TerminosCondiciones terminos={terminosCondiciones} />
+              {/* Términos y condiciones - Solo mostrar si hay condiciones comerciales activas */}
+              {condicionesAMostrar.length > 0 && terminosCondiciones.length > 0 && (
+                <TerminosCondiciones terminos={terminosCondiciones} />
+              )}
+            </>
           )}
 
           {/* Aviso de privacidad */}

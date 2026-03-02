@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect, useRef, startTransition, useMemo } fr
 import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
@@ -12,7 +11,7 @@ import { ContractStepCardSkeleton } from '@/app/[slug]/promise/[promiseId]/cierr
 import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { ResumenPago } from '@/components/shared/precio';
-import { ResumenCotizacion } from '@/components/shared/cotizaciones';
+import { CotizacionDetailSheet } from './CotizacionDetailSheet';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
@@ -711,30 +710,40 @@ export function PublicQuoteAuthorizedView({
                     <h3 className="text-xl font-bold text-zinc-100 mb-1">
                       {isContractSigned
                         ? 'Contrato Firmado'
-                        : 'Firma tu Contrato Digital'}
+                        : hasPlaceholderData
+                          ? 'Validación de Información'
+                          : hasContract
+                            ? 'Firma tu Contrato Digital'
+                            : 'Revisión de Contrato'}
                     </h3>
                     <p className="text-sm text-zinc-400">
                       {isContractSigned
                         ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
-                        : 'Revisa y firma tu contrato digital para oficializar tu reserva'}
+                        : hasPlaceholderData
+                          ? 'Completa tu información de contacto y del evento para generar tu contrato'
+                          : hasContract
+                            ? 'Revisa y firma tu contrato digital para oficializar tu reserva'
+                            : 'Estamos preparando tu contrato digital'}
                     </p>
                   </div>
                   {hasContract ? (
                     // Sub-condition A: Contrato disponible - mostrar preview para firma
-                    <PublicContractCard
-                      contract={currentContract || null}
-                      isContractSigned={isContractSigned}
-                      isRegeneratingContract={isRegeneratingContract}
-                      isUpdatingData={isUpdatingData}
-                      onEditData={() => {
-                        window.dispatchEvent(new CustomEvent('close-overlays'));
-                        setShowEditDataModal(true);
-                      }}
-                      onViewContract={() => {
-                        window.dispatchEvent(new CustomEvent('close-overlays'));
-                        setShowContractView(true);
-                      }}
-                    />
+                    <div data-contract-card>
+                      <PublicContractCard
+                        contract={currentContract || null}
+                        isContractSigned={isContractSigned}
+                        isRegeneratingContract={isRegeneratingContract}
+                        isUpdatingData={isUpdatingData}
+                        onEditData={() => {
+                          window.dispatchEvent(new CustomEvent('close-overlays'));
+                          setShowEditDataModal(true);
+                        }}
+                        onViewContract={() => {
+                          window.dispatchEvent(new CustomEvent('close-overlays'));
+                          setShowContractView(true);
+                        }}
+                      />
+                    </div>
                   ) : isEnCierre ? (
                     // Sub-condition B: En cierre pero sin contrato
                     (() => {
@@ -780,10 +789,13 @@ export function PublicQuoteAuthorizedView({
                         const pagoMonto = cotizacion.contract?.pago_monto ?? cotizacion.anticipo ?? 0;
                         const diferido = totalAPagar - pagoMonto;
                         const condComerciales = cotizacion.contract?.condiciones_comerciales || cotizacion.condiciones_comerciales;
-                        const advanceType = condComerciales?.advance_type === 'fixed_amount' || condComerciales?.advance_type === 'amount' 
-                          ? 'fixed_amount' as const 
+                        const advanceType = condComerciales?.advance_type === 'fixed_amount' || condComerciales?.advance_type === 'amount'
+                          ? 'fixed_amount' as const
                           : 'percentage' as const;
-                        const anticipoPorcentaje = condComerciales?.advance_percentage ?? null;
+                        // Fase 28.8: Calcular porcentaje real basado en monto confirmado vs total
+                        const anticipoPorcentaje = advanceType === 'percentage' && totalAPagar > 0
+                          ? Math.round((pagoMonto / totalAPagar) * 100)
+                          : null;
 
                         return (
                           <div className="space-y-4">
@@ -843,87 +855,29 @@ export function PublicQuoteAuthorizedView({
                             </ZenCard>
 
                             {/* Inspección de servicios contratados */}
-                            <Sheet open={showServicesSheet} onOpenChange={setShowServicesSheet}>
-                              <SheetTrigger asChild>
-                                <ZenCard className="cursor-pointer hover:border-zinc-600 transition-colors">
-                                  <div className="p-6">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3">
-                                        <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
-                                          <Package className="h-5 w-5 text-blue-400" />
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium text-zinc-200">
-                                            Revisar detalle de servicios contratados
-                                          </h4>
-                                          <p className="text-xs text-zinc-500 mt-1">
-                                            Valida alcance y especificaciones
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <FileSearch className="h-5 w-5 text-zinc-400" />
+                            <ZenCard 
+                              className="cursor-pointer hover:border-zinc-600 transition-colors"
+                              onClick={() => setShowServicesSheet(true)}
+                            >
+                              <div className="p-6">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
+                                      <Package className="h-5 w-5 text-blue-400" />
+                                    </div>
+                                    <div>
+                                      <h4 className="text-sm font-medium text-zinc-200">
+                                        Revisar detalle de servicios contratados
+                                      </h4>
+                                      <p className="text-xs text-zinc-500 mt-1">
+                                        Valida alcance y especificaciones
+                                      </p>
                                     </div>
                                   </div>
-                                </ZenCard>
-                              </SheetTrigger>
-                              <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-                                <SheetHeader>
-                                  <SheetTitle>Servicios Contratados</SheetTitle>
-                                  <SheetDescription>
-                                    Revisa el detalle completo de los servicios incluidos en tu cotización
-                                  </SheetDescription>
-                                </SheetHeader>
-                                <div className="mt-6">
-                                  <ResumenCotizacion
-                                    cotizacion={{
-                                      id: cotizacion.id,
-                                      name: cotizacion.name,
-                                      description: cotizacion.description,
-                                      price: cotizacion.price,
-                                      status: cotizacion.status || 'en_cierre',
-                                      precio_calculado: cotizacion.precio_calculado,
-                                      bono_especial: cotizacion.bono_especial,
-                                      items: cotizacion.servicios.flatMap(seccion =>
-                                        seccion.categorias.flatMap(categoria =>
-                                          categoria.servicios.map(servicio => ({
-                                            item_id: servicio.id,
-                                            id: servicio.id,
-                                            quantity: servicio.quantity || 1,
-                                            unit_price: servicio.price || 0,
-                                            subtotal: (servicio.price || 0) * (servicio.quantity || 1),
-                                            cost: 0,
-                                            expense: 0,
-                                            name: servicio.name,
-                                            description: servicio.description,
-                                            category_name: categoria.nombre,
-                                            seccion_name: seccion.nombre,
-                                            billing_type: servicio.billing_type || 'SERVICE',
-                                            is_courtesy: servicio.is_courtesy || false,
-                                            name_snapshot: servicio.name_snapshot,
-                                            description_snapshot: servicio.description_snapshot,
-                                          }))
-                                        )
-                                      ),
-                                    }}
-                                    hideSubtotals
-                                    showCategorySubtotals={false}
-                                    resumenCierreOverride={{
-                                      precioLista: totalAPagar,
-                                      montoCortesias: 0,
-                                      cortesiasCount: 0,
-                                      montoBono: 0,
-                                      ajusteCierre: 0,
-                                      tieneConcesiones: false,
-                                      advanceType,
-                                      anticipoPorcentaje,
-                                      anticipo: pagoMonto,
-                                      diferido,
-                                      anticipoModificado: false,
-                                    }}
-                                  />
+                                  <FileSearch className="h-5 w-5 text-zinc-400" />
                                 </div>
-                              </SheetContent>
-                            </Sheet>
+                              </div>
+                            </ZenCard>
 
                             {/* Fase 28.1: Información de Contratación - solo si hay datos placeholder o faltan datos */}
                             {hasPlaceholderData && !isContractSigned && (
@@ -1252,6 +1206,34 @@ export function PublicQuoteAuthorizedView({
             </div>
           )}
         </div>
+
+        {/* Fase 28.8: Botón principal "Autorizar y continuar" - solo visible si NO está firmado */}
+        {!isContractSigned && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
+          <div className="mt-8 max-w-2xl mx-auto px-4">
+            <ZenButton
+              size="lg"
+              className="w-full"
+              onClick={() => {
+                if (hasPlaceholderData) {
+                  window.dispatchEvent(new CustomEvent('close-overlays'));
+                  setShowEditDataModal(true);
+                } else if (hasContract && !isContractSigned) {
+                  // Scroll suave al contrato
+                  const contractElement = document.querySelector('[data-contract-card]');
+                  if (contractElement) {
+                    contractElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }
+              }}
+            >
+              {hasPlaceholderData
+                ? 'Autorizar y continuar'
+                : hasContract
+                  ? 'Ir a firma de contrato'
+                  : 'Continuar con el proceso'}
+            </ZenButton>
+          </div>
+        )}
       </div>
 
       {/* Vista de Contrato - solo si firma habilitada (Espejo comercial) */}
@@ -1346,6 +1328,21 @@ export function PublicQuoteAuthorizedView({
           studioName={studio.studio_name}
         />
       )}
+
+      {/* Fase 28.7/28.8: Sheet de inspección de servicios - solo lectura, sin secciones financieras */}
+      <CotizacionDetailSheet
+        cotizacion={cotizacion}
+        isOpen={showServicesSheet}
+        onClose={() => setShowServicesSheet(false)}
+        promiseId={promiseId}
+        studioSlug={studioSlug}
+        showCategoriesSubtotals={shareSettings?.show_categories_subtotals ?? false}
+        showItemsPrices={false}
+        mostrarBotonAutorizar={false}
+        promiseData={promise}
+        isPreviewMode
+        hideFinancialSections
+      />
     </>
   );
 }

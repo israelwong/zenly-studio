@@ -200,11 +200,13 @@ export function CierrePageDeferred({
                 nombre: categoria.nombre || 'Sin categoría',
                 servicios: Array.isArray(categoria.servicios)
                   ? categoria.servicios.map(servicio => ({
+                      // Spread completo para que is_courtesy, price, quantity, billing_type, media, etc. viajen intactos al CotizacionDetailSheet
                       ...servicio,
                       name: servicio.name_snapshot || servicio.name || 'Servicio personalizado',
                       name_snapshot: servicio.name_snapshot || servicio.name || 'Servicio personalizado',
-                      description: servicio.description_snapshot || servicio.description || null,
-                      description_snapshot: servicio.description_snapshot || servicio.description || null,
+                      description: servicio.description_snapshot ?? servicio.description ?? null,
+                      description_snapshot: servicio.description_snapshot ?? servicio.description ?? null,
+                      is_courtesy: servicio.is_courtesy ?? (servicio.price === 0),
                     }))
                   : [],
               }))

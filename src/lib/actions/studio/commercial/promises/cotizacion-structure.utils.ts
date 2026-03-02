@@ -264,6 +264,11 @@ export function construirEstructuraJerarquicaCotizacion(
       itemData.billing_type = item.billing_type;
     }
 
+    // Preservar is_courtesy (paridad Pendientes/Cierre — cortesías en modal)
+    if ((item as { is_courtesy?: boolean }).is_courtesy !== undefined) {
+      itemData.is_courtesy = (item as { is_courtesy?: boolean }).is_courtesy;
+    }
+
     // Preservar profit_type_snapshot si existe (para badge Servicio/Producto)
     if ((item as { profit_type_snapshot?: string | null }).profit_type_snapshot !== undefined) {
       itemData.profit_type_snapshot = (item as { profit_type_snapshot?: string | null }).profit_type_snapshot;
