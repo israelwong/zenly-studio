@@ -1,14 +1,14 @@
 'use client';
 
 import React, { memo, useMemo, useState, useEffect, useCallback } from 'react';
-import { Eye, Pencil } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenInput, SeparadorZen } from '@/components/ui/zen';
+import { Eye, Pencil, Loader2 } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenInput, ZenTextarea, ZenDialog, SeparadorZen } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { CondicionesSection } from './CondicionesSection';
 import { ResumenPago } from '@/components/shared/precio';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
-import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getAuditoriaRentabilidadCierre, updateCotizacionName } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { actualizarAnticipoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
@@ -52,6 +52,10 @@ interface CotizacionCardProps {
   onDefinirCondiciones: () => void;
   onQuitarCondiciones: () => void;
   isRemovingCondiciones: boolean;
+  /** Tras editar nombre/descripción, el padre puede refetch para actualizar la tarjeta */
+  onMetadataUpdated?: () => void;
+  /** Mientras el padre refetcha la cotización (ej. tras editar metadatos), mostrar spinner en lugar del lápiz */
+  isRefreshingMetadata?: boolean;
 }
 
 function CotizacionCardInner({
@@ -69,6 +73,8 @@ function CotizacionCardInner({
   onDefinirCondiciones,
   onQuitarCondiciones,
   isRemovingCondiciones,
+  onMetadataUpdated,
+  isRefreshingMetadata = false,
 }: CotizacionCardProps) {
   const hasCotizacion = cotizacion != null && cotizacion.id;
   const hasCondiciones = condicionesData != null;
@@ -104,6 +110,34 @@ function CotizacionCardInner({
   const anticipo = anticipoOverride ?? anticipoFromCondition;
   const diferido = Math.max(0, totalFinalCierre - anticipo);
   const anticipoModificado = anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01;
+
+  const [showEditMetadataModal, setShowEditMetadataModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [savingMetadata, setSavingMetadata] = useState(false);
+
+  const openEditMetadataModal = useCallback(() => {
+    setEditName(cotizacion?.name ?? '');
+    setEditDescription(cotizacion?.description ?? '');
+    setShowEditMetadataModal(true);
+  }, [cotizacion?.name, cotizacion?.description]);
+
+  const handleSaveMetadata = useCallback(async () => {
+    if (!cotizacion?.id || !editName.trim()) return;
+    setSavingMetadata(true);
+    try {
+      const result = await updateCotizacionName(cotizacion.id, studioSlug, editName.trim(), editDescription.trim() || null);
+      if (result.success) {
+        toast.success('Información actualizada');
+        onMetadataUpdated?.();
+        setShowEditMetadataModal(false);
+      } else {
+        toast.error(result.error ?? 'Error al actualizar');
+      }
+    } finally {
+      setSavingMetadata(false);
+    }
+  }, [cotizacion?.id, studioSlug, editName, editDescription, onMetadataUpdated]);
 
   const [ajustePopoverOpen, setAjustePopoverOpen] = useState(false);
   const [ajusteFino, setAjusteFino] = useState<{
@@ -179,6 +213,7 @@ function CotizacionCardInner({
   }, [showResumenPago, cotizacion?.id, studioSlug]);
 
   return (
+    <>
     <ZenCard className="h-auto">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -206,10 +241,29 @@ function CotizacionCardInner({
           <p className="text-sm text-zinc-500">No hay datos de cotización</p>
         ) : !hasCondiciones ? (
           <>
-            <div>
-              <h4 className="text-base font-semibold text-white">{cotizacion.name}</h4>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-semibold text-white">{cotizacion.name}</h4>
+                {isRefreshingMetadata ? (
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center text-zinc-500" aria-hidden>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <ZenButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    onClick={openEditMetadataModal}
+                    title="Editar nombre y descripción"
+                    aria-label="Editar información de cotización"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </ZenButton>
+                )}
+              </div>
+              <p className={cotizacion.description ? 'text-sm text-zinc-400' : 'text-xs text-zinc-500 italic'}>{cotizacion.description || 'Descripción no definida'}</p>
             </div>
-            <p className="text-sm text-zinc-400">{cotizacion.description || 'No definida'}</p>
             <div className="pb-3 border-b border-zinc-800">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-zinc-400">Precio cotización:</span>
@@ -222,10 +276,29 @@ function CotizacionCardInner({
           </>
         ) : (
           <>
-            <div>
-              <h4 className="text-base font-semibold text-white">{cotizacion.name}</h4>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-semibold text-white">{cotizacion.name}</h4>
+                {isRefreshingMetadata ? (
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center text-zinc-500" aria-hidden>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <ZenButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    onClick={openEditMetadataModal}
+                    title="Editar nombre y descripción"
+                    aria-label="Editar información de cotización"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </ZenButton>
+                )}
+              </div>
+              <p className={cotizacion.description ? 'text-sm text-zinc-400' : 'text-xs text-zinc-500 italic'}>{cotizacion.description || 'Descripción no definida'}</p>
             </div>
-            <p className="text-sm text-zinc-400">{cotizacion.description || 'No definida'}</p>
             {showResumenPago ? (
               <>
                 <Popover open={ajustePopoverOpen} onOpenChange={handleAjustePopoverOpen}>
@@ -338,6 +411,37 @@ function CotizacionCardInner({
         )}
       </ZenCardContent>
     </ZenCard>
+
+    <ZenDialog
+      isOpen={showEditMetadataModal}
+      onClose={() => !savingMetadata && setShowEditMetadataModal(false)}
+      title="Editar información de cotización"
+      saveLabel="Guardar"
+      cancelLabel="Cancelar"
+      onSave={handleSaveMetadata}
+      onCancel={() => !savingMetadata && setShowEditMetadataModal(false)}
+      isLoading={savingMetadata}
+      saveDisabled={!editName.trim() || savingMetadata}
+      maxWidth="md"
+    >
+      <div className="space-y-4">
+        <ZenInput
+          label="Nombre"
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          placeholder="Nombre de la cotización"
+          required
+        />
+        <ZenTextarea
+          label="Descripción"
+          value={editDescription}
+          onChange={(e) => setEditDescription(e.target.value)}
+          placeholder="Descripción opcional"
+          rows={4}
+        />
+      </div>
+    </ZenDialog>
+    </>
   );
 }
 

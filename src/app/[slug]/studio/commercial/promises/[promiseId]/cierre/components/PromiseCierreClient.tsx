@@ -45,6 +45,8 @@ interface CierreColumn2Props {
   onDefinirCondiciones: () => void;
   onQuitarCondiciones: () => void;
   isRemovingCondiciones: boolean;
+  onMetadataUpdated?: () => void;
+  isRefreshingMetadata?: boolean;
 }
 
 const CierreColumn2 = memo(function CierreColumn2({
@@ -63,6 +65,8 @@ const CierreColumn2 = memo(function CierreColumn2({
   onDefinirCondiciones,
   onQuitarCondiciones,
   isRemovingCondiciones,
+  onMetadataUpdated,
+  isRefreshingMetadata,
 }: CierreColumn2Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -84,6 +88,8 @@ const CierreColumn2 = memo(function CierreColumn2({
           onDefinirCondiciones={onDefinirCondiciones}
           onQuitarCondiciones={onQuitarCondiciones}
           isRemovingCondiciones={isRemovingCondiciones}
+          onMetadataUpdated={onMetadataUpdated}
+          isRefreshingMetadata={isRefreshingMetadata}
         />
       )}
     </div>
@@ -196,27 +202,31 @@ export function PromiseCierreClient({
 
   const [reloadingCotizaciones, setReloadingCotizaciones] = useState(false);
 
-  const handleCierreCancelado = useCallback(() => {
-    // ✅ OPTIMIZACIÓN: Estado de carga local solo para esta sección
-    const reloadCotizaciones = async () => {
-      setReloadingCotizaciones(true);
-      try {
-        const result = await getCotizacionesByPromiseId(promiseId);
-        if (result.success && result.data) {
-          const enCierre = result.data.find(c => c.status === 'en_cierre');
-          const aprobada = result.data.find(
-            c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
-          );
-          setCotizacionEnCierre(enCierre || aprobada || null);
-        }
-      } catch (error) {
-        console.error('Error reloading cotizaciones:', error);
-      } finally {
-        setReloadingCotizaciones(false);
+  const reloadCotizacionEnCierre = useCallback(async () => {
+    setReloadingCotizaciones(true);
+    try {
+      const result = await getCotizacionesByPromiseId(promiseId);
+      if (result.success && result.data) {
+        const enCierre = result.data.find(c => c.status === 'en_cierre');
+        const aprobada = result.data.find(
+          c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
+        );
+        setCotizacionEnCierre(enCierre || aprobada || null);
       }
-    };
-    reloadCotizaciones();
+    } catch (error) {
+      console.error('Error reloading cotizaciones:', error);
+    } finally {
+      setReloadingCotizaciones(false);
+    }
   }, [promiseId]);
+
+  const handleCierreCancelado = useCallback(() => {
+    reloadCotizacionEnCierre();
+  }, [reloadCotizacionEnCierre]);
+
+  const handleMetadataUpdated = useCallback(() => {
+    reloadCotizacionEnCierre();
+  }, [reloadCotizacionEnCierre]);
 
   // Memoizar promiseData para evitar recreación en cada render
   const memoizedPromiseData = useMemo(() => {
@@ -440,6 +450,8 @@ export function PromiseCierreClient({
               onDefinirCondiciones={cierreLogic.handleDefinirCondiciones}
               onQuitarCondiciones={cierreLogic.handleQuitarCondiciones}
               isRemovingCondiciones={cierreLogic.isRemovingCondiciones}
+              onMetadataUpdated={handleMetadataUpdated}
+              isRefreshingMetadata={reloadingCotizaciones}
             />
           )}
 

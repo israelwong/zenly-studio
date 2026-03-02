@@ -325,9 +325,17 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
 
   // Estado vacío compacto: sin recordatorio y formulario colapsado (y no en modo edición)
   if (!isFormVisible && !isEditing) {
+    const openForm = () => setIsFormVisible(true);
     return (
       <ZenCard variant="outlined" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 hover:border-zinc-600/60">
-        <ZenCardContent className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0">
+        <ZenCardContent
+          className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0 cursor-pointer hover:bg-zinc-800/40"
+          role="button"
+          tabIndex={0}
+          onClick={openForm}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openForm(); } }}
+          aria-label="Programar recordatorio"
+        >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
               <Bell className="h-4 w-4 text-zinc-500" aria-hidden />
@@ -339,7 +347,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
             variant="ghost"
             size="sm"
             className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
-            onClick={() => setIsFormVisible(true)}
+            onClick={(e) => { e.stopPropagation(); openForm(); }}
             title="Programar seguimiento"
             aria-label="Programar seguimiento"
           >

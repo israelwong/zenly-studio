@@ -2065,7 +2065,7 @@ export async function updateCotizacionName(
 
     const data: { name: string; description?: string | null } = { name: newName.trim() };
     if (newDescription !== undefined) {
-      data.description = newDescription === '' ? null : newDescription.trim() || null;
+      data.description = (newDescription == null || newDescription === '') ? null : (String(newDescription).trim() || null);
     }
 
     const updated = await prisma.studio_cotizaciones.update({
