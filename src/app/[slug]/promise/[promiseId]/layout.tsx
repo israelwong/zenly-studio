@@ -11,7 +11,7 @@ import { PromiseMantenimientoView } from '@/components/promise/PromiseMantenimie
 import { PromiseDraftGate } from '@/components/promise/PromiseDraftGate';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { prisma } from '@/lib/prisma';
-import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
+import { determinePromiseRoute, getPublicPromisePath, normalizeStatus } from '@/lib/utils/public-promise-routing';
 
 // Force-dynamic: Evitar caché para validación en tiempo real
 export const dynamic = 'force-dynamic';
@@ -87,7 +87,7 @@ async function getServerSideRouteState(
   const isArchived = ['archived', 'archivado', 'archivada'].includes(stageSlug);
   if (isArchived) {
     return {
-      targetRoute: `/${studioSlug}/promise/${promiseId}/no-disponible`,
+      targetRoute: getPublicPromisePath(studioSlug, promiseId, 'no-disponible'),
       quotes: [],
     };
   }

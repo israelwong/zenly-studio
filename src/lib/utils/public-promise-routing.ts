@@ -1,5 +1,30 @@
 import type { PublicCotizacion } from '@/types/public-promise';
 
+/** Segmentos de ruta pública de promesa (vista cliente: /[slug]/promise/[promiseId]/<segment>). Única fuente de verdad para navegación. */
+export type PublicPromiseRouteSegment = 'pendientes' | 'cierre' | 'no-disponible';
+
+/** Orden recomendado para enlaces y redirects. Usar con getPublicPromisePath. */
+export const PUBLIC_PROMISE_ROUTE_SEGMENTS: readonly PublicPromiseRouteSegment[] = [
+  'pendientes',
+  'cierre',
+  'no-disponible',
+] as const;
+
+/**
+ * Construye la ruta pública de una promesa (vista cliente).
+ * @param slug - Slug del estudio
+ * @param promiseId - ID de la promesa
+ * @param segment - Subruta (pendientes | cierre | no-disponible). Si se omite, retorna la raíz /promise/[id].
+ */
+export function getPublicPromisePath(
+  slug: string,
+  promiseId: string,
+  segment?: PublicPromiseRouteSegment | null
+): string {
+  const base = `/${slug}/promise/${promiseId}`;
+  return segment ? `${base}/${segment}` : base;
+}
+
 /**
  * Normaliza el status de una cotización para comparación
  * EXPORTADO para uso en validaciones
@@ -49,7 +74,7 @@ export function determinePromiseRoute(
 ): string {
   const stageSlug = (options?.promisePipelineStageSlug ?? '').toLowerCase().trim();
   if (stageSlug && ARCHIVED_STAGE_SLUGS.has(stageSlug)) {
-    return `/${slug}/promise/${promiseId}/no-disponible`;
+    return getPublicPromisePath(slug, promiseId, 'no-disponible');
   }
 
   // FILTRO INICIAL: Solo considerar cotizaciones visibles al cliente
@@ -57,7 +82,7 @@ export function determinePromiseRoute(
 
   // Si no hay cotizaciones visibles, siempre redirigir a /pendientes
   if (visibleQuotes.length === 0) {
-    return `/${slug}/promise/${promiseId}/pendientes`;
+    return getPublicPromisePath(slug, promiseId, 'pendientes');
   }
 
   // PRIORIDAD 1: Buscar cotización aprobada/autorizada CON evento creado (máxima prioridad)
@@ -83,7 +108,7 @@ export function determinePromiseRoute(
   });
 
   if (cotizacionEnCierre) {
-    return `/${slug}/promise/${promiseId}/cierre`;
+    return getPublicPromisePath(slug, promiseId, 'cierre');
   }
 
   // PRIORIDAD 3: Cotización en negociación → redirigir a cierre (ruta /negociacion obsoleta)
@@ -94,7 +119,7 @@ export function determinePromiseRoute(
   });
 
   if (cotizacionNegociacion) {
-    return `/${slug}/promise/${promiseId}/cierre`;
+    return getPublicPromisePath(slug, promiseId, 'cierre');
   }
 
   // PRIORIDAD 4: Verificar si hay cotizaciones pendientes válidas
@@ -106,11 +131,11 @@ export function determinePromiseRoute(
   // CASO DE USO: Si no hay cotizaciones válidas, permitir acceso a /pendientes para ver paquetes
   // Esto permite que el prospecto vea paquetes disponibles incluso sin cotizaciones
   if (!hasPendientes) {
-    return `/${slug}/promise/${promiseId}/pendientes`;
+    return getPublicPromisePath(slug, promiseId, 'pendientes');
   }
 
   // Default: Cotizaciones pendientes
-  return `/${slug}/promise/${promiseId}/pendientes`;
+  return getPublicPromisePath(slug, promiseId, 'pendientes');
 }
 
 /**

@@ -11,15 +11,17 @@ interface TerminoCondicion {
 
 interface TerminosCondicionesProps {
   terminos: TerminoCondicion[];
+  /** Si true, no aplica borde ni margen superior (el padre controla el contenedor). */
+  noBorder?: boolean;
 }
 
-export function TerminosCondiciones({ terminos }: TerminosCondicionesProps) {
+export function TerminosCondiciones({ terminos, noBorder }: TerminosCondicionesProps) {
   if (terminos.length === 0) {
     return null;
   }
 
   return (
-    <div className="pt-4 mt-4 border-t border-zinc-800/50 space-y-2">
+    <div className={noBorder ? 'space-y-2' : 'pt-4 mt-4 border-t border-zinc-800/50 space-y-2'}>
       {terminos.map((termino) => (
         <div key={termino.id} className="text-[10px] text-zinc-500 leading-relaxed">
           <div

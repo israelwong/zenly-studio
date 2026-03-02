@@ -18,6 +18,7 @@ import type { PublicPaquete } from '@/types/public-promise';
 import { solicitarPaquetePublico } from '@/lib/actions/public/paquetes.actions';
 import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { getTotalServicios } from '@/lib/utils/public-promise';
+import { getPublicPromisePath } from '@/lib/utils/public-promise-routing';
 import { usePromisePageContext } from './PromisePageContext';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { cn } from '@/lib/utils';
@@ -451,7 +452,7 @@ export function SolicitarPaqueteModal({
       
       // Redirigir a cierre cuando el proceso esté completado
       // Pausa de Momentum: 3 segundos para disfrutar la celebración - UNIFICADO
-      const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
+      const redirectPath = getPublicPromisePath(studioSlug, promiseId, 'cierre');
       
       setTimeout(() => {
         setShowProgressOverlay(false);

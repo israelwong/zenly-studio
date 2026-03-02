@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
+import { determinePromiseRoute, getPublicPromisePath, normalizeStatus } from '@/lib/utils/public-promise-routing';
 
 // Force-dynamic: Evitar caché en este endpoint
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
       success: true,
       data: [],
       promiseStageSlug: promise!.pipeline_stage!.slug,
-      redirectNoDisponible: `/${studioSlug}/promise/${promiseId}/no-disponible`,
+      redirectNoDisponible: getPublicPromisePath(studioSlug, promiseId, 'no-disponible'),
     };
   }
 
@@ -74,7 +74,7 @@ export async function GET(
     const routeStateResult = await getRouteStateDirect(slug, promiseId);
 
     if (!routeStateResult.success) {
-      return NextResponse.json({ redirect: `/${slug}/promise/${promiseId}/pendientes` });
+      return NextResponse.json({ redirect: getPublicPromisePath(slug, promiseId, 'pendientes') });
     }
 
     // Promesa archivada → ruta física no disponible (en UI pública: "No disponible")
@@ -84,7 +84,7 @@ export async function GET(
 
     // Si no hay cotizaciones, redirigir a /pendientes para ver paquetes disponibles
     if (!routeStateResult.data || routeStateResult.data.length === 0) {
-      return NextResponse.json({ redirect: `/${slug}/promise/${promiseId}/pendientes` });
+      return NextResponse.json({ redirect: getPublicPromisePath(slug, promiseId, 'pendientes') });
     }
 
     const cotizaciones = routeStateResult.data;
@@ -98,6 +98,6 @@ export async function GET(
   } catch (error) {
     console.error('[PromiseRedirectAPI] Error:', error);
     // En caso de error, redirigir a /pendientes para permitir ver paquetes
-    return NextResponse.json({ redirect: `/${slug}/promise/${promiseId}/pendientes` });
+    return NextResponse.json({ redirect: getPublicPromisePath(slug, promiseId, 'pendientes') });
   }
 }

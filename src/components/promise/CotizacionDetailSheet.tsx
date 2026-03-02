@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -11,6 +11,7 @@ import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
 import { CondicionesComercialesSelector } from './shared/CondicionesComercialesSelector';
 import { PrecioDesglose } from './shared/PrecioDesglose';
 import { TerminosCondiciones } from './shared/TerminosCondiciones';
+import { TerminosCondicionesEditor } from '@/components/shared/terminos-condiciones/TerminosCondicionesEditor';
 import { obtenerCondicionesComercialesParaCotizacion, obtenerTerminosCondicionesPublicos } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
 import {
@@ -85,6 +86,22 @@ interface CotizacionDetailSheetProps {
   isPreviewMode?: boolean;
   /** Fase 28.8: Si true, oculta secciones financieras (precio, condiciones, términos) para inspección simple de servicios. */
   hideFinancialSections?: boolean;
+  /**
+   * Acciones de administración para el footer (solo MODO ESTUDIO / vista previa).
+   * Si se define junto con isPreviewMode, se muestra el footer con Guardar borrador, Guardar como paquete, Crear y Publicar.
+   * En MODO PÚBLICO (isPreviewMode false) este objeto no debe pasarse; el footer de administración no se muestra.
+   */
+  studioFooterActions?: {
+    onSaveDraft: () => void;
+    onSavePublish: () => void;
+    onGuardarComoPaquete: () => void;
+    loading?: boolean;
+    savingIntent?: 'draft' | 'publish' | null;
+    isSavingAsPaquete?: boolean;
+    isEditMode?: boolean;
+    saveDisabledTitle?: string;
+    condicionIdsVisiblesSize?: number;
+  } | null;
 }
 
 export function CotizacionDetailSheet({
@@ -108,7 +125,9 @@ export function CotizacionDetailSheet({
   condicionesVisiblesIds,
   isPreviewMode = false,
   hideFinancialSections = false,
+  studioFooterActions = null,
 }: CotizacionDetailSheetProps) {
+  const isStudioContext = isPreviewMode && studioFooterActions != null;
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
   const [terminosCondiciones, setTerminosCondiciones] = useState<TerminoCondicion[]>([]);
@@ -119,6 +138,7 @@ export function CotizacionDetailSheet({
   const sheetContainerRef = useRef<HTMLDivElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [showTerminosEditor, setShowTerminosEditor] = useState(false);
 
   // Exclusividad negociación: condiciones_visibles solo aplican a cotizaciones que las tienen.
   // is_public: false solo aparece si está en condiciones_visibles (carga vía obtenerCondicionesComercialesParaCotizacion).
@@ -519,19 +539,19 @@ export function CotizacionDetailSheet({
           {/* Precio principal: precio de lista (calculado) + total a pagar (cierre) */}
           {!hideFinancialSections && (
             <>
-              <div className="bg-zinc-900/50 rounded-lg p-6 border border-zinc-800">
-                <div className="flex items-end justify-between gap-4">
-                  <div className="flex-1 min-w-0">
+              <div className="bg-emerald-950/40 rounded-lg p-4 border border-emerald-800/50">
+                <div className="flex items-end justify-between gap-3">
+                  <div className="flex-1 min-w-0 space-y-1">
                     {tieneConcesiones && precioLista > 0 && (
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-zinc-400">Precio de lista</span>
-                        <span className="text-lg text-zinc-500 line-through">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-emerald-200/70">Precio de lista</span>
+                        <span className="text-sm text-emerald-300/60 line-through">
                           {formatPrice(precioLista)}
                         </span>
                       </div>
                     )}
-                    <p className="text-sm text-zinc-400 mb-2">Total a pagar</p>
-                    <p className="text-4xl font-bold text-blue-400">
+                    <p className="text-xs text-emerald-200/70">Total a pagar</p>
+                    <p className="text-2xl font-bold text-emerald-300">
                       {formatPrice(precioFinal)}
                     </p>
                   </div>
@@ -549,8 +569,6 @@ export function CotizacionDetailSheet({
                   )}
                 </div>
               </div>
-
-              <SeparadorZen />
             </>
           )}
 
@@ -679,9 +697,25 @@ export function CotizacionDetailSheet({
                 )}
               </div>
 
-              {/* Términos y condiciones - Solo mostrar si hay condiciones comerciales activas */}
+              {/* Términos y condiciones - Solo mostrar si hay condiciones comerciales activas. En modo estudio, botón editar para actualizar al vuelo. */}
               {condicionesAMostrar.length > 0 && terminosCondiciones.length > 0 && (
-                <TerminosCondiciones terminos={terminosCondiciones} />
+                <div className="pt-4 mt-4 border-t border-zinc-800/50 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Términos y Condiciones</h3>
+                    {isStudioContext && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTerminosEditor(true)}
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                        title="Editar términos y condiciones"
+                        aria-label="Editar términos y condiciones"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <TerminosCondiciones terminos={terminosCondiciones} noBorder />
+                </div>
               )}
             </>
           )}
@@ -700,30 +734,72 @@ export function CotizacionDetailSheet({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 pt-4 pb-6">
-          <div className="flex gap-3">
-            <ZenButton
-              variant="outline"
-              onClick={onClose}
-              className={isPreviewMode ? 'w-full' : 'shrink-0'}
-              size="sm"
-            >
-              <X className="h-4 w-4 mr-1.5" />
-              Cerrar
-            </ZenButton>
-            {!isPreviewMode && mostrarBotonAutorizar && (
+        {/* Footer: MODO PÚBLICO = solo Cerrar (+ Autorizar si aplica). MODO ESTUDIO (vista previa) = acciones en jerarquía clara. Cerrar siempre no-destructivo. */}
+        <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800/70 p-4 sm:p-6">
+          {isStudioContext && studioFooterActions ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <ZenButton
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={studioFooterActions.onSaveDraft}
+                  loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'draft'}
+                  loadingText="Guardando..."
+                  disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                  title={studioFooterActions.saveDisabledTitle}
+                >
+                  {studioFooterActions.isEditMode ? 'Guardar cambios' : 'Guardar como borrador'}
+                </ZenButton>
+                <ZenButton
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  className="flex-1"
+                  onClick={studioFooterActions.onSavePublish}
+                  loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'publish'}
+                  loadingText="Publicando..."
+                  disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                  title={studioFooterActions.saveDisabledTitle}
+                >
+                  {studioFooterActions.isEditMode ? 'Publicar ahora' : 'Crear y Publicar'}
+                </ZenButton>
+              </div>
               <ZenButton
-                onClick={() => setShowAutorizarModal(true)}
-                className="flex-1"
+                type="button"
+                variant="ghost"
                 size="sm"
-                disabled={!selectedCondicionId}
+                className="w-full border border-zinc-700/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                onClick={studioFooterActions.onGuardarComoPaquete}
+                disabled={studioFooterActions.loading || studioFooterActions.isSavingAsPaquete}
               >
-                <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Autorizar
+                <PackagePlus className="h-3.5 w-3.5 mr-1" />
+                {studioFooterActions.isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
               </ZenButton>
-            )}
-          </div>
+              <ZenButton variant="secondary" size="sm" className="w-full" onClick={onClose} disabled={studioFooterActions.loading}>
+                <X className="h-4 w-4 mr-1.5" />
+                Cerrar
+              </ZenButton>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <ZenButton variant="outline" onClick={onClose} className={isPreviewMode ? 'w-full' : 'shrink-0'} size="sm">
+                <X className="h-4 w-4 mr-1.5" />
+                Cerrar
+              </ZenButton>
+              {!isPreviewMode && mostrarBotonAutorizar && (
+                <ZenButton
+                  onClick={() => setShowAutorizarModal(true)}
+                  className="flex-1"
+                  size="sm"
+                  disabled={!selectedCondicionId}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  Autorizar
+                </ZenButton>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -798,6 +874,19 @@ export function CotizacionDetailSheet({
           onCloseDetailSheet={onClose}
         />
       )}
+
+      {/* Editor de términos y condiciones (modo estudio, actualización al vuelo en vista previa) */}
+      <TerminosCondicionesEditor
+        studioSlug={studioSlug}
+        isOpen={showTerminosEditor}
+        onClose={() => setShowTerminosEditor(false)}
+        onRefresh={async () => {
+          const result = await obtenerTerminosCondicionesPublicos(studioSlug);
+          if (result.success && result.data) {
+            setTerminosCondiciones(result.data);
+          }
+        }}
+      />
 
       {/* Lightbox */}
       {mediaInfo && lightboxSlides.length > 0 && (

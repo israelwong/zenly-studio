@@ -51,6 +51,7 @@ import { calcularPrecio, type ConfiguracionPrecios } from '@/lib/actions/studio/
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 import { getPromiseRouteStateFromSlug, type PromiseRouteState } from '@/lib/utils/promise-navigation';
+import { getPublicPromisePath } from '@/lib/utils/public-promise-routing';
 import { calcularRentabilidadGlobal } from '@/lib/utils/negociacion-calc';
 import type { CotizacionItem } from '@/lib/utils/negociacion-calc';
 
@@ -3740,6 +3741,7 @@ export async function pasarACierre(
         ? new Prisma.Decimal(options.pago_monto_confirmado) 
         : null;
 
+      // Fase 29.9.5: checkin_completed = true cuando el estudio autoriza/pasa a cierre (validación hecha por estudio)
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
         create: {
@@ -3747,6 +3749,7 @@ export async function pasarACierre(
           previous_status: previousStatus,
           condiciones_comerciales_id: registroCondicionId,
           condiciones_comerciales_definidas: registroCondicionDefinidas,
+          checkin_completed: true,
           pago_confirmado_estudio: pagoConfirmado,
           pago_monto: pagoMontoConfirmado,
         },
@@ -3754,6 +3757,7 @@ export async function pasarACierre(
           previous_status: previousStatus,
           condiciones_comerciales_id: registroCondicionId,
           condiciones_comerciales_definidas: registroCondicionDefinidas,
+          checkin_completed: true,
           contract_template_id: null,
           contract_content: null,
           contrato_definido: false,
@@ -3797,11 +3801,11 @@ export async function pasarACierre(
     revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-      // ⚠️ CRÍTICO: Invalidar layout de rutas públicas para forzar frescura
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`, 'layout');
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/pendientes`, 'layout');
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'layout');
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}/cierre`, 'page');
+      // ⚠️ CRÍTICO: Invalidar layout de rutas públicas para forzar frescura (usa mapeo centralizado)
+      revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id), 'layout');
+      revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id, 'pendientes'), 'layout');
+      revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id, 'cierre'), 'layout');
+      revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id, 'cierre'), 'page');
       // Invalidar tags específicos para forzar revalidación del estado de la promesa
       revalidateTag(`promise-state-${cotizacion.promise_id}`, 'max');
       revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');

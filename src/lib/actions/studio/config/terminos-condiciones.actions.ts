@@ -3,7 +3,7 @@
 'use server';
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { TerminosCondicionesSchema, type TerminosCondicionesForm } from "@/lib/actions/schemas/terminos-condiciones-schemas";
 
 // Template por defecto de términos y condiciones (HTML simple)
@@ -203,6 +203,7 @@ export async function crearTerminosCondiciones(studioSlug: string, data: Termino
         });
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+        revalidateTag(`public-terminos-${studioSlug}`);
 
         return {
             success: true,
@@ -341,6 +342,7 @@ export async function actualizarTerminosCondiciones(
             });
 
             revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+            revalidateTag(`public-terminos-${studioSlug}`);
 
             return {
                 success: true,
@@ -376,6 +378,7 @@ export async function actualizarTerminosCondiciones(
             });
 
             revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+            revalidateTag(`public-terminos-${studioSlug}`);
 
             return {
                 success: true,

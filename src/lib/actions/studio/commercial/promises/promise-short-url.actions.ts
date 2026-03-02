@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
+import { determinePromiseRoute, getPublicPromisePath, normalizeStatus } from '@/lib/utils/public-promise-routing';
 
 interface ActionResponse<T> {
   success: boolean;
@@ -144,8 +144,8 @@ export async function getOrCreateShortUrl(
       return { success: false, error: 'Error al generar código único' };
     }
 
-    // Crear registro
-    const originalUrl = `/${studioSlug}/promise/${promiseId}`;
+    // Crear registro (ruta base pública; redirect resolverá segmento pendientes/cierre/no-disponible)
+    const originalUrl = getPublicPromisePath(studioSlug, promiseId);
     
     await prisma.studio_short_urls.create({
       data: {

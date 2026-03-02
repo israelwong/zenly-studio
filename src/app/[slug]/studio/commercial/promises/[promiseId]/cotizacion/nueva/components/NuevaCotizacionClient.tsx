@@ -27,6 +27,14 @@ export function NuevaCotizacionClient({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewCotizacion, setPreviewCotizacion] = useState<PublicCotizacion | null>(null);
   const previewDataRef = useRef<(() => PublicCotizacion | null) | null>(null);
+  const guardarComoPaqueteRef = useRef<(() => void) | null>(null);
+  const saveHandlersRef = useRef<{ onSaveDraft: () => void; onSavePublish: () => void } | null>(null);
+  const [previewFooterState, setPreviewFooterState] = useState<{
+    loading: boolean;
+    savingIntent: 'draft' | 'publish' | null;
+    isEditMode: boolean;
+    condicionIdsVisiblesSize: number;
+  } | null>(null);
   const [shareSettings, setShareSettings] = useState({ show_items_prices: true, show_categories_subtotals: false });
 
   useEffect(() => {
@@ -88,6 +96,11 @@ export function NuevaCotizacionClient({
             redirectOnSuccess={`/${studioSlug}/studio/commercial/promises/${promiseId}`}
             getPreviewDataRef={previewDataRef}
             onRequestPreview={handleOpenPreview}
+            hideGuardarComoPaqueteInSidebar={true}
+            getGuardarComoPaqueteHandlerRef={guardarComoPaqueteRef}
+            getSaveHandlersRef={saveHandlersRef}
+            onPreviewFooterStateChange={setPreviewFooterState}
+            promiseState="pendiente"
           />
         </ZenCardContent>
       </ZenCard>
@@ -105,6 +118,24 @@ export function NuevaCotizacionClient({
           showItemsPrices={shareSettings.show_items_prices}
           showCategoriesSubtotals={shareSettings.show_categories_subtotals}
           isPreviewMode
+          studioFooterActions={
+            isPreviewOpen && saveHandlersRef.current && previewFooterState
+              ? {
+                  onSaveDraft: saveHandlersRef.current.onSaveDraft,
+                  onSavePublish: saveHandlersRef.current.onSavePublish,
+                  onGuardarComoPaquete: () => guardarComoPaqueteRef.current?.(),
+                  loading: previewFooterState.loading,
+                  savingIntent: previewFooterState.savingIntent,
+                  isSavingAsPaquete: false,
+                  isEditMode: false,
+                  saveDisabledTitle:
+                    previewFooterState.condicionIdsVisiblesSize === 0
+                      ? 'Selecciona al menos una condición visible para el cliente'
+                      : undefined,
+                  condicionIdsVisiblesSize: previewFooterState.condicionIdsVisiblesSize,
+                }
+              : null
+          }
         />
       )}
     </div>

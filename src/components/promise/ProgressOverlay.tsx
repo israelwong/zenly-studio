@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, XCircle, RefreshCw, FileSignature, ArrowRight } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
+import { getPublicPromisePath } from '@/lib/utils/public-promise-routing';
 import { ProgressStepItem } from './ProgressStepItem';
 import confetti from 'canvas-confetti';
 
@@ -79,7 +80,7 @@ export function ProgressOverlay({
       await new Promise(resolve => setTimeout(resolve, 500));
       
       const timestamp = Date.now();
-      const redirectUrl = `/${studioSlug}/promise/${promiseId}/cierre?t=${timestamp}`;
+      const redirectUrl = `${getPublicPromisePath(studioSlug!, promiseId!, 'cierre')}?t=${timestamp}`;
       
       window.location.assign(redirectUrl);
     } catch (error) {

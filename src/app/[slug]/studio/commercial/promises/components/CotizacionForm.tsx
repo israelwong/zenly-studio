@@ -30,6 +30,7 @@ import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
 import type { PublicCotizacion, PublicSeccionData } from '@/types/public-promise';
 import { cn } from '@/lib/utils';
+import { getPromisePathFromState, type PromiseRouteState } from '@/lib/utils/promise-navigation';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import type { FormSectionId } from './FormSection';
@@ -37,6 +38,14 @@ import { PaqueteCoverDropzone } from '../../paquetes/components/PaqueteCoverDrop
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 
 const DUPLICATE_NAME_ERROR = 'Ya existe una cotización con ese nombre en esta promesa';
+
+/** Mapea status de cotización al estado de ruta del estudio (pendiente | cierre | autorizada). */
+function cotizacionStatusToRouteState(status: string): PromiseRouteState {
+  const s = (status || '').toLowerCase();
+  if (s === 'en_cierre' || s === 'cierre' || s === 'contract_generated' || s === 'contract_signed') return 'cierre';
+  if (s === 'aprobada' || s === 'autorizada' || s === 'approved') return 'autorizada';
+  return 'pendiente';
+}
 
 interface CotizacionFormProps {
   studioSlug: string;
@@ -74,6 +83,17 @@ interface CotizacionFormProps {
   getGuardarComoPaqueteHandlerRef?: React.MutableRefObject<(() => void) | null>;
   /** Callback para notificar al padre cuando cambia el estado de guardado del paquete. */
   onSavingAsPaqueteChange?: (isSaving: boolean) => void;
+  /** Ref para que el padre obtenga handlers de guardado (para footer del modal de vista previa). */
+  getSaveHandlersRef?: React.MutableRefObject<{ onSaveDraft: () => void; onSavePublish: () => void } | null>;
+  /** Callback con estado para el footer de vista previa (loading, savingIntent, etc.). */
+  onPreviewFooterStateChange?: (state: {
+    loading: boolean;
+    savingIntent: 'draft' | 'publish' | null;
+    isEditMode: boolean;
+    condicionIdsVisiblesSize: number;
+  }) => void;
+  /** Estado de ruta actual (pendiente | cierre | autorizada). Si se pasa, Cancelar sin returnPath navega a esta ruta. */
+  promiseState?: PromiseRouteState | null;
 }
 
 export function CotizacionForm({
@@ -101,6 +121,9 @@ export function CotizacionForm({
   hideGuardarComoPaqueteInSidebar = false,
   getGuardarComoPaqueteHandlerRef,
   onSavingAsPaqueteChange,
+  getSaveHandlersRef,
+  onPreviewFooterStateChange,
+  promiseState = null,
 }: CotizacionFormProps & {
   onCreateAsRevision?: (data: {
     nombre: string;
@@ -532,9 +555,8 @@ export function CotizacionForm({
             return newSet;
           });
           if (promiseId && studioSlug) {
-            setReturnPath((cotizacionData.status === 'en_cierre' || cotizacionData.status === 'cierre')
-              ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
-              : `/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            const state = cotizacionStatusToRouteState(cotizacionData.status);
+            setReturnPath(getPromisePathFromState(studioSlug, promiseId, state));
           }
           setIsInitializing(false);
         } else if (revisionOriginalId && originalResult.success && originalResult.data) {
@@ -1865,12 +1887,13 @@ export function CotizacionForm({
     setPaqueteCoverMedia([]);
   };
 
-  // Redirigir a returnPath (cierre o detalle de promesa) para evitar fallos con historial vacío en nueva pestaña
+  // Redirigir a la ruta del estado (pendiente/cierre/autorizada) para que Cancelar lleve siempre a la vista correcta
   const goToPromiseDetailOrBack = () => {
     if (returnPath) {
       router.push(returnPath);
     } else if (promiseId && studioSlug) {
-      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+      const state = promiseState ?? 'pendiente';
+      router.push(getPromisePathFromState(studioSlug, promiseId, state));
     } else {
       router.back();
     }
@@ -2203,6 +2226,29 @@ export function CotizacionForm({
     }
   };
 
+  // Exponer handlers de guardado para footer del modal de vista previa (después de handleSave)
+  useEffect(() => {
+    if (!getSaveHandlersRef) return;
+    getSaveHandlersRef.current = {
+      onSaveDraft: () => handleSave(false),
+      onSavePublish: () => handleSave(true),
+    };
+    return () => {
+      getSaveHandlersRef.current = null;
+    };
+  }, [getSaveHandlersRef, handleSave]);
+
+  // Estado para footer de vista previa (MODO ESTUDIO)
+  useEffect(() => {
+    if (!onPreviewFooterStateChange) return;
+    onPreviewFooterStateChange({
+      loading,
+      savingIntent,
+      isEditMode,
+      condicionIdsVisiblesSize: condicionIdsVisibles.size,
+    });
+  }, [onPreviewFooterStateChange, loading, savingIntent, isEditMode, condicionIdsVisibles.size]);
+
   // Expandir todas las secciones y categorías al cargar el catálogo (o al filtrar)
   useEffect(() => {
     if (catalogoFiltrado.length > 0) {
@@ -2465,6 +2511,7 @@ export function CotizacionForm({
               savingIntent={savingIntent}
               saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
               hideGuardarComoPaquete={hideGuardarComoPaqueteInSidebar}
+              sidebarOnlyPreviewAndCancel={!!onRequestPreview}
             />
           ))
         }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
-import { syncPromiseRoute } from '@/lib/utils/public-promise-routing';
+import { getPublicPromisePath, syncPromiseRoute } from '@/lib/utils/public-promise-routing';
 import { PromiseRedirectSkeleton } from './PromiseRedirectSkeleton';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 
@@ -16,7 +16,7 @@ export function PromiseRedirectHandler({ slug, promiseId }: PromiseRedirectHandl
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const hasRedirectedRef = useRef(false);
-  const currentPath = `/${slug}/promise/${promiseId}`;
+  const currentPath = getPublicPromisePath(slug, promiseId);
 
   const { isAuthorizationInProgress } = usePromisePageContext();
   const isAuthorizationInProgressRef = useRef(isAuthorizationInProgress);

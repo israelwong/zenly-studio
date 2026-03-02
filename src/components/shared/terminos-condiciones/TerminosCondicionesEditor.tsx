@@ -231,15 +231,17 @@ export function TerminosCondicionesEditor({
             <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse"></div>
           </div>
 
-          {/* Skeleton del editor */}
-          <div className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg min-h-[500px] animate-pulse">
-            <div className="space-y-3">
-              <div className="h-4 bg-zinc-700 rounded w-full"></div>
-              <div className="h-4 bg-zinc-700 rounded w-5/6"></div>
-              <div className="h-4 bg-zinc-700 rounded w-full"></div>
-              <div className="h-4 bg-zinc-700 rounded w-4/5"></div>
-              <div className="h-4 bg-zinc-700 rounded w-full"></div>
-              <div className="h-4 bg-zinc-700 rounded w-3/4"></div>
+          {/* Skeleton del editor (misma altura y padding que SimpleTextEditor) */}
+          <div className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg min-h-[350px] overflow-y-auto">
+            <div className="space-y-2.5 animate-pulse">
+              <div className="h-3.5 bg-zinc-700 rounded w-full"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-5/6"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-full"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-4/5"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-full"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-3/4"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-full"></div>
+              <div className="h-3.5 bg-zinc-700 rounded w-2/3"></div>
             </div>
           </div>
 

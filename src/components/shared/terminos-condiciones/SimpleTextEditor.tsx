@@ -348,7 +348,7 @@ export function SimpleTextEditor({
           contentEditable
           onInput={handleEditorInput}
           className={cn(
-            "w-full p-4 bg-zinc-800 border rounded-lg text-zinc-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none min-h-[350px] overflow-y-auto",
+            "w-full p-4 bg-zinc-800 border rounded-lg text-zinc-300 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none min-h-[350px] overflow-y-auto",
             error ? 'border-red-500' : 'border-zinc-700',
             !value && "text-zinc-600"
           )}
@@ -368,22 +368,22 @@ export function SimpleTextEditor({
           color: rgb(82, 82, 91);
         }
         [contenteditable] h1 {
-          font-size: 1.5rem !important;
+          font-size: 1.25rem !important;
           font-weight: 700 !important;
           line-height: 1.2 !important;
-          margin-top: 1.5rem !important;
-          margin-bottom: 1rem !important;
+          margin-top: 1.25rem !important;
+          margin-bottom: 0.75rem !important;
           color: rgb(244, 244, 245) !important;
         }
         [contenteditable] h1:first-child {
           margin-top: 0 !important;
         }
         [contenteditable] h2 {
-          font-size: 1.25rem !important;
+          font-size: 1.125rem !important;
           font-weight: 600 !important;
           line-height: 1.3 !important;
-          margin-top: 1.25rem !important;
-          margin-bottom: 0.75rem !important;
+          margin-top: 1rem !important;
+          margin-bottom: 0.5rem !important;
           color: rgb(244, 244, 245) !important;
         }
         [contenteditable] h2:first-child {

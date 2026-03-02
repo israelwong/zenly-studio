@@ -14,6 +14,7 @@ import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { toast } from 'sonner';
 import { startTransition } from 'react';
 import { getStudioPageTitle, STUDIO_PAGE_NAMES } from '@/lib/utils/studio-page-title';
+import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { usePromiseFocusMode } from '../../../context/PromiseFocusModeContext';
 import type { PublicCotizacion } from '@/types/public-promise';
 
@@ -91,11 +92,13 @@ export function EditarCotizacionClient({
   const fromCierre = searchParams.get('from') === 'cierre';
   const focusMode = usePromiseFocusMode();
 
-  // Destino de retorno: cierre si la cotización está en cierre (o from=cierre), sino detalle de promesa
+  // Ruta de regreso al estado de la promesa (pendiente/cierre/autorizada). Usar siempre ruta con segmento para que funcione en nueva pestaña.
   const isFromCierreFlow = fromCierre || initialCotizacion?.status === 'en_cierre' || initialCotizacion?.status === 'cierre';
-  const backHref = isFromCierreFlow
-    ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`
-    : `/${studioSlug}/studio/commercial/promises/${promiseId}`;
+  const backHref = getPromisePathFromState(
+    studioSlug,
+    promiseId,
+    isFromCierreFlow ? 'cierre' : (promiseState ?? 'pendiente')
+  );
 
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
@@ -106,7 +109,14 @@ export function EditarCotizacionClient({
   const [showShareOptionsModal, setShowShareOptionsModal] = useState(false);
   const [shareSettings, setShareSettings] = useState({ show_items_prices: true, show_categories_subtotals: false });
   const guardarComoPaqueteRef = useRef<(() => void) | null>(null);
+  const saveHandlersRef = useRef<{ onSaveDraft: () => void; onSavePublish: () => void } | null>(null);
   const [isSavingAsPaquete, setIsSavingAsPaquete] = useState(false);
+  const [previewFooterState, setPreviewFooterState] = useState<{
+    loading: boolean;
+    savingIntent: 'draft' | 'publish' | null;
+    isEditMode: boolean;
+    condicionIdsVisiblesSize: number;
+  } | null>(null);
 
   React.useEffect(() => {
     document.title = getStudioPageTitle(STUDIO_PAGE_NAMES.COTIZACION);
@@ -244,7 +254,7 @@ export function EditarCotizacionClient({
               Herramientas
             </ZenButton>
           </ZenDropdownMenuTrigger>
-          <ZenDropdownMenuContent align="end" className="w-56">
+          <ZenDropdownMenuContent align="end" className="min-w-[18rem] w-auto">
             <ZenDropdownMenuItem
               onClick={() => setShowShareOptionsModal(true)}
             >
@@ -293,6 +303,9 @@ export function EditarCotizacionClient({
       hideGuardarComoPaqueteInSidebar={true}
       getGuardarComoPaqueteHandlerRef={guardarComoPaqueteRef}
       onSavingAsPaqueteChange={setIsSavingAsPaquete}
+      getSaveHandlersRef={saveHandlersRef}
+      onPreviewFooterStateChange={setPreviewFooterState}
+      promiseState={promiseState ?? undefined}
     />
   );
 
@@ -340,6 +353,24 @@ export function EditarCotizacionClient({
           showItemsPrices={shareSettings.show_items_prices}
           showCategoriesSubtotals={shareSettings.show_categories_subtotals}
           isPreviewMode
+          studioFooterActions={
+            isPreviewOpen && saveHandlersRef.current && previewFooterState
+              ? {
+                  onSaveDraft: saveHandlersRef.current.onSaveDraft,
+                  onSavePublish: saveHandlersRef.current.onSavePublish,
+                  onGuardarComoPaquete: () => guardarComoPaqueteRef.current?.(),
+                  loading: previewFooterState.loading,
+                  savingIntent: previewFooterState.savingIntent,
+                  isSavingAsPaquete,
+                  isEditMode: true,
+                  saveDisabledTitle:
+                    previewFooterState.condicionIdsVisiblesSize === 0
+                      ? 'Selecciona al menos una condición visible para el cliente'
+                      : undefined,
+                  condicionIdsVisiblesSize: previewFooterState.condicionIdsVisiblesSize,
+                }
+              : null
+          }
         />
       )}
 
