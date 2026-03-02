@@ -19,6 +19,8 @@ interface AuthorizationData {
   condicionesComercialesId?: string | null;
   condicionesComercialesMetodoPagoId?: string | null;
   autoGenerateContract: boolean;
+  /** Fase 29.2: true cuando la cotización ya está en cierre (pago confirmado); solo actualizar datos y redirigir, sin autorizarCotizacionPublica */
+  isModoCierre?: boolean;
 }
 
 interface PromisePageContextValue {

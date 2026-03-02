@@ -54,6 +54,7 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           condicionesComercialesId,
           condicionesComercialesMetodoPagoId,
           autoGenerateContract: shouldGenerateContract,
+          isModoCierre,
         } = authorizationData;
 
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -82,6 +83,13 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           setIsAuthorizationInProgress(false);
           (window as any).__IS_AUTHORIZING = false;
           setAuthorizationData(null);
+          isProcessing = false;
+          return;
+        }
+
+        // Fase 29.2: Modo Cierre — ya está en cierre y pago confirmado; solo actualizar datos y redirigir a cierre (no duplicar registro ni llamar autorizarCotizacionPublica)
+        if (isModoCierre) {
+          setProgressStep('completed');
           isProcessing = false;
           return;
         }

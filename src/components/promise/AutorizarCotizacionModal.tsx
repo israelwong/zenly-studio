@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { Step1Identity } from './Step1Identity';
 import { Step2EventDetails } from './Step2EventDetails';
 import { Step3Summary } from './Step3Summary';
+import { AutorizarCotizacionSkeleton } from './AutorizarCotizacionSkeleton';
 
 interface PrecioCalculado {
   precioBase: number;
@@ -42,6 +43,12 @@ interface AutorizarCotizacionModalProps {
   cotizacion: PublicCotizacion;
   isOpen: boolean;
   onClose: () => void;
+  /** Fase 29.3: Paso inicial desde URL (checkin=true&step=1|2|3) */
+  initialStep?: 1 | 2 | 3;
+  /** Fase 29.3: Callback al cambiar de paso para sincronizar URL */
+  onStepChange?: (step: number) => void;
+  /** Fase 29.3: Si true, al intentar cerrar solo se llama onClose (el padre muestra AlertDialog) */
+  useSafeExitConfirm?: boolean;
   promiseId: string;
   studioSlug: string;
   condicionesComercialesId?: string | null;
@@ -157,7 +164,7 @@ function WizardFooter({
   isLoadingData = false
 }: WizardFooterProps) {
   return (
-    <div className="flex items-center justify-between gap-3 pt-6 border-t border-zinc-800">
+    <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-800">
       <ZenButton
         variant="ghost"
         onClick={onCancel}
@@ -193,6 +200,9 @@ export function AutorizarCotizacionModal({
   cotizacion,
   isOpen,
   onClose,
+  initialStep,
+  onStepChange,
+  useSafeExitConfirm = false,
   promiseId,
   studioSlug,
   condicionesComercialesId,
@@ -213,6 +223,10 @@ export function AutorizarCotizacionModal({
   promiseData: promiseDataProp,
   dateSoldOut = false,
 }: AutorizarCotizacionModalProps) {
+  // Fase 29.2: Modo Cierre = promesa ya en cierre o pago confirmado por estudio; solo confirmar datos, no cambiar condición
+  const isModoCierre =
+    cotizacion.status === 'en_cierre' || cotizacion.contract?.pago_confirmado_estudio === true;
+
   // Estado del Booking Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -284,6 +298,13 @@ export function AutorizarCotizacionModal({
     }
   }, [isOpen, promiseId, studioSlug, promiseDataProp]);
 
+  // Fase 29.3: Sincronizar paso inicial desde URL al abrir
+  useEffect(() => {
+    if (isOpen && initialStep !== undefined) {
+      setCurrentStep(Math.min(3, Math.max(1, initialStep)) as WizardStep);
+    }
+  }, [isOpen, initialStep]);
+
   // Resetear wizard cuando se cierra el modal
   useEffect(() => {
     if (!isOpen) {
@@ -343,8 +364,10 @@ export function AutorizarCotizacionModal({
     }
 
     if (currentStep < 3) {
-      setCurrentStep((prev) => (prev + 1) as WizardStep);
+      const next = (currentStep + 1) as WizardStep;
+      setCurrentStep(next);
       setErrors({}); // Limpiar errores al avanzar
+      onStepChange?.(next);
     } else {
       // En el paso 3, ejecutar submit final
       handleFinalSubmit();
@@ -353,8 +376,10 @@ export function AutorizarCotizacionModal({
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep((prev) => (prev - 1) as WizardStep);
+      const prev = (currentStep - 1) as WizardStep;
+      setCurrentStep(prev);
       setErrors({}); // Limpiar errores al retroceder
+      onStepChange?.(prev);
     }
   };
 
@@ -396,6 +421,7 @@ export function AutorizarCotizacionModal({
       condicionesComercialesId,
       condicionesComercialesMetodoPagoId,
       autoGenerateContract: autoGenerateContract || autoGenerateContractContext,
+      isModoCierre,
     };
     
     // Establecer bloqueo síncronamente ANTES de cerrar el modal
@@ -418,22 +444,26 @@ export function AutorizarCotizacionModal({
   };
 
 
-  // Títulos y descripciones dinámicas por paso
+  // Títulos y descripciones dinámicas por paso (Fase 29.2: título distinto en Modo Cierre)
   const stepTitles: Record<WizardStep, string> = {
     1: "¿A nombre de quién hacemos la reserva?",
     2: "Detalles de la celebración",
-    3: "Confirma tu reserva"
+    3: isModoCierre ? "Confirma tu información de reserva" : "Confirma tu reserva",
   };
 
   const stepDescriptions: Record<WizardStep, string> = {
     1: "Necesitamos algunos datos para generar tu contrato",
     2: "Cuéntanos sobre tu evento",
-    3: "Revisa los detalles antes de confirmar"
+    3: isModoCierre ? "Revisa y confirma tus datos antes de continuar" : "Revisa los detalles antes de confirmar",
   };
 
-  // Intento de cerrar: mostrar confirmación para evitar pérdida de datos
+  // Intento de cerrar: Fase 29.3 si useSafeExitConfirm el padre muestra AlertDialog; si no, confirmación interna
   const handleCloseAttempt = () => {
     if (isSubmitting) return;
+    if (useSafeExitConfirm) {
+      onClose();
+      return;
+    }
     setShowCancelConfirm(true);
   };
 
@@ -532,6 +562,7 @@ export function AutorizarCotizacionModal({
               onEditEvent={() => setCurrentStep(2)}
               onEditContact={() => setCurrentStep(1)}
               studioSlug={studioSlug}
+              pagoConfirmado={isModoCierre}
             />
           </>
         );
@@ -544,53 +575,64 @@ export function AutorizarCotizacionModal({
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogChange}>
         <DialogContent
-          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="h-full w-full max-w-none m-0 rounded-none max-h-[100vh] overflow-y-auto sm:h-auto sm:max-w-[450px] sm:rounded-xl sm:flex sm:flex-col sm:m-auto"
           overlayZIndex={10020}
           style={{ zIndex: 10030 }}
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
-        {/* Header con barra de progreso */}
-        <div className="pt-6 mb-0">
-          <WizardProgressBar currentStep={currentStep} totalSteps={3} />
-          <DialogHeader className="mt-8">
-            <DialogTitle className="text-xl font-semibold">
-              {stepTitles[currentStep]}
-            </DialogTitle>
-            <DialogDescription className="mt-0">
-              {stepDescriptions[currentStep]}
-            </DialogDescription>
-            {/* Indicador de seguridad */}
-            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400/80">
-              <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span>Conexión segura • Tus datos están encriptados</span>
+        {/* Fase 29.4: Skeleton mientras datos del paso / URL no están listos */}
+        {isLoadingData ? (
+          <div className="pt-6 mb-0">
+            <AutorizarCotizacionSkeleton />
+          </div>
+        ) : (
+          <>
+            {/* Header con barra de progreso */}
+            <div className="pt-6 mb-0 shrink-0">
+              <WizardProgressBar currentStep={currentStep} totalSteps={3} />
+              <DialogHeader className="mt-5 gap-1">
+                <DialogTitle className="text-xl font-semibold">
+                  {stepTitles[currentStep]}
+                </DialogTitle>
+                <DialogDescription className="mt-0">
+                  {stepDescriptions[currentStep]}
+                </DialogDescription>
+                {/* Indicador de seguridad — card esmeralda */}
+                <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 flex items-center gap-2 text-xs text-emerald-400/90">
+                  <Shield className="h-3.5 w-3.5 shrink-0" />
+                  <span>Conexión segura • Tus datos están encriptados</span>
+                </div>
+              </DialogHeader>
             </div>
-          </DialogHeader>
-        </div>
 
-        {/* Contenido del paso */}
-        <div className="py-4">
-          {renderStepContent()}
+            {/* Contenido del paso: flex-1 para centrado vertical cuando el contenido es corto */}
+            <div className="pt-2 pb-2 flex-1 flex flex-col justify-center min-h-0">
+              {renderStepContent()}
 
-          {/* Mostrar errores generales si existen */}
-          {errors.general && (
-            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <p className="text-sm text-red-400">{errors.general}</p>
+              {/* Mostrar errores generales si existen */}
+              {errors.general && (
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-sm text-red-400">{errors.general}</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Footer con navegación */}
-        <WizardFooter
-          currentStep={currentStep}
-          onBack={handleBack}
-          onNext={handleNext}
-          onCancel={handleCloseAttempt}
-          canGoBack={currentStep > 1}
-          canGoNext={currentStep < 3 || !dateSoldOut}
-          isSubmitting={isSubmitting}
-          isLoadingData={isLoadingData}
-        />
+            {/* Footer con navegación */}
+            <div className="shrink-0">
+            <WizardFooter
+              currentStep={currentStep}
+              onBack={handleBack}
+              onNext={handleNext}
+              onCancel={handleCloseAttempt}
+              canGoBack={currentStep > 1}
+              canGoNext={currentStep < 3 || !dateSoldOut}
+              isSubmitting={isSubmitting}
+              isLoadingData={isLoadingData}
+            />
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
 

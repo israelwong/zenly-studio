@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Calendar, MapPin, User, Phone, Mail, FileText, Home, Edit, ExternalLink } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCheckbox } from '@/components/ui/zen';
+import { Edit, ExternalLink } from 'lucide-react';
+import { ZenCheckbox } from '@/components/ui/zen';
 import { ResumenPago } from '@/components/shared/precio';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 
@@ -47,6 +47,8 @@ interface Step3SummaryProps {
   precioFinalCierre?: number;
   /** Ajuste por cierre para desglose (solo mostrar si !== 0). */
   ajusteCierre?: number;
+  /** Fase 29.2: Si true, muestra badge PAGADO en el anticipo (Modo Cierre). */
+  pagoConfirmado?: boolean;
   errors: Record<string, string>;
   termsAccepted: boolean;
   onAcceptTerms: (accepted: boolean) => void;
@@ -67,6 +69,7 @@ export function Step3Summary({
   montoBono = 0,
   precioFinalCierre,
   ajusteCierre = 0,
+  pagoConfirmado = false,
   errors,
   termsAccepted,
   onAcceptTerms,
@@ -110,105 +113,72 @@ export function Step3Summary({
         tieneConcesiones={tieneConcesiones}
         compact
         title="COTIZACIÓN AUTORIZADA"
+        pagoConfirmado={pagoConfirmado}
       />
 
-      {/* Card: Datos del evento */}
-      <ZenCard variant="outlined" padding="none" className="bg-zinc-900/30 border-zinc-800">
-        <ZenCardContent className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-zinc-400" />
-              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                Datos del evento
-              </p>
-            </div>
+      {/* Resumen: una columna por tarjeta, estilo smartphone (card minimalista) */}
+      <div className="space-y-4">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Datos del evento</span>
             {onEditEvent && (
-              <button
-                onClick={onEditEvent}
-                className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors rounded hover:bg-zinc-800/50"
-              >
+              <button type="button" onClick={onEditEvent} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs">
                 <Edit className="h-3 w-3" />
-                <span>Editar</span>
+                Editar
               </button>
             )}
           </div>
-
-          <div className="space-y-2">
-            <div className="flex items-start gap-2">
-              <Calendar className="h-3.5 w-3.5 text-zinc-500 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-zinc-500 mb-0.5">Fecha del evento</p>
-                <p className="text-sm font-medium text-zinc-200">{formatDate(formData.event_date || null)}</p>
-              </div>
-            </div>
-
+          <div className="space-y-1.5 text-sm">
+            <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+              <span className="text-zinc-400 shrink-0">Fecha:</span>
+              <span className="text-white">{formatDate(formData.event_date || null)}</span>
+            </p>
             {formData.event_name && (
-              <div className="flex items-start gap-2">
-                <User className="h-3.5 w-3.5 text-zinc-500 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-zinc-500 mb-0.5">Festejado(s)</p>
-                  <p className="text-sm font-medium text-zinc-200">{formData.event_name}</p>
-                </div>
-              </div>
+              <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                <span className="text-zinc-400 shrink-0">Festejado(s):</span>
+                <span className="text-white">{formData.event_name}</span>
+              </p>
             )}
-
             {formData.event_location && (
-              <div className="flex items-start gap-2">
-                <MapPin className="h-3.5 w-3.5 text-zinc-500 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-zinc-500 mb-0.5">Lugar</p>
-                  <p className="text-sm font-medium text-zinc-200">{formData.event_location}</p>
-                </div>
-              </div>
+              <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                <span className="text-zinc-400 shrink-0">Lugar:</span>
+                <span className="text-white">{formData.event_location}</span>
+              </p>
             )}
           </div>
-        </ZenCardContent>
-      </ZenCard>
-
-      {/* Información de contacto (resumen) */}
-      <ZenCard variant="outlined" padding="none" className="bg-zinc-900/30 border-zinc-800">
-        <ZenCardContent className="p-5">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <FileText className="h-3.5 w-3.5 text-zinc-400" />
-                <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                  Datos para el contrato
-                </p>
-              </div>
-              {onEditContact && (
-                <button
-                  onClick={onEditContact}
-                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors rounded hover:bg-zinc-800/50"
-                >
-                  <Edit className="h-3 w-3" />
-                  <span>Editar</span>
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div className="flex items-start gap-2">
-                <User className="h-3 w-3 text-zinc-500 shrink-0 mt-0.5" />
-                <span className="text-zinc-400">{formData.contact_name || '—'}</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Phone className="h-3 w-3 text-zinc-500 shrink-0 mt-0.5" />
-                <span className="text-zinc-400">{formData.contact_phone || '—'}</span>
-              </div>
-              <div className="flex items-start gap-2 sm:col-span-2">
-                <Mail className="h-3 w-3 text-zinc-500 shrink-0 mt-0.5" />
-                <span className="text-zinc-400">{formData.contact_email || '—'}</span>
-              </div>
-              {formData.contact_address && (
-                <div className="flex items-start gap-2 sm:col-span-2">
-                  <Home className="h-3 w-3 text-zinc-500 shrink-0 mt-0.5" />
-                  <span className="text-zinc-400 text-xs leading-relaxed">{formData.contact_address}</span>
-                </div>
-              )}
-            </div>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Datos para el contrato</span>
+            {onEditContact && (
+              <button type="button" onClick={onEditContact} className="text-emerald-500 hover:text-emerald-400 transition-colors inline-flex items-center gap-1 text-xs">
+                <Edit className="h-3 w-3" />
+                Editar
+              </button>
+            )}
           </div>
-        </ZenCardContent>
-      </ZenCard>
+          <div className="space-y-1.5 text-sm">
+            <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+              <span className="text-zinc-400 shrink-0">Nombre:</span>
+              <span className="text-white">{formData.contact_name || '—'}</span>
+            </p>
+            <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+              <span className="text-zinc-400 shrink-0">Teléfono:</span>
+              <span className="text-white">{formData.contact_phone || '—'}</span>
+            </p>
+            <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+              <span className="text-zinc-400 shrink-0">Email:</span>
+              <span className="text-white">{formData.contact_email || '—'}</span>
+            </p>
+            {formData.contact_address && (
+              <p className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                <span className="text-zinc-400 shrink-0">Dirección:</span>
+                <span className="text-white text-xs leading-relaxed">{formData.contact_address}</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Checkbox de consentimiento legal */}
       <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, startTransition, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package, ChevronRight } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
@@ -13,6 +13,16 @@ import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { ResumenPago } from '@/components/shared/precio';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
 import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import {
   getPrecioListaStudio,
   getMontoCortesiasFromServicios,
@@ -78,6 +88,8 @@ export function PublicQuoteAuthorizedView({
   shareSettings,
 }: PublicQuoteAuthorizedViewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [showContractView, setShowContractView] = useState(false);
   const [showEditDataModal, setShowEditDataModal] = useState(false);
   const [showSuccessDataModal, setShowSuccessDataModal] = useState(false);
@@ -93,8 +105,61 @@ export function PublicQuoteAuthorizedView({
   
   // Fase 28.1: Inspección de servicios contratados
   const [showServicesSheet, setShowServicesSheet] = useState(false);
-  // Fase 29.1: Modal de autorización (flujo 3 pasos)
-  const [showAutorizarModal, setShowAutorizarModal] = useState(false);
+  // Fase 29.1 / 29.3: Modal de autorización; en cierre visibilidad y paso desde URL (?checkin=true&step=1|2|3)
+  const isCierrePath = pathname?.includes('/cierre') ?? false;
+  const checkinFromUrl = isCierrePath && searchParams?.get('checkin') === 'true';
+  const stepParam = searchParams?.get('step');
+  const checkinStep = stepParam ? Math.min(3, Math.max(1, parseInt(stepParam, 10) || 1)) : 1;
+  // Fase 29.4: Cierre optimista — ocultar modal al instante antes de limpiar URL
+  const [exitConfirmed, setExitConfirmed] = useState(false);
+  const showAutorizarModal = checkinFromUrl && !exitConfirmed;
+  // Fase 29.4: Feedback de clic inmediato en botón Continuar
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  // Fase 29.3: Safe exit — AlertDialog antes de salir del check-in
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!checkinFromUrl) setExitConfirmed(false);
+  }, [checkinFromUrl]);
+
+  const openCheckinModal = useCallback(() => {
+    setIsTransitioning(true);
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      params.set('checkin', 'true');
+      params.set('step', '1');
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
+  }, [pathname, searchParams, router]);
+
+  useEffect(() => {
+    if (checkinFromUrl) setIsTransitioning(false);
+  }, [checkinFromUrl]);
+
+  const handleSafeClose = useCallback(() => {
+    setShowExitConfirm(true);
+  }, []);
+
+  const handleConfirmExitCheckin = useCallback(() => {
+    setExitConfirmed(true);
+    setShowExitConfirm(false);
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      params.delete('checkin');
+      params.delete('step');
+      const q = params.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname ?? '', { scroll: false });
+    });
+  }, [pathname, searchParams, router]);
+
+  const handleCheckinStepChange = useCallback((step: number) => {
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      params.set('checkin', 'true');
+      params.set('step', String(step));
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
+  }, [pathname, searchParams, router]);
   
   // Estado de actualización para notificaciones (solo insert/delete, no cambios de estatus)
   const [pendingUpdate, setPendingUpdate] = useState<{ 
@@ -1198,8 +1263,11 @@ export function PublicQuoteAuthorizedView({
               className="w-full sm:w-auto gap-2"
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('close-overlays'));
-                setShowAutorizarModal(true);
+                openCheckinModal();
               }}
+              disabled={isTransitioning}
+              loading={isTransitioning}
+              loadingText=""
             >
               Continuar
               <ChevronRight className="h-5 w-5 shrink-0" />
@@ -1301,12 +1369,15 @@ export function PublicQuoteAuthorizedView({
         />
       )}
 
-      {/* Fase 29.1: Flujo de 3 pasos — condición comercial ya pactada en cierre, preseleccionada */}
+      {/* Fase 29.1 / 29.3: Flujo de 3 pasos; URL ?checkin=true&step=1|2|3; safe exit vía AlertDialog */}
       {showAutorizarModal && (
         <AutorizarCotizacionModal
           cotizacion={cotizacion}
           isOpen={showAutorizarModal}
-          onClose={() => setShowAutorizarModal(false)}
+          onClose={handleSafeClose}
+          initialStep={checkinStep as 1 | 2 | 3}
+          onStepChange={handleCheckinStepChange}
+          useSafeExitConfirm
           promiseId={promiseId}
           studioSlug={studioSlug}
           promiseData={{
@@ -1328,9 +1399,27 @@ export function PublicQuoteAuthorizedView({
           precioFinalCierre={precioFinalCierreModal}
           ajusteCierre={ajusteCierreModal}
           autoGenerateContract={shareSettings?.auto_generate_contract ?? false}
-          onSuccess={() => setShowAutorizarModal(false)}
+          onSuccess={handleConfirmExitCheckin}
         />
       )}
+
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent
+          className="z-[10050] bg-zinc-900 border-zinc-800"
+          overlayClassName="z-[10050]"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100">¿Salir del check-in?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              Si cierras ahora, perderás el progreso de los datos que no hayas confirmado. ¿Deseas salir?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-zinc-600 text-zinc-300 hover:bg-zinc-800">Seguir completando</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmExitCheckin} className="bg-red-600 hover:bg-red-700">Sí, salir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Fase 28.7/28.8: Sheet de inspección de servicios - solo lectura, sin secciones financieras */}
       <CotizacionDetailSheet
