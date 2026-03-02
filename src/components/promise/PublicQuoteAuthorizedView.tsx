@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, startTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package } from 'lucide-react';
+import { Loader2, CheckCircle2, Building2, Copy, Check, FileText, Clock, FileSearch, Package, ChevronRight } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
@@ -12,6 +12,15 @@ import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { ResumenPago } from '@/components/shared/precio';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
+import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
+import {
+  getPrecioListaStudio,
+  getMontoCortesiasFromServicios,
+  getBonoEspecialMonto,
+  getCortesiasCount,
+  getPrecioFinalCierre,
+  getAjusteCierre,
+} from '@/lib/utils/promise-public-financials';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
@@ -84,6 +93,8 @@ export function PublicQuoteAuthorizedView({
   
   // Fase 28.1: Inspección de servicios contratados
   const [showServicesSheet, setShowServicesSheet] = useState(false);
+  // Fase 29.1: Modal de autorización (flujo 3 pasos)
+  const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   
   // Estado de actualización para notificaciones (solo insert/delete, no cambios de estatus)
   const [pendingUpdate, setPendingUpdate] = useState<{ 
@@ -183,20 +194,42 @@ export function PublicQuoteAuthorizedView({
       }
       : null);
 
-  // Fase 28.1: Detectar si hay datos placeholder que necesitan actualización
-  const hasPlaceholderData = useMemo(() => {
-    const addressLower = (promise.contact_address || '').toLowerCase();
-    const emailLower = (promise.contact_email || '').toLowerCase();
-    
-    return (
-      addressLower.includes('proporcionada') ||
-      addressLower.includes('placeholder') ||
-      addressLower.includes('cliente)') ||
-      emailLower.includes('@placeholder') ||
-      !promise.contact_address ||
-      !promise.contact_email
-    );
-  }, [promise.contact_address, promise.contact_email]);
+  // Fase 29.1: Datos pendientes de validar (placeholder, "asd", vacíos) — usado en títulos y CTA único
+  const isDataPending = useMemo(() => {
+    const name = (promise.contact_name || '').trim().toLowerCase();
+    const address = (promise.contact_address || '').trim().toLowerCase();
+    const email = (promise.contact_email || '').trim().toLowerCase();
+
+    const invalidValues = ['asd', 'placeholder', 'test', 'prueba', 'proporcionada', 'cliente)'];
+    const isInvalidName = !name || invalidValues.some((v) => name === v || name.includes(v));
+    const isInvalidAddress =
+      !address ||
+      invalidValues.some((v) => address === v || address.includes(v)) ||
+      address.includes('proporcionada') ||
+      address.includes('(cliente)');
+    const isInvalidEmail = !email || email.includes('@placeholder');
+
+    return isInvalidName || isInvalidAddress || isInvalidEmail;
+  }, [promise.contact_name, promise.contact_address, promise.contact_email]);
+
+  const hasPlaceholderData = isDataPending;
+
+  // Desglose para AutorizarCotizacionModal (condición comercial ya pactada en cierre)
+  const precioListaModal = useMemo(() => getPrecioListaStudio(cotizacion), [cotizacion]);
+  const montoCortesiasModal = useMemo(() => getMontoCortesiasFromServicios(cotizacion), [cotizacion]);
+  const cortesiasCountModal = useMemo(() => getCortesiasCount(cotizacion), [cotizacion]);
+  const montoBonoModal = useMemo(() => getBonoEspecialMonto(cotizacion), [cotizacion]);
+  const precioFinalCierreModal = useMemo(
+    () => getPrecioFinalCierre(cotizacion, Math.max(0, precioListaModal - montoCortesiasModal - montoBonoModal)),
+    [cotizacion, precioListaModal, montoCortesiasModal, montoBonoModal]
+  );
+  const ajusteCierreModal = useMemo(
+    () => getAjusteCierre(precioFinalCierreModal, precioListaModal, montoCortesiasModal, montoBonoModal),
+    [precioFinalCierreModal, precioListaModal, montoCortesiasModal, montoBonoModal]
+  );
+  const condicionesComercialesIdCierre =
+    (cotizacion as { contract?: { condiciones_comerciales?: { id?: string } } }).contract?.condiciones_comerciales?.id ??
+    (cotizacion.condiciones_comerciales && 'id' in cotizacion.condiciones_comerciales ? cotizacion.condiciones_comerciales.id : null);
 
   // Actualizar solo el contrato localmente (sin recargar toda la cotización)
   const updateContractLocally = useCallback(async () => {
@@ -686,11 +719,6 @@ export function PublicQuoteAuthorizedView({
           {/* PASO PRINCIPAL: Firma de Contrato - solo si el estudio tiene habilitado auto_generate_contract */}
           {(isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
             <div className="relative">
-              {/* Línea conectora al siguiente paso - solo si el contrato está firmado */}
-              {isContractSigned && (
-                <div className="absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] bg-emerald-500/30 z-0" />
-              )}
-
               <div className="flex items-start gap-4">
                 {/* Número del paso - más grande y destacado */}
                 <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center relative z-10 transition-all duration-300 ${isContractSigned
@@ -704,29 +732,34 @@ export function PublicQuoteAuthorizedView({
                   )}
                 </div>
 
-                {/* Contenido */}
+                {/* Título y subtítulo */}
                 <div className="flex-1 min-w-0">
                   <div className="mb-4">
                     <h3 className="text-xl font-bold text-zinc-100 mb-1">
                       {isContractSigned
                         ? 'Contrato Firmado'
-                        : hasPlaceholderData
+                        : isDataPending
                           ? 'Validación de Información'
                           : hasContract
                             ? 'Firma tu Contrato Digital'
-                            : 'Revisión de Contrato'}
+                            : 'Preparando tu Contrato'}
                     </h3>
                     <p className="text-sm text-zinc-400">
                       {isContractSigned
                         ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
-                        : hasPlaceholderData
-                          ? 'Completa tu información de contacto y del evento para generar tu contrato'
+                        : isDataPending
+                          ? 'Completa tus datos requeridos para generar tu contrato.'
                           : hasContract
-                            ? 'Revisa y firma tu contrato digital para oficializar tu reserva'
-                            : 'Estamos preparando tu contrato digital'}
+                            ? 'Revisa y firma tu contrato para oficializar tu reserva.'
+                            : 'Estamos generando el documento final con tu información verificada.'}
                     </p>
                   </div>
-                  {hasContract ? (
+                </div>
+              </div>
+
+              {/* Cards a ancho completo (sin indentación respecto al contenedor) */}
+              <div className="w-full mt-0">
+                {hasContract ? (
                     // Sub-condition A: Contrato disponible - mostrar preview para firma
                     <div data-contract-card>
                       <PublicContractCard
@@ -800,19 +833,18 @@ export function PublicQuoteAuthorizedView({
                         return (
                           <div className="space-y-4">
                             {/* Mensaje de bienvenida */}
-                            <ZenCard>
+                            <ZenCard className="border-emerald-500/50 bg-emerald-500/5">
                               <div className="p-6">
                                 <div className="flex items-start gap-4">
                                   <div className="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
                                     <CheckCircle2 className="h-6 w-6 text-emerald-400" />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
-                                      <FileText className="h-5 w-5 text-emerald-400" />
+                                    <h4 className="text-lg font-semibold text-zinc-200 mb-2">
                                       Pago Confirmado
                                     </h4>
                                     <p className="text-sm text-zinc-400 leading-relaxed">
-                                      ¡Excelente! {studio.studio_name} confirmó la recepción de tu anticipo. Revisa el resumen financiero y los servicios contratados antes de firmar.
+                                      ¡Excelente! Se confirmó la recepción de tu anticipo. Revisa el resumen financiero y los servicios contratados antes de continuar con el proceso de contratación.
                                     </p>
                                   </div>
                                 </div>
@@ -835,22 +867,6 @@ export function PublicQuoteAuthorizedView({
                                   compact
                                   pagoConfirmado
                                 />
-                                
-                                {/* Fase 28.7: Next Step CTA */}
-                                {hasPlaceholderData && !isContractSigned && (
-                                  <div className="mt-6 pt-6 border-t border-zinc-700">
-                                    <ZenButton
-                                      size="lg"
-                                      onClick={() => {
-                                        window.dispatchEvent(new CustomEvent('close-overlays'));
-                                        setShowEditDataModal(true);
-                                      }}
-                                      className="w-full"
-                                    >
-                                      Continuar con mi información
-                                    </ZenButton>
-                                  </div>
-                                )}
                               </div>
                             </ZenCard>
 
@@ -874,42 +890,10 @@ export function PublicQuoteAuthorizedView({
                                       </p>
                                     </div>
                                   </div>
-                                  <FileSearch className="h-5 w-5 text-zinc-400" />
+                                  <ChevronRight className="h-5 w-5 text-zinc-400" />
                                 </div>
                               </div>
                             </ZenCard>
-
-                            {/* Fase 28.1: Información de Contratación - solo si hay datos placeholder o faltan datos */}
-                            {hasPlaceholderData && !isContractSigned && (
-                              <ZenCard className="border-amber-500/30 bg-amber-950/20">
-                                <div className="p-6">
-                                  <div className="flex items-start gap-4 mb-4">
-                                    <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center">
-                                      <FileText className="h-5 w-5 text-amber-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <h4 className="text-sm font-medium text-zinc-200 mb-1">
-                                        Información de Contratación
-                                      </h4>
-                                      <p className="text-xs text-zinc-400">
-                                        Actualiza tus datos para poder generar y firmar tu contrato
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <ZenButton
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      window.dispatchEvent(new CustomEvent('close-overlays'));
-                                      setShowEditDataModal(true);
-                                    }}
-                                    className="w-full"
-                                  >
-                                    Completar datos requeridos
-                                  </ZenButton>
-                                </div>
-                              </ZenCard>
-                            )}
                           </div>
                         );
                       }
@@ -973,7 +957,6 @@ export function PublicQuoteAuthorizedView({
                     // Fallback: Skeleton solo si no está en cierre
                     <ContractStepCardSkeleton />
                   )}
-                </div>
               </div>
             </div>
           )}
@@ -1207,30 +1190,19 @@ export function PublicQuoteAuthorizedView({
           )}
         </div>
 
-        {/* Fase 28.8: Botón principal "Autorizar y continuar" - solo visible si NO está firmado */}
+        {/* Fase 29.1: Mismo ancho que las cards; desktop botón a la derecha, mobile ancho completo */}
         {!isContractSigned && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
-          <div className="mt-8 max-w-2xl mx-auto px-4">
+          <div className="mt-8 flex justify-end">
             <ZenButton
               size="lg"
-              className="w-full"
+              className="w-full sm:w-auto gap-2"
               onClick={() => {
-                if (hasPlaceholderData) {
-                  window.dispatchEvent(new CustomEvent('close-overlays'));
-                  setShowEditDataModal(true);
-                } else if (hasContract && !isContractSigned) {
-                  // Scroll suave al contrato
-                  const contractElement = document.querySelector('[data-contract-card]');
-                  if (contractElement) {
-                    contractElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-                }
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+                setShowAutorizarModal(true);
               }}
             >
-              {hasPlaceholderData
-                ? 'Autorizar y continuar'
-                : hasContract
-                  ? 'Ir a firma de contrato'
-                  : 'Continuar con el proceso'}
+              Continuar
+              <ChevronRight className="h-5 w-5 shrink-0" />
             </ZenButton>
           </div>
         )}
@@ -1326,6 +1298,37 @@ export function PublicQuoteAuthorizedView({
           onClose={() => setShowBankInfoModal(false)}
           bankInfo={bankInfo}
           studioName={studio.studio_name}
+        />
+      )}
+
+      {/* Fase 29.1: Flujo de 3 pasos — condición comercial ya pactada en cierre, preseleccionada */}
+      {showAutorizarModal && (
+        <AutorizarCotizacionModal
+          cotizacion={cotizacion}
+          isOpen={showAutorizarModal}
+          onClose={() => setShowAutorizarModal(false)}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
+          promiseData={{
+            contact_name: promise.contact_name,
+            contact_phone: promise.contact_phone,
+            contact_email: promise.contact_email ?? '',
+            contact_address: promise.contact_address ?? '',
+            event_name: promise.event_name ?? '',
+            event_location: promise.event_location ?? '',
+            event_date: promise.event_date ?? null,
+            event_type_name: promise.event_type_name ?? null,
+          }}
+          condicionesComercialesId={condicionesComercialesIdCierre}
+          condicionesComercialesMetodoPagoId={null}
+          precioLista={precioListaModal}
+          montoCortesias={montoCortesiasModal}
+          cortesiasCount={cortesiasCountModal}
+          montoBono={montoBonoModal}
+          precioFinalCierre={precioFinalCierreModal}
+          ajusteCierre={ajusteCierreModal}
+          autoGenerateContract={shareSettings?.auto_generate_contract ?? false}
+          onSuccess={() => setShowAutorizarModal(false)}
         />
       )}
 

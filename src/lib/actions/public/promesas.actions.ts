@@ -1364,12 +1364,10 @@ export async function getPublicPromisePendientes(
       });
 
       // Incluir items del catálogo Y custom items (con snapshots)
-      console.log('📦 [Pendientes] ÍTEMS TOTALES DB:', (cot.cotizacion_items as CotizacionItem[]).length);
       const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
         // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
         return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
       });
-      console.log('📦 [Pendientes] ÍTEMS TRAS FILTRO:', itemsFiltrados.length);
 
       const estructura = construirEstructuraJerarquicaCotizacion(
         itemsFiltrados.map((item: CotizacionItem) => {
@@ -1443,9 +1441,6 @@ export async function getPublicPromisePendientes(
           }),
         })),
       }));
-
-      // DEBUG: comparación Cierre vs Pendiente — objeto RAW cotizacion.servicios (server)
-      console.log('[getPublicPromisePendientes] cotizacion.servicios RAW', JSON.stringify(servicios, null, 0).slice(0, 2000));
 
       const condicionesComerciales = (cot as any)['condiciones_comerciales'];
 
@@ -3531,12 +3526,10 @@ export async function getPublicPromiseCierre(
     });
 
     // Incluir items del catálogo Y custom items (con snapshots)
-    console.log('📦 [Cierre] ÍTEMS TOTALES DB:', (cotizacion.cotizacion_items as CotizacionItem[]).length);
     const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
       // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
       return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
     });
-    console.log('📦 [Cierre] ÍTEMS TRAS FILTRO:', itemsFiltrados.length);
 
     // Fase 28.13: IDs de cortesía desde catálogo original (match como en Studio / ResumenCotizacion)
     const itemsCortesiaRaw = (cotizacion as { items_cortesia?: unknown }).items_cortesia;
@@ -3631,10 +3624,6 @@ export async function getPublicPromiseCierre(
           }),
       })),
     }));
-
-    // DEBUG: comparación Cierre vs Pendiente — objeto RAW cotizacion.servicios (server)
-    const serviciosConCourtesy = servicios.flatMap(s => s.categorias.flatMap(c => c.servicios.filter(srv => srv.is_courtesy === true)));
-    console.log('[getPublicPromiseCierre] cotizacion.servicios RAW (is_courtesy en true?)', serviciosConCourtesy.length, JSON.stringify(servicios, null, 0).slice(0, 2000));
 
     const cierre = cotizacion.cotizacion_cierre as any;
     const condCierre = cierre?.condiciones_comerciales;
