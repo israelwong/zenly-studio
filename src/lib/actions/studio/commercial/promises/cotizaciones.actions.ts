@@ -3621,6 +3621,8 @@ export interface PasarACierreOptions {
   pago_confirmado_estudio?: boolean;
   /** Fase 28.0: Monto confirmado del anticipo (sobreescribe el calculado por condición) */
   pago_monto_confirmado?: number;
+  /** ID del método de pago seleccionado */
+  pago_metodo_id?: string | null;
 }
 
 /**
@@ -3787,6 +3789,7 @@ export async function pasarACierre(
           checkin_completed: true,
           pago_confirmado_estudio: pagoConfirmado,
           pago_monto: pagoMontoConfirmado,
+          pago_metodo_id: options?.pago_metodo_id || null,
         },
         update: {
           previous_status: previousStatus,
@@ -3801,7 +3804,7 @@ export async function pasarACierre(
           pago_concepto: null,
           pago_monto: pagoMontoConfirmado,
           pago_fecha: null,
-          pago_metodo_id: null,
+          pago_metodo_id: options?.pago_metodo_id || null,
           updated_at: new Date(),
         },
       });

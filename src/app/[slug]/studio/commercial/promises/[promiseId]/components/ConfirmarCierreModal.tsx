@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ZenDialog, ZenButton, ZenInput } from '@/components/ui/zen';
+import { ZenDialog, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Loader2, Lock, Globe, Pencil, DollarSign } from 'lucide-react';
 import { getDatosConfirmarCierre, getAuditoriaRentabilidadCierre, limpiarCondicionPactadaAlCancelarCierre, actualizarAnticipoCondicionNegociacionCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { obtenerMetodosPagoManuales } from '@/lib/actions/studio/config/metodos-pago.actions';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { AuditoriaRentabilidadCard } from '@/components/shared/commercial';
 import { ResumenPago } from '@/components/shared/precio';
 import { toast } from 'sonner';
 
@@ -132,13 +134,29 @@ export function ConfirmarCierreModal({
   const [pagoMontoConfirmado, setPagoMontoConfirmado] = useState<string>('');
   /** Fase 28.3: Trackear si el usuario editó manualmente el monto */
   const isManualEditRef = useRef(false);
+  /** Método de pago seleccionado */
+  const [metodosPago, setMetodosPago] = useState<Array<{ id: string; payment_method_name: string }>>([]);
+  const [pagoMetodoId, setPagoMetodoId] = useState<string>('');
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
       setPagoConfirmado(false);
       setPagoMontoConfirmado('');
+      setPagoMetodoId('');
       isManualEditRef.current = false;
+      
+      // Cargar métodos de pago
+      obtenerMetodosPagoManuales(studioSlug).then((result) => {
+        if (result.success && result.data) {
+          const metodos = result.data.map(m => ({ id: m.id, payment_method_name: m.payment_method_name }));
+          setMetodosPago(metodos);
+          if (metodos.length > 0) {
+            setPagoMetodoId(metodos[0].id);
+          }
+        }
+      }).catch(() => {});
+      
       getDatosConfirmarCierre(studioSlug, cotizacionId)
         .then((res) => {
           if (res.success && res.data) {
@@ -252,6 +270,7 @@ export function ConfirmarCierreModal({
         else if (!isPct && usarAjuste.advance_amount != null) montoFinal = Math.round(Number(usarAjuste.advance_amount));
       }
       basePayload.pago_monto_confirmado = montoFinal > 0 ? montoFinal : Math.round(totalAPagar * 0.1);
+      basePayload.pago_metodo_id = pagoMetodoId || null;
     }
     
     return basePayload;
@@ -553,41 +572,67 @@ export function ConfirmarCierreModal({
                 />
               </div>
               {pagoConfirmado && (
-                <div className="pt-3 border-t border-zinc-700/50">
-                  <ZenInput
-                    type="number"
-                    min={0}
-                    max={totalAPagar}
-                    step={0.01}
-                    label="Monto del anticipo recibido"
-                    placeholder={`Anticipo calculado: ${formatearMoneda(anticipo)}`}
-                    value={pagoMontoConfirmado}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const num = parseFloat(raw);
-                      const capped = !raw || isNaN(num) ? raw : (num > totalAPagar ? totalAPagar.toString() : raw);
-                      setPagoMontoConfirmado(capped);
-                      isManualEditRef.current = true;
-                    }}
-                    icon={DollarSign}
-                    hint={`Máximo: ${formatearMoneda(totalAPagar)} (total a pagar). Si es diferente al calculado, ajústalo aquí.`}
-                  />
+                <div className="pt-3 border-t border-zinc-700/50 space-y-3">
+                  <div className="flex gap-3 items-start">
+                    <div className="space-y-2 w-32">
+                      <label className="text-xs text-zinc-400 uppercase tracking-wide font-semibold block">
+                        Monto recibido
+                      </label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                        <input
+                          type="number"
+                          min={0}
+                          max={totalAPagar}
+                          step={0.01}
+                          placeholder={`${formatearMoneda(anticipo)}`}
+                          value={pagoMontoConfirmado}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const num = parseFloat(raw);
+                            const capped = !raw || isNaN(num) ? raw : (num > totalAPagar ? totalAPagar.toString() : raw);
+                            setPagoMontoConfirmado(capped);
+                            isManualEditRef.current = true;
+                          }}
+                          className="w-full h-[42px] pl-10 pr-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder:text-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1">
+                      {metodosPago.length > 0 ? (
+                        <div className="space-y-2">
+                          <label className="text-xs text-zinc-400 uppercase tracking-wide font-semibold block">
+                            Método de pago
+                          </label>
+                          <ZenSelect
+                            value={pagoMetodoId}
+                            onValueChange={setPagoMetodoId}
+                            options={metodosPago.map(m => ({ value: m.id, label: m.payment_method_name }))}
+                            placeholder="Selecciona método"
+                            disableSearch={metodosPago.length <= 5}
+                            className="h-[42px]"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No hay métodos de pago configurados</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-zinc-500">
+                    Máximo: {formatearMoneda(totalAPagar)} (total a pagar). Si es diferente al calculado, ajústalo aquí.
+                  </p>
                 </div>
               )}
             </div>
 
             {auditoria != null && (
-              <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 p-2 ring-2 ring-amber-500/30">
-                  <p className="text-xs text-zinc-500 font-medium mb-1.5">
-                    Auditoría de rentabilidad visible solo para estudio
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm text-zinc-400">
-                    <span>Utilidad Neta</span>
-                    <span className="text-right font-medium text-zinc-300">{formatearMoneda(auditoria.utilidadNeta)}</span>
-                    <span>Margen %</span>
-                    <span className="text-right font-medium text-zinc-300">{auditoria.margenPorcentaje.toFixed(1)}%</span>
-                  </div>
-                </div>
+              <AuditoriaRentabilidadCard
+                utilidadNeta={auditoria.utilidadNeta}
+                margenPorcentaje={auditoria.margenPorcentaje}
+                compact
+              />
             )}
           </>
         )}
