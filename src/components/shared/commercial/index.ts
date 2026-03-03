@@ -5,3 +5,4 @@ export {
   type CommercialConfigSidebarProps,
   type CommercialConfigActionButtonsProps,
 } from './CommercialConfigSidebar';
+export { AuditoriaRentabilidadCard, type AuditoriaRentabilidadCardProps } from './AuditoriaRentabilidadCard';
