@@ -782,6 +782,14 @@ export async function getEventContractData(
             condiciones_comerciales_advance_type_snapshot: true,
             condiciones_comerciales_advance_amount_snapshot: true,
             condiciones_comerciales_discount_percentage_snapshot: true,
+            precio_calculado: true,
+            bono_especial: true,
+            cortesias_monto_snapshot: true,
+            cortesias_count_snapshot: true,
+            snap_precio_lista: true,
+            snap_ajuste_cierre: true,
+            snap_monto_bono: true,
+            snap_total_final: true,
             // Relación catálogo + negociación (mismo fallback que getPromiseContractData)
             condiciones_comerciales: {
               select: {
@@ -859,6 +867,14 @@ export async function getEventContractData(
             condiciones_comerciales_advance_type_snapshot: true,
             condiciones_comerciales_advance_amount_snapshot: true,
             condiciones_comerciales_discount_percentage_snapshot: true,
+            precio_calculado: true,
+            bono_especial: true,
+            cortesias_monto_snapshot: true,
+            cortesias_count_snapshot: true,
+            snap_precio_lista: true,
+            snap_ajuste_cierre: true,
+            snap_monto_bono: true,
+            snap_total_final: true,
             event_duration: true,
             condiciones_comerciales: {
               select: {
@@ -1114,13 +1130,26 @@ export async function getEventContractData(
       precioOriginalParaContrato = precioBaseReal;
     }
 
-    // Preparar datos de condiciones comerciales si existen
+    // Desglose completo desde snapshots (o fallback precio_calculado/cortesias para autorizadas antiguas)
+    const cotSnap = cotizacionAprobada as typeof cotizacionAprobada & {
+      snap_precio_lista?: unknown; snap_ajuste_cierre?: unknown; snap_monto_bono?: unknown; snap_total_final?: unknown;
+      cortesias_monto_snapshot?: unknown; precio_calculado?: unknown; bono_especial?: unknown;
+    };
+    const precioListaNum = cotSnap.snap_precio_lista != null ? Number(cotSnap.snap_precio_lista)
+      : (cotSnap.precio_calculado != null ? Number(cotSnap.precio_calculado) : undefined);
+    const snapPrecioLista = precioListaNum !== undefined ? precioListaNum : precioBase;
+    const snapCortesias = cotSnap.cortesias_monto_snapshot != null ? Number(cotSnap.cortesias_monto_snapshot) : 0;
+    const snapBono = (cotSnap.snap_monto_bono != null ? Number(cotSnap.snap_monto_bono) : cotSnap.bono_especial != null ? Number(cotSnap.bono_especial) : 0) ?? 0;
+    const snapTotal = cotSnap.snap_total_final != null ? Number(cotSnap.snap_total_final) : totalFinal;
+    const snapAjuste = cotSnap.snap_ajuste_cierre != null ? Number(cotSnap.snap_ajuste_cierre)
+      : (snapTotal - Math.max(0, snapPrecioLista - snapCortesias - snapBono));
+    const tieneSnapDesglose = snapPrecioLista > 0 || snapCortesias > 0 || snapBono > 0 || Math.abs(snapAjuste) >= 0.01;
+
     let condicionesData: CondicionesComercialesData | undefined;
     if (condiciones) {
-      // Calcular monto de anticipo basado en totalFinal (ya sea negociado o normal)
       let montoAnticipoCalculado: number | undefined;
       if (condiciones.advance_percentage && condiciones.advance_type === "percentage") {
-        montoAnticipoCalculado = totalFinal * (Number(condiciones.advance_percentage) / 100);
+        montoAnticipoCalculado = snapTotal * (Number(condiciones.advance_percentage) / 100);
       } else if (condiciones.advance_amount) {
         montoAnticipoCalculado = Number(condiciones.advance_amount);
       }
@@ -1133,15 +1162,19 @@ export async function getEventContractData(
         monto_anticipo: montoAnticipoCalculado,
         porcentaje_descuento: condiciones.discount_percentage || undefined,
         total_contrato: esNegociacion ? precioOriginalParaContrato : precioBaseReal,
-        total_final: totalFinal,
+        total_final: snapTotal,
         descuento_aplicado: descuentoAplicado,
-        // Campos para modo negociaci?n
         es_negociacion: esNegociacion,
         precio_negociado: precioNegociado ?? undefined,
         precio_original: esNegociacion ? precioOriginalParaContrato : undefined,
         ahorro_total: ahorroTotal,
-        // TODO: Agregar condiciones_metodo_pago si est?n disponibles en la relaci?n
         condiciones_metodo_pago: undefined,
+        // Desglose completo para vista autorizada (snapshots inmutables o fallback)
+        tiene_concesiones: tieneSnapDesglose,
+        precio_lista: snapPrecioLista > 0 ? snapPrecioLista : undefined,
+        monto_cortesias: snapCortesias > 0 ? snapCortesias : undefined,
+        monto_bono: snapBono > 0 ? snapBono : undefined,
+        ajuste_cierre: Math.abs(snapAjuste) >= 0.01 ? snapAjuste : undefined,
       };
     }
 

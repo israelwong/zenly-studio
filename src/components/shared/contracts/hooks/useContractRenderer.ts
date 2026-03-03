@@ -155,16 +155,60 @@ export function useContractRenderer({
     }
 
     if (condicionesData) {
+      const contentHasPlaceholder = rendered.includes('@condiciones_comerciales') || 
+                                   rendered.includes('{condiciones_comerciales}') ||
+                                   rendered.includes('@condiciones_pago') ||
+                                   rendered.includes('{condiciones_pago}');
+      
+      console.log('[useContractRenderer] Renderizando condiciones comerciales:', {
+        condicionesData,
+        hasNombre: !!condicionesData.nombre,
+        hasTotalFinal: condicionesData.total_final !== undefined,
+        contentHasPlaceholder,
+        contentLength: rendered.length,
+      });
+      
       const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
+      console.log('[useContractRenderer] HTML generado:', {
+        htmlLength: condicionesHtml.length,
+        htmlPreview: condicionesHtml.substring(0, 200),
+      });
+      
+      const beforeReplace = rendered.length;
       rendered = rendered.replaceAll("@condiciones_comerciales", condicionesHtml);
       rendered = rendered.replaceAll("{condiciones_comerciales}", condicionesHtml);
+      
+      // Reemplazar también @condiciones_pago (alias legacy)
       if (rendered.includes("@condiciones_pago")) {
         rendered = rendered.replace("@condiciones_pago", condicionesHtml);
       }
       if (rendered.includes("{condiciones_pago}")) {
         rendered = rendered.replace("{condiciones_pago}", condicionesHtml);
       }
+      
+      const afterReplace = rendered.length;
+      const wasReplaced = afterReplace !== beforeReplace;
+
+      // Contenido ya trae el bloque inyectado (contract_content_snapshot al autorizar): no duplicar
+      const alreadyHasCondicionesBlock = rendered.includes('condiciones-comerciales') && rendered.includes('TOTAL A PAGAR');
+
+      // 🚨 INYECTOR DE EMERGENCIA (Fase 31.4): solo si no hay placeholder Y el contenido no es snapshot
+      if ((!contentHasPlaceholder || !wasReplaced) && !alreadyHasCondicionesBlock) {
+        const hasHtmlStructure = rendered.includes('</div>') || rendered.includes('</p>');
+        if (hasHtmlStructure) {
+          const injectionPoint = rendered.lastIndexOf('</div>');
+          if (injectionPoint > 0) {
+            const injectionHtml = `<div class="mt-8 border-t border-zinc-700 pt-6">${condicionesHtml}</div>`;
+            rendered = rendered.substring(0, injectionPoint) + injectionHtml + rendered.substring(injectionPoint);
+          } else {
+            rendered += `<div class="mt-8 border-t border-zinc-700 pt-6">${condicionesHtml}</div>`;
+          }
+        } else {
+          rendered += `<div class="mt-8 border-t border-zinc-700 pt-6">${condicionesHtml}</div>`;
+        }
+      }
     } else {
+      console.log('[useContractRenderer] NO hay condicionesData, usando placeholder');
       const placeholder =
         '<div class="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg"><p class="text-zinc-500 italic">No hay condiciones comerciales disponibles</p></div>';
       rendered = rendered.replace("@condiciones_comerciales", placeholder);

@@ -13,6 +13,8 @@ import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcula
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { checkDateConflict } from '@/lib/utils/booking-conflict';
+import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
+import { generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent } from '@/lib/utils/contract-financial-snapshot';
 
 interface CierreResponse {
   success: boolean;
@@ -1667,6 +1669,17 @@ export async function autorizarYCrearEvento(
           },
         },
         cotizacion_items: true,
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
       },
     });
 
@@ -1845,6 +1858,15 @@ export async function autorizarYCrearEvento(
       cortesias_monto += valorComercial > 0 ? valorComercial : Number((i as { subtotal?: unknown }).subtotal ?? 0);
     }
 
+    // Snapshot financiero (inmutable) para reportes y anexos futuros
+    const totalFinalCierre = Number(cotizacion.price ?? 0);
+    const montoBonoSnap = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
+    const precioListaSnap = getPrecioListaStudio({
+      price: cotizacion.price,
+      precio_calculado: cotizacion.precio_calculado,
+    });
+    const ajusteCierreSnap = getAjusteCierre(totalFinalCierre, precioListaSnap, cortesias_monto, montoBonoSnap);
+
     // 7. TRANSACCI?N AT?MICA
     console.log('🔍 VALIDANDO REGLAS DE NEGOCIO PARA:', promiseId);
     const result = await prisma.$transaction(async (tx) => {
@@ -1872,25 +1894,42 @@ export async function autorizarYCrearEvento(
       }
 
       // 7.2. Crear snapshots de condiciones comerciales (si est?n definidas)
+      // PRIORIDAD: condición de negociación (pactada) > condición estándar del registro de cierre
       // Para clientes manuales son opcionales, pero si est?n definidas deben guardarse
-      const condicionSnapshot = registroCierre.condiciones_comerciales_definidas && registroCierre.condiciones_comerciales
+      const condicionNegociacion = cotizacion.condicion_comercial_negociacion;
+      const condicionEstandar = registroCierre.condiciones_comerciales;
+      
+      console.log('[autorizarYCrearEvento] Condiciones para snapshot:', {
+        tieneNegociacion: !!condicionNegociacion,
+        tieneEstandar: !!condicionEstandar,
+        negociacionName: condicionNegociacion?.name,
+        estandarName: condicionEstandar?.name,
+      });
+      
+      const condicionSnapshot = condicionNegociacion
         ? {
-          name: registroCierre.condiciones_comerciales.name,
-          description: registroCierre.condiciones_comerciales.description,
-          advance_percentage: registroCierre.condiciones_comerciales
-            .advance_percentage
-            ? Number(
-              registroCierre.condiciones_comerciales.advance_percentage
-            )
+          name: condicionNegociacion.name,
+          description: condicionNegociacion.description,
+          advance_percentage: condicionNegociacion.advance_percentage
+            ? Number(condicionNegociacion.advance_percentage)
             : null,
-          advance_type: registroCierre.condiciones_comerciales.advance_type,
-          advance_amount:
-            registroCierre.condiciones_comerciales.advance_amount,
-          discount_percentage: registroCierre.condiciones_comerciales
-            .discount_percentage
-            ? Number(
-              registroCierre.condiciones_comerciales.discount_percentage
-            )
+          advance_type: condicionNegociacion.advance_type,
+          advance_amount: condicionNegociacion.advance_amount,
+          discount_percentage: condicionNegociacion.discount_percentage
+            ? Number(condicionNegociacion.discount_percentage)
+            : null,
+        }
+        : registroCierre.condiciones_comerciales_definidas && condicionEstandar
+        ? {
+          name: condicionEstandar.name,
+          description: condicionEstandar.description,
+          advance_percentage: condicionEstandar.advance_percentage
+            ? Number(condicionEstandar.advance_percentage)
+            : null,
+          advance_type: condicionEstandar.advance_type,
+          advance_amount: condicionEstandar.advance_amount,
+          discount_percentage: condicionEstandar.discount_percentage
+            ? Number(condicionEstandar.discount_percentage)
             : null,
         }
         : null;
@@ -1909,6 +1948,28 @@ export async function autorizarYCrearEvento(
           signed_ip: null,
         }
         : null;
+
+      // 7.3.1 Resumen financiero HTML (snapshot) e inyección permanente en contract_content_snapshot
+      const montoAnticipoSnap = condicionSnapshot
+        ? (condicionSnapshot.advance_type === 'fixed_amount' || condicionSnapshot.advance_type === 'amount') && condicionSnapshot.advance_amount != null
+          ? Number(condicionSnapshot.advance_amount)
+          : (condicionSnapshot.advance_percentage != null ? Math.round(totalFinalCierre * (condicionSnapshot.advance_percentage / 100)) : 0)
+        : 0;
+      const financialHtml = generateFinancialSummaryHtml({
+        nombre: condicionSnapshot?.name ?? 'Condiciones comerciales',
+        descripcion: condicionSnapshot?.description ?? null,
+        precio_lista: precioListaSnap,
+        monto_cortesias: cortesias_monto,
+        ajuste_cierre: ajusteCierreSnap,
+        monto_bono: montoBonoSnap,
+        total_final: totalFinalCierre,
+        monto_anticipo: montoAnticipoSnap > 0 ? montoAnticipoSnap : undefined,
+        tipo_anticipo: condicionSnapshot?.advance_type ?? null,
+        porcentaje_anticipo: condicionSnapshot?.advance_percentage ?? null,
+      });
+      const contractContentWithFinancial = contratoSnapshot?.content
+        ? injectFinancialSummaryIntoContractContent(contratoSnapshot.content, financialHtml)
+        : (contratoSnapshot?.content ?? null);
 
       // 7.4. Crear o actualizar evento
       // Duración: studio_events no tiene campo duration; las horas de cobertura se obtienen de la cotización autorizada (evento.cotizacion_id → studio_cotizaciones.event_duration).
@@ -1988,8 +2049,7 @@ export async function autorizarYCrearEvento(
       // 7.5. Actualizar cotización con snapshots (inmutables) y establecer relación con evento
       // Snapshot de negociación (Ecuación Financiera Maestra): precio_calculado, bono_especial, items_cortesia
       // persisten en la cotización autorizada para que el evento herede el histórico vía cotizacion_id.
-      // Consistencia: AjusteCierre = PrecioFinal - (PrecioLista - Cortesías - Bono); no recalculamos aquí,
-      // copiamos los valores ya guardados en la cotización durante el cierre (centavos exactos).
+      // Snapshots financieros (snap_*) permiten anexos futuros: sumar snap_total_final de varias cotizaciones del mismo evento.
       const snapshotPrecioCalculado = cotizacion.precio_calculado != null
         ? new Prisma.Decimal(Number(cotizacion.precio_calculado))
         : null;
@@ -2012,7 +2072,12 @@ export async function autorizarYCrearEvento(
           items_cortesia: cotizacion.items_cortesia ?? null,
           cortesias_monto_snapshot: cortesias_monto > 0 ? new Prisma.Decimal(cortesias_monto) : null,
           cortesias_count_snapshot: cortesias_count > 0 ? cortesias_count : null,
-          // Snapshots de condiciones comerciales
+          // Snapshots financieros inmutables (auditoría persistencia / anexos)
+          snap_precio_lista: new Prisma.Decimal(precioListaSnap),
+          snap_ajuste_cierre: new Prisma.Decimal(ajusteCierreSnap),
+          snap_monto_bono: new Prisma.Decimal(montoBonoSnap),
+          snap_total_final: new Prisma.Decimal(totalFinalCierre),
+          // Snapshots de condiciones comerciales (sin relación a tabla original tras firma)
           condiciones_comerciales_name_snapshot:
             condicionSnapshot?.name || null,
           condiciones_comerciales_description_snapshot:
@@ -2027,15 +2092,23 @@ export async function autorizarYCrearEvento(
               : null,
           condiciones_comerciales_discount_percentage_snapshot:
             condicionSnapshot?.discount_percentage || null,
-          // Snapshots de contrato
+          // Snapshots de contrato (resumen financiero ya inyectado en HTML)
           contract_template_id_snapshot: contratoSnapshot?.template_id || null,
           contract_template_name_snapshot: contratoSnapshot?.template_name || null,
-          contract_content_snapshot: contratoSnapshot?.content || null,
+          contract_content_snapshot: contractContentWithFinancial || null,
           contract_version_snapshot: contratoSnapshot?.version || null,
           contract_signed_at_snapshot: contratoSnapshot?.signed_at || null,
           contract_signed_ip_snapshot: contratoSnapshot?.signed_ip || null,
           updated_at: new Date(),
         },
+      });
+
+      console.log('[autorizarYCrearEvento] Snapshots guardados:', {
+        cotizacionId,
+        condiciones_name: condicionSnapshot?.name,
+        condiciones_advance_type: condicionSnapshot?.advance_type,
+        condiciones_advance_percentage: condicionSnapshot?.advance_percentage,
+        condiciones_advance_amount: condicionSnapshot?.advance_amount,
       });
 
       // 8.5. Fase 28.5: Registrar pago inicial desde pago_confirmado_estudio o desde cliente
@@ -2360,5 +2433,28 @@ export async function autorizarYCrearEvento(
           : 'Error al autorizar cotizaci?n y crear evento',
     };
   }
+}
+
+/**
+ * Preparación para anexos: total a pagar de un evento sumando snap_total_final de todas las cotizaciones vinculadas.
+ * Hoy: una cotización por evento. Futuro: "Cotización B" u otros anexos con mismo evento_id → suma sin errores.
+ */
+export async function getSnapTotalFinalForEvento(
+  studioId: string,
+  eventoId: string
+): Promise<{ total: number; cotizacionIds: string[] }> {
+  const cotizaciones = await prisma.studio_cotizaciones.findMany({
+    where: { studio_id: studioId, evento_id: eventoId },
+    select: { id: true, snap_total_final: true },
+  });
+  let total = 0;
+  const ids: string[] = [];
+  for (const c of cotizaciones) {
+    if (c.snap_total_final != null) {
+      total += Number(c.snap_total_final);
+      ids.push(c.id);
+    }
+  }
+  return { total, cotizacionIds: ids };
 }
 
