@@ -37,6 +37,8 @@ interface CondicionComercial {
   advance_amount?: number | null;
   discount_percentage: number | null;
   type?: string;
+  /** false = solo estudio; no debe mostrarse en vista prospecto ni en vista previa */
+  is_public?: boolean;
   metodos_pago: Array<{
     id: string;
     metodo_pago_id: string;
@@ -164,17 +166,22 @@ export function CotizacionDetailSheet({
       : null;
 
     if (!condicionesComerciales.length && !negSynthetic) return [];
+    // Solo mostrar condiciones públicas al prospecto (vista previa = vista prospecto; privadas no seleccionables)
+    const soloPublicas = (list: typeof condicionesComerciales) =>
+      list.filter((c) => (c as CondicionComercial & { is_public?: boolean }).is_public !== false);
     let catalogList: typeof condicionesComerciales;
     if (esCotizacionConVisibles && condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
       const setIds = new Set(condicionesVisiblesIds);
-      catalogList = condicionesComerciales.filter((c) => setIds.has(c.id));
+      catalogList = soloPublicas(condicionesComerciales.filter((c) => setIds.has(c.id)));
     } else {
-      catalogList = condicionesComerciales.filter((c) => {
-        const tipo = c.type || 'standard';
-        if (tipo === 'standard') return showStandardConditions;
-        if (tipo === 'offer') return showOfferConditions;
-        return false;
-      });
+      catalogList = soloPublicas(
+        condicionesComerciales.filter((c) => {
+          const tipo = c.type || 'standard';
+          if (tipo === 'standard') return showStandardConditions;
+          if (tipo === 'offer') return showOfferConditions;
+          return false;
+        })
+      );
     }
     return negSynthetic ? [negSynthetic, ...catalogList] : catalogList;
   }, [

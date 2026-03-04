@@ -1166,7 +1166,8 @@ export function CotizacionForm({
           }
         : null,
       paquete_origen: null,
-      condiciones_visibles: selectedCondicionComercialId ? [selectedCondicionComercialId] : null,
+      /** Vista previa al vuelo: condiciones que el usuario tiene marcadas como visibles (el sheet filtra a solo públicas) */
+      condiciones_visibles: condicionIdsVisibles.size > 0 ? Array.from(condicionIdsVisibles) : null,
       bono_especial: Number(bonoEspecial) || 0,
     };
   }, [
@@ -1180,7 +1181,7 @@ export function CotizacionForm({
     calculoPrecio.subtotal,
     calculoPrecio.total,
     precioPersonalizado,
-    selectedCondicionComercialId,
+    condicionIdsVisibles,
     condicionesComerciales,
     condicionNegociacion,
     cotizacionId,

@@ -14,6 +14,7 @@ import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/co
 import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
 import { calculatePackagePrice } from "@/lib/utils/package-price-engine";
 import { calculateCotizacionTotals } from "@/lib/utils/cotizacion-calculation-engine";
+import { formatDisplayDateLong } from "@/lib/utils/date-formatter";
 import { checkDateConflict } from "@/lib/utils/booking-conflict";
 import type { PipelineStage } from "@/lib/actions/schemas/promises-schemas";
 
@@ -317,6 +318,7 @@ export async function obtenerCondicionesComercialesParaCotizacion(
     advance_amount?: number | null;
     discount_percentage: number | null;
     type?: string;
+    is_public?: boolean;
     metodos_pago: Array<{
       id: string;
       metodo_pago_id: string;
@@ -346,6 +348,7 @@ export async function obtenerCondicionesComercialesParaCotizacion(
           advance_amount: c.advance_amount,
           discount_percentage: c.discount_percentage,
           type: c.type,
+          is_public: c.is_public,
           metodos_pago: c.metodos_pago,
         })),
       };
@@ -5173,6 +5176,195 @@ export async function getPublicCotizacionContract(
       success: false,
       error: "Error al obtener datos del contrato",
     };
+  }
+}
+
+/**
+ * Datos para la página de bienvenida post-firma: contacto, estudio, evento, cotización autorizada y contrato.
+ */
+export async function getPublicPromiseBienvenidoData(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    contactName: string;
+    nombreEstudio: string;
+    nombreEvento: string | null;
+    fechaEvento: string | null;
+    categoriaEvento: string | null;
+    archivoContratoUrl: string | null;
+    studio: { studio_name: string; logo_url: string | null };
+    cotizacionId: string;
+    /** Id de contexto del contrato (cotizacion_id); en /bienvenido el contrato es certeza. */
+    contractId: string;
+    eventoId: string | null;
+    contract: {
+      template_id: string | null;
+      content: string | null;
+      version: number;
+      signed_at: Date | null;
+      /** Total a pagar (para desglose en modal contrato). */
+      total_final: number | null;
+      condiciones_comerciales: {
+        id: string;
+        name: string;
+        description: string | null;
+        advance_percentage: number | null;
+        advance_type: string | null;
+        advance_amount: number | null;
+        discount_percentage: number | null;
+      } | null;
+    } | null;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true, studio_name: true, logo_url: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: { id: promiseId, studio_id: studio.id },
+      select: {
+        contact: { select: { name: true } },
+        name: true,
+        event_date: true,
+        event_type: { select: { name: true } },
+      },
+    });
+    if (!promise) return { success: false, error: 'Promesa no encontrada' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+        visible_to_client: true,
+        status: { in: ['aprobada', 'autorizada', 'approved', 'contract_generated', 'contract_signed'] },
+      },
+      select: {
+        id: true,
+        evento_id: true,
+        price: true,
+        contract_content_snapshot: true,
+        contract_template_id_snapshot: true,
+        contract_version_snapshot: true,
+        contract_signed_at_snapshot: true,
+        // Snapshots de condiciones comerciales (guardados en autorización)
+        condiciones_comerciales_name_snapshot: true,
+        condiciones_comerciales_description_snapshot: true,
+        condiciones_comerciales_advance_percentage_snapshot: true,
+        condiciones_comerciales_advance_type_snapshot: true,
+        condiciones_comerciales_advance_amount_snapshot: true,
+        condiciones_comerciales_discount_percentage_snapshot: true,
+        cotizacion_cierre: {
+          select: {
+            contract_template_id: true,
+            contract_content: true,
+            contract_version: true,
+            contract_signed_at: true,
+            pago_monto: true,
+            condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    const cierre = cotizacion.cotizacion_cierre;
+    // Misma fuente que el estudio: priorizar snapshots (post-autorización) y fallback a cierre.
+    type ContractShape = NonNullable<Awaited<ReturnType<typeof getPublicPromiseBienvenidoData>>['data']>['contract'];
+    const hasSnapshot = !!(cotizacion.contract_content_snapshot ?? cotizacion.contract_template_id_snapshot ?? cotizacion.contract_signed_at_snapshot);
+    const hasCierre = !!cierre;
+    const hasContract = hasSnapshot || hasCierre;
+
+    let contract: ContractShape = null;
+    if (hasContract) {
+      const content = cotizacion.contract_content_snapshot ?? cierre?.contract_content ?? null;
+      const templateId = cotizacion.contract_template_id_snapshot ?? cierre?.contract_template_id ?? null;
+      const version = cotizacion.contract_version_snapshot ?? cierre?.contract_version ?? 1;
+      const signedAt = cotizacion.contract_signed_at_snapshot ?? cierre?.contract_signed_at ?? null;
+      
+      // ⚠️ SNAPSHOTS: Priorizar snapshots de condiciones (post-autorización) sobre cierre (temporal)
+      // El total_final viene del price de la cotización (ya incluye ajustes de cierre)
+      const totalFinal = Number(cotizacion.price);
+      
+      // Construir condiciones desde snapshots si existen
+      const hasCondicionesSnapshot = !!(
+        cotizacion.condiciones_comerciales_name_snapshot ||
+        cotizacion.condiciones_comerciales_advance_percentage_snapshot ||
+        cotizacion.condiciones_comerciales_advance_amount_snapshot
+      );
+      
+      const cond = hasCondicionesSnapshot
+        ? {
+            id: '', // No se guarda ID en snapshot
+            name: cotizacion.condiciones_comerciales_name_snapshot ?? 'Condiciones',
+            description: cotizacion.condiciones_comerciales_description_snapshot,
+            advance_percentage: cotizacion.condiciones_comerciales_advance_percentage_snapshot,
+            advance_type: cotizacion.condiciones_comerciales_advance_type_snapshot,
+            advance_amount: cotizacion.condiciones_comerciales_advance_amount_snapshot != null 
+              ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) 
+              : null,
+            discount_percentage: cotizacion.condiciones_comerciales_discount_percentage_snapshot,
+          }
+        : cierre?.condiciones_comerciales; // Fallback a cierre si no hay snapshot
+      
+      contract = {
+        template_id: templateId,
+        content,
+        version: version ?? 1,
+        signed_at: signedAt,
+        total_final: totalFinal,
+        condiciones_comerciales: cond
+          ? {
+              id: cond.id || '',
+              name: cond.name,
+              description: cond.description,
+              advance_percentage: cond.advance_percentage,
+              advance_type: cond.advance_type,
+              advance_amount: cond.advance_amount != null ? Number(cond.advance_amount) : null,
+              discount_percentage: cond.discount_percentage != null ? Number(cond.discount_percentage) : null,
+            }
+          : null,
+      };
+    }
+
+    const fechaEventoFormatted = promise.event_date
+      ? formatDisplayDateLong(promise.event_date)
+      : null;
+
+    return {
+      success: true,
+      data: {
+        contactName: promise.contact?.name ?? '',
+        nombreEstudio: studio.studio_name,
+        nombreEvento: promise.name ?? null,
+        fechaEvento: fechaEventoFormatted,
+        categoriaEvento: promise.event_type?.name ?? null,
+        archivoContratoUrl: null, // PDF firmado: disponible cuando exista URL persistida
+        studio: { studio_name: studio.studio_name, logo_url: studio.logo_url },
+        cotizacionId: cotizacion.id,
+        contractId: cotizacion.id,
+        eventoId: cotizacion.evento_id,
+        contract,
+      },
+    };
+  } catch (error) {
+    console.error('[getPublicPromiseBienvenidoData] Error:', error);
+    return { success: false, error: 'Error al cargar datos de bienvenida' };
   }
 }
 
