@@ -1,7 +1,9 @@
 'use client';
 
 import React, { forwardRef, useMemo } from 'react';
+import { Info } from 'lucide-react';
 import { formatMoney } from '@/lib/utils/package-price-formatter';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 
 export interface ResumenPagoProps {
   precioBase: number;
@@ -20,8 +22,10 @@ export interface ResumenPagoProps {
   montoBono?: number;
   /** Precio final de cierre. Si se pasa, Total a pagar = este valor. */
   precioFinalCierre?: number | null;
-  /** Ajuste: precioFinalCierre - (precioLista - cortesías - bono). */
+  /** Ajuste por cierre (negociación): diferencia respecto a precio lista - cortesías - bono. Se muestra aparte del descuento de condición. */
   ajusteCierre?: number;
+  /** Monto del descuento aplicado por la condición comercial (ej. 10% Especial). Se muestra como línea "Descuento condición (X%)". */
+  descuentoCondicionMonto?: number;
   tieneConcesiones?: boolean;
   /** Si true, no aplica margen superior (mt-4). Útil dentro de modales. */
   compact?: boolean;
@@ -33,6 +37,8 @@ export interface ResumenPagoProps {
   anticipoModificado?: boolean;
   /** Fase 28.4: Si true, muestra badge de "PAGADO" en el anticipo. */
   pagoConfirmado?: boolean;
+  /** Si true (vista cierre): badge informativo "Pago registrado" + tooltip; si false (autorizada): badge verde "PAGADO". */
+  badgeEnCierre?: boolean;
 }
 
 /** Formateador SSOT: 2 decimales, mismo que contrato digital (evita discrepancia Resumen vs Contrato). */
@@ -60,12 +66,14 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
       montoBono = 0,
       precioFinalCierre,
       ajusteCierre = 0,
+      descuentoCondicionMonto = 0,
       tieneConcesiones = true,
       compact = false,
       title = 'Resumen de Pago',
       renderAnticipoActions,
       anticipoModificado = false,
       pagoConfirmado = false,
+      badgeEnCierre = false,
     },
     ref
   ) => {
@@ -143,10 +151,18 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                   </span>
                 </div>
               )}
+              {descuentoCondicionMonto > 0 && (descuentoCondicion ?? 0) > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-zinc-400">Descuento especial aplicado ({descuentoCondicion}%)</span>
+                  <span className="text-sm font-medium text-zinc-300">
+                    -{formatPrecioCierre(descuentoCondicionMonto)}
+                  </span>
+                </div>
+              )}
               {Math.abs(ajusteCierre ?? 0) >= 0.01 && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-400">
-                    {(ajusteCierre ?? 0) < 0 ? 'Descuento adicional / Ajuste por cierre' : 'Ajuste por cierre'}
+                    {(ajusteCierre ?? 0) < 0 ? 'Ajuste por cierre' : 'Ajuste por cierre'}
                   </span>
                   <span className="text-sm font-medium text-zinc-300">
                     {(ajusteCierre ?? 0) < 0 ? `-${formatPrecioCierre(Math.abs(ajusteCierre ?? 0))}` : `+${formatPrecioCierre(ajusteCierre ?? 0)}`}
@@ -181,7 +197,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
               )}
             </>
           )}
-          {tieneConcesiones && descuentoCondicion > 0 && !tienePrecioNegociado && (
+          {tieneConcesiones && descuentoCondicion > 0 && !tienePrecioNegociado && descuentoCondicionMonto <= 0 && (
             <div className="flex justify-between items-center">
               <span className="text-sm text-zinc-400">Descuento</span>
               <span className="text-sm font-medium text-red-400">
@@ -214,9 +230,23 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                   </span>
                   {renderAnticipoActions?.()}
                   {pagoConfirmado && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                      PAGADO
-                    </span>
+                    badgeEnCierre ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full border bg-sky-500/10 text-sky-400 border-sky-500/30 cursor-help">
+                            Pago registrado
+                            <Info className="w-2.5 h-2.5 text-sky-400/80 shrink-0" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[220px] text-center bg-zinc-800 border-zinc-600 text-zinc-200">
+                          El registro contable oficial se generará automáticamente al autorizar el evento.
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                        PAGADO
+                      </span>
+                    )
                   )}
                 </div>
                 <span className={`text-sm font-medium shrink-0 ml-2 ${anticipoModificado ? 'text-amber-400' : 'text-blue-400'}`}>

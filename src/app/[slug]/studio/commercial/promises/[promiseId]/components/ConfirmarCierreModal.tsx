@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 
 const NEGOCIACION_ID = '__negociacion__';
 const BADGE_BASE = 'inline-flex items-center gap-1 min-h-[20px] px-2 py-1 text-[10px] font-medium rounded-full';
+const BADGE_SM = 'inline-flex items-center gap-0.5 min-h-[18px] px-1.5 py-0.5 text-[9px] font-medium rounded-full';
 
 type CondicionItem = {
   id: string;
@@ -185,17 +186,23 @@ export function ConfirmarCierreModal({
                 advance_amount: c.advance_amount,
                 editing: false,
               } : null);
-            } else if (res.data.condiciones.length > 0) {
-              setSelectedId(res.data.condiciones[0].id);
-              const c = res.data.condiciones[0];
-              setAjusteFino({
-                advance_type: (c.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
-                advance_percentage: c.advance_percentage,
-                advance_amount: c.advance_amount,
-                editing: false,
-              });
             } else {
-              setAjusteFino(null);
+              const visibles = res.data.cotizacion.condiciones_visibles ?? [];
+              const listaParaElegir = visibles.length > 0
+                ? res.data.condiciones.filter((x) => visibles.includes(x.id))
+                : res.data.condiciones;
+              if (listaParaElegir.length > 0) {
+                const c = listaParaElegir[0];
+                setSelectedId(c.id);
+                setAjusteFino({
+                  advance_type: (c.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
+                  advance_percentage: c.advance_percentage,
+                  advance_amount: c.advance_amount,
+                  editing: false,
+                });
+              } else {
+                setAjusteFino(null);
+              }
             }
           }
         })
@@ -203,11 +210,13 @@ export function ConfirmarCierreModal({
     }
   }, [isOpen, studioSlug, cotizacionId]);
 
-  /** Total a pagar (precio de cierre). Base para anticipo %. */
-  const totalAPagar = cotizacion?.price ?? 0;
   const condicionActiva = selectedId === NEGOCIACION_ID
     ? cotizacion?.condicion_comercial_negociacion ?? null
     : condiciones.find((c) => c.id === selectedId) ?? null;
+  /** Total a pagar según condición: precio base de cotización menos descuento % de la condición (ej. Especial 10%). */
+  const precioBaseCotizacion = cotizacion?.price ?? 0;
+  const descuentoPctCondicion = condicionActiva?.discount_percentage ?? 0;
+  const totalAPagar = Math.round(precioBaseCotizacion * (1 - descuentoPctCondicion / 100));
   const usarAjuste = ajusteFino?.editing ? ajusteFino : condicionActiva;
   const anticipo = usarAjuste
     ? (usarAjuste.advance_type === 'fixed_amount' || usarAjuste.advance_type === 'amount') && usarAjuste.advance_amount != null
@@ -215,6 +224,12 @@ export function ConfirmarCierreModal({
       : (usarAjuste.advance_percentage != null ? Math.round(totalAPagar * (usarAjuste.advance_percentage / 100)) : 0)
     : 0;
   const diferido = Math.max(0, totalAPagar - anticipo);
+
+  // Al cambiar la condición seleccionada, cerrar popover y limpiar snapshot para que ResumenPago muestre los valores de la condición activa
+  useEffect(() => {
+    setPopoverDisplaySnapshot(null);
+    setAjusteFinoPopoverOpen(false);
+  }, [selectedId]);
 
   // Fase 28.3: Sincronización automática del monto de anticipo
   useEffect(() => {
@@ -292,7 +307,11 @@ export function ConfirmarCierreModal({
   const canConfirm = selectedId !== '' && (selectedId === NEGOCIACION_ID ? !!cotizacion?.condicion_comercial_negociacion : condiciones.some((c) => c.id === selectedId));
 
   const visibleIds = new Set(cotizacion?.condiciones_visibles ?? []);
-  const condicionesOrdenadas = [...condiciones].sort((a, b) => {
+  /** Solo condiciones definidas como visibles para esta cotización (públicas y privadas); si no hay visibles guardados, mostrar todas. */
+  const condicionesParaLista = visibleIds.size > 0
+    ? condiciones.filter((c) => visibleIds.has(c.id))
+    : condiciones;
+  const condicionesOrdenadas = [...condicionesParaLista].sort((a, b) => {
     const aVis = visibleIds.has(a.id) ? 1 : 0;
     const bVis = visibleIds.has(b.id) ? 1 : 0;
     return bVis - aVis;
@@ -302,10 +321,12 @@ export function ConfirmarCierreModal({
   const montoCortesias = cotizacion?.cortesias_monto ?? 0;
   const cortesiasCount = cotizacion?.cortesias_count ?? 0;
   const montoBono = cotizacion?.bono_especial ?? 0;
-  // Ecuación financiera: Total = PrecioLista - Cortesías - Bono + AjusteCierre → ajusteCierre = Total - (PrecioLista - Cortesías - Bono)
-  const baseDescuentos = precioLista != null ? precioLista - montoCortesias - montoBono : totalAPagar;
-  const ajustePorCierre = precioLista != null && Math.abs(totalAPagar - baseDescuentos) >= 0.01 ? totalAPagar - baseDescuentos : 0;
-  const tieneConcesiones = (precioLista != null && precioLista > 0) || montoCortesias > 0 || montoBono > 0 || Math.abs(ajustePorCierre) >= 0.01;
+  const baseDescuentos = precioLista != null ? precioLista - montoCortesias - montoBono : precioBaseCotizacion;
+  /** Ajuste por cierre (solo negociación): diferencia entre precio final acordado y (lista - cortesías - bono). */
+  const ajustePorCierre = precioLista != null && Math.abs(precioBaseCotizacion - baseDescuentos) >= 0.01 ? precioBaseCotizacion - baseDescuentos : 0;
+  /** Monto del descuento aplicado por la condición comercial (ej. 10% Especial). */
+  const descuentoCondicionMonto = descuentoPctCondicion > 0 ? Math.round(precioBaseCotizacion * descuentoPctCondicion / 100) : 0;
+  const tieneConcesiones = (precioLista != null && precioLista > 0) || montoCortesias > 0 || montoBono > 0 || Math.abs(ajustePorCierre) >= 0.01 || descuentoCondicionMonto > 0;
   const anticipoPct = usarAjuste?.advance_type === 'percentage' || usarAjuste?.advance_type !== 'fixed_amount' ? (usarAjuste?.advance_percentage ?? 0) : null;
 
   const displayAnticipo = ajusteFinoPopoverOpen && popoverDisplaySnapshot ? popoverDisplaySnapshot.anticipo : anticipo;
@@ -377,8 +398,12 @@ export function ConfirmarCierreModal({
           <>
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
               <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-1">Condiciones Comerciales</p>
-              <p className="text-xs text-zinc-500 mb-3">Elige con qué condición de pago (anticipo y diferido) quieres cerrar esta cotización.</p>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <p className="text-xs text-zinc-500 mb-3">
+                {visibleIds.size > 0
+                  ? 'Solo se muestran las condiciones definidas como visibles para esta cotización. Elige con qué condición de pago quieres cerrar.'
+                  : 'Elige con qué condición de pago quieres cerrar esta cotización.'}
+              </p>
+              <div className="space-y-2">
                 {cotizacion?.condicion_comercial_negociacion && (
                   <div
                     onClick={() => { setSelectedId(NEGOCIACION_ID); setAjusteFino((a) => a ? { ...a, editing: true } : null); }}
@@ -411,17 +436,19 @@ export function ConfirmarCierreModal({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-zinc-200">{c.name}</span>
-                          <span className={`${BADGE_BASE} ${c.type === 'offer' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-500/20 text-slate-300 border-slate-500/40'} border`}>
-                            {c.type === 'offer' ? 'Especial' : 'Normal'}
-                          </span>
+                          {c.type === 'offer' && (
+                            <span className={`${BADGE_BASE} bg-emerald-500/20 text-emerald-300 border-emerald-500/30 border`}>
+                              Especial
+                            </span>
+                          )}
                           {c.is_public !== false ? (
-                            <span className={`${BADGE_BASE} bg-sky-500/20 text-sky-300 border border-sky-500/30`}>
-                              <Globe className="h-2.5 w-2.5 shrink-0" />
+                            <span className={`${BADGE_SM} bg-sky-500/20 text-sky-300 border border-sky-500/30`}>
+                              <Globe className="h-2 w-2 shrink-0" />
                               Pública
                             </span>
                           ) : (
-                            <span className={`${BADGE_BASE} bg-zinc-600 text-zinc-300 border border-zinc-500`}>
-                              <Lock className="h-2.5 w-2.5 shrink-0" />
+                            <span className={`${BADGE_SM} bg-red-500/20 text-red-300 border border-red-500/40`}>
+                              <Lock className="h-2 w-2 shrink-0" />
                               Privada
                             </span>
                           )}
@@ -437,9 +464,11 @@ export function ConfirmarCierreModal({
             <div className="-mt-2">
               <Popover open={ajusteFinoPopoverOpen} onOpenChange={handleAjustePopoverOpenChange}>
                 <ResumenPago
+                key={selectedId}
                 compact
                 precioBase={totalAPagar}
-                descuentoCondicion={0}
+                descuentoCondicion={descuentoPctCondicion}
+                descuentoCondicionMonto={descuentoCondicionMonto}
                 precioConDescuento={totalAPagar}
                 advanceType={displayAdvanceType}
                 anticipoPorcentaje={displayAnticipoPct}
