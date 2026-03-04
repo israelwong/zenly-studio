@@ -39,6 +39,8 @@ interface RegistroCierreLoadData {
   pago_registrado?: boolean;
   pago_concepto?: string | null;
   pago_monto?: number | null;
+  advance_type_override?: string | null;
+  advance_percentage_override?: number | null;
   pago_fecha?: Date | null;
   pago_metodo_id?: string | null;
   pago_metodo_nombre?: string | null;
@@ -240,6 +242,8 @@ export function usePromiseCierreLogic({
           pago_registrado: data.pago_registrado,
           pago_concepto: data.pago_concepto,
           pago_monto: data.pago_monto,
+          advance_type_override: data.advance_type_override ?? undefined,
+          advance_percentage_override: data.advance_percentage_override ?? undefined,
           pago_fecha: data.pago_fecha,
           pago_metodo_id: data.pago_metodo_id,
           pago_metodo_nombre: data.pago_metodo_nombre,

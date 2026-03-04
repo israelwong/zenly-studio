@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useMemo, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenInput, ZenTextarea, ZenDialog, SeparadorZen } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -45,7 +46,11 @@ interface CotizacionCardProps {
   /** Anticipo guardado en registro cierre (pago_monto); SSOT para resumen unificado */
   pagoData?: { 
     pago_confirmado_estudio?: boolean;
+    pago_registrado?: boolean;
     pago_monto?: number | null;
+    advance_type_override?: string | null;
+    advance_percentage_override?: number | null;
+    pagos_confirmados_sum?: number;
   } | null;
   onAnticipoUpdated?: () => void;
   onPreviewClick: () => void;
@@ -77,6 +82,7 @@ function CotizacionCardInner({
   onMetadataUpdated,
   isRefreshingMetadata = false,
 }: CotizacionCardProps) {
+  const router = useRouter();
   const hasCotizacion = cotizacion != null && cotizacion.id;
   const hasCondiciones = condicionesData != null;
 
@@ -119,6 +125,28 @@ function CotizacionCardInner({
   /** Pendiente = Total a pagar − Pagos confirmados (nunca negativo). */
   const pendienteReal = Math.max(0, totalFinalCierre - montoRecibidoReal);
   const anticipoModificado = anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01;
+  /** Tipo y % para ResumenPago: prioridad registro cierre (advance_type_override) > condiciones. */
+  const { advanceTypeDisplay, anticipoPorcentajeDisplay } = useMemo(() => {
+    const tipoRegistro = pagoData?.advance_type_override === 'percentage' || pagoData?.advance_type_override === 'fixed_amount'
+      ? pagoData.advance_type_override
+      : null;
+    if (anticipoOverride == null) {
+      return { advanceTypeDisplay: advanceType, anticipoPorcentajeDisplay: anticipoPorcentaje };
+    }
+    if (tipoRegistro === 'percentage') {
+      const pct = pagoData?.advance_percentage_override ?? condicion?.advance_percentage ?? null;
+      return { advanceTypeDisplay: 'percentage' as const, anticipoPorcentajeDisplay: pct };
+    }
+    if (tipoRegistro === 'fixed_amount') {
+      return { advanceTypeDisplay: 'fixed_amount' as const, anticipoPorcentajeDisplay: null as number | null };
+    }
+    const porCondicion = condicion?.advance_percentage != null ? Math.round(totalFinalCierre * (condicion.advance_percentage / 100)) : null;
+    const coincideConPorcentaje = porCondicion != null && Math.abs(anticipoOverride - porCondicion) <= 1;
+    if (coincideConPorcentaje && condicion?.advance_type !== 'fixed_amount' && condicion?.advance_type !== 'amount') {
+      return { advanceTypeDisplay: 'percentage' as const, anticipoPorcentajeDisplay: condicion?.advance_percentage ?? null };
+    }
+    return { advanceTypeDisplay: 'fixed_amount' as const, anticipoPorcentajeDisplay: null as number | null };
+  }, [anticipoOverride, advanceType, anticipoPorcentaje, condicion?.advance_type, condicion?.advance_percentage, totalFinalCierre, pagoData?.advance_type_override, pagoData?.advance_percentage_override]);
   /** Verde solo si lo recibido cumple o supera el anticipo pactado; si no, ámbar para indicar compromiso no cumplido. */
   const recibidoCumpleAnticipo = anticipo <= 0 || montoRecibidoReal >= anticipo;
 
@@ -151,40 +179,67 @@ function CotizacionCardInner({
   }, [cotizacion?.id, studioSlug, editName, editDescription, onMetadataUpdated]);
 
   const [ajustePopoverOpen, setAjustePopoverOpen] = useState(false);
+  /** Estado inicial del popover: desde registro cierre (advance_type_override) o condicion. */
+  const ajusteFinoInitial = useMemo(() => {
+    if (!condicion) return null;
+    const pctCondicion = condicion.advance_percentage ?? null;
+    const montoCondicion = condicion.advance_amount != null ? Number(condicion.advance_amount) : null;
+    const isFixedCondicion = condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'amount';
+    const tipoRegistro = pagoData?.advance_type_override === 'percentage' || pagoData?.advance_type_override === 'fixed_amount' ? pagoData.advance_type_override : null;
+    if (pagoData?.pago_monto != null) {
+      const monto = Number(pagoData.pago_monto);
+      if (tipoRegistro === 'percentage') {
+        const pct = pagoData?.advance_percentage_override ?? pctCondicion;
+        return {
+          advance_type: 'percentage' as const,
+          advance_percentage: pct,
+          advance_amount: monto,
+        };
+      }
+      if (tipoRegistro === 'fixed_amount') {
+        return {
+          advance_type: 'fixed_amount' as const,
+          advance_percentage: pctCondicion,
+          advance_amount: monto,
+        };
+      }
+      const pctCalculado = pctCondicion != null ? Math.round(totalFinalCierre * (pctCondicion / 100)) : null;
+      const coincideConPorcentaje = pctCalculado != null && Math.abs(monto - pctCalculado) <= 1;
+      if (coincideConPorcentaje && !isFixedCondicion) {
+        return {
+          advance_type: 'percentage' as const,
+          advance_percentage: pctCondicion,
+          advance_amount: monto,
+        };
+      }
+      return {
+        advance_type: 'fixed_amount' as const,
+        advance_percentage: pctCondicion,
+        advance_amount: monto,
+      };
+    }
+    return {
+      advance_type: (isFixedCondicion ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
+      advance_percentage: pctCondicion,
+      advance_amount: isFixedCondicion ? montoCondicion : (pctCondicion != null ? Math.round(totalFinalCierre * (pctCondicion / 100)) : null),
+    };
+  }, [condicion, pagoData?.pago_monto, pagoData?.advance_type_override, pagoData?.advance_percentage_override, totalFinalCierre]);
+
   const [ajusteFino, setAjusteFino] = useState<{
     advance_type: 'percentage' | 'fixed_amount';
     advance_percentage: number | null;
     advance_amount: number | null;
-  } | null>(() =>
-    condicion
-      ? {
-          advance_type: (condicion.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
-          advance_percentage: condicion.advance_percentage ?? null,
-          advance_amount: condicion.advance_amount != null ? Number(condicion.advance_amount) : null,
-        }
-      : null
-  );
+  } | null>(() => ajusteFinoInitial ?? null);
   const [savingAnticipo, setSavingAnticipo] = useState(false);
 
   const handleAjustePopoverOpen = useCallback((open: boolean) => {
-    if (open) {
-      setAjusteFino({
-        advance_type: 'fixed_amount',
-        advance_amount: Math.round(anticipo),
-        advance_percentage: condicion?.advance_percentage ?? null,
-      });
-    }
+    if (open && ajusteFinoInitial) setAjusteFino({ ...ajusteFinoInitial });
     setAjustePopoverOpen(open);
-  }, [anticipo, condicion?.advance_percentage]);
+  }, [ajusteFinoInitial]);
 
   useEffect(() => {
-    if (!ajustePopoverOpen && condicion && ajusteFino)
-      setAjusteFino({
-        advance_type: (condicion.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
-        advance_percentage: condicion.advance_percentage ?? null,
-        advance_amount: condicion.advance_amount != null ? Number(condicion.advance_amount) : null,
-      });
-  }, [condicion?.advance_type, condicion?.advance_percentage, condicion?.advance_amount, ajustePopoverOpen]);
+    if (ajusteFinoInitial && !ajustePopoverOpen) setAjusteFino({ ...ajusteFinoInitial });
+  }, [ajusteFinoInitial, ajustePopoverOpen]);
 
   const handleConfirmarAjusteAnticipo = useCallback(async () => {
     if (!ajusteFino || !cotizacion?.id) return;
@@ -196,18 +251,25 @@ function CotizacionCardInner({
           : 0;
     setSavingAnticipo(true);
     try {
-      const res = await actualizarAnticipoCierre(studioSlug, cotizacion.id, monto);
+      const res = await actualizarAnticipoCierre(
+        studioSlug,
+        cotizacion.id,
+        monto,
+        ajusteFino.advance_type,
+        ajusteFino.advance_type === 'percentage' ? ajusteFino.advance_percentage : null
+      );
       if (res.success) {
+        await Promise.resolve(onAnticipoUpdated?.());
+        router.refresh();
         setAjustePopoverOpen(false);
         toast.success('Anticipo actualizado');
-        onAnticipoUpdated?.();
       } else {
         toast.error(res.error ?? 'Error al actualizar anticipo');
       }
     } finally {
       setSavingAnticipo(false);
     }
-  }, [ajusteFino, cotizacion?.id, studioSlug, totalFinalCierre, onAnticipoUpdated]);
+  }, [ajusteFino, cotizacion?.id, studioSlug, totalFinalCierre, onAnticipoUpdated, router]);
 
   const showResumenPago = hasCondiciones && desgloseCierre && tieneConcesiones;
 
@@ -218,10 +280,17 @@ function CotizacionCardInner({
       setAuditoria(null);
       return;
     }
-    getAuditoriaRentabilidadCierre(studioSlug!, cotizacion!.id).then((r) => {
-      if (r.success && r.data) setAuditoria(r.data);
-      else setAuditoria(null);
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      getAuditoriaRentabilidadCierre(studioSlug!, cotizacion!.id).then((r) => {
+        if (!cancelled && r.success && r.data) setAuditoria(r.data);
+        else if (!cancelled) setAuditoria(null);
+      });
     });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
   }, [debeCargarAuditoria, studioSlug, cotizacion?.id]);
 
   return (
@@ -319,8 +388,8 @@ function CotizacionCardInner({
                     precioBase={totalFinalCierre}
                     descuentoCondicion={0}
                     precioConDescuento={totalFinalCierre}
-                    advanceType={advanceType}
-                    anticipoPorcentaje={anticipoPorcentaje}
+                    advanceType={advanceTypeDisplay}
+                    anticipoPorcentaje={anticipoPorcentajeDisplay}
                     anticipo={anticipo}
                     diferido={diferido}
                     precioLista={precioLista}
@@ -336,15 +405,18 @@ function CotizacionCardInner({
                     pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
                     badgeEnCierre={cotizacion?.status === 'en_cierre'}
                     renderAnticipoActions={
-                      !(pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false) && ajusteFino !== null
-                        ? () => (
-                            <PopoverTrigger asChild>
-                              <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-zinc-400 hover:text-zinc-200" aria-label="Ajustar anticipo">
-                                <Pencil className="h-3 w-3" />
-                              </ZenButton>
-                            </PopoverTrigger>
-                          )
-                        : undefined
+                      (() => {
+                        const pagoConfirmado = pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false;
+                        const hayPagosConfirmados = (pagoData?.pagos_confirmados_sum ?? 0) > 0;
+                        if (pagoConfirmado || hayPagosConfirmados || ajusteFino === null) return undefined;
+                        return () => (
+                          <PopoverTrigger asChild>
+                            <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-zinc-400 hover:text-zinc-200" aria-label="Ajustar anticipo">
+                              <Pencil className="h-3 w-3" />
+                            </ZenButton>
+                          </PopoverTrigger>
+                        );
+                      })()
                     }
                   />
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] max-w-md bg-zinc-900 border-zinc-700 p-4" align="end" side="right">
@@ -399,8 +471,8 @@ function CotizacionCardInner({
                           </div>
                         )}
                         <div className="flex gap-2 justify-end mt-4 pt-3 border-t border-zinc-700">
-                          <ZenButton type="button" variant="ghost" size="sm" onClick={() => setAjustePopoverOpen(false)}>Cancelar</ZenButton>
-                          <ZenButton type="button" variant="primary" size="sm" onClick={() => void handleConfirmarAjusteAnticipo()} disabled={savingAnticipo}>{savingAnticipo ? 'Guardando...' : 'Confirmar ajuste'}</ZenButton>
+                          <ZenButton type="button" variant="ghost" size="sm" onClick={() => setAjustePopoverOpen(false)} disabled={savingAnticipo}>Cancelar</ZenButton>
+                          <ZenButton type="button" variant="primary" size="sm" onClick={() => void handleConfirmarAjusteAnticipo()} disabled={savingAnticipo} loading={savingAnticipo} loadingText="Confirmando...">Confirmar ajuste</ZenButton>
                         </div>
                       </div>
                     )}
@@ -426,10 +498,14 @@ function CotizacionCardInner({
                     </div>
                   </>
                 )}
-                {auditoria != null && (
+                {debeCargarAuditoria && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />
-                    <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
+                    {auditoria != null ? (
+                      <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
+                    ) : (
+                      <AuditoriaRentabilidadCard utilidadNeta={0} margenPorcentaje={0} loading />
+                    )}
                   </>
                 )}
               </>
@@ -454,10 +530,14 @@ function CotizacionCardInner({
                   isRemovingCondiciones={isRemovingCondiciones}
                   pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
                 />
-                {auditoria != null && (
+                {debeCargarAuditoria && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />
-                    <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
+                    {auditoria != null ? (
+                      <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
+                    ) : (
+                      <AuditoriaRentabilidadCard utilidadNeta={0} margenPorcentaje={0} loading />
+                    )}
                   </>
                 )}
               </>

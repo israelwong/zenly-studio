@@ -230,6 +230,8 @@ export async function obtenerRegistroCierre(
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
         pago_monto: registro.pago_monto ? Number(registro.pago_monto) : null,
+        advance_type_override: registro.advance_type_override ?? null,
+        advance_percentage_override: registro.advance_percentage_override != null ? Number(registro.advance_percentage_override) : null,
         pago_fecha: registro.pago_fecha,
         pago_metodo_id: registro.pago_metodo_id,
         pago_metodo_nombre,
@@ -1442,13 +1444,15 @@ export async function actualizarPagoCierre(
 }
 
 /**
- * Actualiza solo el monto de anticipo en el registro de cierre (SSOT para el resumen unificado).
- * No modifica fecha ni método de pago; el contrato y autorización leen este valor.
+ * Actualiza monto y tipo de anticipo en el registro de cierre (SSOT para el resumen unificado).
+ * Guarda advance_type_override y advance_percentage_override para persistir "Anticipo (30%)" tras recarga.
  */
 export async function actualizarAnticipoCierre(
   studioSlug: string,
   cotizacionId: string,
-  monto: number
+  monto: number,
+  advanceType: 'percentage' | 'fixed_amount',
+  advancePercentage: number | null
 ): Promise<CierreResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -1467,6 +1471,11 @@ export async function actualizarAnticipoCierre(
       data: {
         pago_concepto: 'Anticipo',
         pago_monto: new Prisma.Decimal(monto),
+        advance_type_override: advanceType,
+        advance_percentage_override:
+          advanceType === 'percentage' && advancePercentage != null
+            ? new Prisma.Decimal(advancePercentage)
+            : null,
         updated_at: new Date(),
       },
     });

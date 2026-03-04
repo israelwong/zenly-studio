@@ -193,6 +193,8 @@ export async function getPromiseContractData(
           select: {
             contract_signed_at: true,
             pago_monto: true,
+            advance_type_override: true,
+            advance_percentage_override: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -433,26 +435,41 @@ export async function getPromiseContractData(
       }
     }
 
-    // Calcular anticipo basado en totalFinal (ya sea negociado o normal)
-    // Herencia contractual: si el registro de cierre tiene pago_monto (ajuste manual), usarlo como monto_anticipo
-    const registroCierre = cotizacion.cotizacion_cierre as { pago_monto?: unknown } | null;
-    if (registroCierre?.pago_monto != null && Number(registroCierre.pago_monto) > 0) {
-      montoAnticipo = Number(registroCierre.pago_monto);
+    // Anticipo: prioridad registro cierre (pago_monto + advance_type_override) > condiciones. Paridad con ResumenPago.
+    const registroCierre = cotizacion.cotizacion_cierre as {
+      pago_monto?: unknown;
+      advance_type_override?: string | null;
+      advance_percentage_override?: unknown;
+    } | null;
+    const tipoAnticipoContrato =
+      registroCierre?.advance_type_override === "percentage" || registroCierre?.advance_type_override === "fixed_amount"
+        ? (registroCierre.advance_type_override as "percentage" | "fixed_amount")
+        : (condiciones?.advance_type as "percentage" | "fixed_amount" | undefined);
+    const porcentajeAnticipoContrato =
+      tipoAnticipoContrato === "percentage"
+        ? (registroCierre?.advance_percentage_override != null
+            ? Number(registroCierre.advance_percentage_override)
+            : condiciones?.advance_percentage ?? undefined)
+        : undefined;
+
+    const tienePagoMontoCierre = registroCierre?.pago_monto != null && Number(registroCierre.pago_monto) > 0;
+    if (tienePagoMontoCierre) {
+      montoAnticipo = Number(registroCierre!.pago_monto);
     } else if (condiciones) {
-      if (condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
-        montoAnticipo = (totalFinal * condiciones.advance_percentage) / 100;
+      if (tipoAnticipoContrato === "percentage" && porcentajeAnticipoContrato != null) {
+        montoAnticipo = (totalFinal * porcentajeAnticipoContrato) / 100;
       } else if (condiciones.advance_type === "fixed_amount" && condiciones.advance_amount) {
         montoAnticipo = condiciones.advance_amount;
       }
     }
-    
+
     // ✅ OPTIMIZACIÓN: Aplicar precio charm si es paquete (después de calcular anticipo)
     let totalFinalParaContrato = totalFinal;
     if (esPaquete) {
       totalFinalParaContrato = roundPrice(totalFinal, 'charm');
-      // Recalcular anticipo si es porcentaje (para mantener proporción con el nuevo total)
-      if (condiciones && condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
-        montoAnticipo = (totalFinalParaContrato * condiciones.advance_percentage) / 100;
+      // Recalcular anticipo solo si NO hay monto fijo en cierre y es porcentaje (proporción con total)
+      if (!tienePagoMontoCierre && tipoAnticipoContrato === "percentage" && porcentajeAnticipoContrato != null) {
+        montoAnticipo = (totalFinalParaContrato * porcentajeAnticipoContrato) / 100;
       }
     }
 
@@ -479,9 +496,9 @@ export async function getPromiseContractData(
     const ajusteCierreContrato = precioBaseContrato - Math.max(0, precioListaContrato - montoCortesiasContrato - bonoEspecialNum);
     const descuentoCondicionMontoContrato = condiciones?.discount_percentage ? Math.round(precioBaseContrato * Number(condiciones.discount_percentage) / 100) : 0;
     const tieneConcesionesContrato = precioListaContrato > 0 && (montoCortesiasContrato > 0 || bonoEspecialNum > 0 || Math.abs(ajusteCierreContrato) >= 0.01 || descuentoCondicionMontoContrato > 0);
-    // Congruencia: total = totalFinal (con descuento de condición si aplica); anticipo % sobre ese total
-    if (condiciones && condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
-      montoAnticipo = Math.round(totalFinalParaContrato * (condiciones.advance_percentage / 100));
+    // Congruencia con ResumenPago: anticipo sobre total_final; si es porcentaje y no hay monto guardado, recalcular
+    if (!tienePagoMontoCierre && tipoAnticipoContrato === "percentage" && porcentajeAnticipoContrato != null) {
+      montoAnticipo = Math.round(totalFinalParaContrato * (porcentajeAnticipoContrato / 100));
     }
 
     // Convertir secciones a formato legacy para [SERVICIOS_INCLUIDOS]
@@ -651,8 +668,8 @@ export async function getPromiseContractData(
         nombre: condiciones.name,
         descripcion: condiciones.description || undefined,
         porcentaje_descuento: condiciones.discount_percentage || undefined,
-        porcentaje_anticipo: condiciones.advance_percentage || undefined,
-        tipo_anticipo: (condiciones.advance_type as "percentage" | "fixed_amount") || undefined,
+        porcentaje_anticipo: porcentajeAnticipoContrato ?? (condiciones.advance_percentage ?? undefined),
+        tipo_anticipo: tipoAnticipoContrato || (condiciones.advance_type as "percentage" | "fixed_amount") || undefined,
         monto_anticipo: montoAnticipo,
         total_contrato: esNegociacion ? precioOriginalParaContrato : precioBaseReal,
         total_final: totalFinalParaContrato,

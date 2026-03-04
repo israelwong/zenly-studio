@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket, Globe, Lock, PanelRightClose } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket, Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -1094,7 +1094,6 @@ export function PromiseQuotesPanelCard({
                     loadingText="Cargando..."
                   >
                     Vista previa
-                    <PanelRightClose className="h-4 w-4 shrink-0" />
                   </ZenButton>
                 )}
                 {!selectionMode && !(isArchivada && hasApprovedQuote) && cotizacion.status === 'negociacion' && (

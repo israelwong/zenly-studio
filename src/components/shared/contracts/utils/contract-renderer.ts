@@ -287,7 +287,8 @@ export function renderCondicionesComercialesBlock(
       const isFullPayment = condiciones.porcentaje_anticipo === 100;
       const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(condiciones.monto_anticipo);
       let anticipoLabel = isFullPayment ? "Monto para reservar" : "Anticipo mínimo";
-      if (!isFullPayment && condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
+      // Paridad con ResumenPago: si tipo es percentage, mostrar "Anticipo mínimo (30%)" (tipo/porcentaje desde getPromiseContractData/registro cierre)
+      if (!isFullPayment && condiciones.porcentaje_anticipo != null && condiciones.tipo_anticipo === "percentage") {
         anticipoLabel += ` (${condiciones.porcentaje_anticipo}%)`;
       }
       const baseParaDiferido = condiciones.total_final ?? 0;

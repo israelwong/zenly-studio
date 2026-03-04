@@ -2460,6 +2460,10 @@ model studio_cotizaciones_cierre {
   pago_registrado                   Boolean   @default(false)
   pago_concepto                     String?
   pago_monto                        Decimal?  @db.Decimal(10, 2)
+  /** Tipo de anticipo guardado en cierre: 'percentage' | 'fixed_amount'. Prioridad sobre condiciones. */
+  advance_type_override             String?
+  /** Porcentaje guardado cuando advance_type_override = 'percentage' (ej. 30). */
+  advance_percentage_override      Decimal?  @db.Decimal(5, 2)
   pago_fecha                        DateTime? @db.Date
   pago_metodo_id                    String?
   created_at                        DateTime  @default(now())
