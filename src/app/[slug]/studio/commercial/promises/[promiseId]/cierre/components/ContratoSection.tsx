@@ -51,6 +51,10 @@ interface ContratoSectionProps {
   onContratoSuccess: () => void;
   onCancelarContrato?: () => Promise<void> | void;
   onRegenerateContract?: () => Promise<void>;
+  /** Si true, la tarjeta muestra estado "Omitido" (contrato no se generará al autorizar) */
+  contratoOmitido?: boolean;
+  onContratoOmitido?: () => void;
+  onRevocarOmitido?: () => void;
   // Props para ContratoGestionCard
   studioSlug: string;
   promiseId: string;
@@ -79,6 +83,9 @@ export const ContratoSection = memo(function ContratoSection({
   onContratoSuccess,
   onCancelarContrato,
   onRegenerateContract,
+  contratoOmitido = false,
+  onContratoOmitido,
+  onRevocarOmitido,
   studioSlug,
   promiseId,
   cotizacionId,
@@ -246,10 +253,18 @@ export const ContratoSection = memo(function ContratoSection({
     }
   };
 
-  const headerTitle = contratoFirmado ? 'Contrato firmado' : 'Contrato Digital';
+  const headerTitle = contratoOmitido
+    ? 'Contrato omitido'
+    : contratoFirmado
+      ? 'Contrato firmado'
+      : 'Contrato Digital';
 
   return (
-    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg overflow-hidden">
+    <div
+      className={`bg-zinc-800/30 border border-zinc-700/50 rounded-lg overflow-hidden transition-all duration-200 ${
+        contratoOmitido ? 'opacity-75 grayscale' : ''
+      }`}
+    >
       {/* Header alineado con otros cards */}
       <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
         <div className="flex items-center gap-2 min-w-0">
@@ -263,7 +278,7 @@ export const ContratoSection = memo(function ContratoSection({
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {contratoBoton && contratoBoton !== 'Definir' && !contratoFirmado && (
+          {contratoBoton && contratoBoton !== 'Definir' && !contratoFirmado && !contratoOmitido && (
             <button
               onClick={onContratoButtonClick}
               className="h-7 min-w-[2.5rem] flex items-center justify-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
@@ -367,7 +382,10 @@ export const ContratoSection = memo(function ContratoSection({
             })()}
           </div>
         )}
-        {contratoEstado && !contratoFirmado && (
+        {contratoOmitido && !tieneContratoGenerado && (
+          <p className="text-xs text-zinc-500">Contrato omitido. Puedes autorizar sin generar contrato.</p>
+        )}
+        {contratoEstado && !contratoFirmado && !contratoOmitido && (
           <div className={`text-xs ${contratoColor}`}>
             {contratoBoton === 'Definir' ? (
               <button
@@ -472,7 +490,6 @@ export const ContratoSection = memo(function ContratoSection({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Comparación personalizada: solo re-renderizar si cambian datos del contrato
   return (
     prevProps.contractData?.contract_template_id === nextProps.contractData?.contract_template_id &&
     prevProps.contractData?.contract_content === nextProps.contractData?.contract_content &&
@@ -484,7 +501,8 @@ export const ContratoSection = memo(function ContratoSection({
     prevProps.cotizacionStatus === nextProps.cotizacionStatus &&
     prevProps.isClienteNuevo === nextProps.isClienteNuevo &&
     prevProps.onCancelarContrato === nextProps.onCancelarContrato &&
-    prevProps.onRegenerateContract === nextProps.onRegenerateContract
+    prevProps.onRegenerateContract === nextProps.onRegenerateContract &&
+    prevProps.contratoOmitido === nextProps.contratoOmitido
   );
 });
 

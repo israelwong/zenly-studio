@@ -1,12 +1,13 @@
 import type { PublicCotizacion } from '@/types/public-promise';
 
 /** Segmentos de ruta pública de promesa (vista cliente: /[slug]/promise/[promiseId]/<segment>). Única fuente de verdad para navegación. */
-export type PublicPromiseRouteSegment = 'pendientes' | 'cierre' | 'no-disponible';
+export type PublicPromiseRouteSegment = 'pendientes' | 'cierre' | 'bienvenido' | 'no-disponible';
 
 /** Orden recomendado para enlaces y redirects. Usar con getPublicPromisePath. */
 export const PUBLIC_PROMISE_ROUTE_SEGMENTS: readonly PublicPromiseRouteSegment[] = [
   'pendientes',
   'cierre',
+  'bienvenido',
   'no-disponible',
 ] as const;
 
@@ -85,19 +86,15 @@ export function determinePromiseRoute(
     return getPublicPromisePath(slug, promiseId, 'pendientes');
   }
 
-  // PRIORIDAD 1: Buscar cotización aprobada/autorizada CON evento creado (máxima prioridad)
-  // Solo redirige a /cliente si la cotización tiene evento_id (evento creado después de autorización)
-  // Estados: aprobada, autorizada, approved
-  // ✅ OPTIMIZACIÓN: Si evento_id es null/undefined, asumir que no tiene evento (no redirigir a /cliente)
+  // PRIORIDAD 1: Cotización aprobada/autorizada → página de bienvenida (luego CTA a /cliente/login)
+  // Estados: aprobada, autorizada, approved (con o sin evento_id; bienvenido muestra "Generando expediente" si falta)
   const cotizacionAprobada = visibleQuotes.find((cot) => {
     const status = (cot.status || '').toLowerCase();
-    const hasEvento = !!cot.evento_id;
-    const isAprobada = status === 'aprobada' || status === 'autorizada' || status === 'approved';
-    return isAprobada && hasEvento;
+    return status === 'aprobada' || status === 'autorizada' || status === 'approved';
   });
 
   if (cotizacionAprobada) {
-    return `/${slug}/cliente`;
+    return getPublicPromisePath(slug, promiseId, 'bienvenido');
   }
 
   // ✅ PRIORIDAD 2: Buscar cotización en cierre (PRIORIDAD SOBRE NEGOCIACIÓN)
@@ -181,9 +178,10 @@ export async function syncPromiseRoute(
       return { redirected: false };
     }
 
+    // Misma normalización que el Guard: sin query, sin trailing slashes (evita loop bienvenido ↔ cierre)
     const clean = (path: string): string => {
       if (!path) return '';
-      return path.split('?')[0].trim().replace(/\/$/, '');
+      return path.split('?')[0].trim().replace(/\/+$/, '');
     };
     const cleanCurrent = clean(currentPath);
     const cleanTarget = clean(targetRoute);
@@ -245,24 +243,30 @@ export function isRouteValid(
     return cot.status === 'pendiente';
   });
 
+  const hasAprobada = normalizedCotizaciones.some((cot) => {
+    const s = (cot.status || '').toLowerCase();
+    return s === 'aprobada' || s === 'autorizada' || s === 'approved';
+  });
+
   switch (routeType) {
+    case 'bienvenido': {
+      return hasAprobada;
+    }
+
     case 'cierre': {
-      // Cierre válido si hay cotización en cierre o en negociación (ruta negociacion obsoleta)
-      return hasCierre || hasNegociacion;
+      // Si ya está aprobada/autorizada, /cierre es inválida; el usuario debe estar en /bienvenido
+      return (hasCierre || hasNegociacion) && !hasAprobada;
     }
 
     case 'negociacion': {
-      // Ruta /negociacion eliminada; siempre inválida para forzar redirect a /cierre
       return false;
     }
 
     case 'pendientes': {
-      // Pendientes es válido solo si hay cotizaciones pendientes Y no hay cierre ni negociación (mayor prioridad)
-      return hasPendientes && !hasCierre && !hasNegociacion;
+      return hasPendientes && !hasCierre && !hasNegociacion && !hasAprobada;
     }
 
     default:
-      // Si es la ruta raíz, siempre es válida (el dispatcher decidirá)
       return true;
   }
 }

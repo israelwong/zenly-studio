@@ -155,7 +155,6 @@ export async function signPublicContract(
     });
 
     // IMPORTANTE: Mantener status en 'en_cierre' porque aún falta el pago y autorización
-    // El estado 'contract_signed' se usará cuando se autorice y cree el evento
     // Por ahora solo actualizamos updated_at para trigger realtime
     await prisma.studio_cotizaciones.update({
       where: { id: cotizacionId },
@@ -163,6 +162,15 @@ export async function signPublicContract(
         updated_at: new Date(),
       },
     });
+
+    // Re-lectura de cierre tras el update para evitar rawPagoMonto null por propagación/transacción
+    const cierreActualizado = await prisma.studio_cotizaciones_cierre.findUnique({
+      where: { cotizacion_id: cotizacionId },
+      select: { pago_confirmado_estudio: true, pago_monto: true },
+    });
+    if (cierreActualizado) {
+      cotizacion.cotizacion_cierre = { ...cotizacion.cotizacion_cierre!, ...cierreActualizado };
+    }
 
     // Notificación al estudio (trigger para UI/centro de notificaciones; Realtime se dispara por trigger DB en studio_cotizaciones_cierre)
     await createStudioNotification({

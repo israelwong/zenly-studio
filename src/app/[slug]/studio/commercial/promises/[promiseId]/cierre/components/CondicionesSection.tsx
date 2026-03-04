@@ -28,6 +28,8 @@ interface CondicionesSectionProps {
   isRemovingCondiciones: boolean;
   negociacionPrecioOriginal?: number | null;
   negociacionPrecioPersonalizado?: number | null;
+  /** En vista cierre: si el pago inicial fue registrado/confirmado, muestra badge [Pagado] en el desglose */
+  pagoConfirmado?: boolean;
 }
 
 export const CondicionesSection = memo(function CondicionesSection({
@@ -39,6 +41,7 @@ export const CondicionesSection = memo(function CondicionesSection({
   isRemovingCondiciones,
   negociacionPrecioOriginal,
   negociacionPrecioPersonalizado,
+  pagoConfirmado = false,
 }: CondicionesSectionProps) {
   const condicion = condicionesData?.condiciones_comerciales;
   const tieneCondicion = condicion && condicion.name;
@@ -49,6 +52,7 @@ export const CondicionesSection = memo(function CondicionesSection({
         condicion={condicion as CondicionComercial}
         negociacionPrecioOriginal={negociacionPrecioOriginal}
         negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
+        pagoConfirmado={pagoConfirmado}
         dropdownMenu={
           <ZenDropdownMenu>
             <ZenDropdownMenuTrigger asChild>
@@ -122,7 +126,8 @@ export const CondicionesSection = memo(function CondicionesSection({
     prevProps.isRemovingCondiciones === nextProps.isRemovingCondiciones &&
     prevProps.precioBase === nextProps.precioBase &&
     prevProps.negociacionPrecioOriginal === nextProps.negociacionPrecioOriginal &&
-    prevProps.negociacionPrecioPersonalizado === nextProps.negociacionPrecioPersonalizado
+    prevProps.negociacionPrecioPersonalizado === nextProps.negociacionPrecioPersonalizado &&
+    prevProps.pagoConfirmado === nextProps.pagoConfirmado
   );
 });
 

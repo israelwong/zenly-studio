@@ -120,7 +120,7 @@ export function PublicQuoteAuthorizedView({
   // Fase 29.3: Safe exit — AlertDialog antes de salir del check-in
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  const { setAuthorizationData, setIsAuthorizationInProgress, authorizationData, setStayOnCierreAfterSign } = usePromisePageContext();
+  const { setAuthorizationData, setIsAuthorizationInProgress, authorizationData } = usePromisePageContext();
   // Fase 29.9.8: Cliente ya dio "Confirmar" en el link público (para títulos y check-in de cortesía)
   const isClientValidated = authorizationData?.cotizacionId === initialCotizacion.id;
 
@@ -882,7 +882,6 @@ export function PublicQuoteAuthorizedView({
                         }}
                         onGoToPortal={() => {
                           window.dispatchEvent(new CustomEvent('close-overlays'));
-                          setStayOnCierreAfterSign(false);
                           router.push(`/${studioSlug}/cliente/login`);
                         }}
                       />
@@ -1318,7 +1317,7 @@ export function PublicQuoteAuthorizedView({
           isOpen={showContractView}
           onClose={() => setShowContractView(false)}
           onContractSigned={handleContractSigned}
-          onBeforeConfirmSign={() => pathname?.includes('/cierre') && setStayOnCierreAfterSign(true)}
+          onBeforeConfirmSign={undefined}
           onContractSignedOptimistic={handleContractSignedOptimistic}
           onContractSignedRollback={handleContractSignedRollback}
           cotizacionId={cotizacion.id}

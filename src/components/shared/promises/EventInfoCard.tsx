@@ -646,9 +646,9 @@ export function EventInfoCard({
                 variant="ghost"
                 size="sm"
                 onClick={handleEdit}
-                className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-300"
+                className="h-7 px-2.5 py-1.5 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300 rounded-md gap-1.5"
               >
-                <Edit className="h-3.5 w-3.5" />
+                Editar
               </ZenButton>
             )}
           </div>

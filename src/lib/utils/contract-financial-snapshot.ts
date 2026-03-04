@@ -15,6 +15,8 @@ export interface FinancialSnapshotInput {
   ajuste_cierre: number;
   monto_bono: number;
   total_final: number;
+  /** Monto ahorrado por descuento % de la condición comercial (línea "Descuento especial aplicado") */
+  descuento_condicion_monto?: number;
   /** Para plan de pagos en el bloque (anticipo mínimo / monto para reservar) */
   monto_anticipo?: number;
   tipo_anticipo?: "percentage" | "fixed_amount" | null;
@@ -33,6 +35,7 @@ export function generateFinancialSummaryHtml(
     input.monto_cortesias > 0 ||
     input.monto_bono > 0 ||
     Math.abs(input.ajuste_cierre) >= 0.01 ||
+    (input.descuento_condicion_monto ?? 0) > 0 ||
     input.precio_lista > input.total_final;
 
   const data: CondicionesComercialesData = {
@@ -44,6 +47,7 @@ export function generateFinancialSummaryHtml(
     monto_cortesias: input.monto_cortesias,
     monto_bono: input.monto_bono,
     ajuste_cierre: input.ajuste_cierre,
+    descuento_condicion_monto: input.descuento_condicion_monto,
     monto_anticipo: input.monto_anticipo,
     tipo_anticipo: input.tipo_anticipo ?? undefined,
     porcentaje_anticipo: input.porcentaje_anticipo ?? undefined,

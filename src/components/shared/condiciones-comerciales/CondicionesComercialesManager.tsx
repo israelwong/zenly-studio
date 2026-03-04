@@ -195,7 +195,7 @@ function SortableCondicionItem({
             {isPrivada ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className={`${BADGE_BASE} bg-zinc-600 text-zinc-300 border border-zinc-500`}>
+                  <span className={`${BADGE_BASE} bg-red-500/20 text-red-300 border border-red-500/40`}>
                     <Lock className="h-2.5 w-2.5 shrink-0" />
                     Privada
                   </span>

@@ -57,8 +57,8 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | [contracts-flow.md](architecture/contracts-flow.md) | Flujo de contratos |
 | [direct-navigator.md](architecture/direct-navigator.md) | Navegación directa |
 | [promise-detalle.md](architecture/promise-detalle.md) | Detalle de promesas |
-| [redireccionamiento-promesas.md](architecture/redireccionamiento-promesas.md) | Redirects de promesas |
-| [renderizado-contratos.md](architecture/renderizado-contratos.md) | Renderizado de contratos |
+| [redireccionamiento-promesas.md](architecture/redireccionamiento-promesas.md) | Redirects de promesas (incl. post-firma y stayOnCierreRef) |
+| [arquitectura-contratos-y-condiciones.md](architecture/arquitectura-contratos-y-condiciones.md) | **SSOT** contratos y condiciones (persistencia, visualización, fixes) |
 
 ---
 

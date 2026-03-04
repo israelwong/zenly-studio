@@ -481,14 +481,14 @@ function PromisesKanban({
       return;
     }
 
-    // Validación 2: Desde closing NO puede ir a pending, negotiation o approved
-    // Solo puede ir a archived o canceled
+    // Validación 2: Desde "En Cierre" solo se puede ir a archived o canceled (no a etapas anteriores ni approved)
+    const allowedFromClosing = ['archived', 'canceled'];
     if (
       currentStageSlug === 'closing' &&
-      (targetStageSlug === 'pending' || targetStageSlug === 'negotiation' || targetStageSlug === 'approved')
+      !allowedFromClosing.includes(targetStageSlug)
     ) {
       toast.error(
-        'No se puede mover desde "En Cierre" a esta etapa. Si necesitas cambiar el estado, cancela el cierre de la cotización o archiva la promesa.'
+        'No se puede mover desde "En Cierre" a esta etapa. Solo puedes archivarla o cancelarla.'
       );
       return;
     }

@@ -129,9 +129,25 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 | Documento | Descripción |
 |-----------|-------------|
 | [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md) | Cierre de cotización: pasar a cierre (público y estudio), pantalla de cierre, cancelar/autorizar; componentes y actions con rutas. |
-| [contracts-flow.md](contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio). |
+| [contracts-flow.md](flows/contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio); persistencia post-autorización y visualización. |
+| [flujo-autorizar-y-crear-evento.md](flows/flujo-autorizar-y-crear-evento.md) | Autorizar y crear evento: transacción, snapshots financieros, inyección de resumen en contract_content_snapshot. |
 
 **Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio). Índice en [flows/README.md](flows/README.md).
+
+---
+
+### 5b. Contratos y condiciones comerciales (SSOT)
+**Archivo principal:** [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md)  
+**Estado:** ✅ SSOT (2026-03-02)
+
+**Contenido:** Modelo de datos y tablas (studio_cotizaciones_cierre, snapshots en studio_cotizaciones), persistencia al autorizar (autorizarYCrearEvento, generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent, getSnapTotalFinalForEvento), componentes (ContractPreview, useContractRenderer), bloques especiales (@cotizacion_autorizada, @condiciones_comerciales), obtención de datos (getEventContractData, getPromiseContractData), guía para visualizar el contrato en otra vista, formatItemQuantity y ducto de datos, uso por contexto (Studio cierre, público, portal), fixes documentados (bloque duplicado, incompleto, Decimal, bienvenido), casos de uso y archivos clave.
+
+Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotizacion.md), [visualizacion-contrato.md](visualizacion-contrato.md) y [renderizado-contratos.md](renderizado-contratos.md) son **stubs de redirección** al SSOT. Detalle de props de ContratoSection, ContratoGestionCard, modales y portal: [components/contract-rendering-system.md](components/contract-rendering-system.md).
+
+**Cuándo consultar:**
+- Implementar o reutilizar la visualización del contrato en una nueva pantalla o modal.
+- Entender qué se persiste al autorizar y por qué no hay relación a condiciones_comerciales tras la firma.
+- Depurar bloque de condiciones duplicado o incompleto; error de Decimal en layout evento.
 
 ---
 
@@ -300,5 +316,7 @@ Cada documento en `architecture/` debe seguir esta estructura:
 
 ---
 
-**Última actualización:** 2026-02-17  
-**Mantenedor:** Equipo de Desarrollo ZENPro
+**Última actualización:** 2026-03-02  
+**Mantenedor:** Equipo de Desarrollo ZENPro  
+
+**Curación 2026-03-02:** Flujo cierre unificado en [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md); SSOT contratos en [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md); auditoría post-firma integrada en [redireccionamiento-promesas.md](redireccionamiento-promesas.md) §4. Stubs de redirección: pasar-a-cierre-modal-flow, renderizado-contratos, visualizacion-contrato, persistencia-snapshots-cotizacion, auditoria-redireccion-post-firma.

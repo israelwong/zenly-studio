@@ -92,6 +92,13 @@ export interface CotizacionListItem {
   items_cortesia?: unknown;
   cortesias_monto_snapshot?: number | null;
   cortesias_count_snapshot?: number | null;
+  snap_precio_lista?: number | null;
+  snap_ajuste_cierre?: number | null;
+  snap_monto_bono?: number | null;
+  snap_total_final?: number | null;
+  snap_descuento_condicion_monto?: number | null;
+  condiciones_comerciales_name_snapshot?: string | null;
+  condiciones_comerciales_discount_percentage_snapshot?: number | null;
   /** Horas de cobertura del servicio (para listado en card) */
   event_duration?: number | null;
 }
@@ -613,6 +620,13 @@ export async function getCotizacionAutorizadaByPromiseId(
         items_cortesia: true,
         cortesias_monto_snapshot: true,
         cortesias_count_snapshot: true,
+        snap_precio_lista: true,
+        snap_ajuste_cierre: true,
+        snap_monto_bono: true,
+        snap_total_final: true,
+        snap_descuento_condicion_monto: true,
+        condiciones_comerciales_name_snapshot: true,
+        condiciones_comerciales_discount_percentage_snapshot: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -663,6 +677,13 @@ export async function getCotizacionAutorizadaByPromiseId(
         items_cortesia: cotizacion.items_cortesia ?? undefined,
         cortesias_monto_snapshot: cotizacion.cortesias_monto_snapshot != null ? Number(cotizacion.cortesias_monto_snapshot) : null,
         cortesias_count_snapshot: cotizacion.cortesias_count_snapshot ?? null,
+        snap_precio_lista: cotizacion.snap_precio_lista != null ? Number(cotizacion.snap_precio_lista) : null,
+        snap_ajuste_cierre: cotizacion.snap_ajuste_cierre != null ? Number(cotizacion.snap_ajuste_cierre) : null,
+        snap_monto_bono: cotizacion.snap_monto_bono != null ? Number(cotizacion.snap_monto_bono) : null,
+        snap_total_final: cotizacion.snap_total_final != null ? Number(cotizacion.snap_total_final) : null,
+        snap_descuento_condicion_monto: cotizacion.snap_descuento_condicion_monto != null ? Number(cotizacion.snap_descuento_condicion_monto) : null,
+        condiciones_comerciales_name_snapshot: cotizacion.condiciones_comerciales_name_snapshot ?? null,
+        condiciones_comerciales_discount_percentage_snapshot: cotizacion.condiciones_comerciales_discount_percentage_snapshot ?? null,
       },
     };
   } catch (error) {

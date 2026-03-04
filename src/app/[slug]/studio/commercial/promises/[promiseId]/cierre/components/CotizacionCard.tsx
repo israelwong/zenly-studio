@@ -1,13 +1,14 @@
 'use client';
 
 import React, { memo, useMemo, useState, useEffect, useCallback } from 'react';
-import { Eye, Pencil, Loader2 } from 'lucide-react';
+import { Pencil, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenInput, ZenTextarea, ZenDialog, SeparadorZen } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { CondicionesSection } from './CondicionesSection';
 import { ResumenPago } from '@/components/shared/precio';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
+import { AuditoriaRentabilidadCard } from '@/components/shared/commercial';
 import { getAuditoriaRentabilidadCierre, updateCotizacionName } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { actualizarAnticipoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -80,18 +81,21 @@ function CotizacionCardInner({
   const hasCondiciones = condicionesData != null;
 
   const condicion = condicionesData?.condiciones_comerciales;
-  /** Total a pagar (precio de cierre negociado). Base para cálculo de anticipo %. */
-  const totalFinalCierre = cotizacion?.price ?? 0;
+  const precioBase = cotizacion?.price ?? 0;
   const montoCortesias = desgloseCierre?.cortesias_monto ?? 0;
   const montoBono = desgloseCierre?.bono_especial ?? 0;
-  const tieneConcesiones = (montoCortesias > 0) || (montoBono > 0);
+  const discountPct = condicion?.discount_percentage ?? 0;
+  const descuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
+  /** Total a pagar (con descuento de condición si aplica). Base para anticipo %. */
+  const totalFinalCierre = Math.round(precioBase - descuentoCondicionMonto);
+  const tieneConcesiones = (montoCortesias > 0) || (montoBono > 0) || descuentoCondicionMonto > 0;
 
   const { precioLista, ajusteCierre, anticipoFromCondition, advanceType, anticipoPorcentaje } = useMemo(() => {
     const lista = desgloseCierre
       ? getPrecioListaStudio({ price: cotizacion.price, precio_calculado: desgloseCierre.precio_calculado })
       : cotizacion.price;
     const ajuste = desgloseCierre
-      ? getAjusteCierre(totalFinalCierre, lista, montoCortesias, montoBono)
+      ? getAjusteCierre(precioBase, lista, montoCortesias, montoBono)
       : 0;
     const isFixed = condicion?.advance_type === 'fixed_amount' || condicion?.advance_type === 'amount';
     const ant = isFixed && condicion?.advance_amount != null
@@ -104,12 +108,19 @@ function CotizacionCardInner({
       advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
       anticipoPorcentaje: condicion?.advance_percentage ?? null,
     };
-  }, [desgloseCierre, cotizacion.price, totalFinalCierre, montoCortesias, montoBono, condicion?.advance_type, condicion?.advance_amount, condicion?.advance_percentage]);
+  }, [desgloseCierre, cotizacion.price, precioBase, totalFinalCierre, montoCortesias, montoBono, condicion?.advance_type, condicion?.advance_amount, condicion?.advance_percentage]);
 
   const anticipoOverride = pagoData?.pago_monto != null ? Number(pagoData.pago_monto) : null;
   const anticipo = anticipoOverride ?? anticipoFromCondition;
+  /** Diferido esperado (Total − Anticipo pactado). Usado por ResumenPago. */
   const diferido = Math.max(0, totalFinalCierre - anticipo);
+  /** Monto realmente recibido: suma de studio_pagos (paid/completed/succeeded) para esta cotización. */
+  const montoRecibidoReal = pagoData?.pagos_confirmados_sum ?? 0;
+  /** Pendiente = Total a pagar − Pagos confirmados (nunca negativo). */
+  const pendienteReal = Math.max(0, totalFinalCierre - montoRecibidoReal);
   const anticipoModificado = anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01;
+  /** Verde solo si lo recibido cumple o supera el anticipo pactado; si no, ámbar para indicar compromiso no cumplido. */
+  const recibidoCumpleAnticipo = anticipo <= 0 || montoRecibidoReal >= anticipo;
 
   const [showEditMetadataModal, setShowEditMetadataModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -201,16 +212,17 @@ function CotizacionCardInner({
   const showResumenPago = hasCondiciones && desgloseCierre && tieneConcesiones;
 
   const [auditoria, setAuditoria] = useState<{ utilidadNeta: number; margenPorcentaje: number } | null>(null);
+  const debeCargarAuditoria = hasCondiciones && cotizacion?.id && studioSlug;
   useEffect(() => {
-    if (!showResumenPago || !cotizacion?.id || !studioSlug) {
+    if (!debeCargarAuditoria) {
       setAuditoria(null);
       return;
     }
-    getAuditoriaRentabilidadCierre(studioSlug, cotizacion.id).then((r) => {
+    getAuditoriaRentabilidadCierre(studioSlug!, cotizacion!.id).then((r) => {
       if (r.success && r.data) setAuditoria(r.data);
       else setAuditoria(null);
     });
-  }, [showResumenPago, cotizacion?.id, studioSlug]);
+  }, [debeCargarAuditoria, studioSlug, cotizacion?.id]);
 
   return (
     <>
@@ -226,11 +238,10 @@ function CotizacionCardInner({
               size="sm"
               onClick={onPreviewClick}
               disabled={loadingCotizacion}
-              className="h-7 min-w-0 gap-1 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-7 px-2.5 py-1.5 text-xs text-emerald-400 bg-zinc-800/50 hover:bg-emerald-500/10 hover:text-emerald-300 rounded-md gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Vista previa de cotización"
               aria-label="Vista previa de cotización"
             >
-              <Eye className="h-3 w-3 shrink-0" />
               <span className="text-xs font-medium">Ver cotización</span>
             </ZenButton>
           )}
@@ -317,12 +328,15 @@ function CotizacionCardInner({
                     cortesiasCount={desgloseCierre.cortesias_count}
                     montoBono={montoBono}
                     precioFinalCierre={totalFinalCierre}
+                    descuentoCondicion={discountPct > 0 ? discountPct : 0}
+                    descuentoCondicionMonto={descuentoCondicionMonto}
                     ajusteCierre={ajusteCierre}
                     tieneConcesiones
                     anticipoModificado={anticipoModificado}
-                    pagoConfirmado={pagoData?.pago_confirmado_estudio ?? false}
+                    pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
+                    badgeEnCierre={cotizacion?.status === 'en_cierre'}
                     renderAnticipoActions={
-                      ajusteFino !== null
+                      !(pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false) && ajusteFino !== null
                         ? () => (
                             <PopoverTrigger asChild>
                               <ZenButton type="button" variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-zinc-400 hover:text-zinc-200" aria-label="Ajustar anticipo">
@@ -392,20 +406,30 @@ function CotizacionCardInner({
                     )}
                   </PopoverContent>
                 </Popover>
+                {anticipo > 0 && cotizacion?.status !== 'en_cierre' && (
+                  <>
+                    <SeparadorZen variant="subtle" spacing="md" />
+                    <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                      <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Balance del Evento</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between text-zinc-300">
+                          <span>Pagos Confirmados</span>
+                          <span className={`font-medium ${recibidoCumpleAnticipo ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {formatearMoneda(montoRecibidoReal)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-zinc-300">
+                          <span>Pendiente (Diferido)</span>
+                          <span className="font-medium text-zinc-200">{formatearMoneda(pendienteReal)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
                 {auditoria != null && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />
-                    <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 p-3 ring-2 ring-amber-500/30">
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">
-                        AUDITORÍA DE RENTABILIDAD (VISIBLE PARA STUDIO)
-                      </p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-400">
-                        <span>Utilidad Neta</span>
-                        <span className="text-right font-medium text-zinc-300">{formatearMoneda(auditoria.utilidadNeta)}</span>
-                        <span>Margen %</span>
-                        <span className="text-right font-medium text-zinc-300">{auditoria.margenPorcentaje.toFixed(1)}%</span>
-                      </div>
-                    </div>
+                    <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
                   </>
                 )}
               </>
@@ -428,7 +452,14 @@ function CotizacionCardInner({
                   negociacionPrecioOriginal={negociacionData.negociacion_precio_original}
                   negociacionPrecioPersonalizado={negociacionData.negociacion_precio_personalizado}
                   isRemovingCondiciones={isRemovingCondiciones}
+                  pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
                 />
+                {auditoria != null && (
+                  <>
+                    <SeparadorZen variant="subtle" spacing="md" />
+                    <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
+                  </>
+                )}
               </>
             )}
           </>

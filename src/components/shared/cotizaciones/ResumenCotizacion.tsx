@@ -87,6 +87,12 @@ interface ResumenCotizacionProps {
     cortesiasCount: number;
     montoBono: number;
     ajusteCierre: number;
+    /** Monto ahorrado por descuento % de la condición (línea "Descuento especial aplicado"). */
+    descuentoCondicionMonto?: number;
+    /** Porcentaje de descuento de la condición (para etiqueta "Descuento especial aplicado (X%)"). */
+    descuentoCondicionPct?: number;
+    /** Total real a pagar (con descuento de condición); base para anticipo %. */
+    precioFinalCierre?: number;
     tieneConcesiones: boolean;
     advanceType: 'percentage' | 'fixed_amount';
     anticipoPorcentaje: number | null;
@@ -434,17 +440,18 @@ export function ResumenCotizacion({ cotizacion, event_duration, promiseDurationH
             title={condicionesComerciales ? 'Resumen de Cierre' : 'Resumen'}
             compact
             precioBase={cotizacion.price}
-            descuentoCondicion={0}
-            precioConDescuento={cotizacion.price}
+            descuentoCondicion={resumenCierreOverride?.descuentoCondicionPct ?? 0}
+            precioConDescuento={resumenCierreOverride?.precioFinalCierre ?? cotizacion.price}
             advanceType={condicionesComerciales ? (resumenCierreOverride?.advanceType ?? desglose.advanceType) : 'percentage'}
             anticipoPorcentaje={condicionesComerciales ? (resumenCierreOverride?.anticipoPorcentaje ?? desglose.anticipoPorcentaje) : null}
             anticipo={condicionesComerciales ? (resumenCierreOverride?.anticipo ?? anticipoOverride ?? desglose.anticipo) : 0}
-            diferido={condicionesComerciales ? (resumenCierreOverride?.diferido ?? Math.max(0, cotizacion.price - (anticipoOverride ?? desglose.anticipo))) : cotizacion.price}
+            diferido={condicionesComerciales ? (resumenCierreOverride?.diferido ?? Math.max(0, (resumenCierreOverride?.precioFinalCierre ?? cotizacion.price) - (anticipoOverride ?? desglose.anticipo))) : cotizacion.price}
             precioLista={resumenCierreOverride?.precioLista ?? desglose.precioLista}
             montoCortesias={resumenCierreOverride?.montoCortesias ?? desglose.cortesias_monto}
             cortesiasCount={resumenCierreOverride?.cortesiasCount ?? desglose.cortesias_count}
             montoBono={resumenCierreOverride?.montoBono ?? desglose.montoBono}
-            precioFinalCierre={cotizacion.price}
+            precioFinalCierre={condicionesComerciales && resumenCierreOverride?.precioFinalCierre != null ? resumenCierreOverride.precioFinalCierre : cotizacion.price}
+            descuentoCondicionMonto={resumenCierreOverride?.descuentoCondicionMonto ?? 0}
             ajusteCierre={resumenCierreOverride?.ajusteCierre ?? desglose.ajusteCierre}
             tieneConcesiones={resumenCierreOverride?.tieneConcesiones ?? desglose.tieneConcesiones}
             anticipoModificado={resumenCierreOverride?.anticipoModificado ?? (condicionesComerciales && anticipoOverride != null && Math.abs(anticipoOverride - desglose.anticipo) >= 0.01)}

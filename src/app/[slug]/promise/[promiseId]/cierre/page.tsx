@@ -54,7 +54,12 @@ export default async function CierrePage({ params }: CierrePageProps) {
   const { promise: promiseBasic, studio: studioBasic } = basicData.data;
 
   // ⚠️ STREAMING: Crear promesa para datos pesados (NO await - deferred)
-  const deferredDataPromise = getPublicPromiseCierre(slug, promiseId);
+  // ⚠️ VALIDACIÓN: Verificar que hay cotización en cierre antes de renderizar
+  const deferredDataPromise = getPublicPromiseCierre(slug, promiseId).then((result) => {
+    // Si no hay cotización en cierre, el componente mostrará mensaje de error
+    // (no hacemos redirect aquí para no romper el streaming)
+    return result;
+  });
 
   return (
     <PromisePageProvider>

@@ -91,35 +91,44 @@ export function CotizacionAutorizadaCard({
   const savedContractContent = contrato?.content || resumen?.cotizacion?.contract_content_snapshot || '';
   const contractTemplateId = contrato?.template_id || resumen?.cotizacion?.contract_template_id_snapshot || null;
 
-  // Resumen de Cierre (solo lectura) desde snapshots: mismo bloque que en cierre
+  // Resumen de Cierre (solo lectura) desde snapshots: paridad con cierre (snap_total_final, snap_descuento_condicion_monto, snap_ajuste_cierre)
   const resumenPagoProps = useMemo(() => {
     const data = cotizacionData as CotizacionListItem & {
       precio_calculado?: number | null;
       bono_especial?: number | null;
       cortesias_monto_snapshot?: number | null;
       cortesias_count_snapshot?: number | null;
+      snap_precio_lista?: number | null;
+      snap_ajuste_cierre?: number | null;
+      snap_monto_bono?: number | null;
+      snap_total_final?: number | null;
+      snap_descuento_condicion_monto?: number | null;
+      condiciones_comerciales_discount_percentage_snapshot?: number | null;
     };
     const price = Number(data.price ?? 0);
-    const precioLista = getPrecioListaStudio({ price, precio_calculado: data.precio_calculado ?? null });
+    const totalFinal = data.snap_total_final != null ? Number(data.snap_total_final) : price;
+    const precioLista = data.snap_precio_lista != null ? Number(data.snap_precio_lista) : getPrecioListaStudio({ price, precio_calculado: data.precio_calculado ?? null });
     const montoCortesias = data.cortesias_monto_snapshot ?? 0;
-    const montoBono = data.bono_especial ?? 0;
-    const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
-    if (!tieneConcesiones && !data.precio_calculado) return null;
-    // AjusteCierre = price - (precioLista - cortesiasMonto - bonoEspecial)
-    const ajusteCierre = getAjusteCierre(price, precioLista, montoCortesias, montoBono);
+    const montoBono = (data.snap_monto_bono != null ? Number(data.snap_monto_bono) : data.bono_especial) ?? 0;
+    const descuentoCondicionMonto = data.snap_descuento_condicion_monto != null ? Number(data.snap_descuento_condicion_monto) : 0;
+    const ajusteCierre = data.snap_ajuste_cierre != null ? Number(data.snap_ajuste_cierre) : getAjusteCierre(price, precioLista, montoCortesias, montoBono);
+    const tieneConcesiones = montoCortesias > 0 || montoBono > 0 || descuentoCondicionMonto > 0 || ajusteCierre !== 0;
+    const tieneSnapshot = data.snap_total_final != null;
+    if (!tieneConcesiones && !tieneSnapshot && !data.precio_calculado) return null;
     const isFixed = condiciones?.advance_type === 'fixed_amount' || condiciones?.advance_type === 'amount';
     const anticipoFromCondition = isFixed && condiciones?.advance_amount != null
       ? Number(condiciones.advance_amount)
-      : (condiciones?.advance_percentage != null ? Math.round(price * (condiciones.advance_percentage / 100)) : 0);
+      : (condiciones?.advance_percentage != null ? Math.round(totalFinal * (condiciones.advance_percentage / 100)) : 0);
     const totalPagadoResumen = (resumen as { totalPagado?: number } | null)?.totalPagado ?? 0;
-    const anticipo = totalPagadoResumen > 0 ? totalPagadoResumen : anticipoFromCondition;
-    const diferido = Math.max(0, price - anticipo);
+    const anticipo = totalPagadoResumen;
+    const diferido = Math.max(0, totalFinal - totalPagadoResumen);
+    const descuentoCondicionPct = condiciones?.discount_percentage ?? data.condiciones_comerciales_discount_percentage_snapshot ?? 0;
     return {
       title: 'Resumen de Cierre' as const,
       compact: true,
-      precioBase: price,
-      descuentoCondicion: 0,
-      precioConDescuento: price,
+      precioBase: totalFinal + descuentoCondicionMonto,
+      descuentoCondicion: descuentoCondicionPct,
+      precioConDescuento: totalFinal,
       advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
       anticipoPorcentaje: condiciones?.advance_percentage ?? null,
       anticipo,
@@ -128,14 +137,25 @@ export function CotizacionAutorizadaCard({
       montoCortesias,
       cortesiasCount: data.cortesias_count_snapshot ?? 0,
       montoBono,
-      precioFinalCierre: price,
+      precioFinalCierre: totalFinal,
       ajusteCierre,
+      descuentoCondicionMonto,
       tieneConcesiones,
-      anticipoModificado: false,
+      anticipoModificado: totalPagadoResumen > 0 && totalPagadoResumen < anticipoFromCondition,
     };
   }, [cotizacionData, condiciones, resumen]);
 
   const openContractPreview = async () => {
+    // Recargar resumen para asegurar que tenemos los snapshots más recientes
+    try {
+      const result = await obtenerResumenEventoCreado(studioSlug, eventoId);
+      if (result.success && result.data) {
+        setResumen(result.data);
+      }
+    } catch (error) {
+      console.error('Error reloading resumen:', error);
+    }
+
     if (contractTemplateId) {
       setLoadingTemplateForPreview(true);
       try {
@@ -372,25 +392,27 @@ export function CotizacionAutorizadaCard({
               </div>
             ) : null}
 
-            {/* Pago Inicial */}
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex items-center gap-3">
-              <DollarSign className="w-5 h-5 text-zinc-400 shrink-0" />
-              <div className="flex-1 min-w-0 text-sm">
-                <span className="font-semibold text-zinc-300">Pago Inicial</span>
-                {hayPagoInicial && primerPago ? (
-                  <>
+            {/* Pago Inicial: solo visible si hay al menos un pago registrado */}
+            {hayPagoInicial && (
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex items-center gap-3">
+                <DollarSign className="w-5 h-5 text-zinc-400 shrink-0" />
+                <div className="flex-1 min-w-0 text-sm">
+                  <span className="font-semibold text-zinc-300">Pago Inicial</span>
+                  {primerPago ? (
+                    <>
+                      <span className="text-emerald-400 font-medium"> · ${formatNumber(totalPagado, 2)} MXN</span>
+                      {(primerPago.concept || primerPago.payment_date) && (
+                        <span className="text-zinc-500 text-xs block mt-0.5">
+                          {[primerPago.concept, primerPago.payment_date && formatDisplayDate(toUtcDateOnly(primerPago.payment_date))].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </>
+                  ) : (
                     <span className="text-emerald-400 font-medium"> · ${formatNumber(totalPagado, 2)} MXN</span>
-                    {(primerPago.concept || primerPago.payment_date) && (
-                      <span className="text-zinc-500 text-xs block mt-0.5">
-                        {[primerPago.concept, primerPago.payment_date && formatDisplayDate(toUtcDateOnly(primerPago.payment_date))].filter(Boolean).join(' · ')}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-zinc-500"> · Promesa de pago</span>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Contrato Inmutable */}
             {contrato && contrato.content ? (

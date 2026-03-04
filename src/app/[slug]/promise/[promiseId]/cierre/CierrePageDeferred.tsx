@@ -158,9 +158,28 @@ export function CierrePageDeferred({
   const result = use(dataPromise);
 
   if (!result.success || !result.data) {
-    // Si falla, no renderizar nada (el error se maneja en el page.tsx)
+    // Si falla, mostrar mensaje de error amigable
     console.error('[CierrePageDeferred] Error obteniendo datos:', result.error);
-    return null;
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
+          <p className="text-lg font-semibold text-zinc-300 mb-2">
+            No se encontró una cotización en proceso de cierre
+          </p>
+          <p className="text-sm text-zinc-400 mb-4">
+            {result.error === 'Cotización en cierre no encontrada' 
+              ? 'La cotización ya fue autorizada o el proceso de cierre fue cancelado.'
+              : result.error || 'Error al cargar los datos'}
+          </p>
+          <a
+            href={`/${studioSlug}/promise/${promiseId}`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+          >
+            Volver a la promesa
+          </a>
+        </div>
+      </div>
+    );
   }
 
   const {
@@ -174,7 +193,24 @@ export function CierrePageDeferred({
   const cotizacionEnCierre = cotizaciones?.[0];
 
   if (!cotizacionEnCierre) {
-    return null;
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
+          <p className="text-lg font-semibold text-zinc-300 mb-2">
+            No hay cotizaciones en proceso de cierre
+          </p>
+          <p className="text-sm text-zinc-400 mb-4">
+            La cotización ya fue autorizada o el proceso fue cancelado.
+          </p>
+          <a
+            href={`/${studioSlug}/promise/${promiseId}`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+          >
+            Volver a la promesa
+          </a>
+        </div>
+      </div>
+    );
   }
 
   // ⚠️ SAFETY: Validar que servicios exista y sea un array

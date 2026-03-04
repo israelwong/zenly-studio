@@ -155,25 +155,13 @@ export function useContractRenderer({
     }
 
     if (condicionesData) {
-      const contentHasPlaceholder = rendered.includes('@condiciones_comerciales') || 
+      const contentHasPlaceholder = rendered.includes('@condiciones_comerciales') ||
                                    rendered.includes('{condiciones_comerciales}') ||
                                    rendered.includes('@condiciones_pago') ||
                                    rendered.includes('{condiciones_pago}');
-      
-      console.log('[useContractRenderer] Renderizando condiciones comerciales:', {
-        condicionesData,
-        hasNombre: !!condicionesData.nombre,
-        hasTotalFinal: condicionesData.total_final !== undefined,
-        contentHasPlaceholder,
-        contentLength: rendered.length,
-      });
-      
+
       const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
-      console.log('[useContractRenderer] HTML generado:', {
-        htmlLength: condicionesHtml.length,
-        htmlPreview: condicionesHtml.substring(0, 200),
-      });
-      
+
       const beforeReplace = rendered.length;
       rendered = rendered.replaceAll("@condiciones_comerciales", condicionesHtml);
       rendered = rendered.replaceAll("{condiciones_comerciales}", condicionesHtml);
@@ -208,7 +196,6 @@ export function useContractRenderer({
         }
       }
     } else {
-      console.log('[useContractRenderer] NO hay condicionesData, usando placeholder');
       const placeholder =
         '<div class="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg"><p class="text-zinc-500 italic">No hay condiciones comerciales disponibles</p></div>';
       rendered = rendered.replace("@condiciones_comerciales", placeholder);

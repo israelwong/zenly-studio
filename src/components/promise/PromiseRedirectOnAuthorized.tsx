@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { getPublicPromisePath } from '@/lib/utils/public-promise-routing';
 
 interface PromiseRedirectOnAuthorizedProps {
   studioSlug: string;
@@ -12,12 +13,8 @@ interface PromiseRedirectOnAuthorizedProps {
 const STATUSES_APROBADOS = ['aprobada', 'autorizada', 'approved'];
 
 /**
- * Componente que escucha cambios en cotizaciones mediante realtime
- * y redirige a /[slug]/cliente cuando se detecta una cotización aprobada/autorizada
- * 
- * ⚠️ OPTIMIZADO: Usa getPublicPromiseRouteState (ultra-ligera) en lugar de getPublicPromiseData
- * ⚠️ OPTIMIZADO: Eliminado setInterval agresivo, solo verifica una vez al montar
- * ⚠️ FIX: Dynamic import para evitar problemas de HMR con Server Actions
+ * Escucha cambios en cotizaciones y redirige a /[slug]/promise/[promiseId]/bienvenido
+ * cuando se detecta cotización aprobada/autorizada.
  */
 export function PromiseRedirectOnAuthorized({
   studioSlug,
@@ -26,55 +23,48 @@ export function PromiseRedirectOnAuthorized({
   const router = useRouter();
   const hasRedirectedRef = useRef(false);
   const lastCheckRef = useRef<number>(0);
+  const bienvenidoPath = getPublicPromisePath(studioSlug, promiseId, 'bienvenido');
 
   const checkAndRedirect = useCallback(async () => {
     if (hasRedirectedRef.current) return;
 
-    // ⚠️ Protección: evitar checks muy frecuentes (mínimo 10 segundos)
     const now = Date.now();
-    if (now - lastCheckRef.current < 10000) {
-      return;
-    }
+    if (now - lastCheckRef.current < 10000) return;
     lastCheckRef.current = now;
 
     try {
-      // Usar la API de redirect que incluye verificación de evento_id
       const response = await fetch(`/api/promise/${studioSlug}/${promiseId}/redirect?t=${Date.now()}`, {
         cache: 'no-store',
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        if (data.redirect && data.redirect.includes('/cliente')) {
+        if (data.redirect && (data.redirect.includes('/bienvenido') || data.redirect.includes('/cliente'))) {
           hasRedirectedRef.current = true;
-          router.push(data.redirect);
+          router.push(data.redirect.includes('/bienvenido') ? data.redirect : bienvenidoPath);
         }
       }
     } catch (error) {
       console.error('[PromiseRedirectOnAuthorized] Error verificando cotización:', error);
     }
-  }, [studioSlug, promiseId, router]);
+  }, [studioSlug, promiseId, router, bienvenidoPath]);
 
   const handleCotizacionUpdated = useCallback(
-    async (cotizacionId: string, payload?: unknown) => {
+    (cotizacionId: string, payload?: unknown) => {
       if (hasRedirectedRef.current) return;
 
-      const p = payload as any;
+      const p = payload as { changeInfo?: { newStatus?: string; evento_id?: string | null } };
       const changeInfo = p?.changeInfo;
 
-      // Verificar si el cambio es de status a aprobada/autorizada/approved Y tiene evento_id
       if (changeInfo?.statusChanged) {
         const newStatus = (changeInfo.newStatus as string).toLowerCase();
-        const hasEvento = !!changeInfo.evento_id;
-
-        // Solo redirigir si está aprobada Y tiene evento creado
-        if (STATUSES_APROBADOS.includes(newStatus) && hasEvento) {
+        if (STATUSES_APROBADOS.includes(newStatus)) {
           hasRedirectedRef.current = true;
-          router.push(`/${studioSlug}/cliente`);
+          router.push(bienvenidoPath);
         }
       }
     },
-    [studioSlug, router]
+    [router, bienvenidoPath]
   );
 
   // Escuchar cambios en cotizaciones mediante realtime

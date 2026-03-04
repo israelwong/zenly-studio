@@ -26,6 +26,8 @@ interface CondicionesComercialesDesgloseProps {
   diferido?: number;
   descuentoAplicado?: number;
   ahorroTotal?: number;
+  /** Si true, muestra badge [Pagado] en esmeralda junto a Anticipo y deshabilita edición en contexto cierre */
+  pagoConfirmado?: boolean;
 }
 
 /**
@@ -51,6 +53,7 @@ export function CondicionesComercialesDesglose({
   diferido: diferidoProp,
   descuentoAplicado: descuentoAplicadoProp,
   ahorroTotal: ahorroTotalProp,
+  pagoConfirmado = false,
 }: CondicionesComercialesDesgloseProps) {
   const precioNegociadoNum = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined
     ? Number(negociacionPrecioPersonalizado)
@@ -135,6 +138,11 @@ export function CondicionesComercialesDesglose({
                     ? ` (${condicion.advance_percentage}%)`
                     : ''}
                   :
+                  {pagoConfirmado && (
+                    <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                      Pagado
+                    </span>
+                  )}
                 </span>
                 <span className="text-emerald-400 font-medium tabular-nums">
                   {formatMoney(anticipoMonto)}
@@ -248,6 +256,11 @@ export function CondicionesComercialesDesglose({
                   ? ` (${condicion.advance_percentage}%)`
                   : ''}
                 :
+                {pagoConfirmado && (
+                  <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                    Pagado
+                  </span>
+                )}
               </span>
               <span className="text-emerald-400 font-medium tabular-nums">
                 {formatMoney(anticipoMonto)}

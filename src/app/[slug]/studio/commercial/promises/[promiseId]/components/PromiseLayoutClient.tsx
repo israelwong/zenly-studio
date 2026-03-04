@@ -76,14 +76,19 @@ export function PromiseLayoutClient({
     window.dispatchEvent(new CustomEvent('close-overlays'));
   }, []);
 
-  // Fase 30.9.5: Si el estado es autorizada pero la URL es /cierre, redirigir a /autorizada para que el staff vea la ruta correcta
+  // Fase 30.9.5: Si el estado es autorizada pero la URL es /cierre, redirigir a /autorizada tras 4s para dar tiempo al overlay/confeti
   useEffect(() => {
     if (!pathname || stateData.state !== 'autorizada') return;
     if (!pathname.includes('/cierre')) return;
     const targetPath = getPromisePathFromState(studioSlug, promiseId, 'autorizada');
-    if (pathname.endsWith('/cierre') || pathname.includes('/cierre/')) {
-      router.push(targetPath);
-    }
+    if (!pathname.endsWith('/cierre') && !pathname.includes('/cierre/')) return;
+    
+    const t = setTimeout(() => {
+      startTransition(() => {
+        router.replace(targetPath);
+      });
+    }, 4000);
+    return () => clearTimeout(t);
   }, [pathname, stateData.state, studioSlug, promiseId, router]);
 
   // Fase 30.9.3: Al volver a la pestaña, refrescar RSC para ver estado actual (ej. conversión automática tras firma en público)

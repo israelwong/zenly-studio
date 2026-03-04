@@ -84,8 +84,8 @@ export async function obtenerRegistroCierre(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Paralelizar: registro de cierre + última versión del contrato
-    const [registro, ultimaVersion] = await Promise.all([
+    // Paralelizar: registro de cierre + última versión del contrato + suma de pagos confirmados (studio_pagos)
+    const [registro, ultimaVersion, pagosAgg] = await Promise.all([
       prisma.studio_cotizaciones_cierre.findUnique({
         where: { cotizacion_id: cotizacionId },
         include: {
@@ -103,7 +103,15 @@ export async function obtenerRegistroCierre(
           created_at: true,
         },
       }),
+      prisma.studio_pagos.aggregate({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: { in: ['paid', 'completed', 'succeeded'] },
+        },
+        _sum: { amount: true },
+      }),
     ]);
+    const pagos_confirmados_sum = pagosAgg._sum?.amount != null ? Number(pagosAgg._sum.amount) : 0;
 
     if (!registro) {
       return { success: false, error: 'Registro de cierre no encontrado' };
@@ -241,6 +249,7 @@ export async function obtenerRegistroCierre(
           ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
         desglose_cierre,
+        pagos_confirmados_sum,
       } as any,
     };
   } catch (error) {
@@ -1390,15 +1399,16 @@ export async function actualizarPagoCierre(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Determinar si es pago registrado o promesa de pago
+    // Determinar si es pago registrado o promesa de pago; si hay monto/concepto/fecha = pago recibido (confirmado estudio)
     const esPromesaDePago = !pagoData.concepto && !pagoData.monto && !pagoData.fecha;
+    const pagoConfirmadoEstudio = !esPromesaDePago;
 
-    // Actualizar o crear registro de cierre
     const registro = await prisma.studio_cotizaciones_cierre.upsert({
       where: { cotizacion_id: cotizacionId },
       create: {
         cotizacion_id: cotizacionId,
         pago_registrado: !esPromesaDePago,
+        pago_confirmado_estudio: pagoConfirmadoEstudio,
         pago_concepto: pagoData.concepto,
         pago_monto: pagoData.monto,
         pago_fecha: pagoData.fecha,
@@ -1406,6 +1416,7 @@ export async function actualizarPagoCierre(
       },
       update: {
         pago_registrado: !esPromesaDePago,
+        pago_confirmado_estudio: pagoConfirmadoEstudio,
         pago_concepto: pagoData.concepto,
         pago_monto: pagoData.monto,
         pago_fecha: pagoData.fecha,
@@ -1620,6 +1631,8 @@ export async function autorizarYCrearEvento(
     montoInicial?: number;
     /** Si true, permite crear evento aunque se supere max_events_per_day */
     forceBooking?: boolean;
+    /** Si true, no exige contrato definido ni firmado (permite autorizar sin contrato para prospecto) */
+    skip_contract?: boolean;
   }
 ): Promise<{
   success: boolean;
@@ -1740,21 +1753,24 @@ export async function autorizarYCrearEvento(
         };
       }
 
-      // Fase 30.9.4: contrato válido si está definido Y (hay plantilla O contenido personalizado)
-      const hasContratoDefinido = !!registroCierre.contrato_definido;
-      const hasTemplateOrContent =
-        !!registroCierre.contract_template_id || !!registroCierre.contract_content;
-      if (!hasContratoDefinido || !hasTemplateOrContent) {
-        return { success: false, error: 'Debe definir el contrato' };
-      }
+      // Omitir contrato: si skip_contract, no exige contrato definido ni firmado
+      if (!options?.skip_contract) {
+        // Fase 30.9.4: contrato válido si está definido Y (hay plantilla O contenido personalizado)
+        const hasContratoDefinido = !!registroCierre.contrato_definido;
+        const hasTemplateOrContent =
+          !!registroCierre.contract_template_id || !!registroCierre.contract_content;
+        if (!hasContratoDefinido || !hasTemplateOrContent) {
+          return { success: false, error: 'Debe definir el contrato' };
+        }
 
-      // Validaci?n: contrato firmado SOLO si la cotizaci?n fue seleccionada por el prospecto
-      if (!registroCierre.contract_signed_at) {
-        return {
-          success: false,
-          error:
-            'El contrato debe estar firmado por el cliente antes de autorizar',
-        };
+        // Validaci?n: contrato firmado SOLO si la cotizaci?n fue seleccionada por el prospecto
+        if (!registroCierre.contract_signed_at) {
+          return {
+            success: false,
+            error:
+              'El contrato debe estar firmado por el cliente antes de autorizar',
+          };
+        }
       }
     }
 
@@ -1803,7 +1819,6 @@ export async function autorizarYCrearEvento(
       return { success: false, error: conflictResult.error ?? 'Error al comprobar disponibilidad' };
     }
     if (conflictResult.data?.isFull && !options?.forceBooking) {
-      console.log('❌ FALLO: CAPACIDAD ALCANZADA');
       return {
         success: false,
         error: 'DATE_OCCUPIED',
@@ -1858,17 +1873,43 @@ export async function autorizarYCrearEvento(
       cortesias_monto += valorComercial > 0 ? valorComercial : Number((i as { subtotal?: unknown }).subtotal ?? 0);
     }
 
-    // Snapshot financiero (inmutable) para reportes y anexos futuros
-    const totalFinalCierre = Number(cotizacion.price ?? 0);
+    // Condición aplicada (misma prioridad que dentro de la transacción: negociación > estándar)
+    const condicionNegociacion = cotizacion.condicion_comercial_negociacion;
+    const condicionEstandar = registroCierre.condiciones_comerciales;
+    const condicionSnapshotPre = condicionNegociacion
+      ? {
+          name: condicionNegociacion.name,
+          description: condicionNegociacion.description,
+          advance_percentage: condicionNegociacion.advance_percentage != null ? Number(condicionNegociacion.advance_percentage) : null,
+          advance_type: condicionNegociacion.advance_type,
+          advance_amount: condicionNegociacion.advance_amount,
+          discount_percentage: condicionNegociacion.discount_percentage != null ? Number(condicionNegociacion.discount_percentage) : null,
+        }
+      : registroCierre.condiciones_comerciales_definidas && condicionEstandar
+        ? {
+            name: condicionEstandar.name,
+            description: condicionEstandar.description,
+            advance_percentage: condicionEstandar.advance_percentage != null ? Number(condicionEstandar.advance_percentage) : null,
+            advance_type: condicionEstandar.advance_type,
+            advance_amount: condicionEstandar.advance_amount,
+            discount_percentage: condicionEstandar.discount_percentage != null ? Number(condicionEstandar.discount_percentage) : null,
+          }
+        : null;
+
+    // Total real: PrecioBase (cotizacion.price) menos descuento % de la condición (congruente con modal Confirmar Cierre)
+    const precioBase = Number(cotizacion.price ?? 0);
+    const discountPct = condicionSnapshotPre?.discount_percentage ?? 0;
+    const snapDescuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
+    const totalFinalCierre = Math.round(precioBase - snapDescuentoCondicionMonto);
     const montoBonoSnap = cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : 0;
     const precioListaSnap = getPrecioListaStudio({
       price: cotizacion.price,
       precio_calculado: cotizacion.precio_calculado,
     });
-    const ajusteCierreSnap = getAjusteCierre(totalFinalCierre, precioListaSnap, cortesias_monto, montoBonoSnap);
+    // Ajuste por cierre = PrecioLista - PrecioBase (solo lo que el estudio ajustó manualmente; descuento condición va aparte)
+    const ajusteCierreSnap = getAjusteCierre(precioBase, precioListaSnap, cortesias_monto, montoBonoSnap);
 
-    // 7. TRANSACCI?N AT?MICA
-    console.log('🔍 VALIDANDO REGLAS DE NEGOCIO PARA:', promiseId);
+    // 7. TRANSACCIÓN ATÓMICA
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacci?n para evitar race conditions)
       const eventoExistente = await tx.studio_events.findFirst({
@@ -1898,14 +1939,7 @@ export async function autorizarYCrearEvento(
       // Para clientes manuales son opcionales, pero si est?n definidas deben guardarse
       const condicionNegociacion = cotizacion.condicion_comercial_negociacion;
       const condicionEstandar = registroCierre.condiciones_comerciales;
-      
-      console.log('[autorizarYCrearEvento] Condiciones para snapshot:', {
-        tieneNegociacion: !!condicionNegociacion,
-        tieneEstandar: !!condicionEstandar,
-        negociacionName: condicionNegociacion?.name,
-        estandarName: condicionEstandar?.name,
-      });
-      
+
       const condicionSnapshot = condicionNegociacion
         ? {
           name: condicionNegociacion.name,
@@ -1949,12 +1983,11 @@ export async function autorizarYCrearEvento(
         }
         : null;
 
-      // 7.3.1 Resumen financiero HTML (snapshot) e inyección permanente en contract_content_snapshot
-      const montoAnticipoSnap = condicionSnapshot
-        ? (condicionSnapshot.advance_type === 'fixed_amount' || condicionSnapshot.advance_type === 'amount') && condicionSnapshot.advance_amount != null
-          ? Number(condicionSnapshot.advance_amount)
-          : (condicionSnapshot.advance_percentage != null ? Math.round(totalFinalCierre * (condicionSnapshot.advance_percentage / 100)) : 0)
-        : 0;
+      // 7.3.1 Resumen financiero HTML (snapshot): refleja la realidad del pago (solo monto si estudio confirmó recepción)
+      const rawPagoReg = registroCierre.pago_monto;
+      const montoPagoRegistro = rawPagoReg != null ? (typeof rawPagoReg === 'number' ? rawPagoReg : Number(String(rawPagoReg))) : 0;
+      const hayPagoConfirmadoEnRegistro = registroCierre.pago_confirmado_estudio === true && montoPagoRegistro > 0;
+      const montoAnticipoSnap = hayPagoConfirmadoEnRegistro ? montoPagoRegistro : 0;
       const financialHtml = generateFinancialSummaryHtml({
         nombre: condicionSnapshot?.name ?? 'Condiciones comerciales',
         descripcion: condicionSnapshot?.description ?? null,
@@ -1963,6 +1996,7 @@ export async function autorizarYCrearEvento(
         ajuste_cierre: ajusteCierreSnap,
         monto_bono: montoBonoSnap,
         total_final: totalFinalCierre,
+        descuento_condicion_monto: snapDescuentoCondicionMonto > 0 ? snapDescuentoCondicionMonto : undefined,
         monto_anticipo: montoAnticipoSnap > 0 ? montoAnticipoSnap : undefined,
         tipo_anticipo: condicionSnapshot?.advance_type ?? null,
         porcentaje_anticipo: condicionSnapshot?.advance_percentage ?? null,
@@ -2077,6 +2111,7 @@ export async function autorizarYCrearEvento(
           snap_ajuste_cierre: new Prisma.Decimal(ajusteCierreSnap),
           snap_monto_bono: new Prisma.Decimal(montoBonoSnap),
           snap_total_final: new Prisma.Decimal(totalFinalCierre),
+          snap_descuento_condicion_monto: snapDescuentoCondicionMonto > 0 ? new Prisma.Decimal(snapDescuentoCondicionMonto) : null,
           // Snapshots de condiciones comerciales (sin relación a tabla original tras firma)
           condiciones_comerciales_name_snapshot:
             condicionSnapshot?.name || null,
@@ -2103,37 +2138,24 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      console.log('[autorizarYCrearEvento] Snapshots guardados:', {
-        cotizacionId,
-        condiciones_name: condicionSnapshot?.name,
-        condiciones_advance_type: condicionSnapshot?.advance_type,
-        condiciones_advance_percentage: condicionSnapshot?.advance_percentage,
-        condiciones_advance_amount: condicionSnapshot?.advance_amount,
-      });
-
-      // 8.5. Fase 28.5: Registrar pago inicial desde pago_confirmado_estudio o desde cliente
+      // 8.5. Fase 28.5: Registrar pago inicial solo si el estudio confirmó recepción (no "promesa de pago")
       let pagoRegistrado = false;
-      
-      // Prioridad 1: Pago confirmado por el estudio (Fase 28.0/28.5)
       const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
       const rawMontoCierre = registroCierre.pago_monto;
-      const montoConfirmado =
-        pagoConfirmadoEstudio && rawMontoCierre != null
+      const montoDesdeRegistro =
+        rawMontoCierre != null
           ? typeof rawMontoCierre === "number"
             ? rawMontoCierre
             : Number(String(rawMontoCierre))
           : 0;
+      const debeCrearPago =
+        options?.registrarPago === true &&
+        pagoConfirmadoEstudio &&
+        montoDesdeRegistro > 0;
+      console.log('💰 [PAGO] ¿Se creará registro de pago?:', debeCrearPago, '(registrarPago:', options?.registrarPago, ', pago_confirmado_estudio:', pagoConfirmadoEstudio, ', monto desde registro:', montoDesdeRegistro, ')');
 
-      // Prioridad 2: Pago solicitado desde cliente / firma pública (Fase 30.9.6)
-      const clientePidioPago = options?.registrarPago === true;
-      const montoCliente = options?.montoInicial ?? 0;
-
-      // Usar monto confirmado si existe, sino el pasado por options (ej. signPublicContract)
-      const montoEfectivo =
-        montoConfirmado > 0 ? montoConfirmado : (clientePidioPago && montoCliente > 0 ? montoCliente : 0);
-      
-      if (montoEfectivo > 0) {
-        const montoInicial = montoEfectivo;
+      if (debeCrearPago) {
+        const montoInicial = montoDesdeRegistro;
         // Obtener nombre del m?todo de pago dentro de la transacci?n
         let metodoPagoNombre = 'Manual'; // Valor por defecto
         if (registroCierre.pago_metodo_id) {
@@ -2320,7 +2342,7 @@ export async function autorizarYCrearEvento(
             evento_fecha: eventDateNormalized.toISOString(),
             contract_signed: !!registroCierre.contract_signed_at,
             pago_registrado: pagoRegistrado,
-            pago_monto: pagoRegistrado ? montoEfectivo : null,
+            pago_monto: pagoRegistrado ? montoDesdeRegistro : null,
             pago_confirmado_estudio: pagoConfirmadoEstudio,
           },
         },

@@ -300,6 +300,33 @@ const handleCotizacionUpdated = useCallback((cotizacionId, payload) => {
 
 ---
 
+---
+
+## 4. Redirección post-firma y soberanía de stayOnCierreAfterSign
+
+**Problema:** Tras firmar el contrato en `/cierre`, el sistema redirigía a `/cliente` (o `/cliente/login`) a pesar del flag `stayOnCierreAfterSign`, que debería mantener al usuario en la página de cierre (p. ej. para ver "Bienvenido" o completar pasos adicionales).
+
+### 4.1 Causa raíz (Realtime)
+
+- **Middleware:** No hay middleware de Next.js que redirija por estado de promesa; el único middleware es el de Supabase (cookies/sesión). No hay lógica de redirect por estado `approved` en middleware.
+- **Realtime en PromiseRouteGuard:** El flag `stayOnCierreAfterSign` se leía desde **estado de React**. El ref local se actualizaba en el cuerpo del componente (`stayOnCierreRef.current = stayOnCierreAfterSign`), es decir **solo en el siguiente render**.
+- **Secuencia del bug:** (1) Usuario confirma firma → `setStayOnCierreAfterSign(true)`. (2) Server Action `signPublicContract` se ejecuta; servidor actualiza estado a aprobada. (3) Supabase Realtime emite UPDATE de cotización. (4) **Antes del siguiente render**, se ejecuta el callback `onCotizacionUpdated` en `useCotizacionesRealtime`. (5) En ese callback, `stayOnCierreRef.current` seguía siendo `false`. (6) El guard calculaba `newTargetRoute` = `/${slug}/cliente` y ejecutaba `router.replace(newTargetRoute)`.
+
+**Conclusión:** Realtime disparaba un `router.replace` hacia `/cliente` que no respetaba el flag porque el ref no estaba actualizado de forma síncrona.
+
+### 4.2 Fix aplicado
+
+1. **PromisePageContext:** Se añade `stayOnCierreRef` (ref) y se expone en el contexto. `setStayOnCierreAfterSign(value)` actualiza **primero** `stayOnCierreRef.current = value` y luego el estado, para que cualquier callback (Realtime, sync) que lea el ref vea el valor actualizado de forma síncrona.
+2. **PromiseRouteGuard:** Usa `stayOnCierreRef` del contexto en `useLayoutEffect`, `handleSyncRoute`, y en el callback `onCotizacionUpdated` de `useCotizacionesRealtime` (y en hidratación). Así la UI en `/cierre` tiene soberanía: no se redirige a `/cliente` cuando el usuario acaba de firmar.
+3. **PromiseRedirectOnAuthorized:** Usa el contexto y comprueba `stayOnCierreRef.current` antes de hacer redirect (en `checkAndRedirect` y `handleCotizacionUpdated`). Si se vuelve a montar en el árbol de promise, ya respeta el flag.
+4. **signPublicContract — re-lectura de pago:** Para evitar `rawPagoMonto` null por propagación o lectura cacheada, tras actualizar `contract_signed_at` en `studio_cotizaciones_cierre` se hace una **re-lectura** del registro de cierre (`pago_confirmado_estudio`, `pago_monto`) y se actualiza `cotizacion.cotizacion_cierre` en memoria antes de decidir y ejecutar `autorizarYCrearEvento`.
+
+**Orígenes de llamadas a `/api/promise/.../redirect`:** `syncPromiseRoute()` (desde `PromiseRouteGuard.handleSyncRoute`), polling en `/no-disponible`, y `checkAndRedirect()` en `PromiseRedirectOnAuthorized`. El "ghost redirect" en el flujo de firma en `/cierre` venía del Realtime dentro de `PromiseRouteGuard` (callback `onCotizacionUpdated`), no de la API de redirect; todos los puntos ahora respetan el ref síncrono.
+
+**Referencia de la auditoría completa:** [auditoria-redireccion-post-firma.md](auditoria-redireccion-post-firma.md) (resumen integrado arriba).
+
+---
+
 ## 📝 Archivos Clave
 
 ### Validación Inicial (SSR)

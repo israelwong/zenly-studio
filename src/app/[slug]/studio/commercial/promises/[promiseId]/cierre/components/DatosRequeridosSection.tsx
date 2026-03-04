@@ -16,11 +16,14 @@ interface DatosRequeridosSectionProps {
     duration_hours?: number | null;
   };
   onEditarClick: () => void;
+  /** Si true (contrato omitido), el progreso se muestra como "listos para autorizar" en lugar de X/8 */
+  contratoOmitido?: boolean;
 }
 
 export const DatosRequeridosSection = memo(function DatosRequeridosSection({
   promiseData,
   onEditarClick,
+  contratoOmitido = false,
 }: DatosRequeridosSectionProps) {
   // Calcular completitud de datos dentro del componente
   const clientCompletion = useMemo(() => ({
@@ -42,10 +45,24 @@ export const DatosRequeridosSection = memo(function DatosRequeridosSection({
   const totalFields = 8;
   const clientPercentage = Math.round((completedFields / totalFields) * 100);
 
+  const minimosParaOmitido =
+    clientCompletion.name &&
+    clientCompletion.phone &&
+    clientCompletion.event_name &&
+    clientCompletion.event_date &&
+    (clientCompletion.event_location || clientCompletion.address);
+  const listosParaAutorizarOmitido = contratoOmitido && !!minimosParaOmitido;
+
   return (
     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
       <div className="flex items-start gap-2 mb-2">
-        {clientPercentage === 100 ? (
+        {contratoOmitido ? (
+          listosParaAutorizarOmitido ? (
+            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          )
+        ) : clientPercentage === 100 ? (
           <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
         ) : (
           <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
@@ -53,7 +70,11 @@ export const DatosRequeridosSection = memo(function DatosRequeridosSection({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-              Datos Requeridos {completedFields}/{totalFields}
+              {contratoOmitido
+                ? listosParaAutorizarOmitido
+                  ? 'Datos listos para autorizar (contrato omitido)'
+                  : `Datos Requeridos ${completedFields}/${totalFields}`
+                : `Datos Requeridos ${completedFields}/${totalFields}`}
             </span>
             <button
               onClick={onEditarClick}

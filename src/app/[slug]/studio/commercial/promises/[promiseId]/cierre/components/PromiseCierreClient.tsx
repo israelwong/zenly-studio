@@ -120,6 +120,9 @@ interface CierreColumn3Props {
   onCancelarContrato: () => void | Promise<void>;
   onRegenerateContract: () => void | Promise<void>;
   onEditarDatosClick: () => void;
+  contratoOmitido: boolean;
+  onContratoOmitido: () => void;
+  onRevocarOmitido: () => void;
   onAutorizar: () => void;
   onCancelarCierre: () => void;
   isAuthorizing: boolean;
@@ -143,6 +146,9 @@ const CierreColumn3 = memo(function CierreColumn3({
   onCancelarContrato,
   onRegenerateContract,
   onEditarDatosClick,
+  contratoOmitido,
+  onContratoOmitido,
+  onRevocarOmitido,
   onAutorizar,
   onCancelarCierre,
   isAuthorizing,
@@ -169,6 +175,9 @@ const CierreColumn3 = memo(function CierreColumn3({
             onCancelarContrato={onCancelarContrato}
             onRegenerateContract={async () => { await onRegenerateContract(); }}
             onEditarDatosClick={onEditarDatosClick}
+            contratoOmitido={contratoOmitido}
+            onContratoOmitido={onContratoOmitido}
+            onRevocarOmitido={onRevocarOmitido}
           />
         )}
       <CierreActionButtons
@@ -312,30 +321,36 @@ export function PromiseCierreClient({
     return { showCotizacionSkeleton, showContratoSkeleton };
   }, [cierreLogic.loadingRegistro, cierreLogic.condicionesData, cierreLogic.contractData, cierreLogic.hasLoadedRegistroOnce]);
 
-  // Desglose idéntico al de la tarjeta (SSOT servidor) para el modal "Ver cotización" — paridad total con Resumen de Cierre.
+  // Desglose idéntico al de la tarjeta (SSOT servidor) para el modal "Ver cotización" — paridad con Resumen de Cierre y contrato.
   const resumenCierreOverride = useMemo(() => {
     const dc = cierreLogic.desgloseCierre;
     const cond = cierreLogic.condicionesData?.condiciones_comerciales;
     const precioBase = cotizacionEnCierre?.price ?? 0;
     if (!dc || !cond) return null;
+    const discountPct = cond.discount_percentage ?? 0;
+    const descuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
+    const precioFinalCierre = Math.round(precioBase - descuentoCondicionMonto);
     const montoCortesias = dc.cortesias_monto ?? 0;
     const montoBono = dc.bono_especial ?? 0;
-    const tieneConcesiones = montoCortesias > 0 || montoBono > 0;
+    const tieneConcesiones = montoCortesias > 0 || montoBono > 0 || descuentoCondicionMonto > 0;
     const precioLista = getPrecioListaStudio({ price: precioBase, precio_calculado: dc.precio_calculado });
     const ajusteCierre = getAjusteCierre(precioBase, precioLista, montoCortesias, montoBono);
     const isFixed = cond.advance_type === 'fixed_amount' || cond.advance_type === 'amount';
     const anticipoFromCondition = isFixed && cond.advance_amount != null
       ? Number(cond.advance_amount)
-      : (cond.advance_percentage != null ? Math.round(precioBase * (Number(cond.advance_percentage) / 100)) : 0);
+      : (cond.advance_percentage != null ? Math.round(precioFinalCierre * (Number(cond.advance_percentage) / 100)) : 0);
     const anticipoOverride = cierreLogic.pagoData?.pago_monto != null ? Number(cierreLogic.pagoData.pago_monto) : null;
     const anticipo = anticipoOverride ?? anticipoFromCondition;
-    const diferido = Math.max(0, precioBase - anticipo);
+    const diferido = Math.max(0, precioFinalCierre - anticipo);
     return {
       precioLista,
       montoCortesias,
       cortesiasCount: dc.cortesias_count ?? 0,
       montoBono,
       ajusteCierre,
+      descuentoCondicionMonto,
+      descuentoCondicionPct: discountPct > 0 ? discountPct : undefined,
+      precioFinalCierre,
       tieneConcesiones,
       advanceType: (isFixed ? 'fixed_amount' : 'percentage') as 'percentage' | 'fixed_amount',
       anticipoPorcentaje: cond.advance_percentage ?? null,
@@ -353,17 +368,12 @@ export function PromiseCierreClient({
     return null;
   }
 
-  // Una sola instancia del overlay: siempre en este árbol para que confeti y estado no se dupliquen
   const overlay = (
     <AutorizacionProgressOverlay
       show={cierreLogic.isAuthorizing}
-      currentTask={cierreLogic.currentTask}
-      completedTasks={cierreLogic.completedTasks}
+      progress={cierreLogic.authorizationProgress}
       error={cierreLogic.authorizationError}
       successReceived={cierreLogic.authorizationSuccess}
-      eventoId={cierreLogic.authorizationEventoId}
-      studioSlug={studioSlug}
-      promiseId={promiseId}
       onClose={() => {
         cierreLogic.setIsAuthorizing(false);
         cierreLogic.setAuthorizationError(null);
@@ -473,6 +483,9 @@ export function PromiseCierreClient({
             onCancelarContrato={cierreLogic.handleCancelarContrato}
             onRegenerateContract={cierreLogic.handleRegenerateContract}
             onEditarDatosClick={cierreLogic.handleEditarDatosClick}
+            contratoOmitido={cierreLogic.contratoOmitido}
+            onContratoOmitido={() => cierreLogic.setContratoOmitido(true)}
+            onRevocarOmitido={() => cierreLogic.setContratoOmitido(false)}
             onAutorizar={cierreLogic.handleAutorizar}
             onCancelarCierre={cierreLogic.handleOpenCancelModal}
             isAuthorizing={cierreLogic.isAuthorizing}
@@ -657,9 +670,6 @@ export function PromiseCierreClient({
                   <li>La cotización regresará a estado <strong className="text-zinc-300">Pendiente</strong></li>
                   <li>Se eliminarán todas las definiciones guardadas (condiciones, contrato, pago)</li>
                 </ul>
-                <p className="text-sm text-zinc-400 mt-3">
-                  ¿Deseas continuar?
-                </p>
               </div>
             }
             confirmText={cierreLogic.isCancelling ? 'Cancelando...' : 'Sí, cancelar cierre'}
@@ -673,7 +683,7 @@ export function PromiseCierreClient({
             isOpen={cierreLogic.showConfirmAutorizarModal}
             onClose={() => cierreLogic.setShowConfirmAutorizarModal(false)}
             onConfirm={cierreLogic.handleConfirmAutorizar}
-            loading={cierreLogic.isAuthorizing}
+            loading={false}
             disabled={cierreLogic.isAuthorizing}
             title="¿Autorizar cotización y crear evento?"
             description={
@@ -692,9 +702,6 @@ export function PromiseCierreClient({
                   )}
                   <li>Otras cotizaciones de esta promesa serán archivadas</li>
                 </ul>
-                <p className="text-sm text-zinc-400 mt-3">
-                  ¿Deseas continuar?
-                </p>
               </div>
             }
             confirmText={cierreLogic.isAuthorizing ? 'Autorizando...' : 'Sí, autorizar y crear evento'}

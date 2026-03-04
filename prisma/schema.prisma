@@ -2399,6 +2399,8 @@ model studio_cotizaciones {
   snap_ajuste_cierre               Decimal? @db.Decimal(12, 2)
   snap_monto_bono                  Decimal? @db.Decimal(12, 2)
   snap_total_final                 Decimal? @db.Decimal(12, 2)
+  /** Monto ahorrado por descuento % de la condición comercial (congruente con modal y contrato). */
+  snap_descuento_condicion_monto   Decimal? @db.Decimal(12, 2)
 
   // Snapshots de Contrato (inmutables)
   contract_template_id_snapshot    String?

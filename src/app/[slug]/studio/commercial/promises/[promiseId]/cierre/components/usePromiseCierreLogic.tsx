@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
-import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosPagoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -42,6 +42,8 @@ interface RegistroCierreLoadData {
   pago_fecha?: Date | null;
   pago_metodo_id?: string | null;
   pago_metodo_nombre?: string | null;
+  /** Suma real de studio_pagos (paid/completed/succeeded) para esta cotización. SSOT para Balance. */
+  pagos_confirmados_sum?: number;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
   desglose_cierre?: {
@@ -108,6 +110,7 @@ export function usePromiseCierreLogic({
   const [showEditPromiseModal, setShowEditPromiseModal] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showShareOptionsModal, setShowShareOptionsModal] = useState(false);
+  const [contratoOmitido, setContratoOmitido] = useState(false);
   const [localPromiseData, setLocalPromiseData] = useState(promiseData);
   const toastShownRef = useRef(false);
 
@@ -155,6 +158,7 @@ export function usePromiseCierreLogic({
     pago_fecha?: Date | null;
     pago_metodo_id?: string | null;
     pago_metodo_nombre?: string | null;
+    pagos_confirmados_sum?: number;
   } | null>(null);
 
   const [desgloseCierre, setDesgloseCierre] = useState<{
@@ -239,6 +243,7 @@ export function usePromiseCierreLogic({
           pago_fecha: data.pago_fecha,
           pago_metodo_id: data.pago_metodo_id,
           pago_metodo_nombre: data.pago_metodo_nombre,
+          pagos_confirmados_sum: data.pagos_confirmados_sum ?? 0,
         });
 
         setNegociacionData({
@@ -498,20 +503,8 @@ export function usePromiseCierreLogic({
 
   const handlePagoSuccess = useCallback(async () => {
     userConfirmedPagoInSessionRef.current = true;
-    const result = await obtenerDatosPagoCierre(studioSlug, cotizacion.id);
-    if (result.success && result.data) {
-      setPagoData(prev => {
-        const hasChanges =
-          prev?.pago_registrado !== result.data!.pago_registrado ||
-          prev?.pago_concepto !== result.data!.pago_concepto ||
-          prev?.pago_monto !== result.data!.pago_monto ||
-          prev?.pago_metodo_nombre !== result.data!.pago_metodo_nombre;
-
-        if (!hasChanges) return prev;
-        return result.data!;
-      });
-    }
-  }, [studioSlug, cotizacion.id]);
+    await loadRegistroCierre();
+  }, [loadRegistroCierre]);
 
   const handleEliminarPago = useCallback(async () => {
     userConfirmedPagoInSessionRef.current = true;
@@ -569,25 +562,13 @@ export function usePromiseCierreLogic({
   const handleOpenCancelModal = useCallback(() => setShowCancelModal(true), []);
   const handleEditarDatosClick = useCallback(() => setShowEditPromiseModal(true), []);
 
-  const [currentTask, setCurrentTask] = useState<string>('');
-  const [completedTasks, setCompletedTasks] = useState<string[]>([]);
+  const [authorizationProgress, setAuthorizationProgress] = useState(0);
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
   const [authorizationEventoId, setAuthorizationEventoId] = useState<string | null>(null);
   const [authorizationSuccess, setAuthorizationSuccess] = useState(false);
   const authorizingInProgressRef = useRef(false);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const TASKS_AUTORIZAR = [
-    'Obteniendo catálogo de servicios',
-    'Calculando precios y desglose',
-    'Guardando cotización autorizada',
-    'Creando evento en agenda',
-    'Actualizando estado de cotización',
-    'Archivando otras cotizaciones de la promesa',
-    'Registrando pago inicial',
-    'Finalizando autorización',
-  ];
-
-  const STEP_DELAY_MS = 350;
 
   const anticipoMontoDefault = useMemo(() => {
     const c = condicionesData?.condiciones_comerciales;
@@ -605,95 +586,112 @@ export function usePromiseCierreLogic({
     return null;
   }, [condicionesData?.condiciones_comerciales, cotizacion.price]);
 
+  /** Inicia un intervalo que sube la barra hasta 90% de forma suave */
+  const startProgressAnimation = useCallback(() => {
+    setAuthorizationProgress(5);
+    let current = 5;
+    progressIntervalRef.current = setInterval(() => {
+      // Avance desacelerado: cuanto más alto, más lento
+      const remaining = 90 - current;
+      const step = Math.max(0.5, remaining * 0.08);
+      current = Math.min(current + step, 90);
+      setAuthorizationProgress(Math.round(current));
+      if (current >= 90 && progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    }, 200);
+  }, []);
+
+  const stopProgressAnimation = useCallback(() => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
   const handleConfirmAutorizar = useCallback(async () => {
     if (authorizingInProgressRef.current) return;
     authorizingInProgressRef.current = true;
-    setIsAuthorizing(true);
+
+    // Cerrar modal y esperar 300ms (transición Shadcn) antes de mostrar overlay
     setShowConfirmAutorizarModal(false);
-    setCurrentTask(TASKS_AUTORIZAR[0]);
-    setCompletedTasks([]);
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Iniciar overlay + barra animada
+    setIsAuthorizing(true);
+    setAuthorizationProgress(0);
     setAuthorizationError(null);
     setAuthorizationEventoId(null);
     setAuthorizationSuccess(false);
-
-    const runProgressAnimation = (): Promise<void> => {
-      return new Promise((resolve) => {
-        let i = 0;
-        const next = () => {
-          if (i >= TASKS_AUTORIZAR.length) {
-            setCurrentTask('');
-            resolve();
-            return;
-          }
-          setCurrentTask(TASKS_AUTORIZAR[i]);
-          setTimeout(() => {
-            const stepName = TASKS_AUTORIZAR[i];
-            setCompletedTasks((prev) => [...prev, stepName]);
-            i++;
-            next();
-          }, STEP_DELAY_MS);
-        };
-        next();
-      });
-    };
+    startProgressAnimation();
 
     try {
       if (cotizacion.status === 'en_cierre') {
-        // Anticipo del resumen unificado (SSOT): pago_monto en registro cierre o anticipo de la condición
+        const pagoConfirmadoPorEstudio = pagoData?.pago_confirmado_estudio === true || pagoData?.pago_registrado === true;
         const anticipoResumen =
           pagoData?.pago_monto != null
             ? Number(pagoData.pago_monto)
             : (anticipoMontoDefault ?? 0);
-        const registrarPago = anticipoResumen > 0;
-        const serverPromise = autorizarYCrearEvento(studioSlug, promiseId, cotizacion.id, {
+        const registrarPago = pagoConfirmadoPorEstudio && anticipoResumen > 0;
+        const result = await autorizarYCrearEvento(studioSlug, promiseId, cotizacion.id, {
           registrarPago,
-          montoInicial: anticipoResumen,
+          montoInicial: registrarPago ? anticipoResumen : 0,
+          skip_contract: contratoOmitido,
         });
-        const animationPromise = runProgressAnimation();
 
-        const [result] = await Promise.all([serverPromise, animationPromise]);
+        stopProgressAnimation();
 
         if (result.success && result.data) {
-          toast.success('¡Cotización autorizada y evento creado!');
-          const eventoId = result.data?.evento_id ?? null;
-          setAuthorizationEventoId(eventoId);
+          // Barra al 100%
+          setAuthorizationProgress(100);
+          setAuthorizationEventoId(result.data.evento_id ?? null);
+          
+          // Micro-buffer para transición CSS antes de confeti
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Activar éxito → dispara confeti
           setAuthorizationSuccess(true);
         } else {
           const msg = result.error === 'DATE_OCCUPIED'
             ? 'Se alcanzó el cupo máximo de eventos para esta fecha. Revisa "Visualización y automatización" o fuerza la reserva si aplica.'
             : (result.error || 'Error al autorizar cotización');
           setAuthorizationError(msg);
-          toast.error(msg);
         }
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error al autorizar cotización';
+    } catch (err) {
+      stopProgressAnimation();
+      const errorMessage = err instanceof Error ? err.message : 'Error al autorizar cotización';
       setAuthorizationError(errorMessage);
-      console.error('[handleConfirmAutorizar] Error:', error);
-      toast.error('Error al autorizar cotización');
-      setCurrentTask('');
-      setCompletedTasks(TASKS_AUTORIZAR);
     } finally {
       authorizingInProgressRef.current = false;
     }
-  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault]);
+  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault, contratoOmitido, startProgressAnimation, stopProgressAnimation]);
 
   // Validar si se puede autorizar
+  // Contrato omitido: mínimo nombre, teléfono, evento, fecha, ubicación (sin email/address ni plantilla)
+  // Contrato incluido: además exige email, address y plantilla de contrato seleccionada
   const puedeAutorizar = useMemo(() => {
     if (cotizacion.status !== 'en_cierre') {
       return false;
     }
-    // Validación básica: datos del cliente completos
-    return !!(
+    const base =
       localPromiseData.name?.trim() &&
       localPromiseData.phone?.trim() &&
+      localPromiseData.event_name?.trim() &&
+      localPromiseData.event_date &&
+      (localPromiseData.event_location?.trim() || localPromiseData.address?.trim());
+    if (!base) return false;
+    if (contratoOmitido) return true;
+    const conContrato =
       localPromiseData.email?.trim() &&
       localPromiseData.address?.trim() &&
-      localPromiseData.event_name?.trim() &&
-      (localPromiseData.event_location?.trim() || localPromiseData.address?.trim()) &&
-      localPromiseData.event_date
-    );
-  }, [cotizacion.status, localPromiseData]);
+      !!(
+        contractData?.contrato_definido &&
+        (contractData?.contract_template_id || contractData?.contract_content)
+      );
+    return !!conContrato;
+  }, [cotizacion.status, localPromiseData, contratoOmitido, contractData]);
 
   return {
     // Estados
@@ -730,6 +728,8 @@ export function usePromiseCierreLogic({
     setShowInfoModal,
     showShareOptionsModal,
     setShowShareOptionsModal,
+    contratoOmitido,
+    setContratoOmitido,
     localPromiseData,
     setLocalPromiseData,
     negociacionData,
@@ -744,8 +744,7 @@ export function usePromiseCierreLogic({
     loadingContract,
     loadingPago,
     // Progreso de autorización
-    currentTask,
-    completedTasks,
+    authorizationProgress,
     authorizationError,
     setAuthorizationError,
     authorizationEventoId,

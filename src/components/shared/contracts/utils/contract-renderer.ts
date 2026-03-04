@@ -203,9 +203,19 @@ export function renderCondicionesComercialesBlock(
           <td style="padding: ${pad}; text-align: right; color: ${textBono}; font-weight: 600; font-size: 14px;">-${fmt(condiciones.monto_bono!)}</td>
         </tr>`;
       }
+      if ((condiciones.descuento_condicion_monto ?? 0) > 0) {
+        const labelDescuento = condiciones.porcentaje_descuento != null && condiciones.porcentaje_descuento > 0
+          ? `Descuento especial aplicado (${condiciones.porcentaje_descuento}%)`
+          : "Descuento especial aplicado";
+        html += `
+        <tr style="border-bottom: 1px solid ${t.border};">
+          <td style="padding: 12px 16px; color: ${t.textPrimary}; font-size: 14px;">${labelDescuento}</td>
+          <td style="padding: ${pad}; text-align: right; color: ${textAjuste}; font-weight: 500; font-size: 14px;">-${fmt(condiciones.descuento_condicion_monto!)}</td>
+        </tr>`;
+      }
       const ajuste = condiciones.ajuste_cierre ?? 0;
       if (Math.abs(ajuste) >= 0.01) {
-        const label = ajuste < 0 ? "Descuento adicional / Ajuste por cierre" : "Ajuste por cierre";
+        const label = "Ajuste por cierre";
         const valor = ajuste < 0 ? `-${fmt(Math.abs(ajuste))}` : `+${fmt(ajuste)}`;
         html += `
         <tr style="border-bottom: 1px solid ${t.border};">

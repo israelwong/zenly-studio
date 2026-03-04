@@ -103,6 +103,11 @@ export async function obtenerResumenEventoCreado(
             items_cortesia: true,
             cortesias_monto_snapshot: true,
             cortesias_count_snapshot: true,
+            snap_precio_lista: true,
+            snap_ajuste_cierre: true,
+            snap_monto_bono: true,
+            snap_total_final: true,
+            snap_descuento_condicion_monto: true,
             contract_template_id_snapshot: true,
             contract_template_name_snapshot: true,
             contract_content_snapshot: true,
@@ -122,12 +127,11 @@ export async function obtenerResumenEventoCreado(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Obtener pagos asociados a la cotización
-    // Solo pagos activos (completed); excluye cancelados por evento cancelado para aislamiento financiero
+    // Obtener pagos asociados a la cotización (suma real para Balance / Recibido)
     const pagos = await prisma.studio_pagos.findMany({
       where: {
         cotizacion_id: evento.cotizacion.id,
-        status: 'completed',
+        status: { in: ['paid', 'completed', 'succeeded'] },
       },
       select: {
         id: true,
@@ -172,6 +176,11 @@ export async function obtenerResumenEventoCreado(
           bono_especial: evento.cotizacion.bono_especial != null ? Number(evento.cotizacion.bono_especial) : null,
           cortesias_monto_snapshot: evento.cotizacion.cortesias_monto_snapshot != null ? Number(evento.cotizacion.cortesias_monto_snapshot) : null,
           cortesias_count_snapshot: evento.cotizacion.cortesias_count_snapshot ?? null,
+          snap_precio_lista: evento.cotizacion.snap_precio_lista != null ? Number(evento.cotizacion.snap_precio_lista) : null,
+          snap_ajuste_cierre: evento.cotizacion.snap_ajuste_cierre != null ? Number(evento.cotizacion.snap_ajuste_cierre) : null,
+          snap_monto_bono: evento.cotizacion.snap_monto_bono != null ? Number(evento.cotizacion.snap_monto_bono) : null,
+          snap_total_final: evento.cotizacion.snap_total_final != null ? Number(evento.cotizacion.snap_total_final) : null,
+          snap_descuento_condicion_monto: evento.cotizacion.snap_descuento_condicion_monto != null ? Number(evento.cotizacion.snap_descuento_condicion_monto) : null,
         },
         pagos,
         totalPagado,

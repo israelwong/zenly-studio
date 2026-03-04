@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenSwitch } from '@/components/ui/zen';
 import { DatosRequeridosSection } from './DatosRequeridosSection';
 import { ContratoSection } from './ContratoSection';
 import { ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
@@ -53,6 +53,9 @@ interface ContratoDigitalCardProps {
   onCancelarContrato?: () => Promise<void> | void;
   onRegenerateContract?: () => Promise<void>;
   onEditarDatosClick: () => void;
+  contratoOmitido?: boolean;
+  onContratoOmitido?: () => void;
+  onRevocarOmitido?: () => void;
 }
 
 function ContratoDigitalCardInner({
@@ -71,21 +74,62 @@ function ContratoDigitalCardInner({
   onCancelarContrato,
   onRegenerateContract,
   onEditarDatosClick,
+  contratoOmitido = false,
+  onContratoOmitido,
+  onRevocarOmitido,
 }: ContratoDigitalCardProps) {
   if (!cotizacion) {
     return <ContratoDigitalCardSkeleton />;
   }
+
+  const incluirContrato = !contratoOmitido;
+  const pendientes: string[] = [];
+  if (!promiseData.email?.trim()) pendientes.push('correo');
+  if (!promiseData.address?.trim()) pendientes.push('dirección');
+  if (!promiseData.event_name?.trim()) pendientes.push('nombre del evento');
+  if (!promiseData.event_location?.trim() && !promiseData.address?.trim()) pendientes.push('locación');
+  if (!promiseData.event_date) pendientes.push('fecha del evento');
+  const mostrarMensajeBloqueo = incluirContrato && pendientes.length > 0;
+  const textoPendientes =
+    pendientes.length === 1
+      ? pendientes[0]
+      : pendientes.length === 2
+        ? `${pendientes[0]} y ${pendientes[1]}`
+        : pendientes.slice(0, -1).join(', ') + ' y ' + pendientes[pendientes.length - 1];
+
   return (
     <ZenCard className="h-auto">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
-        <ZenCardTitle className="text-sm">Contrato Digital</ZenCardTitle>
+        <div className="flex flex-col gap-3 w-full">
+          <ZenSwitch
+            checked={incluirContrato}
+            onCheckedChange={(checked) => {
+              if (checked) onRevocarOmitido?.();
+              else onContratoOmitido?.();
+            }}
+            label="Incluir Contrato Digital"
+            labelClassName="text-sm text-zinc-300"
+            variant="emerald"
+            className="w-full"
+          />
+        </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4 space-y-4">
-        {/* DATOS REQUERIDOS PARA CONTRATO */}
-        <DatosRequeridosSection
-          promiseData={promiseData}
-          onEditarClick={onEditarDatosClick}
-        />
+        {mostrarMensajeBloqueo && (
+          <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+            Completa {textoPendientes} para poder generar el contrato.
+          </p>
+        )}
+        {/* DATOS REQUERIDOS — en gris cuando contrato omitido */}
+        <div
+          className={`transition-all duration-200 ${contratoOmitido ? 'opacity-75 grayscale' : ''}`}
+        >
+          <DatosRequeridosSection
+            promiseData={promiseData}
+            onEditarClick={onEditarDatosClick}
+            contratoOmitido={contratoOmitido}
+          />
+        </div>
 
         {/* CONTRATO DIGITAL */}
         <ContratoSection
@@ -99,6 +143,9 @@ function ContratoDigitalCardInner({
           onContratoSuccess={onContratoSuccess}
           onCancelarContrato={onCancelarContrato}
           onRegenerateContract={onRegenerateContract}
+          contratoOmitido={contratoOmitido}
+          onContratoOmitido={onContratoOmitido}
+          onRevocarOmitido={onRevocarOmitido}
           studioSlug={studioSlug}
           promiseId={promiseId}
           cotizacionId={cotizacion.id}

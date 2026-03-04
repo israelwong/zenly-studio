@@ -320,6 +320,7 @@ export function PublicContractView({
 
   const handleConfirmSign = async () => {
     onBeforeConfirmSign?.();
+
     setIsSigning(true);
     setCompletedSteps(0);
     setServerDone(false);
@@ -328,7 +329,6 @@ export function PublicContractView({
       clearInterval(stepperIntervalRef.current);
       stepperIntervalRef.current = null;
     }
-    // Fase 30.9: Avanzar stepper cada ~750ms para ~3s total (4 pasos)
     stepperIntervalRef.current = setInterval(() => {
       setCompletedSteps((s) => {
         const next = Math.min(s + 1, 4);
@@ -344,6 +344,7 @@ export function PublicContractView({
       onContractSignedOptimistic();
     }
 
+    // 2) Ejecutar API de firma; 3) solo tras success: true el flujo de UI continúa (setServerDone, toast, etc.)
     try {
       let clientIp = '0.0.0.0';
       try {

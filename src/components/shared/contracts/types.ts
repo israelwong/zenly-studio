@@ -54,6 +54,8 @@ export interface CondicionesComercialesData {
   precio_lista?: number;
   monto_cortesias?: number;
   monto_bono?: number;
+  /** Monto ahorrado por descuento % de la condición (línea "Descuento especial aplicado"). */
+  descuento_condicion_monto?: number;
   ajuste_cierre?: number;
 }
 

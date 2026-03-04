@@ -82,9 +82,15 @@ const config = {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
         },
+        'scale-in': {
+          '0%': { transform: 'scale(0.8)', opacity: '0' },
+          '50%': { transform: 'scale(1.05)', opacity: '1' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
       },
       animation: {
         shimmer: 'shimmer 2s infinite',
+        'scale-in': 'scale-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
     },
   },
