@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, BarChart3, MoreHorizontal, Settings, Plus, Pencil } from 'lucide-react';
-import { ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
+import { ChevronDown, ChevronRight, BarChart3, MoreHorizontal, Settings, Plus, Pencil, Lock, Globe } from 'lucide-react';
+import { ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDialog } from '@/components/ui/zen';
 import { AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
@@ -17,6 +17,8 @@ export type CondicionComercialItem = {
   advance_type?: string | null;
   advance_amount?: number | null;
   type?: string;
+  /** false = solo visible para el estudio, no seleccionable por prospectos en el portal */
+  is_public?: boolean;
 };
 
 export type CalculoPrecioCondiciones = {
@@ -50,6 +52,8 @@ export interface CondicionesCierreAccordionProps {
   onScrollIntoView?: () => void;
   selectedCondicionComercialId?: string | null;
   className?: string;
+  /** Solo cotizacion: al elegir "Quitar ajustes y habilitar condición con descuento" el padre limpia cortesías/bono */
+  onQuitarAjustesNegociacion?: () => void;
 }
 
 export function CondicionesCierreAccordion({
@@ -74,9 +78,51 @@ export function CondicionesCierreAccordion({
   onScrollIntoView,
   selectedCondicionComercialId,
   className,
+  onQuitarAjustesNegociacion,
 }: CondicionesCierreAccordionProps) {
   const simulacionBlockRef = useRef<HTMLDivElement>(null);
   const [simulacionBlockExpanded, setSimulacionBlockExpanded] = useState(false);
+  const [pendingCondicionVisibleId, setPendingCondicionVisibleId] = useState<string | null>(null);
+  const [modalOption, setModalOption] = useState<'mantener' | 'quitar' | null>(null);
+
+  useEffect(() => {
+    if (pendingCondicionVisibleId != null) setModalOption(null);
+  }, [pendingCondicionVisibleId]);
+
+  const handleToggleVisible = (condId: string, descuentoPct: number, isVisible: boolean) => {
+    if (isVisible) {
+      setCondicionIdsVisibles((prev) => {
+        const next = new Set(prev);
+        next.delete(condId);
+        return next;
+      });
+      return;
+    }
+    if (context === 'cotizacion' && tieneAjustesNegociacion && descuentoPct > 0) {
+      setPendingCondicionVisibleId(condId);
+      return;
+    }
+    setCondicionIdsVisibles((prev) => new Set([...prev, condId]));
+  };
+
+  const handleConfirmQuitarAjustes = () => {
+    if (pendingCondicionVisibleId) {
+      onQuitarAjustesNegociacion?.();
+      setCondicionIdsVisibles((prev) => new Set([...prev, pendingCondicionVisibleId]));
+      setPendingCondicionVisibleId(null);
+    }
+  };
+
+  const handleAplicarCambios = () => {
+    if (modalOption === 'quitar') handleConfirmQuitarAjustes();
+    else if (modalOption === 'mantener') setPendingCondicionVisibleId(null);
+    setModalOption(null);
+  };
+
+  const handleCerrarModal = () => {
+    setPendingCondicionVisibleId(null);
+    setModalOption(null);
+  };
 
   useEffect(() => {
     if (condicionSimulacionId) {
@@ -177,9 +223,20 @@ export function CondicionesCierreAccordion({
       <AccordionContent>
         <div className="rounded-b-lg border border-t-0 border-zinc-800 border-l-2 border-l-rose-500/60 overflow-hidden transition-all duration-300 ease-out bg-zinc-950/40 p-3">
           <p className="text-[11px] text-zinc-500 mb-3">{descriptionText}</p>
-          {tieneAjustesNegociacion && context === 'cotizacion' && (
-            <p className="text-[11px] text-amber-600 mt-1 mb-3">
-              Se ocultaron condiciones con descuento por los ajustes de negociación (cortesías/bono). Puedes activarlas si lo deseas.
+          {context === 'cotizacion' && tieneAjustesNegociacion && (() => {
+            const hayCondicionesConDescuentoOcultas =
+              condicionesComerciales.some((c) => (c.discount_percentage ?? 0) > 0 && !condicionIdsVisibles.has(c.id)) ||
+              (condicionNegociacion != null && (condicionNegociacion.discount_percentage ?? 0) > 0 && !condicionIdsVisibles.has(condicionNegociacion.id));
+            if (!hayCondicionesConDescuentoOcultas) return null;
+            return (
+              <p className="text-[11px] text-amber-600 mt-1 mb-3">
+                Se ocultaron condiciones con descuento por los ajustes de negociación (cortesías/bono). Puedes activarlas si lo deseas.
+              </p>
+            );
+          })()}
+          {context === 'cotizacion' && condicionIdsVisibles.size === 0 && (
+            <p className="text-[11px] text-amber-500 mb-3 font-medium">
+              Debe haber al menos una condición visible para el cliente.
             </p>
           )}
           <div className="grid grid-cols-1 gap-3">
@@ -209,35 +266,31 @@ export function CondicionesCierreAccordion({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setCondicionIdsVisibles((prev) => {
-                          const next = new Set(prev);
-                          if (isVisible) next.delete(cond.id); else next.add(cond.id);
-                          return next;
-                        });
+                        handleToggleVisible(cond.id, descuentoPct, isVisible);
                       }}
                       className={cn(
-                        'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                        isVisible ? 'text-rose-300/70 bg-rose-500/10 border border-rose-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                        'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full transition-colors',
+                        isVisible ? 'text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
                       )}
                       aria-label={isVisible ? 'Ocultar' : 'Visible'}
                     >
                       {isVisible ? 'Visible' : 'Oculto'}
                     </button>
+                    {cond.is_public === false ? (
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
+                        <Lock className="h-2.5 w-2.5" />
+                        Privada
+                      </span>
+                    ) : (
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
+                        <Globe className="h-2.5 w-2.5" />
+                        Pública
+                      </span>
+                    )}
                     {isSimulacion && <span className="text-[10px] text-amber-500/80 shrink-0">[Simulando]</span>}
                     {cond.type === 'offer' && (
                       <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-300/60 border border-purple-500/20 rounded-full shrink-0">OFERTA</span>
                     )}
-                    {onAuditoriaClick && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onAuditoriaClick(cond.id); }}
-                          className="shrink-0 p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50"
-                          title="Auditoría con esta condición"
-                          aria-label="Ver auditoría"
-                        >
-                          <BarChart3 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onEditCondicion(cond.id); }}
@@ -282,6 +335,12 @@ export function CondicionesCierreAccordion({
                         <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado en esta simulación' : 'Doble beneficio: ajustes de negociación y descuento de esta condición'}
                       </div>
                     )}
+                    {cond.is_public === false && (
+                      <p className="mt-2 pt-2 border-t border-zinc-700/40 text-[10px] text-amber-400/80 flex items-start gap-1.5">
+                        <Lock className="h-3 w-3 shrink-0 mt-0.5" />
+                        Solo visible para el estudio, no es seleccionable para los prospectos.
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -316,32 +375,21 @@ export function CondicionesCierreAccordion({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setCondicionIdsVisibles((prev) => {
-                            const next = new Set(prev);
-                            if (isVisible) next.delete(cond.id); else next.add(cond.id);
-                            return next;
-                          });
+                          handleToggleVisible(cond.id, descuentoPct, isVisible);
                         }}
                         className={cn(
-                          'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors',
-                          isVisible ? 'text-rose-300/70 bg-rose-500/10 border border-rose-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
+                          'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full transition-colors',
+                          isVisible ? 'text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/20' : 'text-zinc-500 bg-zinc-700/50 border border-zinc-600/50'
                         )}
                       >
                         {isVisible ? 'Visible' : 'Oculto'}
                       </button>
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
+                        <Lock className="h-2.5 w-2.5" />
+                        Privada
+                      </span>
                       {isSimulacion && <span className="text-[10px] text-amber-500/80 shrink-0">[Simulando]</span>}
                       <span className="text-[10px] text-rose-400/50 shrink-0">Condición especial</span>
-                      {onAuditoriaClick && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onAuditoriaClick(cond.id); }}
-                          className="ml-auto shrink-0 p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50"
-                          title="Auditoría con esta condición"
-                          aria-label="Ver auditoría"
-                        >
-                          <BarChart3 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                     </div>
                     <div
                       role="button"
@@ -374,6 +422,10 @@ export function CondicionesCierreAccordion({
                           <span aria-hidden>⚠️</span> {isSimulacion ? 'Doble beneficio detectado' : 'Doble beneficio: ajustes y descuento'}
                         </div>
                       )}
+                      <p className="mt-2 pt-2 border-t border-zinc-700/40 text-[10px] text-amber-400/80 flex items-start gap-1.5">
+                        <Lock className="h-3 w-3 shrink-0 mt-0.5" />
+                        Solo visible para el estudio, no es seleccionable para los prospectos.
+                      </p>
                     </div>
                   </div>
                 );
@@ -435,6 +487,75 @@ export function CondicionesCierreAccordion({
           })()}
         </div>
       </AccordionContent>
+
+      <ZenDialog
+        isOpen={pendingCondicionVisibleId != null}
+        onClose={handleCerrarModal}
+        title="Cuida tu salud financiera"
+        maxWidth="lg"
+        cancelLabel="Cerrar"
+        onCancel={handleCerrarModal}
+        footerRightContent={
+          <div className="flex-1 min-w-0 flex justify-end">
+            <ZenButton
+              type="button"
+              variant="primary"
+              className="w-full sm:w-auto sm:min-w-[160px]"
+              onClick={handleAplicarCambios}
+              disabled={modalOption == null}
+            >
+              Aplicar cambios
+            </ZenButton>
+          </div>
+        }
+      >
+        <p className="text-sm text-zinc-400">
+          Por salud financiera no es posible tener ajustes de negociación (cortesías/bono) y condiciones comerciales con descuentos al mismo tiempo.
+        </p>
+        <p className="text-sm text-zinc-300 mt-4 font-medium mb-4">¿Qué deseas hacer?</p>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setModalOption('mantener')}
+            className={cn(
+              'w-full text-left rounded-lg border p-4 transition-all flex items-center gap-3',
+              modalOption === 'mantener'
+                ? 'border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30'
+                : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800/30 hover:bg-zinc-800/50'
+            )}
+          >
+            <span
+              className={cn(
+                'shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                modalOption === 'mantener' ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-500'
+              )}
+            >
+              {modalOption === 'mantener' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </span>
+            <span className="text-sm font-medium text-zinc-200">Mantener ajustes de negociación</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalOption('quitar')}
+            className={cn(
+              'w-full text-left rounded-lg border p-4 transition-all flex items-center gap-3',
+              modalOption === 'quitar'
+                ? 'border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30'
+                : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800/30 hover:bg-zinc-800/50'
+            )}
+          >
+            <span
+              className={cn(
+                'shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                modalOption === 'quitar' ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-500'
+              )}
+            >
+              {modalOption === 'quitar' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </span>
+            <span className="text-sm font-medium text-zinc-200">Quitar ajustes y habilitar condición con descuento</span>
+          </button>
+        </div>
+      </ZenDialog>
     </AccordionItem>
   );
 }

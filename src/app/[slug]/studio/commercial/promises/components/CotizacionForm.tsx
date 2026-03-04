@@ -197,6 +197,7 @@ export function CotizacionForm({
     advance_type?: string | null;
     advance_amount?: number | null;
     type?: string;
+    is_public?: boolean;
   }>>([]);
   const [selectedCondicionComercialId, setSelectedCondicionComercialId] = useState<string | null>(null);
   const [condicionNegociacion, setCondicionNegociacion] = useState<{ id: string; name: string; discount_percentage: number | null } | null>(null);
@@ -314,7 +315,7 @@ export function CotizacionForm({
           setServiceLinksMap(linksResult.data);
         }
         if (condicionesResult.success && condicionesResult.data) {
-          setCondicionesComerciales(condicionesResult.data.map(c => ({
+          setCondicionesComerciales(condicionesResult.data.map((c: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown; type?: string | null; is_public?: boolean }) => ({
             id: c.id,
             name: c.name,
             description: c.description ?? null,
@@ -323,6 +324,7 @@ export function CotizacionForm({
             advance_type: c.advance_type ?? null,
             advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
             type: c.type ?? undefined,
+            is_public: c.is_public,
           })));
         }
 
@@ -1224,7 +1226,7 @@ export function CotizacionForm({
   const loadCondicionesComerciales = useCallback(async () => {
     const result = await obtenerCondicionesComerciales(studioSlug);
     if (result.success && result.data) {
-      setCondicionesComerciales(result.data.map(c => ({
+      setCondicionesComerciales(result.data.map((c: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown; type?: string | null; is_public?: boolean }) => ({
         id: c.id,
         name: c.name,
         description: c.description ?? null,
@@ -1233,6 +1235,7 @@ export function CotizacionForm({
         advance_type: c.advance_type ?? null,
         advance_amount: c.advance_amount != null ? Number(c.advance_amount) : null,
         type: c.type ?? undefined,
+        is_public: c.is_public,
       })));
     }
   }, [studioSlug]);
@@ -2789,6 +2792,10 @@ export function CotizacionForm({
               sectionRef={sectionCondicionesRef}
               onScrollIntoView={() => accordionValue.includes('condiciones') && requestAnimationFrame(() => sectionCondicionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))}
               selectedCondicionComercialId={selectedCondicionComercialId}
+              onQuitarAjustesNegociacion={() => {
+                setItemsCortesia(new Set());
+                setBonoEspecial(0);
+              }}
             />
             </div>
       </CommercialConfigSidebar>
