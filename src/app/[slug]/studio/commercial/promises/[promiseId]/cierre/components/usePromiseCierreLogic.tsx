@@ -54,6 +54,8 @@ interface RegistroCierreLoadData {
     cortesias_monto: number;
     cortesias_count: number;
   } | null;
+  /** Inyectado por obtenerRegistroCierre (respuesta atómica). */
+  auditoria_rentabilidad?: { utilidadNeta: number; margenPorcentaje: number } | null;
 }
 
 type CotizacionByIdData = NonNullable<Awaited<ReturnType<typeof getCotizacionById>>['data']>;
@@ -170,6 +172,11 @@ export function usePromiseCierreLogic({
     cortesias_count: number;
   } | null>(null);
 
+  const [auditoriaRentabilidad, setAuditoriaRentabilidad] = useState<{
+    utilidadNeta: number;
+    margenPorcentaje: number;
+  } | null>(null);
+
   const [loadingRegistro, setLoadingRegistro] = useState(true);
   const [hasLoadedRegistroOnce, setHasLoadedRegistroOnce] = useState(false);
   const initialLoadDoneRef = useRef(false);
@@ -212,7 +219,6 @@ export function usePromiseCierreLogic({
   ]);
 
   const loadRegistroCierre = useCallback(async () => {
-    // Atómico: solo mostrar skeleton en la primera carga; si ya cargó (initialLoadDoneRef) no tocar loadingRegistro
     const isInitialLoad = !initialLoadDoneRef.current;
     if (isInitialLoad) {
       setLoadingRegistro(true);
@@ -221,6 +227,7 @@ export function usePromiseCierreLogic({
       const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         const data = result.data as unknown as RegistroCierreLoadData;
+        setAuditoriaRentabilidad(data.auditoria_rentabilidad ?? null);
 
         setCondicionesData({
           condiciones_comerciales_id: data.condiciones_comerciales_id,
@@ -256,9 +263,12 @@ export function usePromiseCierreLogic({
         });
 
         setDesgloseCierre(data.desglose_cierre ?? null);
+      } else {
+        setAuditoriaRentabilidad(null);
       }
     } catch (error) {
       console.error('[loadRegistroCierre] Error:', error);
+      setAuditoriaRentabilidad(null);
     } finally {
       if (isInitialLoad) {
         setLoadingRegistro(false);
@@ -280,6 +290,7 @@ export function usePromiseCierreLogic({
       initialLoadDoneRef.current = false;
       userConfirmedPagoInSessionRef.current = false;
       setHasLoadedRegistroOnce(false);
+      setAuditoriaRentabilidad(null);
     }
     loadRegistroCierre();
   }, [cotizacion.id, loadRegistroCierre]);
@@ -508,7 +519,8 @@ export function usePromiseCierreLogic({
   const handlePagoSuccess = useCallback(async () => {
     userConfirmedPagoInSessionRef.current = true;
     await loadRegistroCierre();
-  }, [loadRegistroCierre]);
+    router.refresh();
+  }, [loadRegistroCierre, router]);
 
   const handleEliminarPago = useCallback(async () => {
     userConfirmedPagoInSessionRef.current = true;
@@ -673,10 +685,15 @@ export function usePromiseCierreLogic({
   }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault, contratoOmitido, startProgressAnimation, stopProgressAnimation]);
 
   // Validar si se puede autorizar
-  // Contrato omitido: mínimo nombre, teléfono, evento, fecha, ubicación (sin email/address ni plantilla)
-  // Contrato incluido: además exige email, address y plantilla de contrato seleccionada
+  // Si el contrato está firmado, exige pago_confirmado_estudio (Card de Activación)
+  // Contrato omitido: mínimo nombre, teléfono, evento, fecha, ubicación
+  // Contrato incluido: además exige email, address y plantilla
   const puedeAutorizar = useMemo(() => {
     if (cotizacion.status !== 'en_cierre') {
+      return false;
+    }
+    const contratoFirmado = !!contractData?.contract_signed_at;
+    if (contratoFirmado && !(pagoData?.pago_confirmado_estudio === true)) {
       return false;
     }
     const base =
@@ -695,7 +712,7 @@ export function usePromiseCierreLogic({
         (contractData?.contract_template_id || contractData?.contract_content)
       );
     return !!conContrato;
-  }, [cotizacion.status, localPromiseData, contratoOmitido, contractData]);
+  }, [cotizacion.status, localPromiseData, contratoOmitido, contractData, pagoData?.pago_confirmado_estudio]);
 
   return {
     // Estados
@@ -742,6 +759,7 @@ export function usePromiseCierreLogic({
     pagoData,
     anticipoMontoDefault,
     desgloseCierre,
+    auditoriaRentabilidad,
     loadingRegistro,
     hasLoadedRegistroOnce,
     loadingCondiciones,

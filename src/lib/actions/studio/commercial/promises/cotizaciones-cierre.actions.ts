@@ -15,6 +15,7 @@ import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { checkDateConflict } from '@/lib/utils/booking-conflict';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent } from '@/lib/utils/contract-financial-snapshot';
+import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
 interface CierreResponse {
   success: boolean;
@@ -214,6 +215,12 @@ export async function obtenerRegistroCierre(
       cortesias_count,
     };
 
+    const auditoriaResult = await getAuditoriaRentabilidadCierre(studioSlug, cotizacionId);
+    const auditoria_rentabilidad =
+      auditoriaResult.success && auditoriaResult.data
+        ? { utilidadNeta: auditoriaResult.data.utilidadNeta, margenPorcentaje: auditoriaResult.data.margenPorcentaje }
+        : null;
+
     // Convertir Decimal a number para serialización
     return {
       success: true,
@@ -252,6 +259,7 @@ export async function obtenerRegistroCierre(
           : null,
         desglose_cierre,
         pagos_confirmados_sum,
+        auditoria_rentabilidad,
       } as any,
     };
   } catch (error) {

@@ -10,7 +10,7 @@ import { ResumenPago } from '@/components/shared/precio';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { AuditoriaRentabilidadCard } from '@/components/shared/commercial';
-import { getAuditoriaRentabilidadCierre, updateCotizacionName } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { updateCotizacionName } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { actualizarAnticipoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
@@ -52,6 +52,8 @@ interface CotizacionCardProps {
     advance_percentage_override?: number | null;
     pagos_confirmados_sum?: number;
   } | null;
+  /** Auditoría inyectada desde el hook (misma carga que registro); evita fetch propio y demora */
+  auditoriaRentabilidad?: { utilidadNeta: number; margenPorcentaje: number } | null;
   onAnticipoUpdated?: () => void;
   onPreviewClick: () => void;
   loadingCotizacion: boolean;
@@ -73,6 +75,7 @@ function CotizacionCardInner({
   negociacionData,
   desgloseCierre = null,
   pagoData,
+  auditoriaRentabilidad: auditoriaRentabilidadProp,
   onAnticipoUpdated,
   onPreviewClick,
   loadingCotizacion,
@@ -273,25 +276,11 @@ function CotizacionCardInner({
 
   const showResumenPago = hasCondiciones && desgloseCierre && tieneConcesiones;
 
-  const [auditoria, setAuditoria] = useState<{ utilidadNeta: number; margenPorcentaje: number } | null>(null);
-  const debeCargarAuditoria = hasCondiciones && cotizacion?.id && studioSlug;
-  useEffect(() => {
-    if (!debeCargarAuditoria) {
-      setAuditoria(null);
-      return;
-    }
-    let cancelled = false;
-    const id = requestAnimationFrame(() => {
-      getAuditoriaRentabilidadCierre(studioSlug!, cotizacion!.id).then((r) => {
-        if (!cancelled && r.success && r.data) setAuditoria(r.data);
-        else if (!cancelled) setAuditoria(null);
-      });
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(id);
-    };
-  }, [debeCargarAuditoria, studioSlug, cotizacion?.id]);
+  /** Auditoría viene del registro atómico (obtenerRegistroCierre). Mostrar bloque solo si hay condiciones. */
+  const mostrarAuditoria = hasCondiciones;
+  const auditoria = auditoriaRentabilidadProp ?? null;
+  const loadingAuditoria = loadingCotizacion || (loadingRegistro && auditoria == null);
+  const skeletonAuditoria = <AuditoriaRentabilidadCard utilidadNeta={0} margenPorcentaje={0} loading />;
 
   return (
     <>
@@ -498,13 +487,13 @@ function CotizacionCardInner({
                     </div>
                   </>
                 )}
-                {debeCargarAuditoria && (
+                {mostrarAuditoria && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />
-                    {auditoria != null ? (
+                    {loadingAuditoria ? skeletonAuditoria : auditoria != null ? (
                       <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
                     ) : (
-                      <AuditoriaRentabilidadCard utilidadNeta={0} margenPorcentaje={0} loading />
+                      skeletonAuditoria
                     )}
                   </>
                 )}
@@ -530,13 +519,13 @@ function CotizacionCardInner({
                   isRemovingCondiciones={isRemovingCondiciones}
                   pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
                 />
-                {debeCargarAuditoria && (
+                {mostrarAuditoria && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />
-                    {auditoria != null ? (
+                    {loadingAuditoria ? skeletonAuditoria : auditoria != null ? (
                       <AuditoriaRentabilidadCard utilidadNeta={auditoria.utilidadNeta} margenPorcentaje={auditoria.margenPorcentaje} />
                     ) : (
-                      <AuditoriaRentabilidadCard utilidadNeta={0} margenPorcentaje={0} loading />
+                      skeletonAuditoria
                     )}
                   </>
                 )}
