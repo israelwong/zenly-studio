@@ -17,29 +17,26 @@ interface PublicServiciosTreeProps {
 }
 
 export function PublicServiciosTree({ servicios, showPrices = false, showSubtotals = false, eventDurationHours }: PublicServiciosTreeProps) {
-  // ⚠️ SAFETY: Validar que servicios sea un array válido
-  if (!Array.isArray(servicios) || servicios.length === 0) {
-    return (
-      <div className="p-4 text-center text-zinc-400 text-sm">
-        No hay servicios disponibles
-      </div>
-    );
-  }
+  // ⚠️ SAFETY: validar sin early return para no romper regla de hooks (mismo orden cada render)
+  const serviciosSafe = Array.isArray(servicios) ? servicios : [];
+  const isEmpty = serviciosSafe.length === 0;
 
   // Inicializar todas las secciones y categorías expandidas por defecto
   const initialExpandedSections = useMemo(() => {
+    if (isEmpty) return new Set<string>();
     try {
-      return new Set(servicios.filter(s => s?.id).map(seccion => seccion.id));
+      return new Set(serviciosSafe.filter(s => s?.id).map(seccion => seccion.id));
     } catch (error) {
       console.error('[PublicServiciosTree] Error inicializando secciones:', error);
       return new Set<string>();
     }
-  }, [servicios]);
+  }, [serviciosSafe, isEmpty]);
 
   const initialExpandedCategories = useMemo(() => {
+    if (isEmpty) return new Set<string>();
     try {
       const categories = new Set<string>();
-      servicios.forEach(seccion => {
+      serviciosSafe.forEach(seccion => {
         if (seccion?.categorias && Array.isArray(seccion.categorias)) {
           seccion.categorias.forEach(categoria => {
             if (categoria?.id) {
@@ -53,7 +50,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
       console.error('[PublicServiciosTree] Error inicializando categorías:', error);
       return new Set<string>();
     }
-  }, [servicios]);
+  }, [serviciosSafe, isEmpty]);
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(initialExpandedSections);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(initialExpandedCategories);
@@ -184,9 +181,17 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
     handleOpenLightbox(servicio, 0);
   };
 
+  if (isEmpty) {
+    return (
+      <div className="p-4 text-center text-zinc-400 text-sm">
+        No hay servicios disponibles
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {servicios.map((seccion) => {
+      {serviciosSafe.map((seccion) => {
           // ⚠️ SAFETY: Validar que seccion tenga datos necesarios
           if (!seccion || !seccion.id) {
             console.warn('[PublicServiciosTree] Sección inválida:', seccion);

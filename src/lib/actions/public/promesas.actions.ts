@@ -3099,6 +3099,334 @@ export async function getPublicPromiseNegociacion(
 }
 
 /**
+ * Vista previa rápida para Studio: una cotización por ID con PublicCotizacion completo.
+ * No filtra por visible_to_client (el staff puede previsualizar cotizaciones ocultas).
+ * Incluye precio_calculado, bono_especial, event_duration y ítems con is_courtesy para desglose.
+ */
+export async function getQuoteDetailForPreview(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{
+  success: boolean;
+  data?: PublicCotizacion;
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise: { studio_id: studio.id },
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        discount: true,
+        status: true,
+        selected_by_prospect: true,
+        order: true,
+        evento_id: true,
+        event_duration: true,
+        precio_calculado: true,
+        bono_especial: true,
+        condiciones_visibles: true,
+        negociacion_precio_original: true,
+        negociacion_precio_personalizado: true,
+        items_cortesia: true,
+        cotizacion_items: {
+          select: {
+            id: true,
+            item_id: true,
+            service_category_id: true,
+            name_snapshot: true,
+            description_snapshot: true,
+            category_name_snapshot: true,
+            seccion_name_snapshot: true,
+            name: true,
+            description: true,
+            category_name: true,
+            seccion_name: true,
+            unit_price: true,
+            quantity: true,
+            subtotal: true,
+            status: true,
+            order: true,
+            is_courtesy: true,
+            billing_type: true,
+            service_categories: {
+              select: {
+                name: true,
+                section_categories: {
+                  select: {
+                    service_sections: {
+                      select: { name: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { order: "asc" },
+        },
+        condiciones_comerciales_metodo_pago: {
+          where: { status: "active" },
+          select: {
+            metodos_pago: {
+              select: { payment_method_name: true },
+            },
+          },
+          orderBy: { orden: "asc" },
+        },
+        condiciones_comerciales: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            discount_percentage: true,
+          },
+        },
+        paquete: {
+          select: { id: true, name: true },
+        },
+        promise: {
+          select: { duration_hours: true },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: "Cotización no encontrada" };
+    }
+
+    const promiseDurationHours = cotizacion.promise?.duration_hours ?? null;
+    const allItemIds = new Set<string>();
+    (cotizacion.cotizacion_items as Array<{ item_id: string | null }>).forEach((item) => {
+      if (item.item_id) allItemIds.add(item.item_id);
+    });
+
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: "IMAGE" | "VIDEO"; thumbnail_url?: string | null }>>();
+    if (allItemIds.size > 0) {
+      const itemsMediaData = await prisma.studio_item_media.findMany({
+        where: {
+          item_id: { in: Array.from(allItemIds) },
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          item_id: true,
+          file_url: true,
+          file_type: true,
+          display_order: true,
+        },
+        orderBy: { display_order: "asc" },
+      });
+      itemsMediaData.forEach((media) => {
+        if (!itemsMediaMap.has(media.item_id)) {
+          itemsMediaMap.set(media.item_id, []);
+        }
+        itemsMediaMap.get(media.item_id)!.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as "IMAGE" | "VIDEO",
+          thumbnail_url: undefined,
+        });
+      });
+    }
+
+    type CotizacionItem = {
+      id: string;
+      item_id: string | null;
+      service_category_id?: string | null;
+      name_snapshot: string | null;
+      description_snapshot: string | null;
+      category_name_snapshot: string | null;
+      seccion_name_snapshot: string | null;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+      unit_price: number;
+      quantity: number;
+      subtotal: number;
+      status: string;
+      order: number;
+      is_courtesy: boolean;
+      billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: { service_sections?: { name: string } };
+      } | null;
+    };
+
+    const cotizacionMedia: Array<{ id: string; file_url: string; file_type: "IMAGE" | "VIDEO"; thumbnail_url?: string | null }> = [];
+    (cotizacion.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
+      if (item.item_id) {
+        const itemMedia = itemsMediaMap.get(item.item_id);
+        if (itemMedia) cotizacionMedia.push(...itemMedia);
+      }
+    });
+
+    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter(
+      (item: CotizacionItem) =>
+        item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name))
+    );
+
+    const itemsCortesiaRaw = (cotizacion as { items_cortesia?: unknown }).items_cortesia;
+    const itemsCortesiaSet = new Set<string>(
+      Array.isArray(itemsCortesiaRaw) ? itemsCortesiaRaw.filter((x: unknown): x is string => typeof x === "string") : []
+    );
+
+    const estructura = construirEstructuraJerarquicaCotizacion(
+      itemsFiltrados.map((item: CotizacionItem) => {
+        let categoryName = item.category_name_snapshot || item.category_name;
+        let sectionName = item.seccion_name_snapshot || item.seccion_name;
+        if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+          categoryName = categoryName || item.service_categories.name;
+          sectionName = sectionName || item.service_categories?.section_categories?.service_sections?.name || null;
+        }
+        return {
+          item_id: item.item_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          order: item.order,
+          name_snapshot: item.name_snapshot || item.name,
+          description_snapshot: item.description_snapshot || item.description,
+          category_name_snapshot: categoryName,
+          seccion_name_snapshot: sectionName,
+          name: item.name_snapshot || item.name,
+          description: item.description_snapshot || item.description,
+          category_name: categoryName,
+          seccion_name: sectionName,
+          id: item.id,
+          billing_type: item.billing_type,
+        };
+      }),
+      { incluirPrecios: true, incluirDescripciones: true, ordenarPor: "insercion" }
+    );
+
+    const servicios: PublicSeccionData[] = estructura.secciones.map((seccion) => ({
+      id: seccion.nombre,
+      nombre: seccion.nombre,
+      orden: seccion.orden,
+      categorias: seccion.categorias.map((categoria) => ({
+        id: categoria.nombre,
+        nombre: categoria.nombre,
+        orden: categoria.orden,
+        servicios: categoria.items.map((item) => {
+          const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+          const originalItem = itemsFiltrados.find((i) => i.id === item.id);
+          const esCortesia = originalItem
+            ? (originalItem.is_courtesy === true ||
+               itemsCortesiaSet.has(originalItem.id) ||
+               (!!originalItem.item_id && itemsCortesiaSet.has(originalItem.item_id)))
+            : false;
+          const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? "SERVICE") as "HOUR" | "SERVICE" | "UNIT";
+          const cantidad = (item as { cantidad?: number; quantity?: number }).cantidad ?? (item as { quantity?: number }).quantity ?? 1;
+          const cantidadEfectiva =
+            billingType === "HOUR" && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, cantidad, promiseDurationHours)
+              : cantidad;
+          return {
+            id: item.item_id || item.id || "",
+            name: item.nombre,
+            name_snapshot: item.nombre,
+            description: item.descripcion || null,
+            description_snapshot: item.descripcion || null,
+            price: item.unit_price,
+            quantity: cantidadEfectiva,
+            is_courtesy: esCortesia,
+            billing_type: billingType,
+            ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+          };
+        }),
+      })),
+    }));
+
+    const condicionesComerciales = (cotizacion as { condiciones_comerciales?: { id: string; name: string; description: string | null; advance_percentage: unknown; advance_type: string | null; advance_amount: unknown; discount_percentage: unknown } | null }).condiciones_comerciales;
+    const neg = (cotizacion as { condicion_comercial_negociacion?: { id: string; name: string; description: string | null; advance_percentage: number | null; advance_type: string | null; advance_amount: unknown; discount_percentage: number | null } | null }).condicion_comercial_negociacion;
+
+    const mapped: PublicCotizacion = {
+      id: cotizacion.id,
+      name: cotizacion.name,
+      description: cotizacion.description,
+      price: cotizacion.price,
+      discount: cotizacion.discount,
+      status: cotizacion.status,
+      order: cotizacion.order ?? 0,
+      evento_id: cotizacion.evento_id,
+      servicios,
+      condiciones_comerciales: condicionesComerciales
+        ? {
+            metodo_pago: (cotizacion.condiciones_comerciales_metodo_pago as Array<{ metodos_pago?: { payment_method_name: string } }>)?.[0]?.metodos_pago?.payment_method_name || null,
+            condiciones: condicionesComerciales.description || null,
+            id: condicionesComerciales.id,
+            name: condicionesComerciales.name,
+            description: condicionesComerciales.description,
+            advance_percentage: condicionesComerciales.advance_percentage != null ? Number(condicionesComerciales.advance_percentage) : null,
+            advance_type: condicionesComerciales.advance_type,
+            advance_amount: condicionesComerciales.advance_amount != null ? Number(condicionesComerciales.advance_amount) : null,
+            discount_percentage: condicionesComerciales.discount_percentage != null ? Number(condicionesComerciales.discount_percentage) : null,
+          }
+        : null,
+      paquete_origen: cotizacion.paquete ? { id: cotizacion.paquete.id, name: cotizacion.paquete.name } : null,
+      condiciones_visibles: Array.isArray(cotizacion.condiciones_visibles)
+        ? (cotizacion.condiciones_visibles as unknown[]).filter((id: unknown): id is string => typeof id === "string")
+        : null,
+      condicion_comercial_negociacion: neg
+        ? {
+            id: neg.id,
+            name: neg.name,
+            description: neg.description,
+            advance_percentage: neg.advance_percentage,
+            advance_type: neg.advance_type,
+            advance_amount: neg.advance_amount != null ? Number(neg.advance_amount) : null,
+            discount_percentage: neg.discount_percentage,
+          }
+        : null,
+      selected_by_prospect: cotizacion.selected_by_prospect || false,
+      negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      event_duration: cotizacion.event_duration ?? null,
+      precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
+      bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
+    };
+
+    return { success: true, data: mapped };
+  } catch (error) {
+    console.error("[getQuoteDetailForPreview] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al cargar vista previa",
+    };
+  }
+}
+
+/**
  * ⚠️ STREAMING: Obtener solo precio total para Basic (instantáneo)
  * Usado en CierrePageBasic para mostrar precio sin esperar datos pesados
  */

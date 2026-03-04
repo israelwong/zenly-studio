@@ -277,7 +277,7 @@ export function CondicionesCierreAccordion({
                       {isVisible ? 'Visible' : 'Oculto'}
                     </button>
                     {cond.is_public === false ? (
-                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-full">
                         <Lock className="h-2.5 w-2.5" />
                         Privada
                       </span>
@@ -384,7 +384,7 @@ export function CondicionesCierreAccordion({
                       >
                         {isVisible ? 'Visible' : 'Oculto'}
                       </button>
-                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-full">
                         <Lock className="h-2.5 w-2.5" />
                         Privada
                       </span>

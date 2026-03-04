@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, CheckSquare, Square, Handshake, RotateCcw, Clock, Gift, Ticket, Globe, Lock, PanelRightClose } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -40,6 +40,9 @@ import {
 import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
 import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { getReminderByPromise, deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
+import { getQuoteDetailForPreview } from '@/lib/actions/public/promesas.actions';
+import type { PublicCotizacion } from '@/types/public-promise';
 
 interface PromiseQuotesPanelCardProps {
   cotizacion: CotizacionListItem;
@@ -106,9 +109,13 @@ export function PromiseQuotesPanelCard({
     id: string;
     subject_text: string;
     reminder_date: Date;
-    description?: string | null;
+    description: string | null;
   } | null>(null);
   const [loadingReminder, setLoadingReminder] = useState(false);
+  const [visibilityLoading, setVisibilityLoading] = useState<'publicando' | 'despublicando' | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewCotizacion, setPreviewCotizacion] = useState<PublicCotizacion | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Sincronizar editingName y editingDescription cuando cambie cotizacion (solo si el modal no está abierto)
   useEffect(() => {
@@ -245,6 +252,11 @@ export function PromiseQuotesPanelCard({
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest?.('[data-quote-actions]')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (selectionMode && onToggleSelect) {
       e.preventDefault();
       onToggleSelect();
@@ -270,6 +282,7 @@ export function PromiseQuotesPanelCard({
         const nuevaCotizacion: CotizacionListItem = {
           ...result.data.cotizacion,
           archived: result.data.cotizacion.archived ?? false,
+          visible_to_client: (result.data.cotizacion as { visible_to_client?: boolean }).visible_to_client ?? false,
         };
         onDuplicateComplete?.(nuevaCotizacion);
       } else {
@@ -425,6 +438,7 @@ export function PromiseQuotesPanelCard({
     if (isProcessingRef.current || loading) return;
 
     const newVisibility = !cotizacion.visible_to_client;
+    setVisibilityLoading(newVisibility ? 'publicando' : 'despublicando');
 
     // Actualización optimista inmediata
     if (onVisibilityToggle) {
@@ -441,24 +455,45 @@ export function PromiseQuotesPanelCard({
             ? 'Cotización visible para el prospecto'
             : 'Cotización ocultada del prospecto'
         );
-        // Recargar desde servidor para sincronizar
         router.refresh();
       } else {
         toast.error(result.error || 'Error al cambiar visibilidad');
-        // Revertir cambio optimista si falla
         if (onVisibilityToggle) {
           onVisibilityToggle(cotizacion.id, cotizacion.visible_to_client);
         }
       }
     } catch {
       toast.error('Error al cambiar visibilidad');
-      // Revertir cambio optimista si falla
       if (onVisibilityToggle) {
         onVisibilityToggle(cotizacion.id, cotizacion.visible_to_client);
       }
     } finally {
       setLoading(false);
+      setVisibilityLoading(null);
       isProcessingRef.current = false;
+    }
+  };
+
+  const handleLoadDetail = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (loadingPreview) return;
+    setIsPreviewOpen(true);
+    setLoadingPreview(true);
+    setPreviewCotizacion(null);
+    try {
+      const result = await getQuoteDetailForPreview(studioSlug, cotizacion.id);
+      if (result.success && result.data) {
+        setPreviewCotizacion(result.data);
+      } else {
+        toast.error(result.error || 'No se pudo cargar la vista previa');
+        setIsPreviewOpen(false);
+      }
+    } catch {
+      toast.error('Error al cargar la vista previa');
+      setIsPreviewOpen(false);
+    } finally {
+      setLoadingPreview(false);
     }
   };
 
@@ -506,8 +541,10 @@ export function PromiseQuotesPanelCard({
         setReminder({
           id: reminderResult.data.id,
           subject_text: reminderResult.data.subject_text,
-          reminder_date: reminderResult.data.reminder_date,
-          description: reminderResult.data.description,
+          reminder_date: reminderResult.data.reminder_date instanceof Date
+            ? reminderResult.data.reminder_date
+            : new Date(reminderResult.data.reminder_date),
+          description: reminderResult.data.description ?? null,
         });
       } else {
         setReminder(null);
@@ -685,6 +722,21 @@ export function PromiseQuotesPanelCard({
         className={cardClassName}
         onClick={handleClick}
       >
+        <div
+          className="contents"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest?.('[data-quote-actions]')) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          onPointerDown={(e) => {
+            if ((e.target as HTMLElement).closest?.('[data-quote-actions]')) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
         {isDuplicating && (
           <div className="absolute inset-0 bg-zinc-900/80 rounded-lg flex items-center justify-center z-10">
             <div className="flex items-center gap-2 text-sm text-zinc-300">
@@ -693,8 +745,8 @@ export function PromiseQuotesPanelCard({
             </div>
           </div>
         )}
-        <div className="flex items-start justify-between gap-2">
-          {/* Checkbox de selección o grip vertical */}
+        {/* Cabecera: grip/checkbox + nombre (flex-1) + badge + menú */}
+        <div className="flex items-center gap-2">
           {selectionMode ? (
             <button
               type="button"
@@ -702,7 +754,7 @@ export function PromiseQuotesPanelCard({
                 e.stopPropagation();
                 onToggleSelect?.();
               }}
-              className="p-1 -ml-1 -mt-1 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+              className="p-1 -ml-1 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
             >
               {isSelected ? (
                 <CheckSquare className="h-4 w-4 text-emerald-400" />
@@ -714,159 +766,38 @@ export function PromiseQuotesPanelCard({
             <div
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing p-1 -ml-1 -mt-1 text-zinc-500 hover:text-zinc-400 transition-colors shrink-0"
+              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-zinc-500 hover:text-zinc-400 transition-colors shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               <GripVertical className="h-4 w-4" />
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <h4 className={`text-sm font-medium truncate mb-1 ${isArchivada ? 'text-zinc-500' : 'text-zinc-200'
-              }`}>
-              {cotizacion.name}
-            </h4>
-            {cotizacion.description && (
-              <p className={`text-xs line-clamp-1 mb-2 ${isArchivada ? 'text-zinc-600' : 'text-zinc-400'
-                }`}>
-                {cotizacion.description}
-              </p>
+          <h4 className={`flex-1 min-w-0 text-sm font-medium truncate ${isArchivada ? 'text-zinc-500' : 'text-zinc-200'}`}>
+            {cotizacion.name}
+          </h4>
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {isArchivada ? (
+              <ZenBadge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full">
+                Archivada
+              </ZenBadge>
+            ) : (
+              <ZenBadge
+                variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
+                className="text-[10px] px-1.5 py-0.5 rounded-full"
+              >
+                {getStatusLabel(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
+                {cotizacion.revision_number && cotizacion.revision_status === 'pending_revision' && (
+                  <span className="ml-1">#{cotizacion.revision_number}</span>
+                )}
+              </ZenBadge>
             )}
-            {(() => {
-              const hasDuration = cotizacion.event_duration != null && cotizacion.event_duration > 0;
-              const cortesiasCount = cotizacion.cortesias_count_snapshot ?? (Array.isArray(cotizacion.items_cortesia) ? cotizacion.items_cortesia.length : 0);
-              const hasCortesias = cortesiasCount > 0;
-              const hasBono = cotizacion.bono_especial != null && cotizacion.bono_especial > 0;
-              if (!hasDuration && !hasCortesias && !hasBono) return null;
-              const divider = <span className="text-zinc-500 px-1">·</span>;
-              return (
-                <div className="flex items-center flex-nowrap gap-0 text-xs text-zinc-400 mb-1.5">
-                  {hasDuration && (
-                    <>
-                      <span className="inline-flex items-center gap-1 shrink-0" title="Duración">
-                        <Clock className="h-3.5 w-3.5 text-zinc-500" />
-                        <span>{cotizacion.event_duration} hrs</span>
-                      </span>
-                      {(hasCortesias || hasBono) && divider}
-                    </>
-                  )}
-                  {hasCortesias && (
-                    <>
-                      <span className="inline-flex items-center gap-1 shrink-0 text-emerald-500">
-                        <Gift className="h-3.5 w-3.5" />
-                        <span>{cortesiasCount} Cortesía{cortesiasCount !== 1 ? 's' : ''}</span>
-                      </span>
-                      {hasBono && divider}
-                    </>
-                  )}
-                  {hasBono && (
-                    <span className="inline-flex items-center gap-1 shrink-0 text-amber-500" title="Bono especial">
-                      <Ticket className="h-3.5 w-3.5" />
-                      <span>Bono: ${Number(cotizacion.bono_especial).toLocaleString('es-MX', { minimumFractionDigits: 0 })}</span>
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-sm font-semibold ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'
-                  }`}>
-                  ${(cotizacion.total_a_pagar ?? cotizacion.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </span>
-                {isArchivada ? (
-                  <ZenBadge
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0.5 rounded-full"
-                  >
-                    Archivada
-                  </ZenBadge>
-                ) : (
-                  <ZenBadge
-                    variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full"
-                  >
-                    {getStatusLabel(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
-                    {cotizacion.revision_number && cotizacion.revision_status === 'pending_revision' && (
-                      <span className="ml-1">#{cotizacion.revision_number}</span>
-                    )}
-                  </ZenBadge>
-                )}
-              </div>
-              {/* Mostrar precio original si hay descuento aplicado */}
-              {(() => {
-                const tieneDescuento = cotizacion.discount && cotizacion.discount > 0;
-
-                if (tieneDescuento) {
-                  return (
-                    <div className="mt-0.5">
-                      <p className={`text-[10px] ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                        Precio original: <span className="font-semibold">
-                          ${cotizacion.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </span>
-                      </p>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-              <p className={`text-[10px] ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                Actualizado: {new Date(cotizacion.updated_at).toLocaleDateString('es-MX', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {/* Ocultar botones en modo selección */}
-            {!selectionMode && (
-              <>
-                {/* Icono de visibilidad - ocultar si está archivada */}
-                {!isArchivada && (
-                  <ZenButton
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={handleToggleVisibility}
-                    disabled={loading || isDuplicating}
-                    title={cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
-                  >
-                    {cotizacion.visible_to_client ? (
-                      <Eye className="h-4 w-4 text-emerald-400" />
-                    ) : (
-                      <EyeOff className="h-4 w-4 text-zinc-500" />
-                    )}
+            {!selectionMode && !(isArchivada && hasApprovedQuote) && (
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={loading || isDuplicating}>
+                    <MoreVertical className="h-4 w-4 text-zinc-400" />
                   </ZenButton>
-                )}
-                {/* Icono de negociación - solo mostrar si está en negociación */}
-                {!(isArchivada && hasApprovedQuote) && cotizacion.status === 'negociacion' && (
-                  <ZenButton
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={handleToggleNegociacion}
-                    disabled={loading || isDuplicating}
-                    title="Quitar de negociación"
-                  >
-                    <Handshake className="h-4 w-4 text-amber-400" />
-                  </ZenButton>
-                )}
-                {/* Ocultar menú si es archivada Y hay cotización en cierre */}
-                {!(isArchivada && hasApprovedQuote) && (
-                  <ZenDropdownMenu>
-                    <ZenDropdownMenuTrigger asChild>
-                      <ZenButton
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        disabled={loading || isDuplicating}
-                      >
-                        <MoreVertical className="h-4 w-4 text-zinc-400" />
-                      </ZenButton>
-                    </ZenDropdownMenuTrigger>
+                </ZenDropdownMenuTrigger>
                     <ZenDropdownMenuContent align="end">
                       {/* Menú según estado: pendiente, negociacion, archivada, cancelada */}
                       {isPendiente ? (
@@ -1029,9 +960,157 @@ export function PromiseQuotesPanelCard({
                     </ZenDropdownMenuContent>
                   </ZenDropdownMenu>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+
+            {/* Cuerpo: descripción, metadatos, precio, condiciones visibles, actualizado */}
+            <div className="mt-3 min-w-0 space-y-2">
+              {cotizacion.description && (
+                <p className={`text-xs line-clamp-1 ${isArchivada ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                  {cotizacion.description}
+                </p>
+              )}
+              {(() => {
+                const hasDuration = cotizacion.event_duration != null && cotizacion.event_duration > 0;
+                const cortesiasCount = cotizacion.cortesias_count_snapshot ?? (Array.isArray(cotizacion.items_cortesia) ? cotizacion.items_cortesia.length : 0);
+                const hasCortesias = cortesiasCount > 0;
+                const hasBono = cotizacion.bono_especial != null && cotizacion.bono_especial > 0;
+                if (!hasDuration && !hasCortesias && !hasBono) return null;
+                const divider = <span className="text-zinc-500 px-1">·</span>;
+                return (
+                  <div className="flex items-center flex-nowrap gap-0 text-xs text-zinc-400">
+                    {hasDuration && (
+                      <>
+                        <span className="inline-flex items-center gap-1 shrink-0" title="Duración">
+                          <Clock className="h-3 w-3 text-zinc-500" />
+                          <span>{cotizacion.event_duration} hrs</span>
+                        </span>
+                        {(hasCortesias || hasBono) && divider}
+                      </>
+                    )}
+                    {hasCortesias && (
+                      <>
+                        <span className="inline-flex items-center gap-1 shrink-0 text-emerald-500">
+                          <Gift className="h-3 w-3" />
+                          <span>{cortesiasCount} Cortesía{cortesiasCount !== 1 ? 's' : ''}</span>
+                        </span>
+                        {hasBono && divider}
+                      </>
+                    )}
+                    {hasBono && (
+                      <span className="inline-flex items-center gap-1 shrink-0 text-amber-500" title="Bono especial">
+                        <Ticket className="h-3 w-3" />
+                        <span>Bono: ${Number(cotizacion.bono_especial).toLocaleString('es-MX', { minimumFractionDigits: 0 })}</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex items-baseline gap-2">
+                {(() => {
+                  const precioFinal = cotizacion.total_a_pagar ?? cotizacion.price;
+                  const precioLista = cotizacion.precio_calculado ?? cotizacion.snap_precio_lista ?? null;
+                  const mostrarListaTachado = precioLista != null && precioLista > precioFinal;
+                  const format = (n: number) => n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+                  return (
+                    <>
+                      {mostrarListaTachado && (
+                        <span className={`text-md font-light line-through shrink-0 ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                          ${format(precioLista)}
+                        </span>
+                      )}
+                      <span className={`text-lg font-bold tabular-nums ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'}`}>
+                        ${format(precioFinal)}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
+              {cotizacion.condiciones_visibles_detalle && cotizacion.condiciones_visibles_detalle.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {cotizacion.condiciones_visibles_detalle.map((c) => (
+                    <span
+                      key={c.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 max-w-[120px] min-w-0"
+                      title={c.name}
+                    >
+                      {c.is_public ? (
+                        <Globe className="h-3 w-3 shrink-0 text-zinc-500" />
+                      ) : (
+                        <Lock className="h-3 w-3 shrink-0 text-zinc-500" />
+                      )}
+                      <span className="truncate">{c.name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className={`text-xs ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                Actualizado: {new Date(cotizacion.updated_at).toLocaleDateString('es-MX', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </p>
+            </div>
+
+            {/* Action footer: Publicada/No publicada izquierda, Vista previa + handshake derecha */}
+            <div
+              data-quote-actions
+              className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center justify-between gap-2 flex-wrap"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-1.5 relative z-10">
+                {!selectionMode && !isArchivada && (
+                  <ZenButton
+                    variant="outline"
+                    size="sm"
+                    className={
+                      cotizacion.visible_to_client
+                        ? 'text-emerald-400 border-emerald-600/50 hover:bg-emerald-500/10 h-7 px-2 text-xs relative z-10'
+                        : 'text-zinc-400 border-zinc-600 hover:bg-zinc-800/50 h-7 px-2 text-xs relative z-10'
+                    }
+                    onClick={handleToggleVisibility}
+                    disabled={loading || isDuplicating}
+                    loading={visibilityLoading !== null}
+                    loadingText={visibilityLoading === 'publicando' ? 'Publicando' : 'Despublicando'}
+                    title={cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
+                  >
+                    {cotizacion.visible_to_client ? 'Publicada' : 'No publicada'}
+                  </ZenButton>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 relative z-10">
+                {!selectionMode && !isArchivada && (
+                  <ZenButton
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs border-zinc-600 text-zinc-300 hover:bg-zinc-800/50 relative z-10"
+                    onClick={handleLoadDetail}
+                    disabled={!promiseId || isDuplicating}
+                    loading={loadingPreview}
+                    loadingText="Cargando..."
+                  >
+                    Vista previa
+                    <PanelRightClose className="h-4 w-4 shrink-0" />
+                  </ZenButton>
+                )}
+                {!selectionMode && !(isArchivada && hasApprovedQuote) && cotizacion.status === 'negociacion' && (
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 hover:bg-zinc-800/50 relative z-10"
+                    onClick={handleToggleNegociacion}
+                    disabled={loading || isDuplicating}
+                    title="Quitar de negociación"
+                  >
+                    <Handshake className="h-4 w-4 text-amber-400" />
+                  </ZenButton>
+                )}
+              </div>
+            </div>
         </div>
       </Link>
 
@@ -1186,14 +1265,12 @@ export function PromiseQuotesPanelCard({
       <ClosingProcessInfoModal
         isOpen={showClosingProcessInfoModal}
         onClose={() => {
-          // No permitir cerrar mientras está procesando
           if (loading || loadingReminder) return;
           setShowClosingProcessInfoModal(false);
           setReminder(null);
         }}
         onConfirm={handlePasarACierre}
         onCancel={() => {
-          // No permitir cancelar mientras está procesando
           if (loading || loadingReminder) return;
           setShowClosingProcessInfoModal(false);
           setReminder(null);
@@ -1204,6 +1281,22 @@ export function PromiseQuotesPanelCard({
         isLoading={loading || loadingReminder}
       />
 
+      {/* Vista previa: abre al instante; sheet muestra skeletons mientras cargan datos */}
+      {isPreviewOpen && promiseId && (
+        <CotizacionDetailSheet
+          cotizacion={previewCotizacion}
+          isOpen={isPreviewOpen}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setPreviewCotizacion(null);
+          }}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
+          isPreviewMode
+          mostrarBotonAutorizar={false}
+          isLoadingPreview={loadingPreview && !previewCotizacion}
+        />
+      )}
     </>
   );
 }

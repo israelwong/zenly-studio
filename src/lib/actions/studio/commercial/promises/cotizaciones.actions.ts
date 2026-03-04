@@ -101,6 +101,8 @@ export interface CotizacionListItem {
   condiciones_comerciales_discount_percentage_snapshot?: number | null;
   /** Horas de cobertura del servicio (para listado en card) */
   event_duration?: number | null;
+  /** Condiciones visibles para el prospecto (pills en card) */
+  condiciones_visibles_detalle?: Array<{ id: string; name: string; is_public: boolean }>;
 }
 
 export interface CotizacionesListResponse {
@@ -450,6 +452,9 @@ export async function getCotizacionesByPromiseId(
         items_cortesia: true,
         cortesias_count_snapshot: true,
         cortesias_monto_snapshot: true,
+        precio_calculado: true,
+        snap_precio_lista: true,
+        condiciones_visibles: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -470,6 +475,21 @@ export async function getCotizacionesByPromiseId(
       { maxRetries: 3, baseDelay: 1000, maxDelay: 5000 }
     );
 
+    const idsVisibles = new Set<string>();
+    cotizaciones.forEach((cot) => {
+      const raw = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
+      const arr = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+      arr.forEach((id) => idsVisibles.add(id));
+    });
+    let condicionesMap = new Map<string, { name: string; is_public: boolean }>();
+    if (idsVisibles.size > 0) {
+      const conds = await prisma.studio_condiciones_comerciales.findMany({
+        where: { id: { in: [...idsVisibles] } },
+        select: { id: true, name: true, is_public: true },
+      });
+      conds.forEach((c) => condicionesMap.set(c.id, { name: c.name, is_public: c.is_public }));
+    }
+
     return {
       success: true,
       data: cotizaciones.map((cot) => {
@@ -478,6 +498,14 @@ export async function getCotizacionesByPromiseId(
         const itemsCortesia = cot.items_cortesia;
         const cortesiasCount = cot.cortesias_count_snapshot ?? (Array.isArray(itemsCortesia) ? itemsCortesia.length : 0);
         const bono = cot.bono_especial != null ? Number(cot.bono_especial) : null;
+        const rawVisibles = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
+        const visibleIds = Array.isArray(rawVisibles) ? rawVisibles.filter((x: unknown): x is string => typeof x === 'string') : [];
+        const condiciones_visibles_detalle = visibleIds
+          .map((id) => {
+            const d = condicionesMap.get(id);
+            return d ? { id, name: d.name, is_public: d.is_public } : null;
+          })
+          .filter((x): x is { id: string; name: string; is_public: boolean } => x != null);
         return {
           id: cot.id,
           name: cot.name,
@@ -505,6 +533,9 @@ export async function getCotizacionesByPromiseId(
           items_cortesia: itemsCortesia ?? undefined,
           cortesias_count_snapshot: cortesiasCount,
           cortesias_monto_snapshot: cot.cortesias_monto_snapshot != null ? Number(cot.cortesias_monto_snapshot) : null,
+          precio_calculado: (cot as { precio_calculado?: unknown }).precio_calculado != null ? Number((cot as { precio_calculado: unknown }).precio_calculado) : null,
+          snap_precio_lista: (cot as { snap_precio_lista?: unknown }).snap_precio_lista != null ? Number((cot as { snap_precio_lista: unknown }).snap_precio_lista) : null,
+          condiciones_visibles_detalle: condiciones_visibles_detalle.length > 0 ? condiciones_visibles_detalle : undefined,
         };
       }),
     };

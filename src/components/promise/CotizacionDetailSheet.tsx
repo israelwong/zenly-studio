@@ -53,8 +53,22 @@ interface TerminoCondicion {
   is_required: boolean;
 }
 
+/** Stub para cuando el sheet abre en modo loading (vista previa Studio) y cotizacion aún no llegó. */
+const EMPTY_COTIZACION_STUB: PublicCotizacion = {
+  id: '',
+  name: '',
+  description: null,
+  price: 0,
+  discount: null,
+  servicios: [],
+  condiciones_comerciales: null,
+  paquete_origen: null,
+  condiciones_visibles: null,
+  condicion_comercial_negociacion: null,
+};
+
 interface CotizacionDetailSheetProps {
-  cotizacion: PublicCotizacion;
+  cotizacion: PublicCotizacion | null;
   isOpen: boolean;
   onClose: () => void;
   promiseId: string;
@@ -88,6 +102,8 @@ interface CotizacionDetailSheetProps {
   isPreviewMode?: boolean;
   /** Fase 28.8: Si true, oculta secciones financieras (precio, condiciones, términos) para inspección simple de servicios. */
   hideFinancialSections?: boolean;
+  /** Cuando true y cotizacion es null, el sheet muestra skeletons (vista previa Studio cargando). */
+  isLoadingPreview?: boolean;
   /**
    * Acciones de administración para el footer (solo MODO ESTUDIO / vista previa).
    * Si se define junto con isPreviewMode, se muestra el footer con Guardar borrador, Guardar como paquete, Crear y Publicar.
@@ -127,8 +143,10 @@ export function CotizacionDetailSheet({
   condicionesVisiblesIds,
   isPreviewMode = false,
   hideFinancialSections = false,
+  isLoadingPreview = false,
   studioFooterActions = null,
 }: CotizacionDetailSheetProps) {
+  const effectiveCotizacion = cotizacion ?? EMPTY_COTIZACION_STUB;
   const isStudioContext = isPreviewMode && studioFooterActions != null;
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [condicionesComerciales, setCondicionesComerciales] = useState<CondicionComercial[]>([]);
@@ -136,7 +154,7 @@ export function CotizacionDetailSheet({
   const [selectedCondicionId, setSelectedCondicionId] = useState<string | null>(null);
   const [selectedMetodoPagoId, setSelectedMetodoPagoId] = useState<string | null>(null);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
-  const [currentCotizacion, setCurrentCotizacion] = useState(cotizacion);
+  const [currentCotizacion, setCurrentCotizacion] = useState(effectiveCotizacion);
   const sheetContainerRef = useRef<HTMLDivElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -195,14 +213,14 @@ export function CotizacionDetailSheet({
 
   // Actualizar cotización cuando cambia la prop
   useEffect(() => {
-    setCurrentCotizacion(cotizacion);
-  }, [cotizacion]);
+    setCurrentCotizacion(effectiveCotizacion);
+  }, [effectiveCotizacion]);
 
   // Al cambiar de cotización, resetear selección para que auto-selección pueda aplicarse si aplica
   useEffect(() => {
     setSelectedCondicionId(null);
     setSelectedMetodoPagoId(null);
-  }, [cotizacion.id]);
+  }, [effectiveCotizacion.id]);
 
   // Auto-selección: si el sheet está abierto y solo hay una condición visible y no hay selección, seleccionarla
   useEffect(() => {
@@ -243,10 +261,10 @@ export function CotizacionDetailSheet({
         if (terminosCondicionesIniciales) setTerminosCondiciones(terminosCondicionesIniciales);
         setLoadingCondiciones(false);
       } else {
-        loadCondicionesYTerminos(cotizacion.condiciones_visibles ?? undefined);
+        loadCondicionesYTerminos(effectiveCotizacion.condiciones_visibles ?? undefined);
       }
     }
-  }, [isOpen, studioSlug, cotizacion, condicionesComercialesIniciales, terminosCondicionesIniciales, loadCondicionesYTerminos]);
+  }, [isOpen, studioSlug, effectiveCotizacion, condicionesComercialesIniciales, terminosCondicionesIniciales, loadCondicionesYTerminos]);
 
   const handleSelectCondicion = (condicionId: string, metodoPagoId: string) => {
     setSelectedCondicionId(condicionId);
@@ -508,6 +526,8 @@ export function CotizacionDetailSheet({
 
   if (!isOpen) return null;
 
+  const showSkeleton = !cotizacion || isLoadingPreview;
+
   const sheetContent = (
     <>
       {/* Overlay */}
@@ -522,13 +542,22 @@ export function CotizacionDetailSheet({
         <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg sm:text-xl font-semibold text-zinc-100 truncate">
-                {currentCotizacion.name}
-              </h2>
-              {currentCotizacion.description && (
-                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 line-clamp-2">
-                  {currentCotizacion.description}
-                </p>
+              {showSkeleton ? (
+                <>
+                  <div className="h-6 w-3/4 bg-zinc-700 rounded animate-pulse" />
+                  <div className="h-4 w-full mt-2 bg-zinc-800 rounded animate-pulse" />
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg sm:text-xl font-semibold text-zinc-100 truncate">
+                    {currentCotizacion.name}
+                  </h2>
+                  {currentCotizacion.description && (
+                    <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 line-clamp-2">
+                      {currentCotizacion.description}
+                    </p>
+                  )}
+                </>
               )}
             </div>
             <button
@@ -543,6 +572,25 @@ export function CotizacionDetailSheet({
 
         {/* Content: h-full overflow-y-auto para scroll sin restricción; ref para scrollTop=0 al abrir */}
         <div ref={sheetContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {showSkeleton ? (
+            <div key="skeleton" className="space-y-6">
+              <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 space-y-2">
+                <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
+                <div className="h-8 w-32 bg-zinc-700 rounded animate-pulse" />
+              </div>
+              <div className="space-y-3">
+                <div className="h-5 w-40 bg-zinc-700 rounded animate-pulse" />
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 w-full bg-zinc-800 rounded animate-pulse" />
+                ))}
+              </div>
+              <div className="space-y-2 pt-4 border-t border-zinc-800">
+                <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse" />
+                <div className="h-20 w-full bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </div>
+          ) : (
+            <div key="content" className="space-y-6">
           {/* Precio principal: precio de lista (calculado) + total a pagar (cierre) */}
           {!hideFinancialSections && (
             <>
@@ -739,9 +787,12 @@ export function CotizacionDetailSheet({
               <ExternalLink className="h-3 w-3" />
             </Link>
           </div>
+            </div>
+          )}
         </div>
 
-        {/* Footer: MODO PÚBLICO = solo Cerrar (+ Autorizar si aplica). MODO ESTUDIO (vista previa) = acciones en jerarquía clara. Cerrar siempre no-destructivo. */}
+        {/* Footer: solo cuando hay datos (no en skeleton) */}
+        {!showSkeleton && (
         <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800/70 p-4 sm:p-6">
           {isStudioContext && studioFooterActions ? (
             <div className="flex flex-col gap-3">
@@ -808,10 +859,11 @@ export function CotizacionDetailSheet({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Modal de contratación */}
-      {showAutorizarModal && (
+      {showAutorizarModal && !showSkeleton && (
         <AutorizarCotizacionModal
           cotizacion={currentCotizacion}
           isOpen={showAutorizarModal}
