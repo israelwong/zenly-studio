@@ -16,6 +16,8 @@ export interface PagoStagingItem {
   metodoId: string | null;
   fecha: Date;
   concepto: string;
+  tipo: 'anticipo' | 'abono_cierre';
+  isReadOnly?: boolean;
 }
 
 interface ActivacionOperativaCardProps {
@@ -60,7 +62,7 @@ export function ActivacionOperativaCard({
 
   const metodoDefault = metodosPago.length > 0 ? metodosPago[0].id : null;
 
-  // Auto-split: cuando cambia el monto total recibido, regenerar staging
+  // Auto-split Top-Down: cuando cambia el monto total recibido, regenerar staging
   useEffect(() => {
     if (!pagoConfirmadoUI) return;
 
@@ -71,16 +73,18 @@ export function ActivacionOperativaCard({
     }
 
     if (totalNum === anticipoMonto) {
-      // Monto exacto: una sola card
+      // Monto exacto: una sola card (anticipo fijo)
       setPagoStaging([{
         id: 'anticipo-1',
         monto: anticipoMonto,
         metodoId: metodoDefault,
         fecha: new Date(),
         concepto: 'Anticipo',
+        tipo: 'anticipo',
+        isReadOnly: true,
       }]);
     } else if (totalNum > anticipoMonto) {
-      // Excedente: dos cards (anticipo + abono adicional)
+      // Excedente: dos cards (anticipo fijo + abono adicional variable)
       const excedente = totalNum - anticipoMonto;
       setPagoStaging([
         {
@@ -89,6 +93,8 @@ export function ActivacionOperativaCard({
           metodoId: metodoDefault,
           fecha: new Date(),
           concepto: 'Anticipo',
+          tipo: 'anticipo',
+          isReadOnly: true,
         },
         {
           id: 'abono-2',
@@ -96,16 +102,20 @@ export function ActivacionOperativaCard({
           metodoId: metodoDefault,
           fecha: new Date(),
           concepto: 'Abono adicional',
+          tipo: 'abono_cierre',
+          isReadOnly: false,
         },
       ]);
     } else {
-      // Monto menor al anticipo: una sola card con el monto parcial
+      // Monto menor al anticipo: una sola card con el monto parcial (editable)
       setPagoStaging([{
         id: 'anticipo-parcial-1',
         monto: totalNum,
         metodoId: metodoDefault,
         fecha: new Date(),
         concepto: 'Anticipo parcial',
+        tipo: 'anticipo',
+        isReadOnly: false,
       }]);
     }
   }, [montoTotalRecibido, pagoConfirmadoUI, anticipoMonto, metodoDefault]);
@@ -158,13 +168,29 @@ export function ActivacionOperativaCard({
   };
 
   const handleUpdatePagoItem = (id: string, updates: Partial<PagoStagingItem>) => {
-    setPagoStaging((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
+    setPagoStaging((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
+      
+      // Sincronía Bottom-Up: si se editó el monto de un abono, actualizar monto total
+      if (updates.monto !== undefined) {
+        const nuevoTotal = updated.reduce((sum, p) => sum + p.monto, 0);
+        setMontoTotalRecibido(String(nuevoTotal));
+      }
+      
+      return updated;
+    });
   };
 
   const handleRemovePagoItem = (id: string) => {
-    setPagoStaging((prev) => prev.filter((p) => p.id !== id));
+    setPagoStaging((prev) => {
+      const filtered = prev.filter((p) => p.id !== id);
+      
+      // Sincronía Smart: al eliminar abono adicional, regresar monto total al anticipo
+      const nuevoTotal = filtered.reduce((sum, p) => sum + p.monto, 0);
+      setMontoTotalRecibido(String(nuevoTotal));
+      
+      return filtered;
+    });
   };
 
   const toggleCardExpanded = (id: string) => {
@@ -184,29 +210,25 @@ export function ActivacionOperativaCard({
   return (
     <ZenCard className="border-amber-500/50 bg-amber-500/5 relative">
       <ZenCardHeader className="border-b border-amber-500/20 py-3 px-4">
-        <ZenCardTitle className="text-sm font-semibold text-amber-200">
-          Confirmación de pago
-        </ZenCardTitle>
+        <div className="flex flex-col gap-3 w-full">
+          <ZenSwitch
+            checked={pagoConfirmadoUI}
+            onCheckedChange={handleSwitchChange}
+            label="Pago confirmado"
+            labelClassName="text-sm text-amber-200"
+            variant="emerald"
+            className="w-full"
+          />
+        </div>
       </ZenCardHeader>
-      <ZenCardContent className="p-4 space-y-4">
-        <p className="text-xs text-zinc-400">
-          {pagoConfirmadoUI
-            ? 'Pago registrado en staging. Los datos se guardarán al autorizar el evento.'
-            : 'El cliente ya firmó. Registra el monto recibido para habilitar "Autorizar y Crear Evento".'}
-        </p>
+      {pagoConfirmadoUI && (
+        <ZenCardContent className="p-4 space-y-4">
+          <p className="text-xs text-zinc-400">
+            Los datos se guardarán al autorizar el evento.
+          </p>
 
-        {/* Switch principal */}
-        <ZenSwitch
-          label="Pago confirmado"
-          checked={pagoConfirmadoUI}
-          onCheckedChange={handleSwitchChange}
-          disabled={false}
-        />
-
-        {pagoConfirmadoUI && (
-          <>
-            {/* Input: Monto Total Recibido */}
-            <div className="space-y-2">
+          {/* Input: Monto Total Recibido */}
+          <div className="space-y-2">
               <label className="block text-xs font-medium text-zinc-400">
                 Monto Total Recibido
               </label>
@@ -254,19 +276,19 @@ export function ActivacionOperativaCard({
                       } overflow-hidden transition-all`}
                     >
                       {/* Header colapsable */}
-                      <button
-                        type="button"
-                        onClick={() => toggleCardExpanded(pago.id)}
-                        className="w-full px-3 py-2 flex items-center justify-between hover:bg-zinc-700/20 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-full px-3 py-2 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => toggleCardExpanded(pago.id)}
+                          className="flex items-center gap-2 min-w-0 flex-1 hover:opacity-80 transition-opacity"
+                        >
                           <span className="text-xs font-medium text-zinc-300 truncate">
                             {pago.concepto}
                           </span>
                           <span className="text-sm font-semibold text-emerald-400">
                             {formatearMoneda(pago.monto)}
                           </span>
-                        </div>
+                        </button>
                         <div className="flex items-center gap-2 shrink-0">
                           {metodo && (
                             <span className="text-xs text-zinc-500">{metodo.payment_method_name}</span>
@@ -284,13 +306,20 @@ export function ActivacionOperativaCard({
                               <X className="h-3 w-3" />
                             </button>
                           )}
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-zinc-500" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-zinc-500" />
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => toggleCardExpanded(pago.id)}
+                            className="hover:opacity-80 transition-opacity"
+                            aria-label={isExpanded ? 'Colapsar' : 'Expandir'}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-zinc-500" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-zinc-500" />
+                            )}
+                          </button>
                         </div>
-                      </button>
+                      </div>
 
                       {/* Contenido expandido */}
                       {isExpanded && (
@@ -298,7 +327,7 @@ export function ActivacionOperativaCard({
                           <div className="grid grid-cols-2 gap-3 mt-3">
                             <div>
                               <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Monto
+                                Monto {pago.isReadOnly && '(Fijo)'}
                               </label>
                               <ZenInput
                                 type="number"
@@ -310,6 +339,8 @@ export function ActivacionOperativaCard({
                                 }
                                 min={0}
                                 step={0.01}
+                                disabled={pago.isReadOnly}
+                                className={pago.isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}
                               />
                             </div>
                             <div>
@@ -365,11 +396,10 @@ export function ActivacionOperativaCard({
                     </div>
                   );
                 })}
-              </div>
-            )}
-          </>
-        )}
-      </ZenCardContent>
+            </div>
+          )}
+        </ZenCardContent>
+      )}
     </ZenCard>
   );
 }
