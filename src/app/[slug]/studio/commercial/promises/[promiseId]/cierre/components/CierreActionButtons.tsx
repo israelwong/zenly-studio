@@ -10,8 +10,10 @@ interface CierreActionButtonsProps {
   isAuthorizing: boolean;
   loadingRegistro: boolean;
   puedeAutorizar: boolean;
-  /** Estado local del switch de pago: botón deshabilitado si false (mismo frame que el toggle) */
+  /** Estado local del switch de pago: botón deshabilitado si false cuando requiereConfirmacionPago (mismo frame que el toggle) */
   pagoConfirmadoLocal?: boolean;
+  /** Solo cuando true se exige pagoConfirmadoLocal para habilitar Autorizar (firma requerida + contrato firmado) */
+  requiereConfirmacionPago?: boolean;
   /** true mientras se guarda confirmación de pago (evita autorizar con datos incompletos) */
   pagoUpdatePending?: boolean;
   /** false si falta método de pago en algún ítem del staging */
@@ -25,10 +27,12 @@ export function CierreActionButtons({
   loadingRegistro,
   puedeAutorizar,
   pagoConfirmadoLocal = false,
+  requiereConfirmacionPago = false,
   pagoUpdatePending = false,
   pagoStagingValid = true,
 }: CierreActionButtonsProps) {
-  const autorizarDisabled = isAuthorizing || loadingRegistro || !puedeAutorizar || !pagoConfirmadoLocal || pagoUpdatePending || !pagoStagingValid;
+  const exigePagoYNoConfirmado = requiereConfirmacionPago && !pagoConfirmadoLocal;
+  const autorizarDisabled = isAuthorizing || loadingRegistro || !puedeAutorizar || exigePagoYNoConfirmado || pagoUpdatePending || !pagoStagingValid;
   
   // Etiquetado semántico por contexto de carga (sin spinner manual, ZenButton lo maneja con loading prop)
   const getButtonText = () => {

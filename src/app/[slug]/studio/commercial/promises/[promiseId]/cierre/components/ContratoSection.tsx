@@ -1,13 +1,15 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw, Pencil } from 'lucide-react';
 import {
+  ZenBadge,
   ZenConfirmModal,
   ZenDropdownMenu,
   ZenDropdownMenuContent,
   ZenDropdownMenuItem,
   ZenDropdownMenuTrigger,
+  ZenSwitch,
 } from '@/components/ui/zen';
 import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
@@ -55,6 +57,9 @@ interface ContratoSectionProps {
   contratoOmitido?: boolean;
   onContratoOmitido?: () => void;
   onRevocarOmitido?: () => void;
+  /** Si true, se exige firma del cliente antes de autorizar; si false, se puede autorizar sin firma. */
+  firmaRequerida?: boolean;
+  onFirmaRequeridaChange?: (value: boolean) => void;
   // Props para ContratoGestionCard
   studioSlug: string;
   promiseId: string;
@@ -86,6 +91,8 @@ export const ContratoSection = memo(function ContratoSection({
   contratoOmitido = false,
   onContratoOmitido,
   onRevocarOmitido,
+  firmaRequerida = true,
+  onFirmaRequeridaChange,
   studioSlug,
   promiseId,
   cotizacionId,
@@ -248,9 +255,9 @@ export const ContratoSection = memo(function ContratoSection({
       contratoColor = 'text-emerald-400';
       contratoBoton = null;
     } else if (tieneContratoGenerado) {
-      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
-      contratoEstado = '';
-      contratoColor = 'text-emerald-400';
+      contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+      contratoEstado = 'En espera de firma del cliente';
+      contratoColor = 'text-blue-400';
       contratoBoton = 'Editar';
     } else {
       contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
@@ -356,15 +363,10 @@ export const ContratoSection = memo(function ContratoSection({
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {contratoBoton && contratoBoton !== 'Definir' && !contratoOmitido && (
-                <button
-                  onClick={onContratoButtonClick}
-                  className="h-7 min-w-[2.5rem] flex items-center justify-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                >
-                  {contratoBoton}
-                </button>
-              )}
-              {tieneContratoGenerado && (onRegenerateContract || onCancelarContrato) && (
+              {tieneContratoGenerado &&
+                ((contratoBoton && contratoBoton !== 'Definir' && !contratoOmitido && onContratoButtonClick) ||
+                  onRegenerateContract ||
+                  onCancelarContrato) && (
                 <ZenDropdownMenu>
                   <ZenDropdownMenuTrigger asChild>
                     <button
@@ -377,6 +379,15 @@ export const ContratoSection = memo(function ContratoSection({
                     </button>
                   </ZenDropdownMenuTrigger>
                   <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                    {contratoBoton && contratoBoton !== 'Definir' && !contratoOmitido && onContratoButtonClick && (
+                      <ZenDropdownMenuItem
+                        className="cursor-pointer text-emerald-400 focus:text-emerald-300"
+                        onSelect={() => onContratoButtonClick()}
+                      >
+                        <Pencil className="h-4 w-4 shrink-0 mr-2" />
+                        Editar
+                      </ZenDropdownMenuItem>
+                    )}
                     {onRegenerateContract && (
                       <ZenDropdownMenuItem
                         className="cursor-pointer text-amber-400 focus:text-amber-300"
@@ -388,7 +399,7 @@ export const ContratoSection = memo(function ContratoSection({
                         ) : (
                           <RefreshCw className="h-4 w-4 shrink-0 mr-2" />
                         )}
-                        Regenerar contrato
+                        Regenerar
                       </ZenDropdownMenuItem>
                     )}
                     {onCancelarContrato && (
@@ -397,7 +408,7 @@ export const ContratoSection = memo(function ContratoSection({
                         onSelect={handleOpenCancelarModal}
                       >
                         <Trash2 className="h-4 w-4 shrink-0 mr-2" />
-                        Cancelar contrato
+                        Eliminar
                       </ZenDropdownMenuItem>
                     )}
                   </ZenDropdownMenuContent>
@@ -411,7 +422,7 @@ export const ContratoSection = memo(function ContratoSection({
           <p className="text-xs text-zinc-500">Contrato omitido. Puedes autorizar sin generar contrato.</p>
         )}
         {contratoEstado && !contratoFirmado && !contratoOmitido && (
-          <div className={`text-xs ${contratoColor}`}>
+          <div className="text-xs">
             {contratoBoton === 'Definir' ? (
               <button
                 type="button"
@@ -420,10 +431,21 @@ export const ContratoSection = memo(function ContratoSection({
               >
                 {contratoEstado}
               </button>
+            ) : contratoEstado === 'En espera de firma del cliente' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <ZenBadge variant="warning" size="sm" className="rounded-full bg-amber-500/10 text-amber-400 border-amber-500/30 px-2 py-0.5 text-[10px] font-medium shrink-0">
+                  {contratoEstado}
+                </ZenBadge>
+                {contractData?.contrato_definido && contractData?.contract_version && (
+                  <ZenBadge variant="secondary" size="sm" className="rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0">
+                    Versión {contractData.contract_version}
+                  </ZenBadge>
+                )}
+              </div>
             ) : (
-              <p>{contratoEstado}</p>
+              <p className={contratoColor}>{contratoEstado}</p>
             )}
-            {contractData?.contrato_definido && contractData?.contract_version && (
+            {contractData?.contrato_definido && contractData?.contract_version && contratoEstado !== 'En espera de firma del cliente' && (
               <p className="text-zinc-500 mt-0.5">
                 Versión {contractData.contract_version}
                 {contractData.contract_version > 1 && contractData.ultima_version_info && (
@@ -464,6 +486,17 @@ export const ContratoSection = memo(function ContratoSection({
           />
         </div>
       )}
+        {!contratoOmitido && tieneContratoGenerado && onFirmaRequeridaChange && (
+          <div className="flex items-center justify-between gap-2 py-1 pt-2 border-t border-zinc-700/50">
+            <span className="text-xs text-zinc-400">Firma requerida</span>
+            <div className="scale-90 origin-right shrink-0">
+              <ZenSwitch
+                checked={firmaRequerida !== false}
+                onCheckedChange={(checked) => onFirmaRequeridaChange(!!checked)}
+              />
+            </div>
+          </div>
+        )}
       </div>
         </>
       )}

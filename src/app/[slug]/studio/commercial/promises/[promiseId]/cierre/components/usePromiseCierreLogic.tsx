@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
-import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract, actualizarFirmaRequeridaCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -29,6 +29,7 @@ interface RegistroCierreLoadData {
   contract_version?: number;
   contract_signed_at?: Date | null;
   contrato_definido?: boolean;
+  firma_requerida?: boolean;
   ultima_version_info?: {
     version: number;
     change_reason: string | null;
@@ -150,6 +151,7 @@ export function usePromiseCierreLogic({
     contract_version?: number;
     contract_signed_at?: Date | null;
     contrato_definido?: boolean;
+    firma_requerida?: boolean;
     ultima_version_info?: {
       version: number;
       change_reason: string | null;
@@ -245,6 +247,7 @@ export function usePromiseCierreLogic({
           contract_version: data.contract_version,
           contract_signed_at: data.contract_signed_at,
           contrato_definido: data.contrato_definido,
+          firma_requerida: data.firma_requerida !== false,
           ultima_version_info: data.ultima_version_info,
         });
         setPagoData({
@@ -525,6 +528,17 @@ export function usePromiseCierreLogic({
     [selectedTemplate, studioSlug, cotizacion.id, promiseId]
   );
 
+  const handleFirmaRequeridaChange = useCallback(async (firmaRequerida: boolean) => {
+    const result = await actualizarFirmaRequeridaCierre(studioSlug, cotizacion.id, firmaRequerida);
+    if (result.success) {
+      setContractData((prev) => (prev ? { ...prev, firma_requerida: firmaRequerida } : prev));
+      toast.success(firmaRequerida ? 'Se exigirá firma del cliente antes de autorizar' : 'Autorizar sin esperar firma del cliente');
+      loadRegistroCierre();
+    } else {
+      toast.error(result.error || 'Error al actualizar');
+    }
+  }, [studioSlug, cotizacion.id, loadRegistroCierre]);
+
   const handleRegistrarPagoClick = useCallback(() => {
     setShowPagoModal(true);
   }, []);
@@ -699,16 +713,18 @@ export function usePromiseCierreLogic({
   }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault, contratoOmitido, startProgressAnimation, stopProgressAnimation]);
 
   // Validar si se puede autorizar
-  // Si el contrato está firmado, exige pago_confirmado_estudio (Card de Activación)
+  // Si firma_requerida y el contrato está firmado, exige pago_confirmado_estudio (Card de Activación)
+  // Si firma_requerida es false, no se exige firma ni pago de activación para autorizar
   // Contrato omitido: mínimo nombre, teléfono, evento, fecha, ubicación
   // Contrato incluido: además exige email, address y plantilla
   const puedeAutorizar = useMemo(() => {
     if (cotizacion.status !== 'en_cierre') {
       return false;
     }
+    const firmaRequerida = contractData?.firma_requerida !== false;
     const contratoFirmado = !!contractData?.contract_signed_at;
-    // Validación de pago: considera estado local optimista O confirmación del servidor
-    if (contratoFirmado && !(pagoConfirmadoLocal === true || pagoData?.pago_confirmado_estudio === true)) {
+    // Validación de pago: solo si firma es requerida y el contrato está firmado
+    if (firmaRequerida && contratoFirmado && !(pagoConfirmadoLocal === true || pagoData?.pago_confirmado_estudio === true)) {
       return false;
     }
     const base =
@@ -802,6 +818,7 @@ export function usePromiseCierreLogic({
     handlePreviewConfirm,
     handleEditFromPreview,
     handleSaveCustomContract,
+    handleFirmaRequeridaChange,
     handleRegistrarPagoClick,
     handlePagoSuccess,
     handleEliminarPago,

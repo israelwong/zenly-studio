@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { ZenButton, ZenDialog } from '@/components/ui/zen';
 import { FileText, Eye, Edit2, Trash2, Loader2, Settings, GitBranch, RefreshCw } from 'lucide-react';
 import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
@@ -72,6 +72,10 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  const handleOpenPreviewFromCard = () => {
+    setShowContractPreview(true);
+  };
+
   // Cargar plantilla si ya está seleccionada
   useEffect(() => {
     if (selectedTemplateId) {
@@ -85,21 +89,19 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
     }
   }, [selectedTemplateId]);
 
-  // Sincronizar customizedContent con contractContent del padre
-  // ✅ CORRECCIÓN: Solo usar contractContent si es diferente de la plantilla (personalizado)
+  // Sincronizar customizedContent con contractContent del padre.
+  // No inferir "Personalizado" por comparación: el contenido guardado es HTML renderizado (variables
+  // reemplazadas), siempre distinto a la plantilla cruda. "Personalizado" solo se activa al guardar
+  // desde el editor (handleSaveCustomContract).
   useEffect(() => {
     if (contractContent !== undefined && selectedTemplate) {
-      // Si hay contenido desde el padre y es diferente a la plantilla, es personalizado
-      if (contractContent !== null && contractContent !== selectedTemplate.content) {
+      if (contractContent !== null) {
         setCustomizedContent(contractContent);
-        setIsContractCustomized(true);
-      } else if (contractContent === null || contractContent === selectedTemplate.content) {
-        // Si el contenido es null o igual a la plantilla, no está personalizado
+      } else {
         setCustomizedContent(null);
-        setIsContractCustomized(false);
       }
+      // No setear isContractCustomized aquí: al cargar/refetch queda en false (inicial); solo pasa a true al guardar desde el editor
     } else if (contractContent === null && customizedContent !== null && !selectedTemplateId) {
-      // Solo limpiar si realmente no hay template seleccionado
       setCustomizedContent(null);
       setIsContractCustomized(false);
     }
@@ -133,6 +135,8 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
     );
 
     if (result.success) {
+      setCustomizedContent(null);
+      setIsContractCustomized(false);
       toast.success('Plantilla de contrato seleccionada');
       onSuccess?.();
       
@@ -211,10 +215,6 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
     } else {
       toast.error(result.error || 'Error al guardar contrato personalizado');
     }
-  };
-
-  const handleOpenPreviewFromCard = () => {
-    setShowContractPreview(true);
   };
 
   const handleRemoveTemplate = async () => {

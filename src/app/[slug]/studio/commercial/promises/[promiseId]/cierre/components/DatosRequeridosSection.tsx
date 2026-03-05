@@ -55,7 +55,7 @@ export const DatosRequeridosSection = memo(function DatosRequeridosSection({
 
   return (
     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
-      <div className="flex items-start gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2">
         {contratoOmitido ? (
           listosParaAutorizarOmitido ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />

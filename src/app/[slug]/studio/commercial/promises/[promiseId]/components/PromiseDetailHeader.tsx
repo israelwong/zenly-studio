@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Zap } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -203,15 +203,6 @@ export function PromiseDetailHeader({
                                     </ZenButton>
                                 </ZenDropdownMenuTrigger>
                                 <ZenDropdownMenuContent align="end">
-                                    {onAutomateClick && (
-                                        <>
-                                            <ZenDropdownMenuItem onClick={onAutomateClick}>
-                                                <Zap className="h-4 w-4 mr-2" />
-                                                Visualización y automatización
-                                            </ZenDropdownMenuItem>
-                                            <ZenDropdownMenuSeparator />
-                                        </>
-                                    )}
                                     {isArchived ? (
                                         <ZenDropdownMenuItem
                                             onClick={onUnarchive}

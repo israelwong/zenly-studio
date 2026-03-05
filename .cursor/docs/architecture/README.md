@@ -128,7 +128,7 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 | Documento | Descripción |
 |-----------|-------------|
-| [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md) | Cierre de cotización: pasar a cierre (público y estudio), pantalla de cierre, cancelar/autorizar; componentes y actions con rutas. |
+| [flujo-pasar-a-cierre.md](flows/flujo-pasar-a-cierre.md) | Pasar a cierre (estudio): modal ConfirmarCierre, recordatorio, payload, pasarACierre, redirección a cierre; componentes y Server Actions. |
 | [contracts-flow.md](flows/contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio); persistencia post-autorización y visualización. |
 | [flujo-autorizar-y-crear-evento.md](flows/flujo-autorizar-y-crear-evento.md) | Autorizar y crear evento: transacción, snapshots financieros, inyección de resumen en contract_content_snapshot. |
 
@@ -231,9 +231,10 @@ Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotiz
 ├── architecture/           # ← ESTÁS AQUÍ
 │   ├── README.md          # Este archivo
 │   ├── components/       # Componentes compartidos (ResumenPago, etc.)
-│   ├── flows/            # Flujos paso a paso (cierre, autorización, etc.)
-│   │   ├── README.md
-│   │   └── flujo-cierre-cotizacion.md
+│   ├── flows/            # Flujos paso a paso (pasar a cierre, contratos, autorización)
+│   │   ├── flujo-pasar-a-cierre.md
+│   │   ├── contracts-flow.md
+│   │   └── flujo-autorizar-y-crear-evento.md
 │   └── ... (contracts-flow, promise-detalle, etc.)
 │
 ├── analysis/              # Análisis técnicos específicos
@@ -319,4 +320,4 @@ Cada documento en `architecture/` debe seguir esta estructura:
 **Última actualización:** 2026-03-02  
 **Mantenedor:** Equipo de Desarrollo ZENPro  
 
-**Curación 2026-03-02:** Flujo cierre unificado en [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md); SSOT contratos en [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md); auditoría post-firma integrada en [redireccionamiento-promesas.md](redireccionamiento-promesas.md) §4. Stubs de redirección: pasar-a-cierre-modal-flow, renderizado-contratos, visualizacion-contrato, persistencia-snapshots-cotizacion, auditoria-redireccion-post-firma.
+**Curación 2026-03-02:** Flujo pasar a cierre en [flujo-pasar-a-cierre.md](flows/flujo-pasar-a-cierre.md); SSOT contratos en [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md); auditoría post-firma integrada en [redireccionamiento-promesas.md](redireccionamiento-promesas.md) §4. Stubs de redirección: renderizado-contratos, visualizacion-contrato, persistencia-snapshots-cotizacion, auditoria-redireccion-post-firma.

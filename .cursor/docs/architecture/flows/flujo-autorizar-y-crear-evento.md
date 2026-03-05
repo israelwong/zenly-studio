@@ -3,7 +3,7 @@
 Documento de referencia para el flujo completo desde el click en **"Autorizar y Crear Evento"** en la pantalla de cierre hasta la redirección a la vista autorizada. Incluye rutas, componentes, Server Actions, relaciones de base de datos y enrutamiento para análisis y depuración (p. ej. contenido vacío en autorizada o card en "nuevo" en vez de archivado/autorizado).
 
 **Última actualización:** 2026-03-03 (Persistencia pagos staging + cancelación justificada contratos)  
-**Relación:** Complementa [flujo-cierre-cotizacion.md](./flujo-cierre-cotizacion.md), [promesa-cierre.md](../promesa-cierre.md) y [persistencia-snapshots-cotizacion.md](../persistencia-snapshots-cotizacion.md).
+**Relación:** Complementa [flujo-pasar-a-cierre.md](./flujo-pasar-a-cierre.md), [promesa-cierre.md](../promesa-cierre.md) y [persistencia-snapshots-cotizacion.md](../persistencia-snapshots-cotizacion.md).
 
 ---
 

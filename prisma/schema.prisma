@@ -2454,6 +2454,8 @@ model studio_cotizaciones_cierre {
   contract_version                  Int       @default(1)
   contrato_definido                 Boolean   @default(false)
   contract_signed_at                DateTime?
+  /** Si true, se exige firma del cliente antes de autorizar; si false, se puede autorizar sin firma (pendiente de firma). */
+  firma_requerida                   Boolean   @default(true)
   /** Fase 29.9.5: true si el check-in (validación datos) fue completado por cliente o estudio */
   checkin_completed                 Boolean   @default(false)
   pago_confirmado_estudio           Boolean   @default(false)

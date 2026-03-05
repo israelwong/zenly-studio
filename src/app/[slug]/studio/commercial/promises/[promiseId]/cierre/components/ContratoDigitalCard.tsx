@@ -18,6 +18,7 @@ interface ContratoDigitalCardProps {
     contract_version?: number;
     contract_signed_at?: Date | null;
     contrato_definido?: boolean;
+    firma_requerida?: boolean;
     ultima_version_info?: {
       version: number;
       change_reason: string | null;
@@ -25,6 +26,8 @@ interface ContratoDigitalCardProps {
       created_at: Date;
     } | null;
   } | null;
+  firmaRequerida?: boolean;
+  onFirmaRequeridaChange?: (value: boolean) => void;
   loadingRegistro: boolean;
   /** Carga atómica: mientras true, muestra skeleton en lugar del contenido */
   isLoading?: boolean;
@@ -100,6 +103,8 @@ function ContratoDigitalCardInner({
   onPagoConfirmadoOptimistic,
   pagoCardKey,
   onStagingChange,
+  firmaRequerida = true,
+  onFirmaRequeridaChange,
 }: ContratoDigitalCardProps) {
   if (isLoading || !cotizacion) {
     return <ContratoDigitalCardSkeleton />;
@@ -187,6 +192,8 @@ function ContratoDigitalCardInner({
           contratoOmitido={contratoOmitido}
           onContratoOmitido={onContratoOmitido}
           onRevocarOmitido={onRevocarOmitido}
+          firmaRequerida={firmaRequerida}
+          onFirmaRequeridaChange={onFirmaRequeridaChange}
           studioSlug={studioSlug}
           promiseId={promiseId}
           cotizacionId={cotizacion.id}

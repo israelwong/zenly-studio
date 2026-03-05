@@ -144,6 +144,10 @@ interface CierreColumn3Props {
   pagoCardKey?: string;
   pagoStagingValid?: boolean;
   onPagoStagingChange?: (staging: unknown[], isValid: boolean) => void;
+  firmaRequerida?: boolean;
+  onFirmaRequeridaChange?: (value: boolean) => void;
+  /** true cuando se exige confirmación de pago para autorizar (firma requerida + contrato firmado) */
+  requiereConfirmacionPago?: boolean;
 }
 
 const CierreColumn3 = memo(function CierreColumn3({
@@ -181,6 +185,9 @@ const CierreColumn3 = memo(function CierreColumn3({
   pagoCardKey,
   pagoStagingValid = true,
   onPagoStagingChange,
+  firmaRequerida = true,
+  onFirmaRequeridaChange,
+  requiereConfirmacionPago = false,
 }: CierreColumn3Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -204,6 +211,8 @@ const CierreColumn3 = memo(function CierreColumn3({
             contratoOmitido={contratoOmitido}
             onContratoOmitido={onContratoOmitido}
             onRevocarOmitido={onRevocarOmitido}
+            firmaRequerida={firmaRequerida}
+            onFirmaRequeridaChange={onFirmaRequeridaChange}
             pagoData={pagoData}
             anticipoMonto={anticipoMonto}
             onPagoConfirmSuccess={onPagoConfirmSuccess}
@@ -220,6 +229,7 @@ const CierreColumn3 = memo(function CierreColumn3({
         loadingRegistro={contratoIsLoading}
         puedeAutorizar={puedeAutorizar}
         pagoConfirmadoLocal={pagoConfirmadoLocal}
+        requiereConfirmacionPago={requiereConfirmacionPago}
         pagoUpdatePending={pagoUpdatePending}
         pagoStagingValid={pagoStagingValid}
       />
@@ -553,6 +563,12 @@ export function PromiseCierreClient({
               setPagoStagingValid(isValid);
               setPagoStagingData(staging);
             }}
+            firmaRequerida={cierreLogic.contractData?.firma_requerida !== false}
+            onFirmaRequeridaChange={cierreLogic.handleFirmaRequeridaChange}
+            requiereConfirmacionPago={
+              (cierreLogic.contractData?.firma_requerida !== false) &&
+              !!cierreLogic.contractData?.contract_signed_at
+            }
           />
         </div>
       </div>

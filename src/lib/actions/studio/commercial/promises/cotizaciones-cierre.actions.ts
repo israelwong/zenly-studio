@@ -233,6 +233,7 @@ export async function obtenerRegistroCierre(
         contract_version: registro.contract_version,
         contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
+        firma_requerida: registro.firma_requerida ?? true,
         pago_confirmado_estudio: registro.pago_confirmado_estudio,
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
@@ -1085,6 +1086,47 @@ export async function actualizarContratoCierre(
 }
 
 /**
+ * Actualiza solo el flag firma_requerida en el registro de cierre.
+ * Si false, se puede autorizar sin esperar firma del cliente.
+ */
+export async function actualizarFirmaRequeridaCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  firmaRequerida: boolean
+): Promise<CierreResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const registro = await prisma.studio_cotizaciones_cierre.findFirst({
+      where: {
+        cotizacion_id: cotizacionId,
+        cotizacion: { studio_id: studio.id },
+      },
+      select: { id: true },
+    });
+    if (!registro) return { success: false, error: 'Registro de cierre no encontrado' };
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { firma_requerida: firmaRequerida, updated_at: new Date() },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    return { success: true, data: { id: registro.id, cotizacion_id: cotizacionId } };
+  } catch (error) {
+    console.error('[actualizarFirmaRequeridaCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar firma requerida',
+    };
+  }
+}
+
+/**
  * Regenera el contrato con los datos actualizados de la cotizaci?n y contacto
  * Crea una nueva versi?n con tipo AUTO_REGENERATE
  */
@@ -1806,8 +1848,9 @@ export async function autorizarYCrearEvento(
           return { success: false, error: 'Debe definir el contrato' };
         }
 
-        // Validaci?n: contrato firmado SOLO si la cotizaci?n fue seleccionada por el prospecto
-        if (!registroCierre.contract_signed_at) {
+        // Validación: contrato firmado solo si firma_requerida es true (por defecto); si false, se puede autorizar sin firma
+        const firmaRequerida = registroCierre.firma_requerida !== false;
+        if (firmaRequerida && !registroCierre.contract_signed_at) {
           return {
             success: false,
             error:
