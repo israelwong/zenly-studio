@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil, Loader2 } from 'lucide-react';
-import { ZenButton, ZenBadge, SeparadorZen, ZenSwitch } from '@/components/ui/zen';
+import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil, Loader2, ChevronDown } from 'lucide-react';
+import { ZenButton, ZenBadge, SeparadorZen, ZenSwitch, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
 import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
@@ -828,63 +828,87 @@ export function CotizacionDetailSheet({
               )}
 
               {studioFooterActions.isEditMode ? (
-                // Modo edición: solo botón Guardar
-                <ZenButton
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  className="w-full"
-                  onClick={studioFooterActions.visibleToClient ? studioFooterActions.onSavePublish : studioFooterActions.onSaveDraft}
-                  loading={studioFooterActions.loading}
-                  loadingText="Guardando..."
-                  disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
-                  title={studioFooterActions.saveDisabledTitle}
-                >
-                  Guardar cambios
-                </ZenButton>
+                // Modo edición: Button Group con Guardar cambios + dropdown
+                <div className="flex gap-0 w-full">
+                  <ZenButton
+                    type="button"
+                    variant="primary"
+                    size="lg"
+                    className="flex-1 rounded-r-none"
+                    onClick={studioFooterActions.visibleToClient ? studioFooterActions.onSavePublish : studioFooterActions.onSaveDraft}
+                    loading={studioFooterActions.loading}
+                    loadingText="Guardando..."
+                    disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                    title={studioFooterActions.saveDisabledTitle}
+                  >
+                    Guardar cambios
+                  </ZenButton>
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                        className="inline-flex items-center justify-center px-3 border-l border-blue-700 bg-blue-600 hover:bg-blue-700 text-white rounded-r-md transition-all duration-200 h-10 disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+                      <ZenDropdownMenuItem
+                        onClick={studioFooterActions.onGuardarComoPaquete}
+                        disabled={studioFooterActions.loading || studioFooterActions.isSavingAsPaquete}
+                      >
+                        <PackagePlus className="h-4 w-4 mr-2" />
+                        {studioFooterActions.isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+                      </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
+                </div>
               ) : (
-                // Modo creación: Guardar borrador y Crear y Publicar
-                <div className="flex gap-2">
+                // Modo creación: Button Group con Guardar borrador + dropdown
+                <div className="flex gap-0 w-full">
                   <ZenButton
                     type="button"
                     variant="outline"
-                    size="sm"
+                    size="lg"
+                    className="flex-1 rounded-r-none"
                     onClick={studioFooterActions.onSaveDraft}
                     loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'draft'}
                     loadingText="Guardando..."
                     disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
                     title={studioFooterActions.saveDisabledTitle}
                   >
-                    Guardar como borrador
+                    Guardar borrador
                   </ZenButton>
-                  <ZenButton
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    className="flex-1"
-                    onClick={studioFooterActions.onSavePublish}
-                    loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'publish'}
-                    loadingText="Publicando..."
-                    disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
-                    title={studioFooterActions.saveDisabledTitle}
-                  >
-                    Crear y Publicar
-                  </ZenButton>
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                        className="inline-flex items-center justify-center px-3 border-l border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-r-md transition-all duration-200 h-10 disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+                      <ZenDropdownMenuItem
+                        onClick={studioFooterActions.onSavePublish}
+                        disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                      >
+                        Crear y Publicar
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem
+                        onClick={studioFooterActions.onGuardarComoPaquete}
+                        disabled={studioFooterActions.loading || studioFooterActions.isSavingAsPaquete}
+                      >
+                        <PackagePlus className="h-4 w-4 mr-2" />
+                        {studioFooterActions.isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+                      </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
                 </div>
               )}
-
-              <ZenButton
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="w-full border border-zinc-700/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-                onClick={studioFooterActions.onGuardarComoPaquete}
-                disabled={studioFooterActions.loading || studioFooterActions.isSavingAsPaquete}
-              >
-                <PackagePlus className="h-3.5 w-3.5 mr-1" />
-                {studioFooterActions.isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
-              </ZenButton>
-              <ZenButton variant="secondary" size="sm" className="w-full" onClick={onClose} disabled={studioFooterActions.loading}>
+              <ZenButton variant="secondary" size="lg" className="w-full" onClick={onClose} disabled={studioFooterActions.loading}>
                 <X className="h-4 w-4 mr-1.5" />
                 Cerrar
               </ZenButton>

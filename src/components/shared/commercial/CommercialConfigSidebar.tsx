@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { PackagePlus, Eye, Loader2 } from 'lucide-react';
+import { PackagePlus, Eye, Loader2, ChevronDown } from 'lucide-react';
 import { Accordion } from '@/components/ui/shadcn/accordion';
-import { ZenButton, ZenSwitch } from '@/components/ui/zen';
+import { ZenButton, ZenSwitch, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { cn } from '@/lib/utils';
 
 export type CommercialConfigContext = 'cotizacion' | 'paquete';
@@ -214,19 +214,6 @@ export function CommercialConfigActionButtons({
         </div>
       )}
 
-      {!sidebarOnlyPreviewAndCancel && !hideGuardarComoPaquete && (
-        <ZenButton
-          type="button"
-          variant="outline"
-          onClick={onGuardarComoPaquete}
-          disabled={loading || isDisabled || isSavingAsPaquete}
-          className="w-full gap-1.5 border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-        >
-          <PackagePlus className="h-3.5 w-3.5" />
-          {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
-        </ZenButton>
-      )}
-      
       {onRequestPreview && (
         <ZenButton
           type="button"
@@ -241,46 +228,94 @@ export function CommercialConfigActionButtons({
       )}
       
       {isEditMode ? (
-        // Modo edición: botón Guardar (el switch maneja publicación)
-        <ZenButton
-          type="button"
-          variant="primary"
-          onClick={isCurrentlyVisible ? onSavePublish : onSaveDraft}
-          loading={loading && savingIntent !== null}
-          loadingText="Guardando..."
-          disabled={loading || isDisabled || condicionDisabled}
-          title={saveDisabledTitle}
-          className="w-full"
-        >
-          Guardar cambios
-        </ZenButton>
-      ) : !sidebarOnlyPreviewAndCancel ? (
-        // Modo creación: Guardar borrador y Crear y Publicar
-        <>
-          <ZenButton
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            loading={loading && savingIntent === 'draft'}
-            loadingText="Guardando..."
-            disabled={loading || isDisabled || condicionDisabled}
-            title={saveDisabledTitle}
-            className="w-full"
-          >
-            Guardar borrador
-          </ZenButton>
+        // Modo edición: Button Group con Guardar cambios + dropdown
+        <div className="flex gap-0 w-full">
           <ZenButton
             type="button"
             variant="primary"
-            onClick={onSavePublish}
-            loading={loading && savingIntent === 'publish'}
-            loadingText="Publicando..."
+            onClick={isCurrentlyVisible ? onSavePublish : onSaveDraft}
+            loading={loading && savingIntent !== null}
+            loadingText="Guardando..."
             disabled={loading || isDisabled || condicionDisabled}
             title={saveDisabledTitle}
-            className="w-full"
+            className="flex-1 rounded-r-none"
           >
-            Crear y Publicar
+            Guardar cambios
           </ZenButton>
+          <ZenDropdownMenu>
+            <ZenDropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={loading || isDisabled || condicionDisabled}
+                className={cn(
+                  "inline-flex items-center justify-center px-2 border-l border-blue-700",
+                  "bg-blue-600 hover:bg-blue-700 text-white rounded-r-md",
+                  "transition-all duration-200 h-9",
+                  "disabled:pointer-events-none disabled:opacity-50"
+                )}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </ZenDropdownMenuTrigger>
+            <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+              <ZenDropdownMenuItem
+                onClick={onGuardarComoPaquete}
+                disabled={loading || isDisabled || isSavingAsPaquete}
+              >
+                <PackagePlus className="h-4 w-4 mr-2" />
+                {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+              </ZenDropdownMenuItem>
+            </ZenDropdownMenuContent>
+          </ZenDropdownMenu>
+        </div>
+      ) : !sidebarOnlyPreviewAndCancel ? (
+        // Modo creación: Button Group con Guardar borrador + dropdown
+        <>
+          <div className="flex gap-0 w-full">
+            <ZenButton
+              type="button"
+              variant="outline"
+              onClick={onSaveDraft}
+              loading={loading && savingIntent === 'draft'}
+              loadingText="Guardando..."
+              disabled={loading || isDisabled || condicionDisabled}
+              title={saveDisabledTitle}
+              className="flex-1 rounded-r-none"
+            >
+              Guardar borrador
+            </ZenButton>
+            <ZenDropdownMenu>
+              <ZenDropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={loading || isDisabled || condicionDisabled}
+                  className={cn(
+                    "inline-flex items-center justify-center px-2 border-l border-zinc-600",
+                    "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-r-md",
+                    "transition-all duration-200 h-9",
+                    "disabled:pointer-events-none disabled:opacity-50"
+                  )}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </ZenDropdownMenuTrigger>
+              <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+                <ZenDropdownMenuItem
+                  onClick={onSavePublish}
+                  disabled={loading || isDisabled || condicionDisabled}
+                >
+                  Crear y Publicar
+                </ZenDropdownMenuItem>
+                <ZenDropdownMenuItem
+                  onClick={onGuardarComoPaquete}
+                  disabled={loading || isDisabled || isSavingAsPaquete}
+                >
+                  <PackagePlus className="h-4 w-4 mr-2" />
+                  {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
+                </ZenDropdownMenuItem>
+              </ZenDropdownMenuContent>
+            </ZenDropdownMenu>
+          </div>
           {autorizarNode}
         </>
       ) : null}

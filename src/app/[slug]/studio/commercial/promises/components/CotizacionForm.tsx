@@ -3307,9 +3307,9 @@ export function CotizacionForm({
                         {paqueteVisibility === 'public' ? 'Público' : 'Privado'}
                       </p>
                       <p className="text-xs text-zinc-500">
-                        {paqueteVisibility === 'public' 
+                        {paqueteVisibility === 'public'
                           ? 'Visible en tu perfil público'
-                          : 'Solo visible internamente'
+                          : 'Solo visible para uso interno del estudio, los prospectos no lo verán en la página pública'
                         }
                       </p>
                     </div>
