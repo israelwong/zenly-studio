@@ -740,7 +740,8 @@ export async function actualizarContratoCierre(
   cotizacionId: string,
   templateId: string,
   customContent?: string | null,
-  promiseId?: string
+  promiseId?: string,
+  motivoCancelacion?: string
 ): Promise<CierreResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -787,13 +788,14 @@ export async function actualizarContratoCierre(
       }
     }
 
-    // Obtener registro actual para versionado
+    // Obtener registro actual para versionado y verificar firma
     const registroActual = await prisma.studio_cotizaciones_cierre.findUnique({
       where: { cotizacion_id: cotizacionId },
       select: {
         contract_content: true,
         contract_version: true,
         contract_template_id: true,
+        contract_signed_at: true,
       },
     });
 
@@ -1024,12 +1026,26 @@ export async function actualizarContratoCierre(
       };
     } else {
       // Primera vez o limpiar contrato: crear/actualizar sin versionado
-      // Si se est? limpiando (desasociando plantilla), eliminar el historial de versiones
+      // Si se está limpiando (desasociando plantilla), eliminar el historial de versiones
       if (isClearing && registroActual) {
+        const contratoEstuvoFirmado = !!registroActual.contract_signed_at;
+        
         // Eliminar todas las versiones del historial cuando se desasocia la plantilla
         await prisma.studio_cotizaciones_cierre_contract_versions.deleteMany({
           where: { cotizacion_id: cotizacionId },
         });
+
+        // Si el contrato estaba firmado, crear log de cancelación con motivo
+        if (contratoEstuvoFirmado && finalPromiseId) {
+          await prisma.studio_promise_logs.create({
+            data: {
+              promise_id: finalPromiseId,
+              log_type: 'contract_cancelled_after_signature',
+              content: motivoCancelacion || 'Contrato cancelado después de firma',
+              meta: motivoCancelacion ? { motivo_cancelacion: motivoCancelacion } : undefined,
+            },
+          });
+        }
       }
 
       const registro = await prisma.studio_cotizaciones_cierre.upsert({
@@ -1038,21 +1054,19 @@ export async function actualizarContratoCierre(
           cotizacion_id: cotizacionId,
           contract_template_id: isClearing ? null : templateId,
           contract_content: isClearing ? null : contentToSave,
-          contract_version: 1, // Primera versi?n
+          contract_version: 1,
           contrato_definido: !isClearing,
           ...(isClearing ? { contract_signed_at: null } : {}),
         },
         update: {
           contract_template_id: isClearing ? null : templateId,
           contract_content: isClearing ? null : contentToSave,
-          // Si se est? limpiando, resetear versi?n y firma
           contract_version: isClearing ? 1 : (registroActual?.contract_version || 1),
           contrato_definido: !isClearing,
           ...(isClearing ? { contract_signed_at: null } : {}),
         },
       });
 
-      // Sin revalidatePath: actualización local vía setContractData en el cliente
       return {
         success: true,
         data: {

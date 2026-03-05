@@ -122,7 +122,7 @@ interface CierreColumn3Props {
   showContratoOptionsModal: boolean;
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void | Promise<void>;
-  onCancelarContrato: () => void | Promise<void>;
+  onCancelarContrato: (motivo?: string) => void | Promise<void>;
   onRegenerateContract: () => void | Promise<void>;
   onEditarDatosClick: () => void;
   contratoOmitido: boolean;

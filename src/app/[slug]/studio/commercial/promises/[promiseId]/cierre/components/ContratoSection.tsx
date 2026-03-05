@@ -49,7 +49,7 @@ interface ContratoSectionProps {
   showContratoOptionsModal: boolean;
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void;
-  onCancelarContrato?: () => Promise<void> | void;
+  onCancelarContrato?: (motivo?: string) => Promise<void> | void;
   onRegenerateContract?: () => Promise<void>;
   /** Si true, la tarjeta muestra estado "Omitido" (contrato no se generará al autorizar) */
   contratoOmitido?: boolean;
@@ -100,6 +100,7 @@ export const ContratoSection = memo(function ContratoSection({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [contractTemplate, setContractTemplate] = useState<ContractTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
 
   // Calcular estado del contrato solo cuando la carga haya terminado (evita parpadeo de estados)
   const tieneContratoGenerado = !loadingRegistro && contractData?.contrato_definido && contractData?.contract_template_id;
@@ -150,11 +151,17 @@ export const ContratoSection = memo(function ContratoSection({
     if (!onCancelarContrato) return;
     setIsCancellingContrato(true);
     try {
-      await onCancelarContrato();
+      await onCancelarContrato(contratoFirmado ? motivoCancelacion : undefined);
       setShowCancelarContratoConfirm(false);
+      setMotivoCancelacion('');
     } finally {
       setIsCancellingContrato(false);
     }
+  };
+
+  const handleOpenCancelarModal = () => {
+    setMotivoCancelacion('');
+    setShowCancelarContratoConfirm(true);
   };
 
   const handleConfirmRegenerate = async () => {
@@ -314,7 +321,7 @@ export const ContratoSection = memo(function ContratoSection({
                   {onCancelarContrato && (
                     <ZenDropdownMenuItem
                       className="cursor-pointer text-rose-400 focus:text-rose-300 focus:bg-rose-500/10"
-                      onSelect={() => setShowCancelarContratoConfirm(true)}
+                      onSelect={handleOpenCancelarModal}
                     >
                       <Trash2 className="h-4 w-4 shrink-0 mr-2" />
                       Cancelar contrato
@@ -357,27 +364,45 @@ export const ContratoSection = memo(function ContratoSection({
                   {contratoBoton}
                 </button>
               )}
-              {tieneContratoGenerado &&
-                onRegenerateContract &&
-                !contratoFirmado && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleConfirmRegenerate();
-                    }}
-                    disabled={isRegenerating}
-                    className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                    title="Regenerar contrato"
-                    aria-label="Regenerar contrato"
-                  >
-                    {isRegenerating ? (
-                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    ) : (
-                      'Regenerar'
+              {tieneContratoGenerado && (onRegenerateContract || onCancelarContrato) && (
+                <ZenDropdownMenu>
+                  <ZenDropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-7 min-w-[2rem] flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors shrink-0"
+                      title="Opciones de contrato"
+                      aria-label="Opciones de contrato"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </ZenDropdownMenuTrigger>
+                  <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                    {onRegenerateContract && (
+                      <ZenDropdownMenuItem
+                        className="cursor-pointer text-amber-400 focus:text-amber-300"
+                        onSelect={() => setShowRegenerateConfirm(true)}
+                        disabled={isRegenerating}
+                      >
+                        {isRegenerating ? (
+                          <Loader2 className="h-4 w-4 animate-spin shrink-0 mr-2" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 shrink-0 mr-2" />
+                        )}
+                        Regenerar contrato
+                      </ZenDropdownMenuItem>
                     )}
-                  </button>
-                )}
+                    {onCancelarContrato && (
+                      <ZenDropdownMenuItem
+                        className="cursor-pointer text-rose-400 focus:text-rose-300 focus:bg-rose-500/10"
+                        onSelect={handleOpenCancelarModal}
+                      >
+                        <Trash2 className="h-4 w-4 shrink-0 mr-2" />
+                        Cancelar contrato
+                      </ZenDropdownMenuItem>
+                    )}
+                  </ZenDropdownMenuContent>
+                </ZenDropdownMenu>
+              )}
             </div>
           </div>
 
@@ -445,14 +470,46 @@ export const ContratoSection = memo(function ContratoSection({
 
       <ZenConfirmModal
         isOpen={showCancelarContratoConfirm}
-        onClose={() => !isCancellingContrato && setShowCancelarContratoConfirm(false)}
+        onClose={() => {
+          if (!isCancellingContrato) {
+            setShowCancelarContratoConfirm(false);
+            setMotivoCancelacion('');
+          }
+        }}
         onConfirm={handleConfirmCancelarContrato}
-        title="Cancelar contrato"
-        description="¿Estás seguro de que deseas cancelar el contrato? Se quitará la plantilla y el contenido. Esta acción no se puede deshacer."
+        title={contratoFirmado ? "⚠️ Cancelar contrato firmado" : "Cancelar contrato"}
+        description={
+          contratoFirmado ? (
+            <div className="space-y-3">
+              <p className="text-zinc-300">
+                Este contrato ya fue <strong className="text-rose-400">firmado por el cliente</strong>. 
+                La cancelación invalidará la firma y revertirá el proceso.
+              </p>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-300">
+                  Motivo de la cancelación <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  value={motivoCancelacion}
+                  onChange={(e) => setMotivoCancelacion(e.target.value)}
+                  placeholder="Explica por qué se cancela este contrato firmado (mínimo 10 caracteres)"
+                  className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none"
+                  disabled={isCancellingContrato}
+                />
+                <p className="text-xs text-zinc-500">
+                  {motivoCancelacion.length}/10 caracteres mínimos
+                </p>
+              </div>
+            </div>
+          ) : (
+            "¿Estás seguro de que deseas cancelar el contrato? Se quitará la plantilla y el contenido. Esta acción no se puede deshacer."
+          )
+        }
         confirmText="Cancelar contrato"
         cancelText="No, mantener"
         variant="destructive"
         loading={isCancellingContrato}
+        disabled={contratoFirmado && motivoCancelacion.trim().length < 10}
       />
 
       <ZenConfirmModal

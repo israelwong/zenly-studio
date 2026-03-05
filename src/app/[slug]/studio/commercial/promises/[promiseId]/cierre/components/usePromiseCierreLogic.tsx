@@ -420,8 +420,8 @@ export function usePromiseCierreLogic({
     setShowContratoOptionsModal(false);
   }, []);
 
-  const handleCancelarContrato = useCallback(async () => {
-    const result = await actualizarContratoCierre(studioSlug, cotizacion.id, '', null, promiseId);
+  const handleCancelarContrato = useCallback(async (motivo?: string) => {
+    const result = await actualizarContratoCierre(studioSlug, cotizacion.id, '', null, promiseId, motivo);
     if (result.success) {
       toast.success('Contrato cancelado correctamente');
       await loadRegistroCierre();

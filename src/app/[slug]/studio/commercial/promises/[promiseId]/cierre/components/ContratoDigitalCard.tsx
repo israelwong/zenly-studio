@@ -53,7 +53,7 @@ interface ContratoDigitalCardProps {
   showContratoOptionsModal: boolean;
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void;
-  onCancelarContrato?: () => Promise<void> | void;
+  onCancelarContrato?: (motivo?: string) => Promise<void> | void;
   onRegenerateContract?: () => Promise<void>;
   onEditarDatosClick: () => void;
   contratoOmitido?: boolean;
