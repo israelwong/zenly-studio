@@ -28,6 +28,8 @@ interface PublicContractCardProps {
   onViewSignedContract?: () => void;
   /** Fase 30.9.6: Navegar al portal de cliente (botón "Ir a mi Portal de Cliente"); si no se pasa, se usa onViewContract */
   onGoToPortal?: () => void;
+  /** Si false y contrato firmado: no mostrar "Ir a mi Portal", mostrar mensaje de espera de confirmación de depósito */
+  eventoAuthorized?: boolean;
 }
 
 export const PublicContractCard = memo(function PublicContractCard({
@@ -39,6 +41,7 @@ export const PublicContractCard = memo(function PublicContractCard({
   onViewContract,
   onViewSignedContract,
   onGoToPortal,
+  eventoAuthorized = true,
 }: PublicContractCardProps) {
   const hasContract = !!contract?.content;
   const hasContractTemplate = !!contract?.template_id;
@@ -136,15 +139,23 @@ export const PublicContractCard = memo(function PublicContractCard({
                       Ver contrato firmado
                     </ZenButton>
                   )}
-                  <ZenButton
-                    variant="primary"
-                    onClick={onGoToPortal ?? onViewContract}
-                    className="w-full"
-                    disabled={isRegeneratingContract}
-                  >
-                    Ir a mi Portal de Cliente
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </ZenButton>
+                  {eventoAuthorized ? (
+                    <ZenButton
+                      variant="primary"
+                      onClick={onGoToPortal ?? onViewContract}
+                      className="w-full"
+                      disabled={isRegeneratingContract}
+                    >
+                      Ir a mi Portal de Cliente
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </ZenButton>
+                  ) : (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                      <p className="text-sm text-amber-200/90">
+                        Contrato firmado con éxito. Tu evento se activará en cuanto el estudio confirme tu depósito.
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3">

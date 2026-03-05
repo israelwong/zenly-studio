@@ -884,6 +884,7 @@ export function PublicQuoteAuthorizedView({
                           window.dispatchEvent(new CustomEvent('close-overlays'));
                           router.push(`/${studioSlug}/cliente/login`);
                         }}
+                        eventoAuthorized={!!cotizacion.evento_id}
                       />
                     </div>
                   ) : isEnCierre ? (

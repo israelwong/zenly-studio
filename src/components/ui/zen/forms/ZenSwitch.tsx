@@ -14,6 +14,8 @@ export interface ZenSwitchProps {
     onCheckedChange: (checked: boolean) => void;
     disabled?: boolean;
     label?: string;
+    /** Contenido opcional a la izquierda del texto del label (ej. spinner) */
+    labelLeading?: React.ReactNode;
     description?: string;
     className?: string;
     /** Clase aplicada al label (ej. text-emerald-500 o text-zinc-400) */
@@ -37,6 +39,7 @@ export function ZenSwitch({
     onCheckedChange,
     disabled = false,
     label,
+    labelLeading,
     description,
     className,
     labelClassName,
@@ -54,7 +57,7 @@ export function ZenSwitch({
         variant === "emerald" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
 
     return (
-        <div className={cn("flex items-start space-x-3", className)}>
+        <div className={cn("flex items-center space-x-3", className)}>
             {/* Switch */}
             <button
                 id={switchId}
@@ -92,12 +95,13 @@ export function ZenSwitch({
                             id={`${switchId}-label`}
                             htmlFor={switchId}
                             className={cn(
-                                "text-sm font-medium cursor-pointer",
+                                "flex items-center gap-2 text-sm font-medium cursor-pointer",
                                 disabled ? "text-zinc-500" : "text-zinc-300",
                                 labelClassName
                             )}
                             suppressHydrationWarning
                         >
+                            {labelLeading}
                             {label}
                         </label>
                     )}

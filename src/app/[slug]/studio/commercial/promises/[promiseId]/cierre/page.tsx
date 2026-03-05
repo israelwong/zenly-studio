@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
 import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
+import { obtenerMetodosPagoManuales } from '@/lib/actions/studio/config/metodos-pago.actions';
 import { CierrePageInner } from './components/CierrePageInner';
 
 interface PromiseCierrePageProps {
@@ -8,6 +10,19 @@ interface PromiseCierrePageProps {
     slug: string;
     promiseId: string;
   }>;
+}
+
+/** Métodos de pago del estudio para el card de confirmación; cache por studio para respuesta instantánea */
+function getCachedMetodosPago(studioSlug: string) {
+  return unstable_cache(
+    async () => {
+      const result = await obtenerMetodosPagoManuales(studioSlug);
+      if (!result.success || !result.data) return [];
+      return result.data.map((m) => ({ id: m.id, payment_method_name: m.payment_method_name }));
+    },
+    [`metodos-pago-${studioSlug}`],
+    { tags: [`metodos-pago-${studioSlug}`], revalidate: 60 }
+  )();
 }
 
 /**
@@ -27,5 +42,6 @@ export default async function PromiseCierrePage({ params }: PromiseCierrePagePro
     }
   }
 
-  return <CierrePageInner />;
+  const metodosPago = await getCachedMetodosPago(studioSlug);
+  return <CierrePageInner initialMetodosPago={metodosPago} />;
 }

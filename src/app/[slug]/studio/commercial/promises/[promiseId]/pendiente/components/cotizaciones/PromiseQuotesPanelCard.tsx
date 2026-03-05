@@ -1027,17 +1027,17 @@ export function PromiseQuotesPanelCard({
                 })()}
               </div>
               {cotizacion.condiciones_visibles_detalle && cotizacion.condiciones_visibles_detalle.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {cotizacion.condiciones_visibles_detalle.map((c) => (
                     <span
                       key={c.id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 max-w-[120px] min-w-0"
+                      className="inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[11px] bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 max-w-[100px] min-w-0"
                       title={c.name}
                     >
                       {c.is_public ? (
-                        <Globe className="h-3 w-3 shrink-0 text-zinc-500" />
+                        <Globe className="h-2.5 w-2.5 shrink-0 text-zinc-500" />
                       ) : (
-                        <Lock className="h-3 w-3 shrink-0 text-zinc-500" />
+                        <Lock className="h-2.5 w-2.5 shrink-0 text-zinc-500" />
                       )}
                       <span className="truncate">{c.name}</span>
                     </span>

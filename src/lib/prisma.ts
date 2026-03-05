@@ -53,8 +53,9 @@ function isPgbouncerUrl(url: string): boolean {
 }
 
 // Seleccionar URL de conexión según entorno
-// Desarrollo: preferir DIRECT_URL para evitar problemas de schema cacheado
-// Producción/Vercel: usar DATABASE_URL con pgbouncer
+// .env desarrollo: usar DIRECT_URL (conexión directa a Postgres, no pgbouncer) para evitar timeouts.
+// Opcional: ?connect_timeout=15 o PRISMA_CONNECT_TIMEOUT=15. No añadir connection_limit en dev (el pool ya limita a 5).
+// Producción/Vercel: DATABASE_URL con pgbouncer (puerto 6543); connection_limit=1 se inyecta aquí.
 const rawConnectionString = 
   process.env.NODE_ENV === 'development' && process.env.DIRECT_URL
     ? process.env.DIRECT_URL
@@ -95,7 +96,7 @@ const pgPool = globalThis.__pgPool || new Pool({
   connectionString,
   max: poolMax,
   idleTimeoutMillis: process.env.NODE_ENV === 'development' ? 10000 : 30000, // 10s en dev, 30s en prod
-  connectionTimeoutMillis: 3000, // 3s max: evita bloqueos de 20s
+  connectionTimeoutMillis: process.env.NODE_ENV === 'development' ? 10000 : 3000, // 10s dev (DB local lento), 3s prod
   allowExitOnIdle: true, // Permitir que el proceso termine cuando no hay conexiones activas
   // ⚠️ OPTIMIZACIÓN: Configuración adicional para reducir overhead
   statement_timeout: process.env.NODE_ENV === 'development' ? 10000 : 15000, // 10s dev, 15s prod
@@ -113,24 +114,18 @@ if (!globalThis.__pgPool) {
   globalThis.__pgPool = pgPool;
 }
 
-// Adapter de Prisma para PostgreSQL
+// PrismaPg usa el pool compartido; no crea uno propio. Una sola instancia de Pool + PrismaClient (singleton).
 const adapter = new PrismaPg(pgPool);
 
-// Singleton de PrismaClient
-// En desarrollo: limpiar si existe para evitar cache de schema
-if (process.env.NODE_ENV !== "production" && globalThis.__prisma) {
-  globalThis.__prisma.$disconnect().catch(() => {});
-  globalThis.__prisma = undefined;
-}
-
+// Singleton de PrismaClient: reutilizar siempre (solo se limpia cuando cambia la URL arriba)
+// Evitar recrear en cada hot reload para no saturar conexiones (timeout exceeded)
 const prisma = globalThis.__prisma || new PrismaClient({
   adapter,
   log: ['error', 'warn'],
   errorFormat: 'pretty',
 });
 
-// Singleton explícito (crítico en serverless)
-if (process.env.NODE_ENV !== "production") {
+if (!globalThis.__prisma) {
   globalThis.__prisma = prisma;
 }
 
