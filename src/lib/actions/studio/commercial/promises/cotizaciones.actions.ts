@@ -101,6 +101,8 @@ export interface CotizacionListItem {
   condiciones_comerciales_discount_percentage_snapshot?: number | null;
   /** Horas de cobertura del servicio (para listado en card) */
   event_duration?: number | null;
+  /** IDs de condiciones habilitadas para vista previa (persistido en BD; obligatorio para duplicación) */
+  condiciones_visibles?: string[] | null;
   /** Condiciones visibles para el prospecto (pills en card) */
   condiciones_visibles_detalle?: Array<{ id: string; name: string; is_public: boolean }>;
 }
@@ -1305,7 +1307,7 @@ export async function duplicateCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener la cotizaciรณn original con sus items
+    // Obtener la cotización original con items, condiciones visibles (pivot) y condición de negociación
     const original = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
@@ -1313,6 +1315,8 @@ export async function duplicateCotizacion(
       },
       include: {
         cotizacion_items: true,
+        condiciones_comerciales_metodo_pago: { select: { id: true } },
+        condicion_comercial_negociacion: true,
       },
     });
 
@@ -1358,7 +1362,16 @@ export async function duplicateCotizacion(
       newName = `${original.name} (Copia ${counter})`;
     }
 
-    // Crear nueva cotizaciรณn con snapshots copiados
+    // Connect masivo: pivot many-to-many debe quedar vinculado al nuevo id para que la vista previa no falle
+    const metodoPagoIds = (original.condiciones_comerciales_metodo_pago ?? []).map((m) => ({ id: m.id }));
+
+    // 1. condiciones_visibles: pasar literalmente (array o null) para que la copia sea espejo
+    const condicionesVisiblesLiteral =
+      original.condiciones_visibles != null && Array.isArray(original.condiciones_visibles)
+        ? (original.condiciones_visibles as string[])
+        : null;
+
+    // Clonación profunda + include para que el retorno traiga condiciones_comerciales_metodo_pago (badges)
     const nuevaCotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: original.studio_id,
@@ -1370,10 +1383,15 @@ export async function duplicateCotizacion(
         description: original.description,
         price: original.price,
         status: 'pendiente',
-        visible_to_client: false, // Duplicadas siempre ocultas inicialmente (studio las editará)
+        visible_to_client: false,
         condiciones_comerciales_id: original.condiciones_comerciales_id,
+        condiciones_comerciales_metodo_pago_id: original.condiciones_comerciales_metodo_pago_id,
         archived: false,
         order: newOrder,
+        condiciones_visibles: condicionesVisiblesLiteral,
+        precio_calculado: original.precio_calculado,
+        snap_precio_lista: original.snap_precio_lista,
+        condiciones_comerciales_metodo_pago: { connect: metodoPagoIds },
         // Snapshots de condiciones comerciales (copiar de original)
         condiciones_comerciales_name_snapshot: original.condiciones_comerciales_name_snapshot,
         condiciones_comerciales_description_snapshot: original.condiciones_comerciales_description_snapshot,
@@ -1395,7 +1413,30 @@ export async function duplicateCotizacion(
         contract_signed_at_snapshot: original.contract_signed_at_snapshot,
         contract_signed_ip_snapshot: original.contract_signed_ip_snapshot,
       },
+      include: {
+        condiciones_comerciales_metodo_pago: true,
+      },
     });
+
+    // Clonar condición de negociación (pactada) si la original tenía una
+    if (original.condicion_comercial_negociacion) {
+      const neg = original.condicion_comercial_negociacion;
+      await prisma.studio_condiciones_comerciales_negociacion.create({
+        data: {
+          cotizacion_id: nuevaCotizacion.id,
+          promise_id: neg.promise_id,
+          studio_id: neg.studio_id,
+          name: neg.name,
+          description: neg.description,
+          discount_percentage: neg.discount_percentage,
+          advance_percentage: neg.advance_percentage,
+          advance_type: neg.advance_type,
+          advance_amount: neg.advance_amount,
+          metodo_pago_id: neg.metodo_pago_id,
+          is_temporary: neg.is_temporary,
+        },
+      });
+    }
 
     // Duplicar items con snapshots copiados
     if (original.cotizacion_items.length > 0) {
@@ -1463,27 +1504,11 @@ export async function duplicateCotizacion(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
-    // Retornar la cotización completa para actualización optimista (incl. duración, bono, cortesías para badges)
+    // Carga forzada con include: traer condiciones_comerciales_metodo_pago para pintar badges en el frontend
     const cotizacionCompleta = await prisma.studio_cotizaciones.findUnique({
       where: { id: nuevaCotizacion.id },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        status: true,
-        description: true,
-        created_at: true,
-        updated_at: true,
-        order: true,
-        archived: true,
-        revision_of_id: true,
-        revision_number: true,
-        revision_status: true,
-        event_duration: true,
-        bono_especial: true,
-        items_cortesia: true,
-        cortesias_count_snapshot: true,
-        cortesias_monto_snapshot: true,
+      include: {
+        condiciones_comerciales_metodo_pago: true,
       },
     });
 
@@ -1491,9 +1516,31 @@ export async function duplicateCotizacion(
       return { success: true, data: { id: nuevaCotizacion.id, name: nuevaCotizacion.name } };
     }
 
+    // Resolver condiciones_visibles → condiciones_visibles_detalle (id, name, is_public) para badges "Pago diferido", etc.
+    const visibleIds = Array.isArray(cotizacionCompleta.condiciones_visibles)
+      ? (cotizacionCompleta.condiciones_visibles as string[]).filter((x): x is string => typeof x === 'string')
+      : [];
+    let condicionesVisiblesDetalle: Array<{ id: string; name: string; is_public: boolean }> = [];
+    if (visibleIds.length > 0) {
+      const conds = await prisma.studio_condiciones_comerciales.findMany({
+        where: { id: { in: visibleIds } },
+        select: { id: true, name: true, is_public: true },
+      });
+      const condMap = new Map(conds.map((c) => [c.id, { name: c.name, is_public: c.is_public }]));
+      condicionesVisiblesDetalle = visibleIds
+        .map((id) => {
+          const d = condMap.get(id);
+          return d ? { id, name: d.name, is_public: d.is_public } : null;
+        })
+        .filter((x): x is { id: string; name: string; is_public: boolean } => x != null);
+    }
+
     const priceNum = Number(cotizacionCompleta.price);
     const itemsCortesia = cotizacionCompleta.items_cortesia;
     const cortesiasCount = cotizacionCompleta.cortesias_count_snapshot ?? (Array.isArray(itemsCortesia) ? itemsCortesia.length : 0);
+
+    // Prueba de fuego: respuesta debe contener condiciones_visibles con datos cuando la original los tenía (no null ni [])
+    const condicionesVisiblesOut = visibleIds.length > 0 ? visibleIds : null;
 
     return {
       success: true,
@@ -1516,6 +1563,11 @@ export async function duplicateCotizacion(
           items_cortesia: itemsCortesia ?? undefined,
           cortesias_count_snapshot: cortesiasCount,
           cortesias_monto_snapshot: cotizacionCompleta.cortesias_monto_snapshot != null ? Number(cotizacionCompleta.cortesias_monto_snapshot) : null,
+          condiciones_visibles: condicionesVisiblesOut,
+          condiciones_visibles_detalle: condicionesVisiblesDetalle.length > 0 ? condicionesVisiblesDetalle : undefined,
+          condiciones_comerciales_metodo_pago: cotizacionCompleta.condiciones_comerciales_metodo_pago,
+          precio_calculado: cotizacionCompleta.precio_calculado != null ? Number(cotizacionCompleta.precio_calculado) : null,
+          snap_precio_lista: cotizacionCompleta.snap_precio_lista != null ? Number(cotizacionCompleta.snap_precio_lista) : null,
         },
       },
     };

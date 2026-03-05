@@ -18,6 +18,7 @@ El Kanban distingue dos tipos de columnas:
 - **ID de la columna virtual:** `historial-virtual`
 - **Slug:** `historial`
 - La columna Historial **no existe en BD**. Es una vista agregada para simplificar el board.
+- Las tarjetas en Historial se muestran con **variant compact** (`variant="compact"` en `PromiseKanbanCard`).
 - Visibilidad: controlada por el toggle "Mostrar Historial" (oculta por defecto). Ver [Persistencia de UI](#5-persistencia-de-ui).
 
 **Origen de datos:** `src/app/[slug]/studio/commercial/promises/components/PromisesKanban.tsx` — `visibleStages` (useMemo que concatena etapas activas + etapa virtual cuando `showHistorial` es true).
