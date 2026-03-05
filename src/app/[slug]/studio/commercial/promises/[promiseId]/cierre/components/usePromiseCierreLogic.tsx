@@ -227,14 +227,14 @@ export function usePromiseCierreLogic({
       const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         const data = result.data as unknown as RegistroCierreLoadData;
+        
+        // Actualizar estados de forma atómica (batch)
         setAuditoriaRentabilidad(data.auditoria_rentabilidad ?? null);
-
         setCondicionesData({
           condiciones_comerciales_id: data.condiciones_comerciales_id,
           condiciones_comerciales_definidas: data.condiciones_comerciales_definidas,
           condiciones_comerciales: data.condiciones_comerciales,
         });
-
         setContractData({
           contract_template_id: data.contract_template_id,
           contract_content: data.contract_content,
@@ -243,7 +243,6 @@ export function usePromiseCierreLogic({
           contrato_definido: data.contrato_definido,
           ultima_version_info: data.ultima_version_info,
         });
-
         setPagoData({
           pago_confirmado_estudio: data.pago_confirmado_estudio,
           pago_registrado: data.pago_registrado,
@@ -256,20 +255,30 @@ export function usePromiseCierreLogic({
           pago_metodo_nombre: data.pago_metodo_nombre,
           pagos_confirmados_sum: data.pagos_confirmados_sum ?? 0,
         });
-
         setNegociacionData({
           negociacion_precio_original: data.negociacion_precio_original ?? null,
           negociacion_precio_personalizado: data.negociacion_precio_personalizado ?? null,
         });
-
         setDesgloseCierre(data.desglose_cierre ?? null);
       } else {
+        // Respuesta sin data: resetear estados
         setAuditoriaRentabilidad(null);
+        setCondicionesData(null);
+        setContractData(null);
+        setPagoData(null);
+        setNegociacionData({ negociacion_precio_original: null, negociacion_precio_personalizado: null });
+        setDesgloseCierre(null);
       }
     } catch (error) {
       console.error('[loadRegistroCierre] Error:', error);
       setAuditoriaRentabilidad(null);
+      setCondicionesData(null);
+      setContractData(null);
+      setPagoData(null);
+      setNegociacionData({ negociacion_precio_original: null, negociacion_precio_personalizado: null });
+      setDesgloseCierre(null);
     } finally {
+      // Solo quitar loading cuando la carga inicial esté completa (success o error)
       if (isInitialLoad) {
         setLoadingRegistro(false);
       }

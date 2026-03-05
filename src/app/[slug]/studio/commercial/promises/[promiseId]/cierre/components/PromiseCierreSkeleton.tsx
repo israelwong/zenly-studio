@@ -3,34 +3,77 @@
 import React from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 
-/** Skeleton para CotizacionCard (condiciones + cotización) - evita layout shift */
+/** Skeleton para CotizacionCard (condiciones + cotización + auditoría) - altura completa sin layout shift */
 export function CotizacionCardSkeleton() {
   return (
     <ZenCard className="h-auto">
-      <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <ZenCardTitle className="text-sm">
+          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
             <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
           </ZenCardTitle>
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse" />
-          </div>
+          <div className="h-7 w-28 bg-zinc-800/50 rounded-md animate-pulse" />
         </div>
       </ZenCardHeader>
-      <ZenCardContent className="p-4 flex-1 overflow-y-auto">
-        <div className="mb-4">
-          <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse mb-2" />
-          <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse" />
+      <ZenCardContent className="p-4 space-y-4">
+        {/* Nombre y descripción */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse shrink-0" />
+          </div>
+          <div className="h-4 w-64 bg-zinc-800/50 rounded animate-pulse" />
         </div>
-        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse" />
-            <div className="h-6 w-20 bg-zinc-700 rounded animate-pulse" />
+
+        {/* Resumen de Pago skeleton */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-3 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-zinc-700">
+            <div className="h-3 w-32 bg-zinc-700 rounded animate-pulse" />
+            <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-full bg-zinc-700 rounded animate-pulse" />
-            <div className="h-3 w-3/4 bg-zinc-700 rounded animate-pulse" />
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-28 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-16 bg-zinc-700/50 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-32 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="pt-2 border-t border-zinc-700">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
+              <div className="h-5 w-24 bg-emerald-700/30 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-16 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-12 bg-zinc-700/50 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-16 bg-zinc-700/50 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Separador */}
+        <div className="h-px bg-zinc-800" />
+
+        {/* Auditoría Rentabilidad skeleton (ámbar) */}
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 ring-2 ring-amber-500/30 p-3">
+          <div className="h-3 w-2/3 bg-zinc-700/25 rounded-sm animate-pulse mb-2" />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
+            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse justify-self-end w-14" />
+            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
+            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse justify-self-end w-10" />
           </div>
         </div>
       </ZenCardContent>
@@ -38,19 +81,21 @@ export function CotizacionCardSkeleton() {
   );
 }
 
-/** Skeleton para ContratoDigitalCard - evita layout shift */
+/** Skeleton para ContratoDigitalCard (altura completa con ActivacionOperativaCard) - evita layout shift */
 export function ContratoDigitalCardSkeleton() {
   return (
     <ZenCard className="h-auto flex flex-col">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
-        <div className="flex items-center justify-between">
-          <ZenCardTitle className="text-sm">
-            <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
-          </ZenCardTitle>
-          <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse" />
+        <div className="flex flex-col gap-3 w-full">
+          {/* Switch "Incluir Contrato Digital" */}
+          <div className="flex items-center justify-between w-full">
+            <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-5 w-10 bg-zinc-800 rounded-full animate-pulse" />
+          </div>
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4 space-y-4">
+        {/* Datos Requeridos skeleton */}
         <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="h-3 w-32 bg-zinc-700 rounded animate-pulse" />
@@ -58,16 +103,33 @@ export function ContratoDigitalCardSkeleton() {
           </div>
           <div className="space-y-2 mt-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-4 w-full bg-zinc-700 rounded animate-pulse" />
+              <div key={i} className="flex items-center justify-between">
+                <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
+                <div className="h-3 w-32 bg-zinc-700/50 rounded animate-pulse" />
+              </div>
             ))}
           </div>
         </div>
+
+        {/* Contrato Digital skeleton */}
         <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse" />
             <div className="h-6 w-20 bg-zinc-700 rounded animate-pulse" />
           </div>
           <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse mt-2" />
+        </div>
+
+        {/* Activación Operativa skeleton (cuando contrato firmado) */}
+        <div className="bg-emerald-950/20 border border-emerald-700/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="h-4 w-36 bg-emerald-700/30 rounded animate-pulse" />
+            <div className="h-5 w-10 bg-emerald-700/30 rounded-full animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-full bg-zinc-700/50 rounded animate-pulse" />
+            <div className="h-3 w-3/4 bg-zinc-700/50 rounded animate-pulse" />
+          </div>
         </div>
       </ZenCardContent>
     </ZenCard>

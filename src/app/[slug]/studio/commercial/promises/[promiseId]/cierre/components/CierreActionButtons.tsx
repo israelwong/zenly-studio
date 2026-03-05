@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 
 interface CierreActionButtonsProps {
@@ -10,6 +10,10 @@ interface CierreActionButtonsProps {
   isAuthorizing: boolean;
   loadingRegistro: boolean;
   puedeAutorizar: boolean;
+  /** Estado local del switch de pago: botón deshabilitado si false (mismo frame que el toggle) */
+  pagoConfirmadoLocal?: boolean;
+  /** true mientras se guarda confirmación de pago (evita autorizar con datos incompletos) */
+  pagoUpdatePending?: boolean;
 }
 
 export function CierreActionButtons({
@@ -18,18 +22,33 @@ export function CierreActionButtons({
   isAuthorizing,
   loadingRegistro,
   puedeAutorizar,
+  pagoConfirmadoLocal = false,
+  pagoUpdatePending = false,
 }: CierreActionButtonsProps) {
+  const autorizarDisabled = isAuthorizing || loadingRegistro || !puedeAutorizar || !pagoConfirmadoLocal || pagoUpdatePending;
+  
+  // Etiquetado semántico por contexto de carga (sin spinner manual, ZenButton lo maneja con loading prop)
+  const getButtonText = () => {
+    if (pagoUpdatePending) return 'Actualizando confirmación...';
+    if (isAuthorizing) return 'Autorizando evento...';
+    if (loadingRegistro) return 'Procesando...';
+    return 'Autorizar y Crear Evento';
+  };
+
+  const isLoading = pagoUpdatePending || isAuthorizing || loadingRegistro;
+  const showIcon = !isLoading;
+
   return (
     <div className="space-y-2">
       <ZenButton
         variant="primary"
         className="w-full"
         onClick={onAutorizar}
-        disabled={isAuthorizing || loadingRegistro || !puedeAutorizar}
-        loading={isAuthorizing || loadingRegistro}
+        disabled={autorizarDisabled}
+        loading={isLoading}
       >
-        <CheckCircle2 className="w-4 h-4 mr-2" />
-        Autorizar y Crear Evento
+        {showIcon && <CheckCircle2 className="w-4 h-4 mr-2" />}
+        {getButtonText()}
       </ZenButton>
       <ZenButton
         variant="outline"

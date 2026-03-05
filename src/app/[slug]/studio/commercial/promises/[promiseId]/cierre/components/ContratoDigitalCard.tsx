@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenSwitch } from '@/components/ui/zen';
 import { DatosRequeridosSection } from './DatosRequeridosSection';
 import { ContratoSection } from './ContratoSection';
+import { ActivacionOperativaCard } from './ActivacionOperativaCard';
 import { ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
@@ -25,6 +26,8 @@ interface ContratoDigitalCardProps {
     } | null;
   } | null;
   loadingRegistro: boolean;
+  /** Carga atómica: mientras true, muestra skeleton en lugar del contenido */
+  isLoading?: boolean;
   eventTypeId: string | null;
   condicionesComerciales: {
     id: string;
@@ -56,6 +59,15 @@ interface ContratoDigitalCardProps {
   contratoOmitido?: boolean;
   onContratoOmitido?: () => void;
   onRevocarOmitido?: () => void;
+  /** Card de activación (contrato firmado) — siempre visible; cuando pago confirmado queda bloqueado hasta desbloquear */
+  pagoData?: { pago_confirmado_estudio?: boolean; pago_concepto?: string | null; pago_monto?: number | null; pago_fecha?: Date | null; pago_metodo_id?: string | null } | null;
+  anticipoMonto?: number;
+  onPagoConfirmSuccess?: () => void;
+  metodosPago?: Array<{ id: string; payment_method_name: string }>;
+  onPagoTransitionPendingChange?: (pending: boolean) => void;
+  onPagoConfirmadoOptimistic?: (checked: boolean) => void;
+  /** Key para reset limpio del card cuando el servidor aplicó el estado (evita flicker) */
+  pagoCardKey?: string;
 }
 
 function ContratoDigitalCardInner({
@@ -64,6 +76,7 @@ function ContratoDigitalCardInner({
   promiseId,
   contractData,
   loadingRegistro,
+  isLoading = false,
   eventTypeId,
   condicionesComerciales,
   promiseData,
@@ -77,8 +90,15 @@ function ContratoDigitalCardInner({
   contratoOmitido = false,
   onContratoOmitido,
   onRevocarOmitido,
+  pagoData,
+  anticipoMonto = 0,
+  onPagoConfirmSuccess,
+  metodosPago = [],
+  onPagoTransitionPendingChange,
+  onPagoConfirmadoOptimistic,
+  pagoCardKey,
 }: ContratoDigitalCardProps) {
-  if (!cotizacion) {
+  if (isLoading || !cotizacion) {
     return <ContratoDigitalCardSkeleton />;
   }
 
@@ -153,6 +173,21 @@ function ContratoDigitalCardInner({
           condicionesComerciales={condicionesComerciales}
           promiseData={promiseData}
         />
+
+        {/* Activación operativa: contrato firmado — siempre visible; cuando pago confirmado, formulario bloqueado */}
+        {cotizacion.status === 'en_cierre' && !!contractData?.contract_signed_at && onPagoConfirmSuccess && (
+          <ActivacionOperativaCard
+            key={pagoCardKey}
+            studioSlug={studioSlug}
+            cotizacionId={cotizacion.id}
+            anticipoMonto={anticipoMonto}
+            pagoData={pagoData ?? null}
+            onSuccess={onPagoConfirmSuccess}
+            metodosPago={metodosPago}
+            onTransitionPendingChange={onPagoTransitionPendingChange}
+            onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
+          />
+        )}
       </ZenCardContent>
     </ZenCard>
   );

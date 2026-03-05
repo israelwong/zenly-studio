@@ -101,9 +101,9 @@ export const ContratoSection = memo(function ContratoSection({
   const [contractTemplate, setContractTemplate] = useState<ContractTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
-  // Calcular estado del contrato dentro del componente
-  const tieneContratoGenerado = contractData?.contrato_definido && contractData?.contract_template_id;
-  const contratoFirmado = !!contractData?.contract_signed_at;
+  // Calcular estado del contrato solo cuando la carga haya terminado (evita parpadeo de estados)
+  const tieneContratoGenerado = !loadingRegistro && contractData?.contrato_definido && contractData?.contract_template_id;
+  const contratoFirmado = !loadingRegistro && !!contractData?.contract_signed_at;
 
   // Cargar template cuando hay template_id y se necesita para el preview
   useEffect(() => {
@@ -173,7 +173,13 @@ export const ContratoSection = memo(function ContratoSection({
   let contratoColor: string;
   let contratoBoton: string | null = null;
 
-  if (isClienteNuevo) {
+  // Durante la carga, mostrar estado neutral
+  if (loadingRegistro) {
+    contratoIcon = <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 animate-spin" />;
+    contratoEstado = 'Cargando...';
+    contratoColor = 'text-zinc-500';
+    contratoBoton = null;
+  } else if (isClienteNuevo) {
     // Si el contrato está firmado (verificar desde tabla temporal)
     if (contratoFirmado) {
       contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
@@ -253,11 +259,13 @@ export const ContratoSection = memo(function ContratoSection({
     }
   };
 
-  const headerTitle = contratoOmitido
-    ? 'Contrato omitido'
-    : contratoFirmado
-      ? 'Contrato firmado'
-      : 'Contrato Digital';
+  const headerTitle = loadingRegistro
+    ? 'Contrato Digital'
+    : contratoOmitido
+      ? 'Contrato omitido'
+      : contratoFirmado
+        ? 'Contrato firmado'
+        : 'Contrato Digital';
 
   return (
     <div
@@ -268,12 +276,8 @@ export const ContratoSection = memo(function ContratoSection({
       {/* Header alineado con otros cards */}
       <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
         <div className="flex items-center gap-2 min-w-0">
-          {loadingRegistro ? (
-            <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 animate-spin" />
-          ) : (
-            contratoIcon
-          )}
-          <span className={`text-xs uppercase tracking-wide font-semibold truncate ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
+          {contratoIcon}
+          <span className={`text-xs uppercase tracking-wide font-semibold truncate ${loadingRegistro ? 'text-zinc-500' : contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
             {headerTitle}
           </span>
         </div>

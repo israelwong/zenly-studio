@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, memo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { EventFormModal } from '@/components/shared/promises';
@@ -25,6 +25,8 @@ import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton } from './PromiseCi
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
+  /** Métodos de pago inyectados desde el servidor (cache); evita fetch en cliente y re-request en cada remount */
+  initialMetodosPago?: Array<{ id: string; payment_method_name: string }>;
 }
 
 type CotizacionListItemType = CotizacionListItem;
@@ -38,6 +40,7 @@ interface CierreColumn2Props {
   loadingRegistro: boolean;
   negociacionData: { negociacion_precio_original?: number | null; negociacion_precio_personalizado?: number | null };
   desgloseCierre: { precio_calculado: number | null; bono_especial: number | null; cortesias_monto: number; cortesias_count: number } | null;
+  auditoriaRentabilidad: { utilidadNeta: number; margenPorcentaje: number } | null;
   pagoData: { pago_monto?: number | null } | null;
   onAnticipoUpdated: () => void;
   onPreviewClick: () => void;
@@ -58,6 +61,7 @@ const CierreColumn2 = memo(function CierreColumn2({
   loadingRegistro,
   negociacionData,
   desgloseCierre,
+  auditoriaRentabilidad,
   pagoData,
   onAnticipoUpdated,
   onPreviewClick,
@@ -81,6 +85,7 @@ const CierreColumn2 = memo(function CierreColumn2({
           loadingRegistro={loadingRegistro}
           negociacionData={negociacionData}
           desgloseCierre={desgloseCierre}
+          auditoriaRentabilidad={auditoriaRentabilidad}
           pagoData={pagoData}
           onAnticipoUpdated={onAnticipoUpdated}
           onPreviewClick={onPreviewClick}
@@ -100,7 +105,7 @@ interface CierreColumn3Props {
   cotizacion: CotizacionListItemType;
   studioSlug: string;
   promiseId: string;
-  showContratoSkeleton: boolean;
+  contratoIsLoading: boolean;
   eventTypeId: string | null;
   contractData: {
     contract_template_id?: string | null;
@@ -127,13 +132,23 @@ interface CierreColumn3Props {
   onCancelarCierre: () => void;
   isAuthorizing: boolean;
   puedeAutorizar: boolean;
+  /** Card de activación: contrato firmado pero estudio no ha confirmado pago */
+  pagoData?: { pago_confirmado_estudio?: boolean; pago_concepto?: string | null; pago_monto?: number | null; pago_fecha?: Date | null; pago_metodo_id?: string | null } | null;
+  anticipoMonto?: number;
+  onPagoConfirmSuccess?: () => void;
+  metodosPago?: Array<{ id: string; payment_method_name: string }>;
+  pagoUpdatePending?: boolean;
+  onPagoTransitionPendingChange?: (pending: boolean) => void;
+  pagoConfirmadoLocal?: boolean;
+  onPagoConfirmadoOptimistic?: (checked: boolean) => void;
+  pagoCardKey?: string;
 }
 
 const CierreColumn3 = memo(function CierreColumn3({
   cotizacion,
   studioSlug,
   promiseId,
-  showContratoSkeleton,
+  contratoIsLoading,
   eventTypeId,
   contractData,
   loadingRegistro,
@@ -153,18 +168,25 @@ const CierreColumn3 = memo(function CierreColumn3({
   onCancelarCierre,
   isAuthorizing,
   puedeAutorizar,
+  pagoData,
+  anticipoMonto = 0,
+  onPagoConfirmSuccess,
+  metodosPago = [],
+  pagoUpdatePending = false,
+  onPagoTransitionPendingChange,
+  pagoConfirmadoLocal = false,
+  onPagoConfirmadoOptimistic,
+  pagoCardKey,
 }: CierreColumn3Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-      {showContratoSkeleton ? (
-        <ContratoDigitalCardSkeleton />
-      ) : (
-        <ContratoDigitalCard
+      <ContratoDigitalCard
             cotizacion={cotizacion}
             studioSlug={studioSlug}
             promiseId={promiseId}
             contractData={contractData}
             loadingRegistro={loadingRegistro}
+            isLoading={contratoIsLoading}
             eventTypeId={eventTypeId}
             condicionesComerciales={condicionesComerciales}
             promiseData={promiseData}
@@ -178,14 +200,22 @@ const CierreColumn3 = memo(function CierreColumn3({
             contratoOmitido={contratoOmitido}
             onContratoOmitido={onContratoOmitido}
             onRevocarOmitido={onRevocarOmitido}
+            pagoData={pagoData}
+            anticipoMonto={anticipoMonto}
+            onPagoConfirmSuccess={onPagoConfirmSuccess}
+            metodosPago={metodosPago}
+            onPagoTransitionPendingChange={onPagoTransitionPendingChange}
+            onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
+            pagoCardKey={pagoCardKey}
           />
-        )}
       <CierreActionButtons
         onAutorizar={onAutorizar}
         onCancelarCierre={onCancelarCierre}
         isAuthorizing={isAuthorizing}
-        loadingRegistro={loadingRegistro}
+        loadingRegistro={contratoIsLoading}
         puedeAutorizar={puedeAutorizar}
+        pagoConfirmadoLocal={pagoConfirmadoLocal}
+        pagoUpdatePending={pagoUpdatePending}
       />
     </div>
   );
@@ -193,6 +223,7 @@ const CierreColumn3 = memo(function CierreColumn3({
 
 export function PromiseCierreClient({
   initialCotizacionEnCierre,
+  initialMetodosPago = [],
 }: PromiseCierreClientProps) {
   const params = useParams();
   const router = useRouter();
@@ -202,6 +233,8 @@ export function PromiseCierreClient({
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [cotizacionEnCierre, setCotizacionEnCierre] = React.useState(initialCotizacionEnCierre);
+  const [pagoUpdatePending, setPagoUpdatePending] = useState(false);
+  const [pagoConfirmadoLocal, setPagoConfirmadoLocal] = useState(false);
 
   const handleEditSuccess = useCallback(() => {
     // ✅ OPTIMIZACIÓN: Cerrar modal primero, luego refresh sin recarga completa
@@ -310,16 +343,21 @@ export function PromiseCierreClient({
     acquisitionChannelId: contextPromiseData?.acquisition_channel_id || null,
   });
 
-  // Skeletons por columna: contrato sigue en skeleton hasta tener content o saber que no hay contrato (evita bloque vacío ~2s).
+  // Sincronizar pagoConfirmadoLocal desde servidor solo cuando no hay transición en curso
+  useEffect(() => {
+    if (!pagoUpdatePending && cierreLogic.pagoData) {
+      setPagoConfirmadoLocal(cierreLogic.pagoData.pago_confirmado_estudio === true);
+    }
+  }, [pagoUpdatePending, cierreLogic.pagoData?.pago_confirmado_estudio]);
+
+  // Skeletons atómicos: columna 2 (cotización) y columna 3 (contrato) con carga atómica
   const showSkeletons = useMemo(() => {
-    const { loadingRegistro, condicionesData, contractData, hasLoadedRegistroOnce } = cierreLogic;
-    const showCotizacionSkeleton = !hasLoadedRegistroOnce && loadingRegistro && condicionesData == null;
-    const showContratoSkeleton =
-      !hasLoadedRegistroOnce &&
-      ((loadingRegistro && contractData == null) ||
-        (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === '')));
-    return { showCotizacionSkeleton, showContratoSkeleton };
-  }, [cierreLogic.loadingRegistro, cierreLogic.condicionesData, cierreLogic.contractData, cierreLogic.hasLoadedRegistroOnce]);
+    const { loadingRegistro, condicionesData, hasLoadedRegistroOnce, loadingCotizacion } = cierreLogic;
+    const showCotizacionSkeleton = loadingRegistro || loadingCotizacion || (!hasLoadedRegistroOnce && condicionesData == null);
+    // Contrato: carga atómica (loadingRegistro || loadingCotizacion)
+    const contratoIsLoading = loadingRegistro || loadingCotizacion;
+    return { showCotizacionSkeleton, contratoIsLoading };
+  }, [cierreLogic.loadingRegistro, cierreLogic.loadingCotizacion, cierreLogic.condicionesData, cierreLogic.hasLoadedRegistroOnce]);
 
   // Desglose idéntico al de la tarjeta (SSOT servidor) para el modal "Ver cotización" — paridad con Resumen de Cierre y contrato.
   const resumenCierreOverride = useMemo(() => {
@@ -453,6 +491,7 @@ export function PromiseCierreClient({
               loadingRegistro={cierreLogic.loadingRegistro}
               negociacionData={cierreLogic.negociacionData}
               desgloseCierre={cierreLogic.desgloseCierre ?? null}
+              auditoriaRentabilidad={cierreLogic.auditoriaRentabilidad ?? null}
               pagoData={cierreLogic.pagoData}
               onAnticipoUpdated={cierreLogic.handlePagoSuccess}
               onPreviewClick={cierreLogic.handleOpenPreview}
@@ -470,7 +509,7 @@ export function PromiseCierreClient({
             cotizacion={cotizacionEnCierre}
             studioSlug={studioSlug}
             promiseId={promiseId}
-            showContratoSkeleton={showSkeletons.showContratoSkeleton}
+            contratoIsLoading={showSkeletons.contratoIsLoading}
             eventTypeId={contextPromiseData.event_type_id || null}
             contractData={cierreLogic.contractData}
             loadingRegistro={cierreLogic.loadingRegistro}
@@ -490,6 +529,15 @@ export function PromiseCierreClient({
             onCancelarCierre={cierreLogic.handleOpenCancelModal}
             isAuthorizing={cierreLogic.isAuthorizing}
             puedeAutorizar={cierreLogic.puedeAutorizar}
+            pagoData={cierreLogic.pagoData}
+            anticipoMonto={resumenCierreOverride?.anticipo ?? 0}
+            onPagoConfirmSuccess={cierreLogic.handlePagoSuccess}
+            metodosPago={initialMetodosPago}
+            pagoUpdatePending={pagoUpdatePending}
+            onPagoTransitionPendingChange={setPagoUpdatePending}
+            pagoConfirmadoLocal={pagoConfirmadoLocal}
+            onPagoConfirmadoOptimistic={setPagoConfirmadoLocal}
+            pagoCardKey={cotizacionEnCierre ? `pago-${cotizacionEnCierre.id}-${cierreLogic.pagoData?.pago_confirmado_estudio}` : undefined}
           />
         </div>
       </div>
