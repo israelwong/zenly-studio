@@ -106,6 +106,9 @@ function ContratoDigitalCardInner({
   }
 
   const incluirContrato = !contratoOmitido;
+  const contratoFirmado = !!contractData?.contract_signed_at;
+  const switchDisabled = contratoFirmado;
+  
   const pendientes: string[] = [];
   if (!promiseData.email?.trim()) pendientes.push('correo');
   if (!promiseData.address?.trim()) pendientes.push('dirección');
@@ -124,17 +127,32 @@ function ContratoDigitalCardInner({
     <ZenCard className="h-auto">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
         <div className="flex flex-col gap-3 w-full">
-          <ZenSwitch
-            checked={incluirContrato}
-            onCheckedChange={(checked) => {
-              if (checked) onRevocarOmitido?.();
-              else onContratoOmitido?.();
-            }}
-            label="Incluir Contrato Digital"
-            labelClassName="text-sm text-zinc-300"
-            variant="emerald"
-            className="w-full"
-          />
+          <div className="relative group">
+            <ZenSwitch
+              checked={incluirContrato}
+              onCheckedChange={(checked) => {
+                if (switchDisabled) return;
+                if (checked) onRevocarOmitido?.();
+                else onContratoOmitido?.();
+              }}
+              label="Incluir Contrato Digital"
+              labelClassName="text-sm text-zinc-300"
+              variant="emerald"
+              className="w-full"
+              disabled={switchDisabled}
+            />
+            {switchDisabled && (
+              <div className="absolute inset-0 cursor-not-allowed" title="No se puede excluir un contrato que ya ha sido firmado por el cliente" />
+            )}
+          </div>
+          {switchDisabled && (
+            <p className="text-xs text-emerald-400/80 flex items-center gap-1.5">
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Contrato firmado por el cliente
+            </p>
+          )}
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4 space-y-4">

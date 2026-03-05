@@ -242,6 +242,7 @@ export function PromiseCierreClient({
   const [pagoUpdatePending, setPagoUpdatePending] = useState(false);
   const [pagoConfirmadoLocal, setPagoConfirmadoLocal] = useState(false);
   const [pagoStagingValid, setPagoStagingValid] = useState(true);
+  const [pagoStagingData, setPagoStagingData] = useState<unknown[]>([]);
 
   const handleEditSuccess = useCallback(() => {
     // ✅ OPTIMIZACIÓN: Cerrar modal primero, luego refresh sin recarga completa
@@ -348,6 +349,8 @@ export function PromiseCierreClient({
     contactId: contextPromiseData?.contact_id,
     eventTypeId: contextPromiseData?.event_type_id || null,
     acquisitionChannelId: contextPromiseData?.acquisition_channel_id || null,
+    pagoStagingData,
+    pagoConfirmadoLocal,
   });
 
   // Sincronizar pagoConfirmadoLocal desde servidor solo cuando no hay transición en curso
@@ -546,7 +549,10 @@ export function PromiseCierreClient({
             onPagoConfirmadoOptimistic={setPagoConfirmadoLocal}
             pagoCardKey={cotizacionEnCierre ? `pago-${cotizacionEnCierre.id}-${cierreLogic.pagoData?.pago_confirmado_estudio}` : undefined}
             pagoStagingValid={pagoStagingValid}
-            onPagoStagingChange={(_, isValid) => setPagoStagingValid(isValid)}
+            onPagoStagingChange={(staging, isValid) => {
+              setPagoStagingValid(isValid);
+              setPagoStagingData(staging);
+            }}
           />
         </div>
       </div>

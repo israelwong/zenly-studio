@@ -285,21 +285,21 @@ export function ActivacionOperativaCard({
                         hasError ? 'border-rose-500/50 bg-rose-500/5' : 'border-zinc-700 bg-zinc-800/30'
                       } transition-all`}
                     >
-                      {/* Header colapsable: solo concepto+monto y chevron expanden; zona método no clicable */}
-                      <div className="w-full px-3 py-2 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleCardExpanded(pago.id)}
-                          className="flex items-center gap-2 min-w-0 shrink-0 hover:opacity-80 transition-opacity text-left"
-                        >
+                      {/* Header colapsable: todo el div expande excepto botón X */}
+                      <button
+                        type="button"
+                        onClick={() => toggleCardExpanded(pago.id)}
+                        className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-zinc-700/30 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 shrink-0">
                           <span className="text-xs font-medium text-zinc-300 truncate">
                             {pago.concepto}
                           </span>
                           <span className="text-sm font-semibold text-emerald-400">
                             {formatearMoneda(pago.monto)}
                           </span>
-                        </button>
-                        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
                           {metodo ? (
                             <span className="text-xs text-zinc-500">{mapearNombreMetodoPago(metodo.payment_method_name)}</span>
                           ) : (
@@ -318,20 +318,13 @@ export function ActivacionOperativaCard({
                               <X className="h-3 w-3" />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => toggleCardExpanded(pago.id)}
-                            className="hover:opacity-80 transition-opacity"
-                            aria-label={isExpanded ? 'Colapsar' : 'Expandir'}
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-zinc-500" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-zinc-500" />
-                            )}
-                          </button>
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-zinc-500" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-zinc-500" />
+                          )}
                         </div>
-                      </div>
+                      </button>
 
                       {/* Contenido expandido */}
                       {isExpanded && (

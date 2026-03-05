@@ -1639,6 +1639,16 @@ export async function obtenerVersionesContratoCierre(
  *
  * @returns Evento creado y cotizaci?n autorizada
  */
+export interface PagoStagingItem {
+  id: string;
+  monto: number;
+  metodoId: string | null;
+  fecha: Date;
+  concepto: string;
+  tipo: 'anticipo' | 'abono_cierre';
+  isReadOnly?: boolean;
+}
+
 export async function autorizarYCrearEvento(
   studioSlug: string,
   promiseId: string,
@@ -1650,6 +1660,8 @@ export async function autorizarYCrearEvento(
     forceBooking?: boolean;
     /** Si true, no exige contrato definido ni firmado (permite autorizar sin contrato para prospecto) */
     skip_contract?: boolean;
+    /** Staging de pagos desde UI (prioridad sobre registro cierre) */
+    pagosStaging?: PagoStagingItem[];
   }
 ): Promise<{
   success: boolean;
@@ -2155,58 +2167,99 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.5. Fase 28.5: Registrar pago inicial solo si el estudio confirmó recepción (no "promesa de pago")
+      // 8.5. Persistencia financiera: prioridad staging → registro cierre
       let pagoRegistrado = false;
-      const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
-      const rawMontoCierre = registroCierre.pago_monto;
-      const montoDesdeRegistro =
-        rawMontoCierre != null
-          ? typeof rawMontoCierre === "number"
-            ? rawMontoCierre
-            : Number(String(rawMontoCierre))
-          : 0;
-      const debeCrearPago =
-        options?.registrarPago === true &&
-        pagoConfirmadoEstudio &&
-        montoDesdeRegistro > 0;
-      console.log('💰 [PAGO] ¿Se creará registro de pago?:', debeCrearPago, '(registrarPago:', options?.registrarPago, ', pago_confirmado_estudio:', pagoConfirmadoEstudio, ', monto desde registro:', montoDesdeRegistro, ')');
-
-      if (debeCrearPago) {
-        const montoInicial = montoDesdeRegistro;
-        // Obtener nombre del m?todo de pago dentro de la transacci?n
-        let metodoPagoNombre = 'Manual'; // Valor por defecto
-        if (registroCierre.pago_metodo_id) {
-          const metodoPago = await tx.studio_metodos_pago.findUnique({
-            where: { id: registroCierre.pago_metodo_id },
-            select: { payment_method_name: true },
-          });
-          if (metodoPago) {
-            metodoPagoNombre = metodoPago.payment_method_name;
+      const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
+      
+      // Prioridad 1: Staging de pagos desde UI (confirmación manual con distribución)
+      if (options?.pagosStaging && options.pagosStaging.length > 0) {
+        console.log('💰 [PAGO] Creando pagos desde staging:', options.pagosStaging.length, 'items');
+        
+        for (const pagoItem of options.pagosStaging) {
+          // Obtener nombre del método de pago
+          let metodoPagoNombre = 'Manual';
+          if (pagoItem.metodoId) {
+            const metodoPago = await tx.studio_metodos_pago.findUnique({
+              where: { id: pagoItem.metodoId },
+              select: { payment_method_name: true },
+            });
+            if (metodoPago) {
+              metodoPagoNombre = metodoPago.payment_method_name;
+            }
           }
+
+          // Normalizar fecha
+          const fechaPago = normalizePaymentDate(pagoItem.fecha);
+          
+          await tx.studio_pagos.create({
+            data: {
+              cotizacion_id: cotizacionId,
+              promise_id: promiseId,
+              contact_id: contactId || null,
+              amount: pagoItem.monto,
+              concept: pagoItem.concepto,
+              payment_date: fechaPago,
+              metodo_pago_id: pagoItem.metodoId,
+              metodo_pago: metodoPagoNombre,
+              status: 'CONFIRMED',
+              transaction_type: 'ingreso',
+              transaction_category: 'abono',
+            },
+          });
         }
-
-        // Usar la fecha del registro de cierre si est? disponible, sino usar fecha actual
-        // Normalizar la fecha para evitar problemas de zona horaria
-        const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
-        const conceptoPago = registroCierre.pago_concepto || 'Pago inicial / Anticipo';
-        const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
-
-        await tx.studio_pagos.create({
-          data: {
-            cotizacion_id: cotizacionId,
-            promise_id: promiseId,
-            contact_id: contactId || null,
-            amount: montoInicial,
-            concept: conceptoPago,
-            payment_date: fechaPago,
-            metodo_pago_id: registroCierre.pago_metodo_id,
-            metodo_pago: metodoPagoNombre,
-            status: 'completed',
-            transaction_type: 'ingreso',
-            transaction_category: 'abono',
-          },
-        });
+        
         pagoRegistrado = true;
+      }
+      // Prioridad 2: Registro de cierre (fallback legacy)
+      else {
+        const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
+        const rawMontoCierre = registroCierre.pago_monto;
+        const montoDesdeRegistro =
+          rawMontoCierre != null
+            ? typeof rawMontoCierre === "number"
+              ? rawMontoCierre
+              : Number(String(rawMontoCierre))
+            : 0;
+        const debeCrearPago =
+          options?.registrarPago === true &&
+          pagoConfirmadoEstudio &&
+          montoDesdeRegistro > 0;
+        
+        console.log('💰 [PAGO] Creando pago desde registro cierre:', debeCrearPago, '(monto:', montoDesdeRegistro, ')');
+
+        if (debeCrearPago) {
+          // Obtener nombre del método de pago
+          let metodoPagoNombre = 'Manual';
+          if (registroCierre.pago_metodo_id) {
+            const metodoPago = await tx.studio_metodos_pago.findUnique({
+              where: { id: registroCierre.pago_metodo_id },
+              select: { payment_method_name: true },
+            });
+            if (metodoPago) {
+              metodoPagoNombre = metodoPago.payment_method_name;
+            }
+          }
+
+          const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
+          const conceptoPago = registroCierre.pago_concepto || 'Anticipo';
+
+          await tx.studio_pagos.create({
+            data: {
+              cotizacion_id: cotizacionId,
+              promise_id: promiseId,
+              contact_id: contactId || null,
+              amount: montoDesdeRegistro,
+              concept: conceptoPago,
+              payment_date: fechaPago,
+              metodo_pago_id: registroCierre.pago_metodo_id,
+              metodo_pago: metodoPagoNombre,
+              status: 'CONFIRMED',
+              transaction_type: 'ingreso',
+              transaction_category: 'abono',
+            },
+          });
+          pagoRegistrado = true;
+        }
       }
 
       // 8.6. Eliminar todas las etiquetas asociadas a la promesa
@@ -2332,11 +2385,11 @@ export async function autorizarYCrearEvento(
         logContent += ` - ${eventoFecha}`;
       }
       if (pagoRegistrado) {
-        // Fase 28.5: Diferenciar si el pago viene de confirmación del estudio
-        if (pagoConfirmadoEstudio) {
-          logContent += ' (anticipo confirmado y validado)';
+        if (options?.pagosStaging && options.pagosStaging.length > 0) {
+          const totalPagos = options.pagosStaging.reduce((sum, p) => sum + p.monto, 0);
+          logContent += ` (${options.pagosStaging.length} pago(s) confirmado(s), total: $${totalPagos.toFixed(2)})`;
         } else {
-          logContent += ' (con pago inicial registrado)';
+          logContent += ' (anticipo confirmado y validado)';
         }
       }
       if (registroCierre.contract_signed_at) {

@@ -82,6 +82,8 @@ interface UsePromiseCierreLogicProps {
   contactId?: string;
   eventTypeId?: string | null;
   acquisitionChannelId?: string | null;
+  pagoStagingData?: unknown[];
+  pagoConfirmadoLocal?: boolean;
 }
 
 export function usePromiseCierreLogic({
@@ -94,6 +96,8 @@ export function usePromiseCierreLogic({
   contactId,
   eventTypeId,
   acquisitionChannelId,
+  pagoStagingData,
+  pagoConfirmadoLocal,
 }: UsePromiseCierreLogicProps) {
   const router = useRouter();
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -663,6 +667,7 @@ export function usePromiseCierreLogic({
           registrarPago,
           montoInicial: registrarPago ? anticipoResumen : 0,
           skip_contract: contratoOmitido,
+          pagosStaging: pagoStagingData as any,
         });
 
         stopProgressAnimation();
@@ -702,7 +707,8 @@ export function usePromiseCierreLogic({
       return false;
     }
     const contratoFirmado = !!contractData?.contract_signed_at;
-    if (contratoFirmado && !(pagoData?.pago_confirmado_estudio === true)) {
+    // Validación de pago: considera estado local optimista O confirmación del servidor
+    if (contratoFirmado && !(pagoConfirmadoLocal === true || pagoData?.pago_confirmado_estudio === true)) {
       return false;
     }
     const base =
@@ -721,7 +727,7 @@ export function usePromiseCierreLogic({
         (contractData?.contract_template_id || contractData?.contract_content)
       );
     return !!conContrato;
-  }, [cotizacion.status, localPromiseData, contratoOmitido, contractData, pagoData?.pago_confirmado_estudio]);
+  }, [cotizacion.status, localPromiseData, contratoOmitido, contractData, pagoData?.pago_confirmado_estudio, pagoConfirmadoLocal]);
 
   return {
     // Estados
