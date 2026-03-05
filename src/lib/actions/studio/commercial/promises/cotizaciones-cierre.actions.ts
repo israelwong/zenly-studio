@@ -2183,6 +2183,7 @@ export async function autorizarYCrearEvento(
 
       // 8.5. Persistencia financiera: prioridad staging → registro cierre
       let pagoRegistrado = false;
+      let montoDesdeRegistro = 0;
       const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
       
       // Prioridad 1: Staging de pagos desde UI (confirmación manual con distribución)
@@ -2228,7 +2229,7 @@ export async function autorizarYCrearEvento(
       else {
         const pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
         const rawMontoCierre = registroCierre.pago_monto;
-        const montoDesdeRegistro =
+        montoDesdeRegistro =
           rawMontoCierre != null
             ? typeof rawMontoCierre === "number"
               ? rawMontoCierre
