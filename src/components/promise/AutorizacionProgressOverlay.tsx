@@ -3,7 +3,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { XCircle } from 'lucide-react';
+import { XCircle, Loader2 } from 'lucide-react';
 import { ZenCard, ZenButton } from '@/components/ui/zen';
 
 interface AutorizacionProgressOverlayProps {
@@ -116,9 +116,12 @@ export function AutorizacionProgressOverlay({
                 ¡Evento creado exitosamente!
               </h3>
               
-              <p id="overlay-description" className="text-sm text-zinc-400">
-                Un momento, estamos preparando el resumen de tu cotización aprobada...
-              </p>
+              <div id="overlay-description" className="flex items-center justify-center gap-3 text-sm text-zinc-400">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" aria-hidden />
+                <p>
+                  Un momento, estamos preparando el resumen de tu cotización aprobada...
+                </p>
+              </div>
             </div>
           </div>
         ) : (

@@ -15,13 +15,14 @@ import { ZenDialog } from '@/components/ui/zen';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { Loader2 } from 'lucide-react';
 import { ContratoDigitalCard } from './ContratoDigitalCard';
+import { ActivacionOperativaCard } from './ActivacionOperativaCard';
 import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { CierreActionButtons } from './CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
-import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
+import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, ActivacionOperativaCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
@@ -213,26 +214,39 @@ const CierreColumn3 = memo(function CierreColumn3({
             onRevocarOmitido={onRevocarOmitido}
             firmaRequerida={firmaRequerida}
             onFirmaRequeridaChange={onFirmaRequeridaChange}
-            pagoData={pagoData}
+          />
+      {cotizacion?.status === 'en_cierre' &&
+        (contratoIsLoading ? (
+          <ActivacionOperativaCardSkeleton />
+        ) : onPagoConfirmSuccess ? (
+          <ActivacionOperativaCard
+            key={pagoCardKey}
+            studioSlug={studioSlug}
+            cotizacionId={cotizacion.id}
             anticipoMonto={anticipoMonto}
-            onPagoConfirmSuccess={onPagoConfirmSuccess}
+            pagoData={pagoData ?? null}
+            onSuccess={onPagoConfirmSuccess}
             metodosPago={metodosPago}
-            onPagoTransitionPendingChange={onPagoTransitionPendingChange}
+            onTransitionPendingChange={onPagoTransitionPendingChange}
             onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
-            pagoCardKey={pagoCardKey}
             onStagingChange={onPagoStagingChange}
           />
-      <CierreActionButtons
-        onAutorizar={onAutorizar}
-        onCancelarCierre={onCancelarCierre}
-        isAuthorizing={isAuthorizing}
-        loadingRegistro={contratoIsLoading}
-        puedeAutorizar={puedeAutorizar}
-        pagoConfirmadoLocal={pagoConfirmadoLocal}
-        requiereConfirmacionPago={requiereConfirmacionPago}
-        pagoUpdatePending={pagoUpdatePending}
-        pagoStagingValid={pagoStagingValid}
-      />
+        ) : null)}
+      {contratoIsLoading ? (
+        <CierreActionButtonsSkeleton />
+      ) : (
+        <CierreActionButtons
+          onAutorizar={onAutorizar}
+          onCancelarCierre={onCancelarCierre}
+          isAuthorizing={isAuthorizing}
+          loadingRegistro={contratoIsLoading}
+          puedeAutorizar={puedeAutorizar}
+          pagoConfirmadoLocal={pagoConfirmadoLocal}
+          requiereConfirmacionPago={requiereConfirmacionPago}
+          pagoUpdatePending={pagoUpdatePending}
+          pagoStagingValid={pagoStagingValid}
+        />
+      )}
     </div>
   );
 });
@@ -384,10 +398,12 @@ export function PromiseCierreClient({
     const dc = cierreLogic.desgloseCierre;
     const cond = cierreLogic.condicionesData?.condiciones_comerciales;
     const precioBase = cotizacionEnCierre?.price ?? 0;
+    const negPrecio = cierreLogic.negociacionData?.negociacion_precio_personalizado;
+    const totalNegociado = negPrecio != null && Number(negPrecio) > 0 ? Math.round(Number(negPrecio)) : null;
     if (!dc || !cond) return null;
     const discountPct = cond.discount_percentage ?? 0;
     const descuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
-    const precioFinalCierre = Math.round(precioBase - descuentoCondicionMonto);
+    const precioFinalCierre = totalNegociado ?? Math.round(precioBase - descuentoCondicionMonto);
     const montoCortesias = dc.cortesias_monto ?? 0;
     const montoBono = dc.bono_especial ?? 0;
     const tieneConcesiones = montoCortesias > 0 || montoBono > 0 || descuentoCondicionMonto > 0;
@@ -416,7 +432,7 @@ export function PromiseCierreClient({
       diferido,
       anticipoModificado: anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01,
     };
-  }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.pagoData?.pago_monto, cotizacionEnCierre?.price]);
+  }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.pagoData?.pago_monto, cierreLogic.negociacionData?.negociacion_precio_personalizado, cotizacionEnCierre?.price]);
 
   // Early returns solo después de todos los hooks (regla de React).
   if (!contextPromiseData) {

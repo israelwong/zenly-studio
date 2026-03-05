@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw, Pencil } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw, Pencil, Clock } from 'lucide-react';
 import {
   ZenBadge,
   ZenConfirmModal,
@@ -273,12 +273,17 @@ export const ContratoSection = memo(function ContratoSection({
       ? 'Contrato omitido'
       : contratoFirmado
         ? 'Contrato firmado'
-        : 'Contrato Digital';
+        : !tieneContratoGenerado
+          ? 'Generar contrato digital'
+          : 'Contrato Digital';
 
+  const isContratoPendiente = !tieneContratoGenerado && !contratoOmitido && !!onContratoButtonClick;
   return (
     <div
-      className={`bg-zinc-800/30 border border-zinc-700/50 rounded-lg overflow-hidden transition-all duration-200 ${
-        contratoOmitido ? 'opacity-75 grayscale' : ''
+      className={`rounded-lg overflow-hidden transition-all duration-200 border ${
+        contratoOmitido ? 'opacity-75 grayscale ' : ''
+      }${
+        isContratoPendiente ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-700/50 bg-zinc-800/30'
       }`}
     >
       {/* Contrato firmado: card informativo sin header — todo el div abre preview */}
@@ -353,6 +358,25 @@ export const ContratoSection = memo(function ContratoSection({
             return line ? <p className="text-xs text-zinc-400">{line}</p> : null;
           })()}
         </div>
+      ) : !tieneContratoGenerado && !contratoOmitido && onContratoButtonClick ? (
+        /* Pendiente: tarjeta clickeable para abrir modal de selección de plantilla, sin body */
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onContratoButtonClick}
+          onKeyDown={(e) => e.key === 'Enter' && onContratoButtonClick()}
+          className="rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-zinc-900"
+          aria-label="Seleccionar plantilla de contrato"
+        >
+          <div className="flex items-center justify-between gap-2 py-2.5 px-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" aria-hidden />
+              <span className="text-xs uppercase tracking-wide font-semibold truncate text-amber-200">
+                {headerTitle}
+              </span>
+            </div>
+          </div>
+        </div>
       ) : (
         <>
           <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
@@ -421,17 +445,9 @@ export const ContratoSection = memo(function ContratoSection({
         {contratoOmitido && !tieneContratoGenerado && (
           <p className="text-xs text-zinc-500">Contrato omitido. Puedes autorizar sin generar contrato.</p>
         )}
-        {contratoEstado && !contratoFirmado && !contratoOmitido && (
+        {contratoEstado && !contratoFirmado && !contratoOmitido && contratoBoton !== 'Definir' && (
           <div className="text-xs">
-            {contratoBoton === 'Definir' ? (
-              <button
-                type="button"
-                onClick={onContratoButtonClick}
-                className="text-left w-full text-emerald-400 hover:text-emerald-300 transition-colors font-medium cursor-pointer"
-              >
-                {contratoEstado}
-              </button>
-            ) : contratoEstado === 'En espera de firma del cliente' ? (
+            {contratoEstado === 'En espera de firma del cliente' ? (
               <div className="flex flex-wrap items-center gap-2">
                 <ZenBadge variant="warning" size="sm" className="rounded-full bg-amber-500/10 text-amber-400 border-amber-500/30 px-2 py-0.5 text-[10px] font-medium shrink-0">
                   {contratoEstado}

@@ -742,7 +742,10 @@ export function usePromiseCierreLogic({
         contractData?.contrato_definido &&
         (contractData?.contract_template_id || contractData?.contract_content)
       );
-    return !!conContrato;
+    if (!conContrato) return false;
+    // Si firma requerida, debe estar firmado para habilitar Autorizar
+    if (firmaRequerida && !contratoFirmado) return false;
+    return true;
   }, [cotizacion.status, localPromiseData, contratoOmitido, contractData, pagoData?.pago_confirmado_estudio, pagoConfirmadoLocal]);
 
   return {

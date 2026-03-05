@@ -145,7 +145,7 @@ export function ContractPreviewForPromiseModal({
       footerLeftContent={
         !isReadOnly ? (
           <ZenButton
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={onEdit}
           >

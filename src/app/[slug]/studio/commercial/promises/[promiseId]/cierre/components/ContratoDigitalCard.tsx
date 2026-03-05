@@ -4,7 +4,6 @@ import React, { memo } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenSwitch } from '@/components/ui/zen';
 import { DatosRequeridosSection } from './DatosRequeridosSection';
 import { ContratoSection } from './ContratoSection';
-import { ActivacionOperativaCard } from './ActivacionOperativaCard';
 import { ContratoDigitalCardSkeleton } from './PromiseCierreSkeleton';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
@@ -62,17 +61,6 @@ interface ContratoDigitalCardProps {
   contratoOmitido?: boolean;
   onContratoOmitido?: () => void;
   onRevocarOmitido?: () => void;
-  /** Card de activación (contrato firmado) — siempre visible; cuando pago confirmado queda bloqueado hasta desbloquear */
-  pagoData?: { pago_confirmado_estudio?: boolean; pago_concepto?: string | null; pago_monto?: number | null; pago_fecha?: Date | null; pago_metodo_id?: string | null } | null;
-  anticipoMonto?: number;
-  onPagoConfirmSuccess?: () => void;
-  metodosPago?: Array<{ id: string; payment_method_name: string }>;
-  onPagoTransitionPendingChange?: (pending: boolean) => void;
-  onPagoConfirmadoOptimistic?: (checked: boolean) => void;
-  /** Key para reset limpio del card cuando el servidor aplicó el estado (evita flicker) */
-  pagoCardKey?: string;
-  /** Notifica staging y validez (metodoId en todos los ítems) para deshabilitar Autorizar */
-  onStagingChange?: (staging: unknown[], isValid: boolean) => void;
 }
 
 function ContratoDigitalCardInner({
@@ -95,14 +83,6 @@ function ContratoDigitalCardInner({
   contratoOmitido = false,
   onContratoOmitido,
   onRevocarOmitido,
-  pagoData,
-  anticipoMonto = 0,
-  onPagoConfirmSuccess,
-  metodosPago = [],
-  onPagoTransitionPendingChange,
-  onPagoConfirmadoOptimistic,
-  pagoCardKey,
-  onStagingChange,
   firmaRequerida = true,
   onFirmaRequeridaChange,
 }: ContratoDigitalCardProps) {
@@ -201,22 +181,6 @@ function ContratoDigitalCardInner({
           condicionesComerciales={condicionesComerciales}
           promiseData={promiseData}
         />
-
-        {/* Activación operativa: contrato firmado — siempre visible; cuando pago confirmado, formulario bloqueado */}
-        {cotizacion.status === 'en_cierre' && !!contractData?.contract_signed_at && onPagoConfirmSuccess && (
-          <ActivacionOperativaCard
-            key={pagoCardKey}
-            studioSlug={studioSlug}
-            cotizacionId={cotizacion.id}
-            anticipoMonto={anticipoMonto}
-            pagoData={pagoData ?? null}
-            onSuccess={onPagoConfirmSuccess}
-            metodosPago={metodosPago}
-            onTransitionPendingChange={onPagoTransitionPendingChange}
-            onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
-            onStagingChange={onStagingChange}
-          />
-        )}
       </ZenCardContent>
     </ZenCard>
   );

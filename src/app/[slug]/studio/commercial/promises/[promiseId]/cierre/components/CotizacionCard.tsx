@@ -91,12 +91,14 @@ function CotizacionCardInner({
 
   const condicion = condicionesData?.condiciones_comerciales;
   const precioBase = cotizacion?.price ?? 0;
+  const negPrecio = negociacionData?.negociacion_precio_personalizado;
+  const totalNegociado = negPrecio != null && Number(negPrecio) > 0 ? Math.round(Number(negPrecio)) : null;
   const montoCortesias = desgloseCierre?.cortesias_monto ?? 0;
   const montoBono = desgloseCierre?.bono_especial ?? 0;
   const discountPct = condicion?.discount_percentage ?? 0;
   const descuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
-  /** Total a pagar (con descuento de condición si aplica). Base para anticipo %. */
-  const totalFinalCierre = Math.round(precioBase - descuentoCondicionMonto);
+  /** Total a pagar: prioridad precio negociado (paridad con motor y modal Ver cotización). */
+  const totalFinalCierre = totalNegociado ?? Math.round(precioBase - descuentoCondicionMonto);
   const tieneConcesiones = (montoCortesias > 0) || (montoBono > 0) || descuentoCondicionMonto > 0;
 
   const { precioLista, ajusteCierre, anticipoFromCondition, advanceType, anticipoPorcentaje } = useMemo(() => {

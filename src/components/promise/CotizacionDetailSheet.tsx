@@ -190,9 +190,11 @@ export function CotizacionDetailSheet({
     // Solo mostrar condiciones públicas al prospecto (vista previa = vista prospecto; privadas no seleccionables)
     const soloPublicas = (list: typeof condicionesComerciales) =>
       list.filter((c) => (c as CondicionComercial & { is_public?: boolean }).is_public !== false);
+    const visibleIds = condicionesVisiblesIds ?? currentCotizacion.condiciones_visibles ?? null;
+    const useVisibleFilter = esCotizacionConVisibles && visibleIds != null && visibleIds.length > 0;
     let catalogList: typeof condicionesComerciales;
-    if (esCotizacionConVisibles && condicionesVisiblesIds != null && condicionesVisiblesIds.length > 0) {
-      const setIds = new Set(condicionesVisiblesIds);
+    if (useVisibleFilter) {
+      const setIds = new Set(visibleIds);
       catalogList = soloPublicas(condicionesComerciales.filter((c) => setIds.has(c.id)));
     } else {
       catalogList = soloPublicas(
@@ -208,6 +210,7 @@ export function CotizacionDetailSheet({
   }, [
     condicionesComerciales,
     condicionesVisiblesIds,
+    currentCotizacion.condiciones_visibles,
     showStandardConditions,
     showOfferConditions,
     esCotizacionConVisibles,
@@ -599,18 +602,15 @@ export function CotizacionDetailSheet({
             <>
               <div className="bg-emerald-950/40 rounded-lg p-4 border border-emerald-800/50">
                 <div className="flex items-end justify-between gap-3">
-                  <div className="flex-1 min-w-0 space-y-1">
-                    {tieneConcesiones && precioLista > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-emerald-200/70">Precio de lista</span>
-                        <span className="text-sm text-emerald-300/60 line-through">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-emerald-200/70 mb-1">Total a pagar</p>
+                    <p className="text-2xl font-bold text-emerald-300 flex flex-wrap items-baseline gap-2">
+                      {tieneConcesiones && precioLista > 0 && (
+                        <span className="text-2xl font-normal text-zinc-400 line-through">
                           {formatPrice(precioLista)}
                         </span>
-                      </div>
-                    )}
-                    <p className="text-xs text-emerald-200/70">Total a pagar</p>
-                    <p className="text-2xl font-bold text-emerald-300">
-                      {formatPrice(precioFinal)}
+                      )}
+                      <span>{formatPrice(precioFinal)}</span>
                     </p>
                   </div>
 
@@ -650,7 +650,7 @@ export function CotizacionDetailSheet({
             />
           </div>
 
-          {/* Condiciones comerciales */}
+          {/* Condiciones comerciales: skeleton hasta tener lista definitiva para evitar parpadeo (todas → ocultar) */}
           {!hideFinancialSections && (
             <>
               <SeparadorZen />
@@ -721,6 +721,17 @@ export function CotizacionDetailSheet({
                   );
                 })()}
               </>
+            ) : loadingCondiciones ? (
+              /* Skeleton hasta tener condiciones resueltas: evita pintar todas y luego ocultar no visibles */
+              <div className="space-y-3" aria-busy="true">
+                {[1, 2].map((i) => (
+                  <div key={i} className="p-4 border border-zinc-700 rounded-lg bg-zinc-800/30 animate-pulse">
+                    <div className="h-4 w-32 bg-zinc-700 rounded mb-2" />
+                    <div className="h-3 w-full bg-zinc-700 rounded" />
+                  </div>
+                ))}
+                <div className="h-20 w-full bg-zinc-800/50 rounded animate-pulse mt-4" />
+              </div>
             ) : (
               <>
                 {/* Mostrar selector de condiciones comerciales para cotizaciones pendientes */}
@@ -729,7 +740,7 @@ export function CotizacionDetailSheet({
                   selectedCondicionId={selectedCondicionId}
                   selectedMetodoPagoId={selectedMetodoPagoId}
                   onSelectCondicion={handleSelectCondicion}
-                  loading={loadingCondiciones}
+                  loading={false}
                 />
 
                 {/* Cálculo de precio según condición comercial */}

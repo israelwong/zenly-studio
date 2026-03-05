@@ -1148,7 +1148,8 @@ export function CotizacionForm({
       description: descripcion || null,
       price: precioCierreRedondo,
       precio_calculado: Math.round(precioCalculado),
-      /** Precio Final de Cierre del editor: usado por el sheet para Ajuste = PrecioCierre - (PrecioLista - Cortesías - Bono). */
+      /** Precio Final de Cierre del editor: SSOT para el sheet (prioridad totalAPagar en getPrecioFinalCierre). */
+      totalAPagar: precioCierreRedondo,
       negociacion_precio_personalizado: precioCierreRedondo,
       discount: condicionActiva?.discount_percentage ?? null,
       status: undefined,

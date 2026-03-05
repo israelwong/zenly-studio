@@ -3414,6 +3414,20 @@ export async function getQuoteDetailForPreview(
       event_duration: cotizacion.event_duration ?? null,
       precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
       bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
+      totalAPagar: (() => {
+        const engineOut = calculateCotizacionTotals({
+          price: Number(cotizacion.price),
+          discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+          negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+          negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+          condiciones_comerciales_discount_percentage_snapshot: condicionesComerciales?.discount_percentage != null ? Number(condicionesComerciales.discount_percentage) : null,
+          condiciones_comerciales_advance_percentage_snapshot: condicionesComerciales?.advance_percentage != null ? Number(condicionesComerciales.advance_percentage) : null,
+          condiciones_comerciales_advance_type_snapshot: condicionesComerciales?.advance_type ?? null,
+          condiciones_comerciales_advance_amount_snapshot: condicionesComerciales?.advance_amount != null ? Number(condicionesComerciales.advance_amount) : null,
+          condiciones_comerciales: null,
+        });
+        return Math.round(engineOut.totalAPagar);
+      })(),
     };
 
     return { success: true, data: mapped };
