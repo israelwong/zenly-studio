@@ -142,6 +142,8 @@ interface CierreColumn3Props {
   pagoConfirmadoLocal?: boolean;
   onPagoConfirmadoOptimistic?: (checked: boolean) => void;
   pagoCardKey?: string;
+  pagoStagingValid?: boolean;
+  onPagoStagingChange?: (staging: unknown[], isValid: boolean) => void;
 }
 
 const CierreColumn3 = memo(function CierreColumn3({
@@ -177,6 +179,8 @@ const CierreColumn3 = memo(function CierreColumn3({
   pagoConfirmadoLocal = false,
   onPagoConfirmadoOptimistic,
   pagoCardKey,
+  pagoStagingValid = true,
+  onPagoStagingChange,
 }: CierreColumn3Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -207,6 +211,7 @@ const CierreColumn3 = memo(function CierreColumn3({
             onPagoTransitionPendingChange={onPagoTransitionPendingChange}
             onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
             pagoCardKey={pagoCardKey}
+            onStagingChange={onPagoStagingChange}
           />
       <CierreActionButtons
         onAutorizar={onAutorizar}
@@ -216,6 +221,7 @@ const CierreColumn3 = memo(function CierreColumn3({
         puedeAutorizar={puedeAutorizar}
         pagoConfirmadoLocal={pagoConfirmadoLocal}
         pagoUpdatePending={pagoUpdatePending}
+        pagoStagingValid={pagoStagingValid}
       />
     </div>
   );
@@ -235,6 +241,7 @@ export function PromiseCierreClient({
   const [cotizacionEnCierre, setCotizacionEnCierre] = React.useState(initialCotizacionEnCierre);
   const [pagoUpdatePending, setPagoUpdatePending] = useState(false);
   const [pagoConfirmadoLocal, setPagoConfirmadoLocal] = useState(false);
+  const [pagoStagingValid, setPagoStagingValid] = useState(true);
 
   const handleEditSuccess = useCallback(() => {
     // ✅ OPTIMIZACIÓN: Cerrar modal primero, luego refresh sin recarga completa
@@ -538,6 +545,8 @@ export function PromiseCierreClient({
             pagoConfirmadoLocal={pagoConfirmadoLocal}
             onPagoConfirmadoOptimistic={setPagoConfirmadoLocal}
             pagoCardKey={cotizacionEnCierre ? `pago-${cotizacionEnCierre.id}-${cierreLogic.pagoData?.pago_confirmado_estudio}` : undefined}
+            pagoStagingValid={pagoStagingValid}
+            onPagoStagingChange={(_, isValid) => setPagoStagingValid(isValid)}
           />
         </div>
       </div>

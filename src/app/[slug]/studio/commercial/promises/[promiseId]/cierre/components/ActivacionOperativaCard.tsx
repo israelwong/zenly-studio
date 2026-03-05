@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenInput, ZenSelect, ZenSwitch } from '@/components/ui/zen';
-import { Loader2, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, X, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
@@ -67,10 +67,13 @@ export function ActivacionOperativaCard({
   );
   const [pagoStaging, setPagoStaging] = useState<PagoStagingItem[]>([]);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [fechaGlobal, setFechaGlobal] = useState<Date>(() =>
+    pagoData?.pago_fecha ? new Date(pagoData.pago_fecha) : new Date()
+  );
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const metodoDefault = metodosPago.length > 0 ? metodosPago[0].id : null;
-
-  // Auto-split Top-Down: cuando cambia el monto total recibido, regenerar staging
+  // Auto-split Top-Down: cuando cambia el monto total recibido, regenerar staging (usa fechaGlobal)
+  // Anticipo metodoId por defecto null; abono hereda el metodoId del anticipo al crear/regenerar
   useEffect(() => {
     if (!pagoConfirmadoUI) return;
 
@@ -80,53 +83,60 @@ export function ActivacionOperativaCard({
       return;
     }
 
-    if (totalNum === anticipoMonto) {
-      // Monto exacto: una sola card (anticipo fijo)
-      setPagoStaging([{
-        id: 'anticipo-1',
-        monto: anticipoMonto,
-        metodoId: metodoDefault,
-        fecha: new Date(),
-        concepto: 'Anticipo',
-        tipo: 'anticipo',
-        isReadOnly: true,
-      }]);
-    } else if (totalNum > anticipoMonto) {
-      // Excedente: dos cards (anticipo fijo + abono adicional variable)
-      const excedente = totalNum - anticipoMonto;
-      setPagoStaging([
-        {
+    setPagoStaging((prev) => {
+      const inheritedMetodo = prev.find((p) => p.tipo === 'anticipo')?.metodoId ?? null;
+      if (totalNum === anticipoMonto) {
+        return [{
           id: 'anticipo-1',
           monto: anticipoMonto,
-          metodoId: metodoDefault,
-          fecha: new Date(),
+          metodoId: inheritedMetodo,
+          fecha: fechaGlobal,
           concepto: 'Anticipo',
           tipo: 'anticipo',
           isReadOnly: true,
-        },
-        {
-          id: 'abono-2',
-          monto: excedente,
-          metodoId: metodoDefault,
-          fecha: new Date(),
-          concepto: 'Abono adicional',
-          tipo: 'abono_cierre',
-          isReadOnly: false,
-        },
-      ]);
-    } else {
-      // Monto menor al anticipo: una sola card con el monto parcial (editable)
-      setPagoStaging([{
+        }];
+      }
+      if (totalNum > anticipoMonto) {
+        const excedente = totalNum - anticipoMonto;
+        return [
+          {
+            id: 'anticipo-1',
+            monto: anticipoMonto,
+            metodoId: inheritedMetodo,
+            fecha: fechaGlobal,
+            concepto: 'Anticipo',
+            tipo: 'anticipo',
+            isReadOnly: true,
+          },
+          {
+            id: 'abono-2',
+            monto: excedente,
+            metodoId: inheritedMetodo,
+            fecha: fechaGlobal,
+            concepto: 'Abono adicional',
+            tipo: 'abono_cierre',
+            isReadOnly: false,
+          },
+        ];
+      }
+      return [{
         id: 'anticipo-parcial-1',
         monto: totalNum,
-        metodoId: metodoDefault,
-        fecha: new Date(),
+        metodoId: inheritedMetodo,
+        fecha: fechaGlobal,
         concepto: 'Anticipo parcial',
         tipo: 'anticipo',
         isReadOnly: false,
-      }]);
-    }
-  }, [montoTotalRecibido, pagoConfirmadoUI, anticipoMonto, metodoDefault]);
+      }];
+    });
+  }, [montoTotalRecibido, pagoConfirmadoUI, anticipoMonto, fechaGlobal]);
+
+  // Sincronía: al cambiar fecha global, actualizar todos los items del staging
+  const handleFechaGlobalChange = (d: Date) => {
+    setFechaGlobal(d);
+    setPagoStaging((prev) => prev.map((p) => ({ ...p, fecha: d })));
+    setCalendarOpen(false);
+  };
 
   // Validación y notificación al padre
   const validationState = useMemo(() => {
@@ -178,13 +188,20 @@ export function ActivacionOperativaCard({
   const handleUpdatePagoItem = (id: string, updates: Partial<PagoStagingItem>) => {
     setPagoStaging((prev) => {
       const updated = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
-      
+      // Herencia: si se actualiza el metodoId del anticipo, sincronizar al abono
+      if (updates.metodoId !== undefined) {
+        const item = updated.find((p) => p.id === id);
+        if (item?.tipo === 'anticipo') {
+          return updated.map((p) =>
+            p.tipo === 'abono_cierre' ? { ...p, metodoId: updates.metodoId ?? null } : p
+          );
+        }
+      }
       // Sincronía Bottom-Up: si se editó el monto de un abono, actualizar monto total
       if (updates.monto !== undefined) {
         const nuevoTotal = updated.reduce((sum, p) => sum + p.monto, 0);
         setMontoTotalRecibido(String(nuevoTotal));
       }
-      
       return updated;
     });
   };
@@ -231,10 +248,6 @@ export function ActivacionOperativaCard({
       </ZenCardHeader>
       {pagoConfirmadoUI && (
         <ZenCardContent className="p-4 space-y-4">
-          <p className="text-xs text-zinc-400">
-            Los datos se guardarán al autorizar el evento.
-          </p>
-
           {/* Input: Monto Total Recibido */}
           <div className="space-y-2">
               <label className="block text-xs font-medium text-zinc-400">
@@ -254,17 +267,6 @@ export function ActivacionOperativaCard({
               </p>
             </div>
 
-            {/* Validación */}
-            {validationState.errors.length > 0 && (
-              <div className="rounded-md bg-rose-500/10 border border-rose-500/30 p-2">
-                <ul className="text-xs text-rose-400 space-y-1">
-                  {validationState.errors.map((err, i) => (
-                    <li key={i}>• {err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             {/* Mini-Cards (Pills) */}
             {pagoStaging.length > 0 && (
               <div className="space-y-2">
@@ -283,12 +285,12 @@ export function ActivacionOperativaCard({
                         hasError ? 'border-rose-500/50 bg-rose-500/5' : 'border-zinc-700 bg-zinc-800/30'
                       } transition-all`}
                     >
-                      {/* Header colapsable */}
-                      <div className="w-full px-3 py-2 flex items-center justify-between">
+                      {/* Header colapsable: solo concepto+monto y chevron expanden; zona método no clicable */}
+                      <div className="w-full px-3 py-2 flex items-center justify-between gap-2">
                         <button
                           type="button"
                           onClick={() => toggleCardExpanded(pago.id)}
-                          className="flex items-center gap-2 min-w-0 flex-1 hover:opacity-80 transition-opacity"
+                          className="flex items-center gap-2 min-w-0 shrink-0 hover:opacity-80 transition-opacity text-left"
                         >
                           <span className="text-xs font-medium text-zinc-300 truncate">
                             {pago.concepto}
@@ -297,9 +299,11 @@ export function ActivacionOperativaCard({
                             {formatearMoneda(pago.monto)}
                           </span>
                         </button>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {metodo && (
+                        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+                          {metodo ? (
                             <span className="text-xs text-zinc-500">{mapearNombreMetodoPago(metodo.payment_method_name)}</span>
+                          ) : (
+                            <span className="text-xs font-medium text-rose-400">Método requerido</span>
                           )}
                           {pago.concepto.includes('adicional') && (
                             <button
@@ -332,7 +336,7 @@ export function ActivacionOperativaCard({
                       {/* Contenido expandido */}
                       {isExpanded && (
                         <div className="px-4 pb-4 pt-3 space-y-3 border-t border-zinc-700/50">
-                          <div className="grid grid-cols-[110px_1fr] gap-4">
+                          <div className="grid grid-cols-[85px_1fr] gap-4">
                             <div className="min-w-0">
                               <label className="block text-xs font-medium text-zinc-400 mb-1">
                                 Monto {pago.isReadOnly && '(Fijo)'}
@@ -358,7 +362,7 @@ export function ActivacionOperativaCard({
                               <ZenSelect
                                 value={pago.metodoId ?? ''}
                                 onValueChange={(val) =>
-                                  handleUpdatePagoItem(pago.id, { metodoId: val })
+                                  handleUpdatePagoItem(pago.id, { metodoId: val || null })
                                 }
                                 options={metodosPago.map((pm) => ({
                                   value: pm.id,
@@ -366,44 +370,53 @@ export function ActivacionOperativaCard({
                                 }))}
                                 placeholder="Seleccionar"
                                 disableSearch
+                                className={`min-h-[2.625rem] ${!pago.metodoId ? 'text-zinc-500' : ''}`}
                               />
                             </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-zinc-400 mb-1">
-                              Fecha de pago
-                            </label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:border-zinc-600 flex items-center justify-between"
-                                >
-                                  <span>{format(pago.fecha, 'PPP', { locale: es })}</span>
-                                  <CalendarIcon className="h-4 w-4 text-zinc-400" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                className="w-auto p-0 bg-zinc-900 border-zinc-700"
-                                align="start"
-                              >
-                                <Calendar
-                                  mode="single"
-                                  selected={pago.fecha}
-                                  onSelect={(d) => {
-                                    if (d) handleUpdatePagoItem(pago.id, { fecha: d });
-                                  }}
-                                  locale={es}
-                                  className="rounded-md border-0"
-                                />
-                              </PopoverContent>
-                            </Popover>
                           </div>
                         </div>
                       )}
                     </div>
                   );
                 })}
+            </div>
+          )}
+
+          {/* Fecha global: aplica a todos los pagos del staging */}
+          {pagoConfirmadoUI && (
+            <div className="pt-3 border-t border-zinc-700/50">
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                Fecha de pago
+              </label>
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:border-zinc-600 flex items-center justify-between"
+                  >
+                    <span>{format(fechaGlobal, 'PPP', { locale: es })}</span>
+                    <CalendarIcon className="h-4 w-4 text-zinc-400" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 bg-zinc-900 border-zinc-700"
+                  align="start"
+                >
+                  <Calendar
+                    mode="single"
+                    selected={fechaGlobal}
+                    onSelect={(d) => d && handleFechaGlobalChange(d)}
+                    locale={es}
+                    className="rounded-md border-0"
+                  />
+                </PopoverContent>
+              </Popover>
+              <div className="flex items-center gap-2 mt-4 text-amber-400/90">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                <p className="text-xs">
+                  Los datos se guardarán al autorizar el evento.
+                </p>
+              </div>
             </div>
           )}
         </ZenCardContent>

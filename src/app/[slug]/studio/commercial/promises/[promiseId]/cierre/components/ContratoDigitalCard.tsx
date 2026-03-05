@@ -68,6 +68,8 @@ interface ContratoDigitalCardProps {
   onPagoConfirmadoOptimistic?: (checked: boolean) => void;
   /** Key para reset limpio del card cuando el servidor aplicó el estado (evita flicker) */
   pagoCardKey?: string;
+  /** Notifica staging y validez (metodoId en todos los ítems) para deshabilitar Autorizar */
+  onStagingChange?: (staging: unknown[], isValid: boolean) => void;
 }
 
 function ContratoDigitalCardInner({
@@ -97,6 +99,7 @@ function ContratoDigitalCardInner({
   onPagoTransitionPendingChange,
   onPagoConfirmadoOptimistic,
   pagoCardKey,
+  onStagingChange,
 }: ContratoDigitalCardProps) {
   if (isLoading || !cotizacion) {
     return <ContratoDigitalCardSkeleton />;
@@ -186,6 +189,7 @@ function ContratoDigitalCardInner({
             metodosPago={metodosPago}
             onTransitionPendingChange={onPagoTransitionPendingChange}
             onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
+            onStagingChange={onStagingChange}
           />
         )}
       </ZenCardContent>

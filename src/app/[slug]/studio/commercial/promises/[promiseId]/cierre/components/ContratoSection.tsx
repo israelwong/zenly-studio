@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2, MoreVertical, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw } from 'lucide-react';
 import {
   ZenConfirmModal,
   ZenDropdownMenu,
@@ -252,12 +252,6 @@ export const ContratoSection = memo(function ContratoSection({
       contratoBoton = 'Definir';
     }
   }
-  const handleOpenPreview = (e: React.MouseEvent) => {
-    if (contratoFirmado && contractData?.contract_template_id) {
-      e.stopPropagation();
-      handleViewContract();
-    }
-  };
 
   const headerTitle = loadingRegistro
     ? 'Contrato Digital'
@@ -273,119 +267,121 @@ export const ContratoSection = memo(function ContratoSection({
         contratoOmitido ? 'opacity-75 grayscale' : ''
       }`}
     >
-      {/* Header alineado con otros cards */}
-      <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
-        <div className="flex items-center gap-2 min-w-0">
-          {contratoIcon}
-          <span className={`text-xs uppercase tracking-wide font-semibold truncate ${loadingRegistro ? 'text-zinc-500' : contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
-            {headerTitle}
-          </span>
+      {/* Contrato firmado: card informativo sin header — todo el div abre preview */}
+      {contratoFirmado && contractData?.contract_template_id ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleViewContract}
+          onKeyDown={(e) => e.key === 'Enter' && handleViewContract()}
+          className="p-3 space-y-1 rounded-lg hover:bg-zinc-700/30 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              <span className="text-xs uppercase tracking-wide font-semibold text-emerald-400 truncate">
+                Contrato firmado
+              </span>
+            </div>
+            {(onRegenerateContract || onCancelarContrato) && (
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-7 min-w-[2rem] flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors shrink-0"
+                    title="Opciones de contrato"
+                    aria-label="Opciones de contrato"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                  {onRegenerateContract && (
+                    <ZenDropdownMenuItem
+                      className="cursor-pointer text-amber-400 focus:text-amber-300"
+                      onSelect={() => setShowRegenerateConfirm(true)}
+                      disabled={isRegenerating}
+                    >
+                      {isRegenerating ? (
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0 mr-2" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 shrink-0 mr-2" />
+                      )}
+                      Regenerar contrato
+                    </ZenDropdownMenuItem>
+                  )}
+                  {onCancelarContrato && (
+                    <ZenDropdownMenuItem
+                      className="cursor-pointer text-rose-400 focus:text-rose-300 focus:bg-rose-500/10"
+                      onSelect={() => setShowCancelarContratoConfirm(true)}
+                    >
+                      <Trash2 className="h-4 w-4 shrink-0 mr-2" />
+                      Cancelar contrato
+                    </ZenDropdownMenuItem>
+                  )}
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
+            )}
+          </div>
+          {(() => {
+            const version = contractData.contract_version != null ? `v${contractData.contract_version}` : '';
+            const studioTz = 'America/Mexico_City';
+            const dayInTz = contractData.contract_signed_at
+              ? getDateOnlyInTimezone(contractData.contract_signed_at, studioTz)
+              : null;
+            const normalized = dayInTz ?? (contractData.contract_signed_at ? toUtcDateOnly(contractData.contract_signed_at) : null);
+            const textoFirma = normalized
+              ? formatDisplayDate(normalized, { day: 'numeric', month: 'long', year: 'numeric' })
+              : '';
+            const firmada = textoFirma ? `Firmada ${textoFirma}` : '';
+            const line = [version, firmada].filter(Boolean).join(' · ');
+            return line ? <p className="text-xs text-zinc-400">{line}</p> : null;
+          })()}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {contratoBoton && contratoBoton !== 'Definir' && !contratoFirmado && !contratoOmitido && (
-            <button
-              onClick={onContratoButtonClick}
-              className="h-7 min-w-[2.5rem] flex items-center justify-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-            >
-              {contratoBoton}
-            </button>
-          )}
-          {contratoFirmado && (onRegenerateContract || onCancelarContrato) ? (
-            <ZenDropdownMenu>
-              <ZenDropdownMenuTrigger asChild>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
+            <div className="flex items-center gap-2 min-w-0">
+              {contratoIcon}
+              <span className={`text-xs uppercase tracking-wide font-semibold truncate ${loadingRegistro ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                {headerTitle}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {contratoBoton && contratoBoton !== 'Definir' && !contratoOmitido && (
                 <button
-                  type="button"
-                  className="h-7 min-w-[2rem] flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors shrink-0"
-                  title="Opciones de contrato"
-                  aria-label="Opciones de contrato"
+                  onClick={onContratoButtonClick}
+                  className="h-7 min-w-[2.5rem] flex items-center justify-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
                 >
-                  <MoreVertical className="h-4 w-4" />
+                  {contratoBoton}
                 </button>
-              </ZenDropdownMenuTrigger>
-              <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
-                {onRegenerateContract && (
-                  <ZenDropdownMenuItem
-                    className="cursor-pointer text-amber-400 focus:text-amber-300"
-                    onSelect={() => setShowRegenerateConfirm(true)}
+              )}
+              {tieneContratoGenerado &&
+                onRegenerateContract &&
+                !contratoFirmado && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConfirmRegenerate();
+                    }}
                     disabled={isRegenerating}
+                    className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                    title="Regenerar contrato"
+                    aria-label="Regenerar contrato"
                   >
                     {isRegenerating ? (
-                      <Loader2 className="h-4 w-4 animate-spin shrink-0 mr-2" />
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                     ) : (
-                      <RefreshCw className="h-4 w-4 shrink-0 mr-2" />
+                      'Regenerar'
                     )}
-                    Regenerar contrato
-                  </ZenDropdownMenuItem>
+                  </button>
                 )}
-                {onCancelarContrato && (
-                  <ZenDropdownMenuItem
-                    className="cursor-pointer text-rose-400 focus:text-rose-300 focus:bg-rose-500/10"
-                    onSelect={() => setShowCancelarContratoConfirm(true)}
-                  >
-                    <Trash2 className="h-4 w-4 shrink-0 mr-2" />
-                    Cancelar contrato
-                  </ZenDropdownMenuItem>
-                )}
-              </ZenDropdownMenuContent>
-            </ZenDropdownMenu>
-          ) : (
-            tieneContratoGenerado &&
-            onRegenerateContract &&
-            !contratoFirmado && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleConfirmRegenerate();
-                }}
-                disabled={isRegenerating}
-                className="h-7 min-w-[2.5rem] flex items-center justify-center text-[10px] text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                title="Regenerar contrato"
-                aria-label="Regenerar contrato"
-              >
-                {isRegenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                ) : (
-                  'Regenerar'
-                )}
-              </button>
-            )
-          )}
-        </div>
-      </div>
-
-      {/* Contenido */}
-      <div className="p-3 space-y-2">
-        {contratoFirmado && contractData?.contract_template_id && (
-          <div className="space-y-1">
-            <button
-              type="button"
-              onClick={handleOpenPreview}
-              className="flex items-center gap-1.5 text-xs text-white hover:text-zinc-200 transition-colors w-full text-left cursor-pointer"
-            >
-              <Eye className="h-3.5 w-3.5 shrink-0" />
-              Clic para ver preview
-            </button>
-            {contractData.contract_version != null && (
-              <p className="text-xs text-zinc-500">
-                Versión del contrato: {contractData.contract_version}
-              </p>
-            )}
-            {contractData.contract_signed_at && (() => {
-              const studioTz = 'America/Mexico_City';
-              const dayInTz = getDateOnlyInTimezone(contractData.contract_signed_at, studioTz);
-              const normalized = dayInTz ?? toUtcDateOnly(contractData.contract_signed_at);
-              const textoFirma = normalized
-                ? formatDisplayDate(normalized, { day: 'numeric', month: 'long', year: 'numeric' })
-                : '—';
-              return (
-                <p className="text-xs text-zinc-500">
-                  Firmado el: {textoFirma}
-                </p>
-              );
-            })()}
+            </div>
           </div>
-        )}
+
+          <div className="p-3 space-y-2">
         {contratoOmitido && !tieneContratoGenerado && (
           <p className="text-xs text-zinc-500">Contrato omitido. Puedes autorizar sin generar contrato.</p>
         )}
@@ -444,6 +440,8 @@ export const ContratoSection = memo(function ContratoSection({
         </div>
       )}
       </div>
+        </>
+      )}
 
       <ZenConfirmModal
         isOpen={showCancelarContratoConfirm}
