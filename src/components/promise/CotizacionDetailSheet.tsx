@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil } from 'lucide-react';
-import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
+import { ZenButton, ZenBadge, SeparadorZen, ZenSwitch } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
 import { AutorizarCotizacionModal } from './AutorizarCotizacionModal';
@@ -119,6 +119,8 @@ interface CotizacionDetailSheetProps {
     isEditMode?: boolean;
     saveDisabledTitle?: string;
     condicionIdsVisiblesSize?: number;
+    visibleToClient?: boolean;
+    onPublishToggle?: (published: boolean) => void;
   } | null;
 }
 
@@ -796,33 +798,81 @@ export function CotizacionDetailSheet({
         <div className="shrink-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800/70 p-4 sm:p-6">
           {isStudioContext && studioFooterActions ? (
             <div className="flex flex-col gap-3">
-              <div className="flex gap-2">
-                <ZenButton
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={studioFooterActions.onSaveDraft}
-                  loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'draft'}
-                  loadingText="Guardando..."
-                  disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
-                  title={studioFooterActions.saveDisabledTitle}
-                >
-                  {studioFooterActions.isEditMode ? 'Guardar cambios' : 'Guardar como borrador'}
-                </ZenButton>
+              {/* Switch de publicación (solo en modo edición) */}
+              {studioFooterActions.isEditMode && studioFooterActions.onPublishToggle && (
+                <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        {studioFooterActions.visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio'}
+                      </p>
+                    </div>
+                    <ZenSwitch
+                      checked={studioFooterActions.visibleToClient ?? false}
+                      onCheckedChange={studioFooterActions.onPublishToggle}
+                      disabled={studioFooterActions.loading}
+                      variant={studioFooterActions.visibleToClient ? 'emerald' : 'default'}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <div className={`px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ${
+                      studioFooterActions.visibleToClient 
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                        : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    }`}>
+                      {studioFooterActions.visibleToClient ? 'Publicada' : 'Borrador'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {studioFooterActions.isEditMode ? (
+                // Modo edición: solo botón Guardar
                 <ZenButton
                   type="button"
                   variant="primary"
                   size="sm"
-                  className="flex-1"
-                  onClick={studioFooterActions.onSavePublish}
-                  loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'publish'}
-                  loadingText="Publicando..."
+                  className="w-full"
+                  onClick={studioFooterActions.visibleToClient ? studioFooterActions.onSavePublish : studioFooterActions.onSaveDraft}
+                  loading={studioFooterActions.loading}
+                  loadingText="Guardando..."
                   disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
                   title={studioFooterActions.saveDisabledTitle}
                 >
-                  {studioFooterActions.isEditMode ? 'Publicar ahora' : 'Crear y Publicar'}
+                  Guardar cambios
                 </ZenButton>
-              </div>
+              ) : (
+                // Modo creación: Guardar borrador y Crear y Publicar
+                <div className="flex gap-2">
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={studioFooterActions.onSaveDraft}
+                    loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'draft'}
+                    loadingText="Guardando..."
+                    disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                    title={studioFooterActions.saveDisabledTitle}
+                  >
+                    Guardar como borrador
+                  </ZenButton>
+                  <ZenButton
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    className="flex-1"
+                    onClick={studioFooterActions.onSavePublish}
+                    loading={studioFooterActions.loading && studioFooterActions.savingIntent === 'publish'}
+                    loadingText="Publicando..."
+                    disabled={studioFooterActions.loading || (studioFooterActions.condicionIdsVisiblesSize === 0)}
+                    title={studioFooterActions.saveDisabledTitle}
+                  >
+                    Crear y Publicar
+                  </ZenButton>
+                </div>
+              )}
+
               <ZenButton
                 type="button"
                 variant="ghost"

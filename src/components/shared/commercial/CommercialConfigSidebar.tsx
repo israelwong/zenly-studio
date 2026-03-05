@@ -3,7 +3,7 @@
 import React from 'react';
 import { PackagePlus, Eye } from 'lucide-react';
 import { Accordion } from '@/components/ui/shadcn/accordion';
-import { ZenButton } from '@/components/ui/zen';
+import { ZenButton, ZenSwitch } from '@/components/ui/zen';
 import { cn } from '@/lib/utils';
 
 export type CommercialConfigContext = 'cotizacion' | 'paquete';
@@ -136,6 +136,12 @@ export interface CommercialConfigActionButtonsProps {
   hideGuardarComoPaquete?: boolean;
   /** Si true, en la barra lateral solo se muestran "Vista previa" y "Cancelar" (acciones de guardado se mueven al footer del modal de vista previa). */
   sidebarOnlyPreviewAndCancel?: boolean;
+  /** Callback para cambiar el estado de publicación (switch). */
+  onPublishToggle?: (published: boolean) => void;
+  /** Si true, muestra el switch de publicación. */
+  showPublishSwitch?: boolean;
+  /** Si true, el switch está deshabilitado (ej. validación pendiente). */
+  publishSwitchDisabled?: boolean;
 }
 
 /**
@@ -161,6 +167,9 @@ export function CommercialConfigActionButtons({
   autorizarNode,
   hideGuardarComoPaquete = false,
   sidebarOnlyPreviewAndCancel = false,
+  onPublishToggle,
+  showPublishSwitch = false,
+  publishSwitchDisabled = false,
 }: CommercialConfigActionButtonsProps) {
   if (customActionButtons) {
     return <>{customActionButtons}</>;
@@ -173,7 +182,37 @@ export function CommercialConfigActionButtons({
   const isCurrentlyVisible = visibleToClient;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Switch de publicación (solo en modo edición) */}
+      {showPublishSwitch && isEditMode && onPublishToggle && (
+        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio'}
+              </p>
+            </div>
+            <ZenSwitch
+              checked={isCurrentlyVisible}
+              onCheckedChange={onPublishToggle}
+              disabled={publishSwitchDisabled || loading}
+              variant={isCurrentlyVisible ? 'emerald' : 'default'}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide",
+              isCurrentlyVisible 
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            )}>
+              {isCurrentlyVisible ? 'Publicada' : 'Borrador'}
+            </div>
+          </div>
+        </div>
+      )}
+
       {!sidebarOnlyPreviewAndCancel && !hideGuardarComoPaquete && (
         <ZenButton
           type="button"
@@ -186,6 +225,7 @@ export function CommercialConfigActionButtons({
           {isSavingAsPaquete ? 'Creando paquete...' : 'Guardar como paquete'}
         </ZenButton>
       )}
+      
       {onRequestPreview && (
         <ZenButton
           type="button"
@@ -198,36 +238,25 @@ export function CommercialConfigActionButtons({
           Vista previa
         </ZenButton>
       )}
+      
       {!sidebarOnlyPreviewAndCancel && (
         <>
           {isEditMode ? (
-            <>
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={onSaveDraft}
-                loading={loading && savingIntent === 'draft'}
-                loadingText="Guardando..."
-                disabled={loading || isDisabled || condicionDisabled}
-                title={saveDisabledTitle}
-                className="w-full"
-              >
-                {isCurrentlyVisible ? 'Cambiar a borrador' : 'Guardar cambios'}
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="primary"
-                onClick={onSavePublish}
-                loading={loading && savingIntent === 'publish'}
-                loadingText={isCurrentlyVisible ? 'Guardando...' : 'Publicando...'}
-                disabled={loading || isDisabled || condicionDisabled}
-                title={saveDisabledTitle}
-                className="w-full"
-              >
-                {isCurrentlyVisible ? 'Guardar cambios' : 'Publicar ahora'}
-              </ZenButton>
-            </>
+            // Modo edición: solo botón Guardar (el switch maneja publicación)
+            <ZenButton
+              type="button"
+              variant="primary"
+              onClick={isCurrentlyVisible ? onSavePublish : onSaveDraft}
+              loading={loading}
+              loadingText="Guardando..."
+              disabled={loading || isDisabled || condicionDisabled}
+              title={saveDisabledTitle}
+              className="w-full"
+            >
+              Guardar
+            </ZenButton>
           ) : (
+            // Modo creación: Guardar borrador y Crear y Publicar
             <>
               <ZenButton
                 type="button"
@@ -258,6 +287,7 @@ export function CommercialConfigActionButtons({
           {autorizarNode}
         </>
       )}
+      
       <ZenButton
         type="button"
         variant="secondary"
