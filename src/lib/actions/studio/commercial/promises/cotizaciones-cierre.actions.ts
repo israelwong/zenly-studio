@@ -107,7 +107,7 @@ export async function obtenerRegistroCierre(
       prisma.studio_pagos.aggregate({
         where: {
           cotizacion_id: cotizacionId,
-          status: { in: ['paid', 'completed', 'succeeded'] },
+          status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
         },
         _sum: { amount: true },
       }),
