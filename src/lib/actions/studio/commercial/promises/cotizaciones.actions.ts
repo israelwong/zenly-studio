@@ -3112,9 +3112,10 @@ export async function cancelarCotizacion(
       where: { id: cotizacionId },
       data: {
         status: 'cancelada',
-        selected_by_prospect: false, // Resetear flag de autorización
+        selected_by_prospect: false,
+        visible_to_client: false,
         evento_id: null, // Liberar relaciรณn con evento
-        discount: null, // Limpiar descuento al cancelar
+        discount: null,
         updated_at: new Date(),
       },
     });
@@ -3199,8 +3200,9 @@ export async function cancelarCotizacionYEvento(
         where: { id: cotizacionId },
         data: {
           status: 'cancelada',
+          visible_to_client: false,
           evento_id: null,
-          discount: null, // Limpiar descuento al cancelar
+          discount: null,
           updated_at: new Date(),
         },
       });
@@ -3972,6 +3974,7 @@ export async function cancelarCierre(
         data: {
           status: statusToRestore,
           selected_by_prospect: false,
+          visible_to_client: false,
           selected_at: null,
           updated_at: new Date(),
         },

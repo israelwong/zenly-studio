@@ -775,12 +775,32 @@ export function PromiseQuotesPanelCard({
           <h4 className={`flex-1 min-w-0 text-sm font-medium truncate ${isArchivada ? 'text-zinc-500' : 'text-zinc-200'}`}>
             {cotizacion.name}
           </h4>
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Botón Publicada/No publicada: primero. Si cancelada, forzar no publicada y deshabilitar */}
+            {!selectionMode && !isArchivada && (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleVisibility}
+                loading={visibilityLoading !== null}
+                disabled={isCancelada}
+                className={
+                  cotizacion.visible_to_client
+                    ? 'text-emerald-400 bg-emerald-950/50 border-emerald-600/50 hover:bg-emerald-500/10 h-7 px-2 text-xs relative z-10'
+                    : 'text-zinc-400 border-zinc-600 hover:bg-zinc-800/50 h-7 px-2 text-xs relative z-10'
+                }
+                loadingText={visibilityLoading === 'publicando' ? 'Publicando' : 'Despublicando'}
+                title={isCancelada ? 'Las cotizaciones canceladas no se pueden publicar' : (cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto')}
+              >
+                {cotizacion.visible_to_client ? 'Publicada' : 'No publicada'}
+              </ZenButton>
+            )}
+            {/* Badge de estado: omitir "Pendiente", mostrar otros estados */}
             {isArchivada ? (
               <ZenBadge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full">
                 Archivada
               </ZenBadge>
-            ) : (
+            ) : cotizacion.status !== 'pendiente' ? (
               <ZenBadge
                 variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
                 className="text-[10px] px-1.5 py-0.5 rounded-full"
@@ -790,7 +810,7 @@ export function PromiseQuotesPanelCard({
                   <span className="ml-1">#{cotizacion.revision_number}</span>
                 )}
               </ZenBadge>
-            )}
+            ) : null}
             {!selectionMode && !(isArchivada && hasApprovedQuote) && (
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
@@ -978,11 +998,11 @@ export function PromiseQuotesPanelCard({
                 if (!hasDuration && !hasCortesias && !hasBono) return null;
                 const divider = <span className="text-zinc-500 px-1">·</span>;
                 return (
-                  <div className="flex items-center flex-nowrap gap-0 text-xs text-zinc-400">
+                  <div className="flex items-center flex-nowrap gap-0 text-sm text-zinc-400">
                     {hasDuration && (
                       <>
                         <span className="inline-flex items-center gap-1 shrink-0" title="Duración">
-                          <Clock className="h-3 w-3 text-zinc-500" />
+                          <Clock className="h-3.5 w-3.5 text-zinc-500" />
                           <span>{cotizacion.event_duration} hrs</span>
                         </span>
                         {(hasCortesias || hasBono) && divider}
@@ -991,7 +1011,7 @@ export function PromiseQuotesPanelCard({
                     {hasCortesias && (
                       <>
                         <span className="inline-flex items-center gap-1 shrink-0 text-emerald-500">
-                          <Gift className="h-3 w-3" />
+                          <Gift className="h-3.5 w-3.5" />
                           <span>{cortesiasCount} Cortesía{cortesiasCount !== 1 ? 's' : ''}</span>
                         </span>
                         {hasBono && divider}
@@ -999,33 +1019,13 @@ export function PromiseQuotesPanelCard({
                     )}
                     {hasBono && (
                       <span className="inline-flex items-center gap-1 shrink-0 text-amber-500" title="Bono especial">
-                        <Ticket className="h-3 w-3" />
+                        <Ticket className="h-3.5 w-3.5" />
                         <span>Bono: ${Number(cotizacion.bono_especial).toLocaleString('es-MX', { minimumFractionDigits: 0 })}</span>
                       </span>
                     )}
                   </div>
                 );
               })()}
-              <div className="flex items-baseline gap-2">
-                {(() => {
-                  const precioFinal = cotizacion.total_a_pagar ?? cotizacion.price;
-                  const precioLista = cotizacion.precio_calculado ?? cotizacion.snap_precio_lista ?? null;
-                  const mostrarListaTachado = precioLista != null && precioLista > precioFinal;
-                  const format = (n: number) => n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
-                  return (
-                    <>
-                      {mostrarListaTachado && (
-                        <span className={`text-md font-light line-through shrink-0 ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                          ${format(precioLista)}
-                        </span>
-                      )}
-                      <span className={`text-lg font-bold tabular-nums ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'}`}>
-                        ${format(precioFinal)}
-                      </span>
-                    </>
-                  );
-                })()}
-              </div>
               {cotizacion.condiciones_visibles_detalle && cotizacion.condiciones_visibles_detalle.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {cotizacion.condiciones_visibles_detalle.map((c) => (
@@ -1055,39 +1055,39 @@ export function PromiseQuotesPanelCard({
               </p>
             </div>
 
-            {/* Action footer: Publicada/No publicada izquierda, Vista previa + handshake derecha */}
+            {/* Action footer: precio + Vista previa + handshake */}
             <div
               data-quote-actions
-              className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center justify-between gap-2 flex-wrap"
+              className="mt-3 pt-3 border-t border-zinc-700 flex items-center justify-between gap-2 flex-wrap"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-1.5 relative z-10">
-                {!selectionMode && !isArchivada && (
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    className={
-                      cotizacion.visible_to_client
-                        ? 'text-emerald-400 border-emerald-600/50 hover:bg-emerald-500/10 h-7 px-2 text-xs relative z-10'
-                        : 'text-zinc-400 border-zinc-600 hover:bg-zinc-800/50 h-7 px-2 text-xs relative z-10'
-                    }
-                    onClick={handleToggleVisibility}
-                    disabled={loading || isDuplicating}
-                    loading={visibilityLoading !== null}
-                    loadingText={visibilityLoading === 'publicando' ? 'Publicando' : 'Despublicando'}
-                    title={cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
-                  >
-                    {cotizacion.visible_to_client ? 'Publicada' : 'No publicada'}
-                  </ZenButton>
-                )}
+              <div className="flex items-baseline gap-2">
+                {(() => {
+                  const precioFinal = cotizacion.total_a_pagar ?? cotizacion.price;
+                  const precioLista = cotizacion.precio_calculado ?? cotizacion.snap_precio_lista ?? null;
+                  const mostrarListaTachado = precioLista != null && precioLista > precioFinal;
+                  const format = (n: number) => n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+                  return (
+                    <>
+                      {mostrarListaTachado && (
+                        <span className={`text-sm font-light line-through shrink-0 ${isArchivada ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                          ${format(precioLista)}
+                        </span>
+                      )}
+                      <span className={`text-base font-bold tabular-nums ${isArchivada ? 'text-zinc-500' : 'text-emerald-400'}`}>
+                        ${format(precioFinal)}
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-1.5 relative z-10">
                 {!selectionMode && !isArchivada && (
                   <ZenButton
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs border-zinc-600 text-zinc-300 hover:bg-zinc-800/50 relative z-10"
+                    className="h-7 px-2 text-xs text-zinc-400 bg-zinc-900/50 hover:bg-zinc-800 hover:text-zinc-200 relative z-10"
                     onClick={handleLoadDetail}
                     disabled={!promiseId || isDuplicating}
                     loading={loadingPreview}
