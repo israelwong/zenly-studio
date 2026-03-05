@@ -135,6 +135,7 @@ export function CotizacionForm({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isTogglingPublish, setIsTogglingPublish] = useState(false);
   const [savingIntent, setSavingIntent] = useState<'draft' | 'publish' | null>(null);
   const isSubmittingRef = useRef(false);
   const redirectingRef = useRef(false);
@@ -2516,6 +2517,53 @@ export function CotizacionForm({
               saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
               hideGuardarComoPaquete={hideGuardarComoPaqueteInSidebar}
               sidebarOnlyPreviewAndCancel={!!onRequestPreview}
+              showPublishSwitch={isEditMode}
+              onPublishToggle={async (published) => {
+                if (isTogglingPublish || condicionIdsVisibles.size === 0) return;
+                
+                // Actualización optimista del estado local
+                const previousState = visibleToClient;
+                setVisibleToClient(published);
+                setIsTogglingPublish(true);
+                
+                try {
+                  const itemsSeleccionados = Object.entries(items).filter(([, cantidad]) => cantidad > 0);
+                  const precioFinal = precioPersonalizado === '' || precioPersonalizado === 0
+                    ? calculoPrecio.total
+                    : Number(precioPersonalizado);
+                  
+                  const result = await updateCotizacion({
+                    studio_slug: studioSlug,
+                    cotizacion_id: cotizacionId!,
+                    nombre: nombre.trim(),
+                    descripcion: descripcion.trim() || undefined,
+                    precio: precioFinal,
+                    precio_calculado: (calculoPrecio.subtotal ?? 0) > 0 ? calculoPrecio.subtotal : undefined,
+                    visible_to_client: published,
+                    items: Object.fromEntries(
+                      itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
+                    ),
+                    customItems: customItems,
+                    condiciones_visibles: Array.from(condicionIdsVisibles),
+                  });
+                  
+                  if (result.success) {
+                    toast.success(published ? 'Cotización publicada' : 'Cotización despublicada');
+                  } else {
+                    // Revertir en caso de error
+                    setVisibleToClient(previousState);
+                    toast.error(result.error || 'Error al cambiar estado de publicación');
+                  }
+                } catch (error) {
+                  // Revertir en caso de error
+                  setVisibleToClient(previousState);
+                  toast.error('Error al cambiar estado de publicación');
+                } finally {
+                  setIsTogglingPublish(false);
+                }
+              }}
+              publishSwitchDisabled={condicionIdsVisibles.size === 0}
+              isTogglingPublish={isTogglingPublish}
             />
           ))
         }

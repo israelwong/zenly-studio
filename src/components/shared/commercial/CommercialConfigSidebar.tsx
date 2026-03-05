@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PackagePlus, Eye } from 'lucide-react';
+import { PackagePlus, Eye, Loader2 } from 'lucide-react';
 import { Accordion } from '@/components/ui/shadcn/accordion';
 import { ZenButton, ZenSwitch } from '@/components/ui/zen';
 import { cn } from '@/lib/utils';
@@ -142,6 +142,8 @@ export interface CommercialConfigActionButtonsProps {
   showPublishSwitch?: boolean;
   /** Si true, el switch está deshabilitado (ej. validación pendiente). */
   publishSwitchDisabled?: boolean;
+  /** Si true, el switch está procesando un cambio de estado. */
+  isTogglingPublish?: boolean;
 }
 
 /**
@@ -170,6 +172,7 @@ export function CommercialConfigActionButtons({
   onPublishToggle,
   showPublishSwitch = false,
   publishSwitchDisabled = false,
+  isTogglingPublish = false,
 }: CommercialConfigActionButtonsProps) {
   if (customActionButtons) {
     return <>{customActionButtons}</>;
@@ -185,30 +188,28 @@ export function CommercialConfigActionButtons({
     <div className="space-y-3">
       {/* Switch de publicación (solo en modo edición) */}
       {showPublishSwitch && isEditMode && onPublishToggle && (
-        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3 space-y-2">
+        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio'}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                {isTogglingPublish && (
+                  <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" />
+                )}
+                <p className="text-xs text-zinc-400">
+                  {isTogglingPublish 
+                    ? (isCurrentlyVisible ? 'Despublicando...' : 'Publicando...')
+                    : (isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio')
+                  }
+                </p>
+              </div>
             </div>
             <ZenSwitch
               checked={isCurrentlyVisible}
               onCheckedChange={onPublishToggle}
-              disabled={publishSwitchDisabled || loading}
+              disabled={publishSwitchDisabled || isTogglingPublish}
               variant={isCurrentlyVisible ? 'emerald' : 'default'}
             />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className={cn(
-              "px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide",
-              isCurrentlyVisible 
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-            )}>
-              {isCurrentlyVisible ? 'Publicada' : 'Borrador'}
-            </div>
           </div>
         </div>
       )}
@@ -239,54 +240,50 @@ export function CommercialConfigActionButtons({
         </ZenButton>
       )}
       
-      {!sidebarOnlyPreviewAndCancel && (
+      {isEditMode ? (
+        // Modo edición: botón Guardar (el switch maneja publicación)
+        <ZenButton
+          type="button"
+          variant="primary"
+          onClick={isCurrentlyVisible ? onSavePublish : onSaveDraft}
+          loading={loading && savingIntent !== null}
+          loadingText="Guardando..."
+          disabled={loading || isDisabled || condicionDisabled}
+          title={saveDisabledTitle}
+          className="w-full"
+        >
+          Guardar cambios
+        </ZenButton>
+      ) : !sidebarOnlyPreviewAndCancel ? (
+        // Modo creación: Guardar borrador y Crear y Publicar
         <>
-          {isEditMode ? (
-            // Modo edición: solo botón Guardar (el switch maneja publicación)
-            <ZenButton
-              type="button"
-              variant="primary"
-              onClick={isCurrentlyVisible ? onSavePublish : onSaveDraft}
-              loading={loading}
-              loadingText="Guardando..."
-              disabled={loading || isDisabled || condicionDisabled}
-              title={saveDisabledTitle}
-              className="w-full"
-            >
-              Guardar
-            </ZenButton>
-          ) : (
-            // Modo creación: Guardar borrador y Crear y Publicar
-            <>
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={onSaveDraft}
-                loading={loading && savingIntent === 'draft'}
-                loadingText="Guardando..."
-                disabled={loading || isDisabled || condicionDisabled}
-                title={saveDisabledTitle}
-                className="w-full"
-              >
-                Guardar borrador
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="primary"
-                onClick={onSavePublish}
-                loading={loading && savingIntent === 'publish'}
-                loadingText="Publicando..."
-                disabled={loading || isDisabled || condicionDisabled}
-                title={saveDisabledTitle}
-                className="w-full"
-              >
-                Crear y Publicar
-              </ZenButton>
-            </>
-          )}
+          <ZenButton
+            type="button"
+            variant="outline"
+            onClick={onSaveDraft}
+            loading={loading && savingIntent === 'draft'}
+            loadingText="Guardando..."
+            disabled={loading || isDisabled || condicionDisabled}
+            title={saveDisabledTitle}
+            className="w-full"
+          >
+            Guardar borrador
+          </ZenButton>
+          <ZenButton
+            type="button"
+            variant="primary"
+            onClick={onSavePublish}
+            loading={loading && savingIntent === 'publish'}
+            loadingText="Publicando..."
+            disabled={loading || isDisabled || condicionDisabled}
+            title={saveDisabledTitle}
+            className="w-full"
+          >
+            Crear y Publicar
+          </ZenButton>
           {autorizarNode}
         </>
-      )}
+      ) : null}
       
       <ZenButton
         type="button"

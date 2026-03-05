@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink, PackagePlus, Pencil, Loader2 } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen, ZenSwitch } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -121,6 +121,7 @@ interface CotizacionDetailSheetProps {
     condicionIdsVisiblesSize?: number;
     visibleToClient?: boolean;
     onPublishToggle?: (published: boolean) => void;
+    isTogglingPublish?: boolean;
   } | null;
 }
 
@@ -804,25 +805,24 @@ export function CotizacionDetailSheet({
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        {studioFooterActions.visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio'}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {studioFooterActions.isTogglingPublish && (
+                          <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" />
+                        )}
+                        <p className="text-xs text-zinc-400">
+                          {studioFooterActions.isTogglingPublish 
+                            ? (studioFooterActions.visibleToClient ? 'Despublicando...' : 'Publicando...')
+                            : (studioFooterActions.visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio')
+                          }
+                        </p>
+                      </div>
                     </div>
                     <ZenSwitch
                       checked={studioFooterActions.visibleToClient ?? false}
                       onCheckedChange={studioFooterActions.onPublishToggle}
-                      disabled={studioFooterActions.loading}
+                      disabled={studioFooterActions.isTogglingPublish}
                       variant={studioFooterActions.visibleToClient ? 'emerald' : 'default'}
                     />
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <div className={`px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ${
-                      studioFooterActions.visibleToClient 
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                        : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    }`}>
-                      {studioFooterActions.visibleToClient ? 'Publicada' : 'Borrador'}
-                    </div>
                   </div>
                 </div>
               )}
