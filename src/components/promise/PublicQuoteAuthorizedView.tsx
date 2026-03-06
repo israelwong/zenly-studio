@@ -243,6 +243,21 @@ export function PublicQuoteAuthorizedView({
   const pagoConfirmadoEstudio = currentContract?.pago_confirmado_estudio ?? false;
   const pagoMonto = currentContract?.pago_monto ?? null;
   
+  // Verificar si hay contrato disponible
+  // El contrato está disponible si hay contract_content (generado)
+  // Si solo hay template_id pero no content, el contrato aún no se ha generado
+  const hasContract = !!currentContract?.content;
+  const hasContractTemplate = !!currentContract?.template_id;
+  const isContractGenerated = cotizacion.status === 'contract_generated' || cotizacion.status === 'contract_signed';
+  // IMPORTANTE: Verificar firma desde la tabla temporal (contract.signed_at)
+  // ⚠️ Usar useMemo para asegurar estabilidad de valores entre renders
+  const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
+  const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
+  /** Fase 29.9.5: Check-in completado por cliente o estudio; no forzar validación de datos */
+  const checkinCompleted = cotizacion.contract?.checkin_completed ?? false;
+  /** Fase 29.9.8: Flujo manual = estudio pasó a cierre sin que el cliente haya autorizado desde el link */
+  const isManualFlow = cotizacion.selected_by_prospect !== true;
+  
   // 🎨 LOG DE ESTADO INICIAL (solo una vez al montar)
   const initialLoggedRef = useRef(false);
   useEffect(() => {
@@ -292,21 +307,6 @@ export function PublicQuoteAuthorizedView({
       initialLoggedRef.current = true;
     }
   }, [contratoDefinido, firmaRequerida, pagoConfirmadoEstudio, pagoMonto, hasContract, isContractSigned, cotizacion.status]);
-  
-  // Verificar si hay contrato disponible
-  // El contrato está disponible si hay contract_content (generado)
-  // Si solo hay template_id pero no content, el contrato aún no se ha generado
-  const hasContract = !!currentContract?.content;
-  const hasContractTemplate = !!currentContract?.template_id;
-  const isContractGenerated = cotizacion.status === 'contract_generated' || cotizacion.status === 'contract_signed';
-  // IMPORTANTE: Verificar firma desde la tabla temporal (contract.signed_at)
-  // ⚠️ Usar useMemo para asegurar estabilidad de valores entre renders
-  const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
-  const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
-  /** Fase 29.9.5: Check-in completado por cliente o estudio; no forzar validación de datos */
-  const checkinCompleted = cotizacion.contract?.checkin_completed ?? false;
-  /** Fase 29.9.8: Flujo manual = estudio pasó a cierre sin que el cliente haya autorizado desde el link */
-  const isManualFlow = cotizacion.selected_by_prospect !== true;
 
   // Fase 29.9.6: Refrescar una vez si check-in completado pero contrato aún no cargado (recién generado)
   const refreshedForContractRef = useRef(false);

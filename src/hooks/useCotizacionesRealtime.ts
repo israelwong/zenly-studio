@@ -163,13 +163,35 @@ export function useCotizacionesRealtime({
 
       const p = payload as any;
       
+      // 🔍 LOG DE DEBUG: Ver todos los eventos que llegan
+      console.log(
+        '%c🔍 [Realtime] Evento recibido',
+        'color: #a855f7; font-size: 11px;',
+        {
+          table: p.table || p.payload?.table || 'unknown',
+          operation: p.operation || p.event || 'unknown',
+          hasOld: !!(p.old || p.payload?.old),
+          hasNew: !!(p.new || p.payload?.new),
+          rawPayload: p,
+        }
+      );
+      
       // Detectar si es un cambio en studio_cotizaciones_cierre
       // El trigger emite eventos con table: 'studio_cotizaciones_cierre'
-      const isCierreEvent = p.table === 'studio_cotizaciones_cierre' || p.payload?.table === 'studio_cotizaciones_cierre';
+      // Verificar múltiples ubicaciones posibles del campo 'table'
+      const tableIdentifier = p.table || p.payload?.table || p.record?.table || p.new?.table;
+      const isCierreEvent = tableIdentifier === 'studio_cotizaciones_cierre';
       
       if (isCierreEvent) {
+        console.log(
+          '%c🎯 [Realtime] Evento de CIERRE detectado',
+          'color: #8b5cf6; font-weight: bold; font-size: 13px; background: #3730a3; padding: 2px 6px; border-radius: 3px;',
+          { ignoreCierreEvents, payload: p }
+        );
+        
         // Si ignoreCierreEvents es true, ignorar estos eventos completamente
         if (ignoreCierreEvents) {
+          console.log('%c⏭️ [Realtime] Evento de cierre ignorado (ignoreCierreEvents: true)', 'color: #71717a;');
           return;
         }
         
