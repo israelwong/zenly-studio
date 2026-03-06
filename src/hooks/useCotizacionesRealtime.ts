@@ -163,19 +163,6 @@ export function useCotizacionesRealtime({
 
       const p = payload as any;
       
-      // 🔍 LOG DE DEBUG: Ver todos los eventos que llegan
-      console.log(
-        '%c🔍 [Realtime] Evento recibido',
-        'color: #a855f7; font-size: 11px;',
-        {
-          table: p.table || p.payload?.table || 'unknown',
-          operation: p.operation || p.event || 'unknown',
-          hasOld: !!(p.old || p.payload?.old),
-          hasNew: !!(p.new || p.payload?.new),
-          rawPayload: p,
-        }
-      );
-      
       // Detectar si es un cambio en studio_cotizaciones_cierre
       // El trigger emite eventos con table: 'studio_cotizaciones_cierre'
       // Verificar múltiples ubicaciones posibles del campo 'table'
@@ -183,15 +170,8 @@ export function useCotizacionesRealtime({
       const isCierreEvent = tableIdentifier === 'studio_cotizaciones_cierre';
       
       if (isCierreEvent) {
-        console.log(
-          '%c🎯 [Realtime] Evento de CIERRE detectado',
-          'color: #8b5cf6; font-weight: bold; font-size: 13px; background: #3730a3; padding: 2px 6px; border-radius: 3px;',
-          { ignoreCierreEvents, payload: p }
-        );
-        
         // Si ignoreCierreEvents es true, ignorar estos eventos completamente
         if (ignoreCierreEvents) {
-          console.log('%c⏭️ [Realtime] Evento de cierre ignorado (ignoreCierreEvents: true)', 'color: #71717a;');
           return;
         }
         
@@ -210,48 +190,31 @@ export function useCotizacionesRealtime({
               if (oldRecord[campo] !== newRecord[campo]) {
                 camposCambiados.push(campo);
                 
-                // 🎨 LOGS DE AUDITORÍA CON ESTILO
+                // 🎨 Logs compactos de auditoría
+                const oldVal = oldRecord[campo];
+                const newVal = newRecord[campo];
+                
                 if (campo === 'contrato_definido') {
-                  console.log(
-                    '%c🔵 [Realtime] Cambio detectado en INCLUIR CONTRATO',
-                    'color: #3b82f6; font-weight: bold; font-size: 12px;',
-                    `${oldRecord[campo]} → ${newRecord[campo]}`
-                  );
+                  console.log(`%c[Realtime] 📥 Incluir Contrato: ${oldVal} → ${newVal}`, 'color: #3b82f6; font-weight: bold;');
                 } else if (campo === 'firma_requerida') {
-                  console.log(
-                    '%c🟠 [Realtime] Cambio detectado en FIRMA REQUERIDA',
-                    'color: #f97316; font-weight: bold; font-size: 12px;',
-                    `${oldRecord[campo]} → ${newRecord[campo]}`
-                  );
+                  console.log(`%c[Realtime] 📥 Firma Requerida: ${oldVal} → ${newVal}`, 'color: #f97316; font-weight: bold;');
                 } else if (campo === 'pago_confirmado_estudio') {
-                  console.log(
-                    '%c🟢 [Realtime] Cambio detectado en PAGO CONFIRMADO',
-                    'color: #10b981; font-weight: bold; font-size: 12px;',
-                    `${oldRecord[campo]} → ${newRecord[campo]}`
-                  );
+                  console.log(`%c[Realtime] 📥 Pago Confirmado: ${oldVal} → ${newVal}`, 'color: #10b981; font-weight: bold;');
                 } else if (campo === 'contract_content' || campo === 'contract_template_id') {
-                  console.log(
-                    '%c📄 [Realtime] Estado del CONTRATO actualizado',
-                    'color: #8b5cf6; font-weight: bold; font-size: 12px;',
-                    campo === 'contract_content' 
-                      ? (newRecord[campo] ? 'Generado' : 'Eliminado')
-                      : `Template: ${newRecord[campo] || 'null'}`
-                  );
+                  const status = campo === 'contract_content' 
+                    ? (newVal ? 'Generado' : 'Eliminado')
+                    : `Template: ${newVal || 'null'}`;
+                  console.log(`%c[Realtime] 📥 Contrato: ${status}`, 'color: #8b5cf6; font-weight: bold;');
                 }
               }
             });
           } else {
-            // Si no hay oldRecord, asumir que todos los campos presentes son "nuevos"
+            // Nuevo registro de cierre
             camposCriticos.forEach(campo => {
               if (newRecord[campo] !== undefined && newRecord[campo] !== null) {
                 camposCambiados.push(campo);
               }
             });
-            console.log(
-              '%c🆕 [Realtime] Nuevo registro de cierre creado',
-              'color: #06b6d4; font-weight: bold; font-size: 12px;',
-              { camposCambiados }
-            );
           }
           
           const changeInfo: CotizacionChangeInfo = {
@@ -474,11 +437,6 @@ export function useCotizacionesRealtime({
         // Agregar listeners
         channel
           .on('broadcast', { event: '*' }, (payload: unknown) => {
-            console.log(
-              '%c📡 [Realtime] Evento RAW recibido en canal',
-              'color: #ec4899; font-weight: bold; font-size: 12px; background: #831843; padding: 2px 6px; border-radius: 3px;',
-              payload
-            );
             const p = payload as any;
             const operation = p.operation || p.event;
             if (operation === 'INSERT') handleInsert(payload);
@@ -490,15 +448,9 @@ export function useCotizacionesRealtime({
           .on('broadcast', { event: 'DELETE' }, handleDelete);
 
         await subscribeToChannel(channel, (status, err) => {
-          console.log(
-            '%c✅ [Realtime] Suscripción al canal',
-            'color: #10b981; font-weight: bold; font-size: 12px;',
-            {
-              canal: `studio:${studioSlug}:cotizaciones`,
-              status,
-              error: err,
-            }
-          );
+          if (status === 'SUBSCRIBED') {
+            console.log(`%c[Realtime] ✓ Conectado a studio:${studioSlug}:cotizaciones`, 'color: #10b981; font-weight: bold;');
+          }
         });
 
         channelRef.current = channel;
