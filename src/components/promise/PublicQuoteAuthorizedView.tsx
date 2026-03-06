@@ -416,6 +416,23 @@ export function PublicQuoteAuthorizedView({
           
           if (changes.length > 0) {
             console.log(`%c[Sync] 📥 ${changes.join(' | ')}`, 'color: #8b5cf6; font-weight: bold;');
+            
+            // 🔍 Objeto completo para debugging
+            console.log(
+              '%c[Debug] 📦 Estado completo del contrato:',
+              'color: #06b6d4; font-weight: bold;',
+              JSON.stringify({
+                contrato_definido: contractUpdate.contrato_definido,
+                firma_requerida: contractUpdate.firma_requerida,
+                pago_confirmado_estudio: contractUpdate.pago_confirmado_estudio,
+                pago_monto: contractUpdate.pago_monto,
+                template_id: contractUpdate.template_id,
+                hasContent: !!contractUpdate.content,
+                contentLength: contractUpdate.content?.length || 0,
+                version: contractUpdate.version,
+                signed_at: contractUpdate.signed_at,
+              }, null, 2)
+            );
           }
           
           lastLoggedStateRef.current = currentStateKey;

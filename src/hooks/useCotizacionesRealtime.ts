@@ -208,6 +208,26 @@ export function useCotizacionesRealtime({
                 }
               }
             });
+            
+            // 🔍 Objeto completo del registro de cierre (solo si hubo cambios)
+            if (camposCambiados.length > 0) {
+              console.log(
+                '%c[Debug] 📦 Registro de cierre completo (NEW):',
+                'color: #06b6d4; font-weight: bold;',
+                JSON.stringify({
+                  cotizacion_id: newRecord.cotizacion_id,
+                  contrato_definido: newRecord.contrato_definido,
+                  firma_requerida: newRecord.firma_requerida,
+                  pago_confirmado_estudio: newRecord.pago_confirmado_estudio,
+                  pago_monto: newRecord.pago_monto,
+                  contract_template_id: newRecord.contract_template_id,
+                  hasContent: !!newRecord.contract_content,
+                  contentLength: newRecord.contract_content?.length || 0,
+                  contract_signed_at: newRecord.contract_signed_at,
+                  updated_at: newRecord.updated_at,
+                }, null, 2)
+              );
+            }
           } else {
             // Nuevo registro de cierre
             camposCriticos.forEach(campo => {
