@@ -3684,6 +3684,7 @@ export async function getPublicPromiseCierre(
                 contract_version: true,
                 contrato_definido: true,
                 contract_signed_at: true,
+                firma_requerida: true,
                 checkin_completed: true,
                 condiciones_comerciales_id: true,
                 condiciones_comerciales_definidas: true,
@@ -3757,6 +3758,7 @@ export async function getPublicPromiseCierre(
             contract_version: true,
             contrato_definido: true,
             contract_signed_at: true,
+            firma_requerida: true,
             checkin_completed: true,
             condiciones_comerciales_id: true,
             condiciones_comerciales_definidas: true,
@@ -4063,6 +4065,7 @@ export async function getPublicPromiseCierre(
           content: cierre.contract_content || null,
           version: cierre.contract_version ?? 1,
           signed_at: cierre.contract_signed_at || null,
+          firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
           pago_confirmado_estudio: cierre.pago_confirmado_estudio || false,
           pago_monto: cierre.pago_monto != null ? Number(cierre.pago_monto) : null,
           checkin_completed: cierre.checkin_completed ?? false,
@@ -5396,6 +5399,7 @@ export async function getPublicCotizacionContract(
     content: string | null;
     version: number;
     signed_at: Date | null;
+    firma_requerida?: boolean;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -5431,6 +5435,7 @@ export async function getPublicCotizacionContract(
             contract_content: true,
             contract_version: true,
             contract_signed_at: true,
+            firma_requerida: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -5469,8 +5474,23 @@ export async function getPublicCotizacionContract(
       },
     });
 
-    if (!cotizacion || !cotizacion.cotizacion_cierre) {
-      return { success: false, error: "Cotización o contrato no encontrado" };
+    if (!cotizacion) {
+      return { success: false, error: "Cotización no encontrada" };
+    }
+
+    // ✅ FIX: Si no hay registro de cierre, devolver success: true con data: null (no es error, simplemente no hay contrato aún)
+    if (!cotizacion.cotizacion_cierre) {
+      return { 
+        success: true, 
+        data: {
+          template_id: null,
+          content: null,
+          version: 1,
+          signed_at: null,
+          firma_requerida: true,
+          condiciones_comerciales: null,
+        }
+      };
     }
 
     const cierre = cotizacion.cotizacion_cierre;
@@ -5509,6 +5529,7 @@ export async function getPublicCotizacionContract(
         content: cierre.contract_content,
         version: cierre.contract_version || 1,
         signed_at: cierre.contract_signed_at,
+        firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
         condiciones_comerciales: condicionesComerciales,
       },
     };

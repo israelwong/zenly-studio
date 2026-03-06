@@ -3835,6 +3835,7 @@ export async function pasarACierre(
           status: 'en_cierre',
           selected_by_prospect: false,
           selected_at: new Date(),
+          visible_to_client: true,
           updated_at: new Date(),
         },
       });

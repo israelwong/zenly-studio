@@ -5,9 +5,9 @@ export type PublicPromiseRouteSegment = 'pendientes' | 'cierre' | 'bienvenido' |
 
 /** Orden recomendado para enlaces y redirects. Usar con getPublicPromisePath. */
 export const PUBLIC_PROMISE_ROUTE_SEGMENTS: readonly PublicPromiseRouteSegment[] = [
-  'pendientes',
-  'cierre',
   'bienvenido',
+  'cierre',
+  'pendientes',
   'no-disponible',
 ] as const;
 
@@ -58,7 +58,7 @@ export interface DeterminePromiseRouteOptions {
 /**
  * Determina la ruta de redirección basada en el estado de la promesa y las cotizaciones.
  *
- * Prioridad: No disponible (archivada) > Aprobada > Cierre > Negociación > Pendientes
+ * Prioridad: No disponible (archivada) > Aprobada > Cierre > Pendientes
  * ✅ Si la promesa está archivada, retorna /no-disponible (en UI pública nunca "Archivada").
  *
  * @param cotizaciones - Array de cotizaciones con estado
@@ -97,7 +97,7 @@ export function determinePromiseRoute(
     return getPublicPromisePath(slug, promiseId, 'bienvenido');
   }
 
-  // ✅ PRIORIDAD 2: Buscar cotización en cierre (PRIORIDAD SOBRE NEGOCIACIÓN)
+  // ✅ PRIORIDAD 2: Buscar cotización en cierre
   // Cierre: status === 'en_cierre' o 'cierre' (acepta selección manual del estudio o del prospecto)
   const cotizacionEnCierre = visibleQuotes.find((cot) => {
     const normalizedStatus = normalizeStatus(cot.status);
@@ -108,18 +108,7 @@ export function determinePromiseRoute(
     return getPublicPromisePath(slug, promiseId, 'cierre');
   }
 
-  // PRIORIDAD 3: Cotización en negociación → redirigir a cierre (ruta /negociacion obsoleta)
-  const cotizacionNegociacion = visibleQuotes.find((cot) => {
-    const normalizedStatus = normalizeStatus(cot.status);
-    const selectedByProspect = cot.selected_by_prospect ?? false;
-    return normalizedStatus === 'negociacion' && selectedByProspect !== true;
-  });
-
-  if (cotizacionNegociacion) {
-    return getPublicPromisePath(slug, promiseId, 'cierre');
-  }
-
-  // PRIORIDAD 4: Verificar si hay cotizaciones pendientes válidas
+  // PRIORIDAD 3: Verificar si hay cotizaciones pendientes válidas
   const hasPendientes = visibleQuotes.some((cot) => {
     const normalizedStatus = normalizeStatus(cot.status);
     return normalizedStatus === 'pendiente';
@@ -255,11 +244,7 @@ export function isRouteValid(
 
     case 'cierre': {
       // Si ya está aprobada/autorizada, /cierre es inválida; el usuario debe estar en /bienvenido
-      return (hasCierre || hasNegociacion) && !hasAprobada;
-    }
-
-    case 'negociacion': {
-      return false;
+      return hasCierre && !hasAprobada;
     }
 
     case 'pendientes': {

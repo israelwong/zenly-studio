@@ -199,6 +199,7 @@ export function PublicQuoteAuthorizedView({
     content: string | null;
     version?: number;
     signed_at?: Date | null;
+    firma_requerida?: boolean;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -216,34 +217,19 @@ export function PublicQuoteAuthorizedView({
         content: initialCotizacion.contract.content,
         version: initialCotizacion.contract.version,
         signed_at: initialCotizacion.contract.signed_at,
+        firma_requerida: initialCotizacion.contract.firma_requerida !== false,
         condiciones_comerciales: initialCotizacion.contract.condiciones_comerciales,
       };
     }
     return null;
   });
 
-  // ⚠️ FIX: Sincronizar contractData cuando cotizacion.contract cambia (desde Realtime o actualizaciones)
-  useEffect(() => {
-    const cotizacionContract = (cotizacion as any).contract;
-    if (cotizacionContract) {
-      // Actualizar si no hay contractData o si el contenido cambió
-      const contentChanged = contractData?.content !== cotizacionContract.content;
-      const templateChanged = contractData?.template_id !== cotizacionContract.template_id;
-      
-      if (!contractData || contentChanged || templateChanged) {
-        setContractData({
-          template_id: cotizacionContract.template_id,
-          content: cotizacionContract.content,
-          version: cotizacionContract.version,
-          signed_at: cotizacionContract.signed_at,
-          condiciones_comerciales: cotizacionContract.condiciones_comerciales,
-        });
-      }
-    }
-  }, [cotizacion, contractData]);
-
-  // Usar contractData si existe, sino usar el de cotizacion (para compatibilidad inicial)
-  const currentContract = contractData || (cotizacion as any).contract;
+  // ✅ FIX: NO sincronizar automáticamente cotizacion.contract → contractData
+  // contractData se actualiza SOLO vía updateContractLocally (disparado por Realtime)
+  // Esto evita loops de re-render
+  
+  // Usar contractData como fuente de verdad única
+  const currentContract = contractData;
 
   // Verificar si hay contrato disponible
   // El contrato está disponible si hay contract_content (generado)
@@ -259,6 +245,8 @@ export function PublicQuoteAuthorizedView({
   const checkinCompleted = cotizacion.contract?.checkin_completed ?? false;
   /** Fase 29.9.8: Flujo manual = estudio pasó a cierre sin que el cliente haya autorizado desde el link */
   const isManualFlow = cotizacion.selected_by_prospect !== true;
+  /** Si true, el cliente debe ver contrato y firma antes de otras acciones; si false, mostrar resumen y confirmación */
+  const firmaRequerida = currentContract?.firma_requerida !== false;
 
   // Fase 29.9.6: Refrescar una vez si check-in completado pero contrato aún no cargado (recién generado)
   const refreshedForContractRef = useRef(false);
@@ -344,63 +332,80 @@ export function PublicQuoteAuthorizedView({
   // Actualizar solo el contrato localmente (sin recargar toda la cotización)
   const updateContractLocally = useCallback(async () => {
     try {
+      console.log('[updateContractLocally] Fetching contract...', { cotizacionId: cotizacion.id });
       const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
       if (result.success && result.data) {
-        // Actualizar solo el estado del contrato, sin tocar cotizacion
         const contractUpdate = {
           template_id: result.data.template_id,
           content: result.data.content,
           version: result.data.version || 1,
           signed_at: result.data.signed_at,
+          firma_requerida: result.data.firma_requerida !== false,
           condiciones_comerciales: result.data.condiciones_comerciales,
         };
-        // Solo actualizar si hay contenido o template_id (evitar sobrescribir con null)
-        if (contractUpdate.content || contractUpdate.template_id) {
+        
+        // ✅ FIX: Solo actualizar si hay cambios reales (evitar re-renders y loops)
+        // Comparar signed_at como string para evitar problemas con objetos Date
+        const currentSignedAt = contractData?.signed_at ? new Date(contractData.signed_at).toISOString() : null;
+        const newSignedAt = contractUpdate.signed_at ? new Date(contractUpdate.signed_at).toISOString() : null;
+        
+        const hasChanges = 
+          contractData?.content !== contractUpdate.content ||
+          contractData?.template_id !== contractUpdate.template_id ||
+          contractData?.version !== contractUpdate.version ||
+          currentSignedAt !== newSignedAt;
+        
+        if (!hasChanges) {
+          console.log('[updateContractLocally] No changes detected, skipping update');
+          return;
+        }
+        
+        // Si no hay contenido NI template_id, limpiar (contrato eliminado o aún no generado)
+        if (!contractUpdate.content && !contractUpdate.template_id) {
+          console.log('[updateContractLocally] No contract content/template, clearing contractData');
+          if (contractData !== null) {
+            setContractData(null);
+          }
+        } else {
+          console.log('[updateContractLocally] Updating contractData with new contract');
           setContractData(contractUpdate);
         }
       }
+      // ✅ FIX: NO limpiar en errores; mantener estado actual para evitar parpadeo
     } catch (error) {
       console.error('[PublicQuoteAuthorizedView] Error updating contract locally:', error);
+      // No limpiar en errores de red
     }
-  }, [studioSlug, cotizacion.id]);
+  }, [studioSlug, cotizacion.id, contractData]);
 
-  // Cargar contrato inicialmente si no está disponible
+  // ✅ FIX: Debounce para evitar múltiples refreshes simultáneos
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scheduleContractRefreshRef = useRef((delay: number = 500) => {
+    // Cancelar refresh pendiente
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    // Programar nuevo refresh
+    refreshTimeoutRef.current = setTimeout(() => {
+      updateContractLocallyRef.current();
+      refreshTimeoutRef.current = null;
+    }, delay);
+  });
+
+  // ✅ FIX: Carga inicial UNA SOLA VEZ al montar
+  // Después, SOLO Realtime actualiza el contrato (sin polling)
   useEffect(() => {
-    // Si no hay contractData pero hay template_id o el estado indica que debería haber contrato
-    const shouldLoadContract = !contractData && (
-      initialCotizacion.contract?.template_id ||
+    const shouldLoadContract = (
       initialCotizacion.status === 'contract_generated' ||
       initialCotizacion.status === 'contract_signed' ||
       initialCotizacion.status === 'en_cierre'
     );
 
     if (shouldLoadContract) {
-      updateContractLocally();
+      scheduleContractRefreshRef.current(100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Solo al montar
-
-  // ⚠️ FIX: Recargar contrato cuando está en cierre pero no hay contrato disponible
-  // Esto asegura que cuando el contrato se genere, se actualice automáticamente
-  useEffect(() => {
-    if (isEnCierre && !hasContract && !isContractSigned) {
-      // Intentar cargar el contrato cada 3 segundos si está en cierre sin contrato
-      // Limitar a máximo 20 intentos (1 minuto) para evitar polling infinito
-      let attempts = 0;
-      const maxAttempts = 20;
-      
-      const intervalId = setInterval(() => {
-        attempts++;
-        if (attempts > maxAttempts) {
-          clearInterval(intervalId);
-          return;
-        }
-        updateContractLocally();
-      }, 3000);
-
-      return () => clearInterval(intervalId);
-    }
-  }, [isEnCierre, hasContract, isContractSigned, updateContractLocally]);
+  }, []); // Solo al montar, NUNCA más
 
   // Cargar información bancaria automáticamente cuando el contrato esté firmado
   useEffect(() => {
@@ -573,6 +578,7 @@ export function PublicQuoteAuthorizedView({
           content: result.data.content,
           version: result.data.version || 1,
           signed_at: result.data.signed_at,
+          firma_requerida: result.data.firma_requerida !== false,
           condiciones_comerciales: result.data.condiciones_comerciales,
         };
 
@@ -597,23 +603,7 @@ export function PublicQuoteAuthorizedView({
     }
   }, []);
 
-  // ⚠️ SIN LÓGICA DE REDIRECCIÓN: El Gatekeeper en el layout maneja toda la redirección
-  // Solo mantener lógica de actualización local del contrato si es necesario
-  const handleContractUpdated = useCallback(async (updatedCotizacionId: string, changeInfo?: CotizacionChangeInfo) => {
-    // Solo procesar si es la cotización actual y hay cambios en el contrato
-    if (updatedCotizacionId === cotizacion.id) {
-      // ⚠️ Toast si el contrato fue actualizado por el estudio
-      if (changeInfo?.camposCambiados?.includes('contract_content') || changeInfo?.camposCambiados?.includes('contract_template_id')) {
-        toast.info('El estudio ha actualizado tu contrato', {
-          description: 'Los cambios se han aplicado automáticamente',
-        });
-      }
-      // Actualizar contrato localmente si hay cambios
-      if (changeInfo?.camposCambiados && changeInfo.camposCambiados.length > 0) {
-        updateContractLocally();
-      }
-    }
-  }, [cotizacion.id, updateContractLocally]);
+  // ⚠️ ELIMINADO: handleContractUpdated no se usa; Realtime maneja todo vía onCotizacionUpdated
 
   // Handler para cuando se inserta una nueva cotización (mostrar notificación)
   const handleCotizacionInserted = useCallback((changeInfo?: CotizacionChangeInfo) => {
@@ -689,31 +679,31 @@ export function PublicQuoteAuthorizedView({
       if (cotizacionId !== cotizacion.id || getIsNavigating()) return;
 
       const info = changeInfo as { contractSignedAt?: Date | null; camposCambiados?: string[] } | undefined;
-      // Evento de cierre: siempre refrescar contrato (cubre generar, actualizar y cancelar contrato)
+      console.log('[Realtime] onCotizacionUpdated', { cotizacionId, changeInfo: info });
+      
+      // ✅ Evento de cierre (cambios en studio_cotizaciones_cierre): refrescar contrato
       const isCierreEvent = info && 'contractSignedAt' in info;
       if (isCierreEvent) {
-        setTimeout(() => updateContractLocallyRef.current(), 500);
+        console.log('[Realtime] Cierre event detected, scheduling contract refresh');
+        scheduleContractRefreshRef.current(500);
         return;
       }
 
-      // Evento en studio_cotizaciones: actualizar si hay cambios de contrato
-      if (!contractData?.content && hasContractTemplate) {
-        setTimeout(() => updateContractLocallyRef.current(), 500);
+      // ✅ Para otros eventos en status en_cierre, solo refrescar si cambió el status
+      if (cotizacion.status === 'en_cierre' && info?.statusChanged) {
+        console.log('[Realtime] Status changed to en_cierre, scheduling contract refresh');
+        scheduleContractRefreshRef.current(800);
         return;
       }
+
+      // ✅ FIX: Evento en studio_cotizaciones (fuera de cierre): solo refrescar si hay cambios críticos de contrato
       const camposCambiados = info?.camposCambiados || [];
       const hasContractChanges = camposCambiados.some((campo: string) =>
-        campo.includes('contrato') || campo.includes('contract') ||
-        campo.includes('contrato_definido') || campo.includes('contract_content') ||
-        campo.includes('status') // También escuchar cambios de status (contract_generated)
+        campo.includes('contract_content') || campo.includes('contract_template_id')
       );
       if (hasContractChanges) {
-        setTimeout(() => updateContractLocallyRef.current(), 500);
-      }
-      
-      // ⚠️ FIX: Si está en cierre sin contrato, intentar cargar siempre que haya cualquier cambio
-      if (cotizacion.status === 'en_cierre' && !contractData?.content) {
-        setTimeout(() => updateContractLocallyRef.current(), 1000);
+        console.log('[Realtime] Contract changes detected, scheduling refresh');
+        scheduleContractRefreshRef.current(500);
       }
     },
   });
@@ -777,8 +767,8 @@ export function PublicQuoteAuthorizedView({
           });
           setIsRegeneratingContract(false);
         } else {
-          // Actualizar solo el contrato localmente después de regenerar
-          await updateContractLocally();
+          // ✅ FIX: Usar debounce para evitar conflictos con Realtime
+          scheduleContractRefreshRef.current(500);
           setIsRegeneratingContract(false);
           setShowSuccessDataModal(true);
         }
@@ -829,36 +819,6 @@ export function PublicQuoteAuthorizedView({
           {/* Contrato / cierre (sin número de paso) */}
           {(isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
             <div className="relative">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-zinc-100 mb-1">
-                  {isContractSigned
-                    ? 'Contrato Firmado'
-                    : checkinCompleted && hasContract
-                      ? 'Contrato pendiente por firma'
-                      : checkinCompleted && !hasContract
-                        ? (isManualFlow && !isClientValidated ? 'Revisión de Datos' : 'Preparando tu Contrato')
-                        : isDataPending
-                          ? 'Validación de Información'
-                          : hasContract
-                            ? 'Firma tu Contrato Digital'
-                            : 'Preparando tu Contrato'}
-                </h3>
-                <p className="text-sm text-zinc-400">
-                  {isContractSigned
-                    ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
-                    : checkinCompleted && hasContract
-                      ? 'Tus datos ya están validados. Revisa y firma tu contrato para oficializar tu reserva.'
-                      : checkinCompleted && !hasContract
-                        ? (isManualFlow && !isClientValidated
-                            ? 'Revisa que tus datos sean correctos y confirma para continuar con el proceso.'
-                            : 'Estamos generando el documento final con tu información verificada.')
-                        : isDataPending
-                          ? 'Completa tus datos requeridos para generar tu contrato.'
-                          : hasContract
-                            ? 'Revisa y firma tu contrato para oficializar tu reserva.'
-                            : 'Estamos generando el documento final con tu información verificada.'}
-                </p>
-              </div>
               <div className="w-full">
                 {hasContract ? (
                     // Sub-condition A: Contrato disponible - mostrar preview para firma
@@ -1009,59 +969,38 @@ export function PublicQuoteAuthorizedView({
                         );
                       }
                       
-                      // Mensaje diferente según flujo (automático vs manual). Fase 29.9.8: manual = revisión de datos primero.
+                      // Sin contrato: UI centralizada de "En preparación" (sin botones de reintentar)
                       return (
-                        <ZenCard>
-                          <div className="p-6">
-                            <div className="flex items-start gap-4">
-                              <div className="shrink-0 w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center">
-                                <FileSearch className="h-6 w-6 text-blue-400" />
+                        <div className="flex flex-col items-center justify-center py-12 px-4">
+                          <div className="max-w-md w-full text-center space-y-6">
+                            <div className="flex justify-center">
+                              <div className="relative">
+                                <div className="w-20 h-20 rounded-full bg-blue-500/10 border-2 border-blue-500/30 flex items-center justify-center">
+                                  <FileText className="h-10 w-10 text-blue-400" />
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-zinc-900 border-2 border-blue-500/50 flex items-center justify-center">
+                                  <Clock className="h-4 w-4 text-blue-400" />
+                                </div>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-lg font-semibold text-zinc-200 mb-2 flex items-center gap-2">
-                                  <FileText className="h-5 w-5 text-blue-400" />
-                                  {isAutomaticFlow ? 'Generando tu contrato' : 'Revisión de datos'}
-                                </h4>
-                                {isAutomaticFlow ? (
-                                  // Scenario A: Flujo automático (cliente autorizó)
-                                  <p className="text-sm text-zinc-400 leading-relaxed">
-                                    Estamos generando tu contrato con los servicios que seleccionaste. Te notificaremos en cuanto esté listo para tu revisión y firma.
-                                  </p>
-                                ) : (
-                                  // Scenario B: Flujo manual (estudio movió a cierre) — Fase 29.9.8: invitar a confirmar datos
-                                  <p className="text-sm text-zinc-400 leading-relaxed">
-                                    El estudio cargó tu información. Revisa que todo sea correcto y haz clic en &quot;Continuar&quot; para confirmar y seguir con el proceso. Cuando tu contrato esté listo, podrás firmarlo aquí.
-                                  </p>
-                                )}
-                                
-                                {/* Fase 29.9.6: Reintentar carga si check-in completado pero contrato aún no visible */}
-                                {(checkinCompleted || (isAutomaticFlow && shouldAutoGenerate && showForceRefresh)) && (
-                                  <div className="mt-4 pt-4 border-t border-zinc-800">
-                                    <p className="text-xs text-zinc-500 mb-3">
-                                      {checkinCompleted ? 'Si tu contrato ya está listo, actualiza para cargarlo:' : '¿No ves tu contrato? Intenta actualizar la página:'}
-                                    </p>
-                                    <ZenButton
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={handleForceRefresh}
-                                      disabled={isRefreshing}
-                                      className="w-full"
-                                    >
-                                      {isRefreshing ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                          Actualizando...
-                                        </>
-                                      ) : (
-                                        'Reintentar carga'
-                                      )}
-                                    </ZenButton>
-                                  </div>
-                                )}
+                            </div>
+                            
+                            <div className="space-y-3">
+                              <h3 className="text-2xl font-bold text-zinc-100">
+                                Estamos preparando tu contrato
+                              </h3>
+                              <p className="text-sm text-zinc-400 leading-relaxed">
+                                El equipo del estudio está finalizando los detalles de tu documento legal. En cuanto esté listo, recibirás una notificación y podrás revisarlo y firmarlo desde aquí mismo.
+                              </p>
+                            </div>
+
+                            <div className="pt-4">
+                              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20">
+                                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                                <span className="text-xs font-medium text-blue-300">En proceso</span>
                               </div>
                             </div>
                           </div>
-                        </ZenCard>
+                        </div>
                       );
                     })()
                   ) : (
@@ -1291,8 +1230,8 @@ export function PublicQuoteAuthorizedView({
           )}
         </div>
 
-        {/* Fase 29.9.8: Mostrar Continuar si no hay firma y (check-in pendiente o contrato aún no listo); permite check-in de cortesía cuando el estudio pasó a cierre */}
-        {!isContractSigned && (!checkinCompleted || !hasContract) && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
+        {/* Fase 29.9.8: Mostrar Continuar si no hay firma y (check-in pendiente o contrato aún no listo); NO mostrar si está en cierre sin contrato (estudio preparando) */}
+        {!isContractSigned && (!checkinCompleted || !hasContract) && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && !(isEnCierre && !hasContract) && (
           <div className="mt-8 flex justify-end">
             <ZenButton
               size="lg"

@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
 import { getPublicPromiseActiveQuote, getPublicPromiseAvailablePackages, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData, getPublicDateAvailability } from '@/lib/actions/public/promesas.actions';
-import { isRouteValid } from '@/lib/utils/public-promise-routing';
+import { determinePromiseRoute } from '@/lib/utils/public-promise-routing';
 import { PendientesPageSkeleton } from '@/components/promise/PendientesPageSkeleton';
 import { PendientesPageBasic } from './PendientesPageBasic';
 import { PendientesPageDeferred } from './PendientesPageDeferred';
@@ -31,11 +31,18 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
     return { success: false, error: 'Error al obtener estado' };
   });
 
-  // Solo validar errores críticos - NO validar discrepancias de estado
-  // El Direct Navigator (con datos frescos vía Realtime) tomará la decisión final de redirección
-  // /pendientes siempre permite acceso para ver paquetes disponibles
-  if (!routeState.success) {
-    // Continuar sin redirigir - permitir acceso para ver paquetes
+  // Si hay cotización en_cierre, redirigir a /cierre para mostrar flujo de firma (evitar "Estamos preparando tu propuesta")
+  if (routeState.success && routeState.data?.length) {
+    const cotizacionesForRoute = routeState.data.map((c) => ({
+      id: c.id,
+      status: c.status,
+      selected_by_prospect: c.selected_by_prospect ?? false,
+      visible_to_client: true,
+    }));
+    const targetRoute = determinePromiseRoute(cotizacionesForRoute, slug, promiseId);
+    if (targetRoute.endsWith('/cierre')) {
+      redirect(targetRoute);
+    }
   }
 
   // ⚠️ STREAMING: Cargar datos básicos inmediatamente (instantáneo)
