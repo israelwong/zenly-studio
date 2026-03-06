@@ -116,6 +116,8 @@ export interface PublicCotizacion {
     content: string;
     version?: number;
     signed_at?: Date | null;
+    /** Si true, el estudio activó el switch de "Incluir Contrato"; si false, omitir flujo de contrato */
+    contrato_definido?: boolean;
     /** Si true, el cliente debe firmar antes de autorizar; si false, se puede autorizar sin firma */
     firma_requerida?: boolean;
     /** Fase 28.0: El estudio confirmó que ya recibió el anticipo */

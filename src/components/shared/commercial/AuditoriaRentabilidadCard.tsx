@@ -36,11 +36,15 @@ export function AuditoriaRentabilidadCard({
     return (
       <div className={cardClass}>
         <div className={`h-3 w-2/3 bg-zinc-700/25 rounded-sm animate-pulse ${compact ? 'mb-1.5' : 'mb-2'}`} />
-        <div className={`grid grid-cols-2 gap-x-4 ${compact ? 'gap-y-0.5' : 'gap-y-1'}`}>
-          <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
-          <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse justify-self-end w-14" />
-          <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
-          <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse justify-self-end w-10" />
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="flex items-center gap-1.5">
+            <div className="h-3.5 w-20 bg-zinc-700/20 rounded-sm animate-pulse" />
+            <div className="h-3.5 w-14 bg-zinc-700/20 rounded-sm animate-pulse" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-3.5 w-16 bg-zinc-700/20 rounded-sm animate-pulse" />
+            <div className="h-3.5 w-10 bg-zinc-700/20 rounded-sm animate-pulse" />
+          </div>
         </div>
       </div>
     );
@@ -59,11 +63,15 @@ export function AuditoriaRentabilidadCard({
       <p className={`text-xs text-zinc-500 font-medium ${compact ? 'mb-1.5' : 'mb-2'}`}>
         {label}
       </p>
-      <div className={`grid grid-cols-2 gap-x-4 text-sm text-zinc-400 ${compact ? 'gap-y-0.5' : 'gap-y-1'}`}>
-        <span>Utilidad Neta</span>
-        <span className="text-right font-medium text-zinc-300">{displayValues.utilidadFormatted}</span>
-        <span>Margen %</span>
-        <span className="text-right font-medium text-zinc-300">{displayValues.margenFormatted}</span>
+      <div className="flex flex-nowrap items-baseline gap-x-4 text-xs">
+        <span className="whitespace-nowrap">
+          <span className="text-zinc-400">Utilidad Neta </span>
+          <span className="font-medium text-zinc-300 tabular-nums">{displayValues.utilidadFormatted}</span>
+        </span>
+        <span className="whitespace-nowrap">
+          <span className="text-zinc-400">Margen </span>
+          <span className="font-medium text-zinc-300 tabular-nums">{displayValues.margenFormatted}</span>
+        </span>
       </div>
     </div>
   );

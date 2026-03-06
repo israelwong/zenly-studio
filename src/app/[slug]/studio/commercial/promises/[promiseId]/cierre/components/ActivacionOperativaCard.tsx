@@ -73,7 +73,7 @@ export function ActivacionOperativaCard({
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Auto-split Top-Down: cuando cambia el monto total recibido, regenerar staging (usa fechaGlobal)
-  // Anticipo metodoId por defecto null; abono hereda el metodoId del anticipo al crear/regenerar
+  // Inicializar metodoId desde registroCierre.pago_metodo_id para que la mini-card muestre el método (ej. Transferencia)
   useEffect(() => {
     if (!pagoConfirmadoUI) return;
 
@@ -83,8 +83,10 @@ export function ActivacionOperativaCard({
       return;
     }
 
+    const metodoFromRegistro = pagoData?.pago_metodo_id ?? null;
+
     setPagoStaging((prev) => {
-      const inheritedMetodo = prev.find((p) => p.tipo === 'anticipo')?.metodoId ?? null;
+      const inheritedMetodo = prev.find((p) => p.tipo === 'anticipo')?.metodoId ?? metodoFromRegistro;
       if (totalNum === anticipoMonto) {
         return [{
           id: 'anticipo-1',
@@ -129,7 +131,7 @@ export function ActivacionOperativaCard({
         isReadOnly: false,
       }];
     });
-  }, [montoTotalRecibido, pagoConfirmadoUI, anticipoMonto, fechaGlobal]);
+  }, [montoTotalRecibido, pagoConfirmadoUI, anticipoMonto, fechaGlobal, pagoData?.pago_metodo_id]);
 
   // Con pago confirmado, mantener expandidos por defecto todos los ítems (y los que se añadan)
   useEffect(() => {

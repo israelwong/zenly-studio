@@ -23,6 +23,8 @@ import { CierreActionButtons } from './CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
 import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, ActivacionOperativaCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
+import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
+import { PromiseAppointmentCard } from '../../pendiente/components/PromiseAppointmentCard';
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
@@ -97,6 +99,13 @@ const CierreColumn2 = memo(function CierreColumn2({
           onMetadataUpdated={onMetadataUpdated}
           isRefreshingMetadata={isRefreshingMetadata}
         />
+      )}
+      {/* Recordatorio y agenda: mismos componentes que en pendientes para flujo fluido */}
+      {promiseId && (
+        <>
+          <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
+          <PromiseAppointmentCard studioSlug={studioSlug} promiseId={promiseId} />
+        </>
       )}
     </div>
   );

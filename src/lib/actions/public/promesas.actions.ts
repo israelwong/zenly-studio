@@ -4065,6 +4065,7 @@ export async function getPublicPromiseCierre(
           content: cierre.contract_content || null,
           version: cierre.contract_version ?? 1,
           signed_at: cierre.contract_signed_at || null,
+          contrato_definido: (cierre as { contrato_definido?: boolean }).contrato_definido ?? false,
           firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
           pago_confirmado_estudio: cierre.pago_confirmado_estudio || false,
           pago_monto: cierre.pago_monto != null ? Number(cierre.pago_monto) : null,
@@ -5435,7 +5436,10 @@ export async function getPublicCotizacionContract(
             contract_content: true,
             contract_version: true,
             contract_signed_at: true,
+            contrato_definido: true,
             firma_requerida: true,
+            pago_confirmado_estudio: true,
+            pago_monto: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -5529,7 +5533,10 @@ export async function getPublicCotizacionContract(
         content: cierre.contract_content,
         version: cierre.contract_version || 1,
         signed_at: cierre.contract_signed_at,
+        contrato_definido: (cierre as { contrato_definido?: boolean }).contrato_definido ?? false,
         firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
+        pago_confirmado_estudio: (cierre as { pago_confirmado_estudio?: boolean }).pago_confirmado_estudio ?? false,
+        pago_monto: (cierre as { pago_monto?: unknown }).pago_monto != null ? Number((cierre as { pago_monto: unknown }).pago_monto) : null,
         condiciones_comerciales: condicionesComerciales,
       },
     };

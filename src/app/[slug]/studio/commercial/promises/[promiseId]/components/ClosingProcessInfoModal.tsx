@@ -121,48 +121,45 @@ export function ClosingProcessInfoModal({
           </div>
         </div>
 
-        {/* Información sobre recordatorio */}
+        {/* Card recordatorio asociado */}
         {reminder && (
-          <div className="bg-amber-950/20 border border-amber-500/30 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                <Bell className="h-4 w-4 text-amber-400" />
+          <div className="rounded-xl border border-amber-500/25 bg-amber-950/15 overflow-hidden">
+            <div className="flex gap-4 p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                <Bell className="h-5 w-5 text-amber-400" />
               </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-amber-200 mb-1">
-                    Recordatorio asociado
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-sm font-semibold text-zinc-200">
+                  Recordatorio asociado
+                </p>
+                <p className="text-sm text-zinc-400">
+                  <span className="font-medium text-amber-400/90">{reminder.subject_text}</span>
+                  {' · '}
+                  <span className="text-zinc-500">{formatDisplayDateLong(toUtcDateOnly(reminder.reminder_date))}</span>
+                </p>
+                {reminder.description && (
+                  <p className="text-xs text-zinc-500 line-clamp-2">
+                    {reminder.description}
                   </p>
-                  <p className="text-xs text-amber-300/80 mb-2">
-                    Esta promesa tiene un recordatorio programado: <strong>{reminder.subject_text}</strong>
-                  </p>
-                  {reminder.description && (
-                    <p className="text-xs text-amber-300/60 mb-2">
-                      {reminder.description}
-                    </p>
-                  )}
-                  <p className="text-xs text-amber-300/60">
-                    Fecha: {formatDisplayDateLong(toUtcDateOnly(reminder.reminder_date))}
+                )}
+              </div>
+            </div>
+            <div className="border-t border-amber-500/15 bg-zinc-900/40 px-4 py-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg py-1 transition-colors hover:bg-zinc-800/50">
+                <ZenCheckbox
+                  checked={deleteReminder}
+                  onCheckedChange={(checked) => setDeleteReminder(checked === true)}
+                  className="mt-0.5 shrink-0"
+                />
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-zinc-200">
+                    Eliminar recordatorio al pasar a cierre
+                  </span>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Si no lo marcas, el recordatorio se mantendrá activo
                   </p>
                 </div>
-                <div className="pt-2 border-t border-amber-500/20">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <ZenCheckbox
-                      checked={deleteReminder}
-                      onCheckedChange={(checked) => setDeleteReminder(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm text-amber-200 group-hover:text-amber-100">
-                        Eliminar recordatorio al pasar a cierre
-                      </p>
-                      <p className="text-xs text-amber-300/60 mt-1">
-                        Si no lo marcas, el recordatorio se mantendrá activo
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
+              </label>
             </div>
           </div>
         )}

@@ -173,18 +173,40 @@ export function useCotizacionesRealtime({
           return;
         }
         
-        const record = p.record || p.new || p.payload?.new || p.payload?.record;
-        if (record && record.cotizacion_id) {
-          const cotizacionId = record.cotizacion_id as string;
-          // Incluir contract_signed_at para distinguir firma del cliente (truthy) de cancelación (null)
+        const oldRecord = p.old || p.payload?.old || p.old_record || p.payload?.old_record;
+        const newRecord = p.record || p.new || p.payload?.new || p.payload?.record;
+        
+        if (newRecord && newRecord.cotizacion_id) {
+          const cotizacionId = newRecord.cotizacion_id as string;
+          
+          // ✅ FIX: Detectar qué campos de cierre cambiaron (switches críticos)
+          const camposCriticos = ['contrato_definido', 'firma_requerida', 'pago_confirmado_estudio', 'contract_content', 'contract_template_id', 'contract_signed_at'];
+          const camposCambiados: string[] = [];
+          
+          if (oldRecord) {
+            camposCriticos.forEach(campo => {
+              if (oldRecord[campo] !== newRecord[campo]) {
+                camposCambiados.push(campo);
+              }
+            });
+          } else {
+            // Si no hay oldRecord, asumir que todos los campos presentes son "nuevos"
+            camposCriticos.forEach(campo => {
+              if (newRecord[campo] !== undefined && newRecord[campo] !== null) {
+                camposCambiados.push(campo);
+              }
+            });
+          }
+          
           const changeInfo: CotizacionChangeInfo = {
             cotizacionId,
             status: 'en_cierre',
             statusChanged: true,
-            oldStatus: 'pendiente',
-            camposCambiados: ['status'],
-            contractSignedAt: record.contract_signed_at ?? null,
+            oldStatus: oldRecord?.status || 'pendiente',
+            camposCambiados: camposCambiados.length > 0 ? camposCambiados : ['status'],
+            contractSignedAt: newRecord.contract_signed_at ?? null,
           };
+          
           if (cotizacionId && onUpdatedRef.current) {
             onUpdatedRef.current(cotizacionId, changeInfo);
           }

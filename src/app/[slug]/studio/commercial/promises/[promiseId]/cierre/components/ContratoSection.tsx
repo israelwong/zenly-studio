@@ -359,22 +359,24 @@ export const ContratoSection = memo(function ContratoSection({
           })()}
         </div>
       ) : !tieneContratoGenerado && !contratoOmitido && onContratoButtonClick ? (
-        /* Pendiente: tarjeta clickeable para abrir modal de selección de plantilla, sin body */
+        /* Pendiente: tarjeta clickeable para abrir modal de selección de plantilla */
         <div
           role="button"
           tabIndex={0}
           onClick={onContratoButtonClick}
           onKeyDown={(e) => e.key === 'Enter' && onContratoButtonClick()}
-          className="rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-zinc-900"
+          className="flex items-center justify-between gap-3 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-zinc-900 py-3 px-3"
           aria-label="Seleccionar plantilla de contrato"
         >
-          <div className="flex items-center justify-between gap-2 py-2.5 px-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" aria-hidden />
-              <span className="text-xs uppercase tracking-wide font-semibold truncate text-amber-200">
-                {headerTitle}
-              </span>
-            </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-xs uppercase tracking-wide font-semibold text-white">CONTRATO DIGITAL</span>
+            <p className="text-xs text-zinc-500">
+              Clic para seleccionar la plantilla del contrato para formalizar los términos legales.
+            </p>
+          </div>
+          <div className="relative shrink-0 ml-auto flex h-2 w-2 items-center justify-center">
+            <span className="absolute inline-flex h-2 w-2 rounded-full bg-amber-500 opacity-75 animate-ping" aria-hidden />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" aria-hidden />
           </div>
         </div>
       ) : (

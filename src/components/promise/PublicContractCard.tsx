@@ -9,6 +9,7 @@ interface PublicContractCardProps {
     template_id: string | null;
     content: string | null;
     version?: number;
+    firma_requerida?: boolean;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -45,6 +46,7 @@ export const PublicContractCard = memo(function PublicContractCard({
 }: PublicContractCardProps) {
   const hasContract = !!contract?.content;
   const hasContractTemplate = !!contract?.template_id;
+  const firmaRequerida = contract?.firma_requerida !== false;
 
   return (
     <ZenCard>
@@ -177,7 +179,7 @@ export const PublicContractCard = memo(function PublicContractCard({
                     disabled={isRegeneratingContract}
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Revisar y firmar
+                    {firmaRequerida ? 'Revisar y firmar' : 'Revisar términos'}
                   </ZenButton>
                 </div>
               )}

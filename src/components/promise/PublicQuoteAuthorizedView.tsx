@@ -199,7 +199,10 @@ export function PublicQuoteAuthorizedView({
     content: string | null;
     version?: number;
     signed_at?: Date | null;
+    contrato_definido?: boolean;
     firma_requerida?: boolean;
+    pago_confirmado_estudio?: boolean;
+    pago_monto?: number | null;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -217,7 +220,10 @@ export function PublicQuoteAuthorizedView({
         content: initialCotizacion.contract.content,
         version: initialCotizacion.contract.version,
         signed_at: initialCotizacion.contract.signed_at,
+        contrato_definido: initialCotizacion.contract.contrato_definido ?? false,
         firma_requerida: initialCotizacion.contract.firma_requerida !== false,
+        pago_confirmado_estudio: initialCotizacion.contract.pago_confirmado_estudio ?? false,
+        pago_monto: initialCotizacion.contract.pago_monto ?? null,
         condiciones_comerciales: initialCotizacion.contract.condiciones_comerciales,
       };
     }
@@ -231,6 +237,12 @@ export function PublicQuoteAuthorizedView({
   // Usar contractData como fuente de verdad única
   const currentContract = contractData;
 
+  // ✅ Variables derivadas de los switches de cierre (sincronizadas vía Realtime)
+  const contratoDefinido = currentContract?.contrato_definido ?? false;
+  const firmaRequerida = currentContract?.firma_requerida !== false;
+  const pagoConfirmadoEstudio = currentContract?.pago_confirmado_estudio ?? false;
+  const pagoMonto = currentContract?.pago_monto ?? null;
+  
   // Verificar si hay contrato disponible
   // El contrato está disponible si hay contract_content (generado)
   // Si solo hay template_id pero no content, el contrato aún no se ha generado
@@ -245,8 +257,6 @@ export function PublicQuoteAuthorizedView({
   const checkinCompleted = cotizacion.contract?.checkin_completed ?? false;
   /** Fase 29.9.8: Flujo manual = estudio pasó a cierre sin que el cliente haya autorizado desde el link */
   const isManualFlow = cotizacion.selected_by_prospect !== true;
-  /** Si true, el cliente debe ver contrato y firma antes de otras acciones; si false, mostrar resumen y confirmación */
-  const firmaRequerida = currentContract?.firma_requerida !== false;
 
   // Fase 29.9.6: Refrescar una vez si check-in completado pero contrato aún no cargado (recién generado)
   const refreshedForContractRef = useRef(false);
@@ -340,7 +350,10 @@ export function PublicQuoteAuthorizedView({
           content: result.data.content,
           version: result.data.version || 1,
           signed_at: result.data.signed_at,
+          contrato_definido: result.data.contrato_definido ?? false,
           firma_requerida: result.data.firma_requerida !== false,
+          pago_confirmado_estudio: result.data.pago_confirmado_estudio ?? false,
+          pago_monto: result.data.pago_monto ?? null,
           condiciones_comerciales: result.data.condiciones_comerciales,
         };
         
@@ -353,6 +366,9 @@ export function PublicQuoteAuthorizedView({
           contractData?.content !== contractUpdate.content ||
           contractData?.template_id !== contractUpdate.template_id ||
           contractData?.version !== contractUpdate.version ||
+          contractData?.contrato_definido !== contractUpdate.contrato_definido ||
+          contractData?.firma_requerida !== contractUpdate.firma_requerida ||
+          contractData?.pago_confirmado_estudio !== contractUpdate.pago_confirmado_estudio ||
           currentSignedAt !== newSignedAt;
         
         if (!hasChanges) {
@@ -696,13 +712,18 @@ export function PublicQuoteAuthorizedView({
         return;
       }
 
-      // ✅ FIX: Evento en studio_cotizaciones (fuera de cierre): solo refrescar si hay cambios críticos de contrato
+      // ✅ FIX: Detectar cambios en switches de cierre (contrato_definido, firma_requerida, pago_confirmado_estudio)
       const camposCambiados = info?.camposCambiados || [];
-      const hasContractChanges = camposCambiados.some((campo: string) =>
-        campo.includes('contract_content') || campo.includes('contract_template_id')
+      const switchesChanged = camposCambiados.some((campo: string) =>
+        campo === 'contrato_definido' || 
+        campo === 'firma_requerida' || 
+        campo === 'pago_confirmado_estudio' ||
+        campo.includes('contract_content') || 
+        campo.includes('contract_template_id')
       );
-      if (hasContractChanges) {
-        console.log('[Realtime] Contract changes detected, scheduling refresh');
+      
+      if (switchesChanged) {
+        console.log('[Realtime] Contract/switches changes detected, scheduling refresh', { camposCambiados });
         scheduleContractRefreshRef.current(500);
       }
     },
@@ -817,7 +838,8 @@ export function PublicQuoteAuthorizedView({
         {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
           {/* Contrato / cierre (sin número de paso) */}
-          {(isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
+          {/* ✅ FIX: Solo mostrar bloque de contrato si contrato_definido es true */}
+          {(isContractGenerated || isEnCierre) && contratoDefinido && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
             <div className="relative">
               <div className="w-full">
                 {hasContract ? (
@@ -969,6 +991,37 @@ export function PublicQuoteAuthorizedView({
                         );
                       }
                       
+                      // ✅ FIX: Si contrato_definido es FALSE, mostrar "Formalización de Reserva" (sin contrato)
+                      if (!contratoDefinido) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-12 px-4">
+                            <div className="max-w-md w-full text-center space-y-6">
+                              <div className="flex justify-center">
+                                <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
+                                  <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                <h3 className="text-2xl font-bold text-zinc-100">
+                                  Formalización de Reserva
+                                </h3>
+                                <p className="text-sm text-zinc-400 leading-relaxed">
+                                  Tu reserva está siendo procesada. El estudio confirmará los detalles finales y la fecha de tu evento.
+                                </p>
+                              </div>
+
+                              <div className="pt-4">
+                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="text-xs font-medium text-emerald-300">Procesando</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
                       // Sin contrato: UI centralizada de "En preparación" (sin botones de reintentar)
                       return (
                         <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -1011,8 +1064,31 @@ export function PublicQuoteAuthorizedView({
             </div>
           )}
 
+          {/* ✅ FIX: Aviso de "Anticipo Confirmado" cuando pago_confirmado_estudio es true */}
+          {isContractSigned && pagoConfirmadoEstudio && (
+            <div className="relative">
+              <ZenCard className="border-emerald-500/30 bg-emerald-500/5">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-emerald-500/10 rounded-lg shrink-0">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-semibold text-emerald-400">
+                        Anticipo Confirmado
+                      </h3>
+                      <p className="text-sm text-zinc-300 leading-relaxed">
+                        El estudio ha confirmado la recepción de tu anticipo{pagoMonto ? ` por ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(pagoMonto)}` : ''}. Tu fecha está formalmente reservada.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </ZenCard>
+            </div>
+          )}
+
           {/* Realiza tu Anticipo / Datos bancarios - Sin numeración (Fase 30.8.5); oculto si pago ya confirmado (Fase 30.8.2) */}
-          {isContractSigned && !(cotizacion.contract?.pago_confirmado_estudio) && (
+          {isContractSigned && !pagoConfirmadoEstudio && (
             <div className="relative">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-zinc-100 mb-1">
