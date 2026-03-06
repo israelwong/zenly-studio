@@ -243,6 +243,56 @@ export function PublicQuoteAuthorizedView({
   const pagoConfirmadoEstudio = currentContract?.pago_confirmado_estudio ?? false;
   const pagoMonto = currentContract?.pago_monto ?? null;
   
+  // 🎨 LOG DE ESTADO INICIAL (solo una vez al montar)
+  const initialLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!initialLoggedRef.current) {
+      console.log(
+        '%c📊 [PublicQuoteAuthorizedView] Estado inicial de switches',
+        'color: #06b6d4; font-weight: bold; font-size: 14px; background: #0c4a6e; padding: 4px 8px; border-radius: 4px;',
+        {
+          contratoDefinido,
+          firmaRequerida,
+          pagoConfirmadoEstudio,
+          pagoMonto,
+          hasContract,
+          isContractSigned,
+          status: cotizacion.status,
+        }
+      );
+      
+      // 📋 Tabla de transiciones esperadas
+      console.log(
+        '%c📋 [Guía] Transiciones de UI según switches del Studio:',
+        'color: #a855f7; font-weight: bold; font-size: 12px; background: #581c87; padding: 4px 8px; border-radius: 4px;'
+      );
+      console.table({
+        'Sin Contrato (contrato_definido: false)': {
+          UI: 'Formalización de Reserva',
+          Color: 'Emerald',
+          Descripción: 'Reserva sin firma digital',
+        },
+        'Con Contrato + Sin Firma (firma_requerida: false)': {
+          UI: 'Documento informativo',
+          Color: 'Blue',
+          Descripción: 'Contrato sin requerir firma',
+        },
+        'Pago Confirmado (pago_confirmado_estudio: true)': {
+          UI: 'Anticipo Confirmado',
+          Color: 'Emerald',
+          Descripción: `Tarjeta destacada con monto${pagoMonto ? `: $${pagoMonto}` : ''}`,
+        },
+        'Preparando Contrato (contrato_definido: true, sin content)': {
+          UI: 'Estamos preparando tu contrato',
+          Color: 'Blue',
+          Descripción: 'Sala de espera con pulse',
+        },
+      });
+      
+      initialLoggedRef.current = true;
+    }
+  }, [contratoDefinido, firmaRequerida, pagoConfirmadoEstudio, pagoMonto, hasContract, isContractSigned, cotizacion.status]);
+  
   // Verificar si hay contrato disponible
   // El contrato está disponible si hay contract_content (generado)
   // Si solo hay template_id pero no content, el contrato aún no se ha generado
@@ -339,10 +389,19 @@ export function PublicQuoteAuthorizedView({
     (cotizacion as { contract?: { condiciones_comerciales?: { id?: string } } }).contract?.condiciones_comerciales?.id ??
     (cotizacion.condiciones_comerciales && 'id' in cotizacion.condiciones_comerciales ? cotizacion.condiciones_comerciales.id : null);
 
+  // ⚠️ FIX: Ref para prevenir logs duplicados
+  const lastLoggedStateRef = useRef<string | null>(null);
+  
   // Actualizar solo el contrato localmente (sin recargar toda la cotización)
   const updateContractLocally = useCallback(async () => {
     try {
-      console.log('[updateContractLocally] Fetching contract...', { cotizacionId: cotizacion.id });
+      const logKey = `fetch-${Date.now()}`;
+      console.log(
+        '%c🔄 [updateContractLocally] Iniciando fetch de contrato',
+        'color: #06b6d4; font-weight: bold;',
+        { cotizacionId: cotizacion.id, logKey }
+      );
+      
       const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         const contractUpdate = {
@@ -372,18 +431,78 @@ export function PublicQuoteAuthorizedView({
           currentSignedAt !== newSignedAt;
         
         if (!hasChanges) {
-          console.log('[updateContractLocally] No changes detected, skipping update');
+          console.log(
+            '%c⏭️ [updateContractLocally] Sin cambios detectados',
+            'color: #71717a; font-style: italic;'
+          );
           return;
+        }
+        
+        // 🎨 LOGS DE AUDITORÍA: Detectar qué cambió específicamente (sin duplicar)
+        const currentStateKey = JSON.stringify({
+          contrato_definido: contractUpdate.contrato_definido,
+          firma_requerida: contractUpdate.firma_requerida,
+          pago_confirmado_estudio: contractUpdate.pago_confirmado_estudio,
+          hasContent: !!contractUpdate.content,
+        });
+        
+        // Solo loggear si el estado realmente cambió (evitar duplicados)
+        if (lastLoggedStateRef.current !== currentStateKey) {
+          if (contractData?.contrato_definido !== contractUpdate.contrato_definido) {
+            console.log(
+              '%c🔵 [Sync] INCLUIR CONTRATO cambió',
+              'color: #3b82f6; font-weight: bold; font-size: 13px;',
+              `${contractData?.contrato_definido} → ${contractUpdate.contrato_definido}`
+            );
+          }
+          if (contractData?.firma_requerida !== contractUpdate.firma_requerida) {
+            console.log(
+              '%c🟠 [Sync] FIRMA REQUERIDA cambió',
+              'color: #f97316; font-weight: bold; font-size: 13px;',
+              `${contractData?.firma_requerida} → ${contractUpdate.firma_requerida}`
+            );
+          }
+          if (contractData?.pago_confirmado_estudio !== contractUpdate.pago_confirmado_estudio) {
+            console.log(
+              '%c🟢 [Sync] PAGO CONFIRMADO cambió',
+              'color: #10b981; font-weight: bold; font-size: 13px;',
+              `${contractData?.pago_confirmado_estudio} → ${contractUpdate.pago_confirmado_estudio}`,
+              contractUpdate.pago_monto ? `Monto: $${contractUpdate.pago_monto}` : ''
+            );
+          }
+          if (contractData?.content !== contractUpdate.content) {
+            console.log(
+              '%c📄 [Sync] CONTENIDO DEL CONTRATO cambió',
+              'color: #8b5cf6; font-weight: bold; font-size: 13px;',
+              contractUpdate.content ? `Generado (v${contractUpdate.version})` : 'Eliminado'
+            );
+          }
+          
+          lastLoggedStateRef.current = currentStateKey;
         }
         
         // Si no hay contenido NI template_id, limpiar (contrato eliminado o aún no generado)
         if (!contractUpdate.content && !contractUpdate.template_id) {
-          console.log('[updateContractLocally] No contract content/template, clearing contractData');
+          console.log(
+            '%c🗑️ [updateContractLocally] Limpiando contractData (sin contenido)',
+            'color: #ef4444; font-weight: bold;'
+          );
           if (contractData !== null) {
             setContractData(null);
           }
         } else {
-          console.log('[updateContractLocally] Updating contractData with new contract');
+          console.log(
+            '%c✅ [updateContractLocally] Actualizando contractData',
+            'color: #10b981; font-weight: bold;',
+            {
+              hasContent: !!contractUpdate.content,
+              hasTemplate: !!contractUpdate.template_id,
+              version: contractUpdate.version,
+              contratoDefinido: contractUpdate.contrato_definido,
+              firmaRequerida: contractUpdate.firma_requerida,
+              pagoConfirmado: contractUpdate.pago_confirmado_estudio,
+            }
+          );
           setContractData(contractUpdate);
         }
       }
@@ -407,6 +526,16 @@ export function PublicQuoteAuthorizedView({
       refreshTimeoutRef.current = null;
     }, delay);
   });
+  
+  // ⚠️ Cleanup: Limpiar timeout al desmontar
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // ✅ FIX: Carga inicial UNA SOLA VEZ al montar
   // Después, SOLO Realtime actualiza el contrato (sin polling)
@@ -695,19 +824,25 @@ export function PublicQuoteAuthorizedView({
       if (cotizacionId !== cotizacion.id || getIsNavigating()) return;
 
       const info = changeInfo as { contractSignedAt?: Date | null; camposCambiados?: string[] } | undefined;
-      console.log('[Realtime] onCotizacionUpdated', { cotizacionId, changeInfo: info });
       
       // ✅ Evento de cierre (cambios en studio_cotizaciones_cierre): refrescar contrato
       const isCierreEvent = info && 'contractSignedAt' in info;
       if (isCierreEvent) {
-        console.log('[Realtime] Cierre event detected, scheduling contract refresh');
+        console.log(
+          '%c🔔 [Realtime] Evento de CIERRE detectado',
+          'color: #8b5cf6; font-weight: bold; font-size: 13px;',
+          { camposCambiados: info.camposCambiados }
+        );
         scheduleContractRefreshRef.current(500);
         return;
       }
 
       // ✅ Para otros eventos en status en_cierre, solo refrescar si cambió el status
       if (cotizacion.status === 'en_cierre' && info?.statusChanged) {
-        console.log('[Realtime] Status changed to en_cierre, scheduling contract refresh');
+        console.log(
+          '%c📊 [Realtime] Status cambió a EN_CIERRE',
+          'color: #06b6d4; font-weight: bold; font-size: 13px;'
+        );
         scheduleContractRefreshRef.current(800);
         return;
       }
@@ -723,7 +858,11 @@ export function PublicQuoteAuthorizedView({
       );
       
       if (switchesChanged) {
-        console.log('[Realtime] Contract/switches changes detected, scheduling refresh', { camposCambiados });
+        console.log(
+          '%c⚡ [Realtime] Switches/Contrato cambiaron - Programando refresh',
+          'color: #eab308; font-weight: bold; font-size: 13px;',
+          { camposCambiados }
+        );
         scheduleContractRefreshRef.current(500);
       }
     },
@@ -994,39 +1133,38 @@ export function PublicQuoteAuthorizedView({
                       // ✅ FIX: Si contrato_definido es FALSE, mostrar "Formalización de Reserva" (sin contrato)
                       if (!contratoDefinido) {
                         return (
-                          <div className="flex flex-col items-center justify-center py-12 px-4">
-                            <div className="max-w-md w-full text-center space-y-6">
-                              <div className="flex justify-center">
+                          <ZenCard className="border-emerald-500/20 bg-emerald-500/5">
+                            <div className="p-8">
+                              <div className="flex flex-col items-center text-center space-y-6">
                                 <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
                                   <CheckCircle2 className="h-10 w-10 text-emerald-400" />
                                 </div>
-                              </div>
-                              
-                              <div className="space-y-3">
-                                <h3 className="text-2xl font-bold text-zinc-100">
-                                  Formalización de Reserva
-                                </h3>
-                                <p className="text-sm text-zinc-400 leading-relaxed">
-                                  Tu reserva está siendo procesada. El estudio confirmará los detalles finales y la fecha de tu evento.
-                                </p>
-                              </div>
-
-                              <div className="pt-4">
-                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                  <span className="text-xs font-medium text-emerald-300">Procesando</span>
+                                
+                                <div className="space-y-3 max-w-md">
+                                  <h3 className="text-2xl font-bold text-zinc-100">
+                                    Formalización de Reserva
+                                  </h3>
+                                  <p className="text-sm text-zinc-400 leading-relaxed">
+                                    Tu reserva está siendo procesada sin necesidad de firma digital. El estudio confirmará los detalles finales y la fecha de tu evento.
+                                  </p>
+                                  <div className="pt-2">
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                      <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                      <span className="text-xs font-medium text-emerald-300">Procesando reserva</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
+                          </ZenCard>
                         );
                       }
                       
                       // Sin contrato: UI centralizada de "En preparación" (sin botones de reintentar)
                       return (
-                        <div className="flex flex-col items-center justify-center py-12 px-4">
-                          <div className="max-w-md w-full text-center space-y-6">
-                            <div className="flex justify-center">
+                        <ZenCard className="border-blue-500/20 bg-blue-500/5">
+                          <div className="p-8">
+                            <div className="flex flex-col items-center text-center space-y-6">
                               <div className="relative">
                                 <div className="w-20 h-20 rounded-full bg-blue-500/10 border-2 border-blue-500/30 flex items-center justify-center">
                                   <FileText className="h-10 w-10 text-blue-400" />
@@ -1035,25 +1173,24 @@ export function PublicQuoteAuthorizedView({
                                   <Clock className="h-4 w-4 text-blue-400" />
                                 </div>
                               </div>
-                            </div>
-                            
-                            <div className="space-y-3">
-                              <h3 className="text-2xl font-bold text-zinc-100">
-                                Estamos preparando tu contrato
-                              </h3>
-                              <p className="text-sm text-zinc-400 leading-relaxed">
-                                El equipo del estudio está finalizando los detalles de tu documento legal. En cuanto esté listo, recibirás una notificación y podrás revisarlo y firmarlo desde aquí mismo.
-                              </p>
-                            </div>
-
-                            <div className="pt-4">
-                              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20">
-                                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                                <span className="text-xs font-medium text-blue-300">En proceso</span>
+                              
+                              <div className="space-y-3 max-w-md">
+                                <h3 className="text-2xl font-bold text-zinc-100">
+                                  Estamos preparando tu contrato
+                                </h3>
+                                <p className="text-sm text-zinc-400 leading-relaxed">
+                                  El equipo del estudio está finalizando los detalles de tu documento legal. En cuanto esté listo, recibirás una notificación y podrás {firmaRequerida ? 'revisarlo y firmarlo' : 'revisarlo'} desde aquí mismo.
+                                </p>
+                                <div className="pt-2">
+                                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20">
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                                    <span className="text-xs font-medium text-blue-300">Generando contrato</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </ZenCard>
                       );
                     })()
                   ) : (
@@ -1067,18 +1204,25 @@ export function PublicQuoteAuthorizedView({
           {/* ✅ FIX: Aviso de "Anticipo Confirmado" cuando pago_confirmado_estudio es true */}
           {isContractSigned && pagoConfirmadoEstudio && (
             <div className="relative">
-              <ZenCard className="border-emerald-500/30 bg-emerald-500/5">
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-lg shrink-0">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <ZenCard className="border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5">
+                <div className="p-8">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                    <div className="shrink-0">
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-emerald-400">
-                        Anticipo Confirmado
-                      </h3>
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-bold text-emerald-400">
+                          Anticipo Confirmado
+                        </h3>
+                        <div className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30">
+                          <span className="text-xs font-semibold text-emerald-300">✓ VERIFICADO</span>
+                        </div>
+                      </div>
                       <p className="text-sm text-zinc-300 leading-relaxed">
-                        El estudio ha confirmado la recepción de tu anticipo{pagoMonto ? ` por ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(pagoMonto)}` : ''}. Tu fecha está formalmente reservada.
+                        El estudio ha confirmado la recepción de tu anticipo{pagoMonto ? ` por ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(pagoMonto)}` : ''}. <span className="font-semibold text-emerald-400">Tu fecha está formalmente reservada.</span>
                       </p>
                     </div>
                   </div>

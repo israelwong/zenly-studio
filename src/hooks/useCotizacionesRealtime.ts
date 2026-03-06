@@ -187,6 +187,35 @@ export function useCotizacionesRealtime({
             camposCriticos.forEach(campo => {
               if (oldRecord[campo] !== newRecord[campo]) {
                 camposCambiados.push(campo);
+                
+                // 🎨 LOGS DE AUDITORÍA CON ESTILO
+                if (campo === 'contrato_definido') {
+                  console.log(
+                    '%c🔵 [Realtime] Cambio detectado en INCLUIR CONTRATO',
+                    'color: #3b82f6; font-weight: bold; font-size: 12px;',
+                    `${oldRecord[campo]} → ${newRecord[campo]}`
+                  );
+                } else if (campo === 'firma_requerida') {
+                  console.log(
+                    '%c🟠 [Realtime] Cambio detectado en FIRMA REQUERIDA',
+                    'color: #f97316; font-weight: bold; font-size: 12px;',
+                    `${oldRecord[campo]} → ${newRecord[campo]}`
+                  );
+                } else if (campo === 'pago_confirmado_estudio') {
+                  console.log(
+                    '%c🟢 [Realtime] Cambio detectado en PAGO CONFIRMADO',
+                    'color: #10b981; font-weight: bold; font-size: 12px;',
+                    `${oldRecord[campo]} → ${newRecord[campo]}`
+                  );
+                } else if (campo === 'contract_content' || campo === 'contract_template_id') {
+                  console.log(
+                    '%c📄 [Realtime] Estado del CONTRATO actualizado',
+                    'color: #8b5cf6; font-weight: bold; font-size: 12px;',
+                    campo === 'contract_content' 
+                      ? (newRecord[campo] ? 'Generado' : 'Eliminado')
+                      : `Template: ${newRecord[campo] || 'null'}`
+                  );
+                }
               }
             });
           } else {
@@ -196,6 +225,11 @@ export function useCotizacionesRealtime({
                 camposCambiados.push(campo);
               }
             });
+            console.log(
+              '%c🆕 [Realtime] Nuevo registro de cierre creado',
+              'color: #06b6d4; font-weight: bold; font-size: 12px;',
+              { camposCambiados }
+            );
           }
           
           const changeInfo: CotizacionChangeInfo = {

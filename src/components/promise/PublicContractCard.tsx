@@ -65,7 +65,9 @@ export const PublicContractCard = memo(function PublicContractCard({
                   {isContractSigned
                     ? 'Contrato firmado y autorizado'
                     : hasContract || hasContractTemplate
-                      ? 'Listo para revisión y firma'
+                      ? firmaRequerida 
+                        ? 'Listo para revisión y firma'
+                        : 'Documento informativo - No requiere firma'
                       : 'En proceso de generación'}
                 </p>
                 {contract?.version && (
