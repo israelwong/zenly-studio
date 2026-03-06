@@ -474,6 +474,11 @@ export function useCotizacionesRealtime({
         // Agregar listeners
         channel
           .on('broadcast', { event: '*' }, (payload: unknown) => {
+            console.log(
+              '%c📡 [Realtime] Evento RAW recibido en canal',
+              'color: #ec4899; font-weight: bold; font-size: 12px; background: #831843; padding: 2px 6px; border-radius: 3px;',
+              payload
+            );
             const p = payload as any;
             const operation = p.operation || p.event;
             if (operation === 'INSERT') handleInsert(payload);
@@ -485,7 +490,15 @@ export function useCotizacionesRealtime({
           .on('broadcast', { event: 'DELETE' }, handleDelete);
 
         await subscribeToChannel(channel, (status, err) => {
-          // Suscripción completada
+          console.log(
+            '%c✅ [Realtime] Suscripción al canal',
+            'color: #10b981; font-weight: bold; font-size: 12px;',
+            {
+              canal: `studio:${studioSlug}:cotizaciones`,
+              status,
+              error: err,
+            }
+          );
         });
 
         channelRef.current = channel;

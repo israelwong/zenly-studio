@@ -4106,3 +4106,153 @@ export async function cancelarCierre(
   }
 }
 
+/**
+ * Actualiza el switch contrato_definido en studio_cotizaciones_cierre
+ */
+export async function updateContratoDefinido(
+  studioSlug: string,
+  cotizacionId: string,
+  contratoDefinido: boolean
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    
+    if (!studio) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { 
+        contrato_definido: contratoDefinido,
+        updated_at: new Date(),
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return { success: true, data: { id: cotizacionId } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizando contrato_definido:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar switch',
+    };
+  }
+}
+
+/**
+ * Actualiza el switch firma_requerida en studio_cotizaciones_cierre
+ */
+export async function updateFirmaRequerida(
+  studioSlug: string,
+  cotizacionId: string,
+  firmaRequerida: boolean
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    
+    if (!studio) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { 
+        firma_requerida: firmaRequerida,
+        updated_at: new Date(),
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return { success: true, data: { id: cotizacionId } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizando firma_requerida:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar switch',
+    };
+  }
+}
+
+/**
+ * Actualiza el switch pago_confirmado_estudio en studio_cotizaciones_cierre
+ */
+export async function updatePagoConfirmado(
+  studioSlug: string,
+  cotizacionId: string,
+  pagoConfirmado: boolean
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    
+    if (!studio) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { 
+        pago_confirmado_estudio: pagoConfirmado,
+        updated_at: new Date(),
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return { success: true, data: { id: cotizacionId } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizando pago_confirmado_estudio:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar switch',
+    };
+  }
+}
+

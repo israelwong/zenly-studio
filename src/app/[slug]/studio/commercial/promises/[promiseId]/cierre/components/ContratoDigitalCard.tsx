@@ -59,8 +59,9 @@ interface ContratoDigitalCardProps {
   onRegenerateContract?: () => Promise<void>;
   onEditarDatosClick: () => void;
   contratoOmitido?: boolean;
-  onContratoOmitido?: () => void;
-  onRevocarOmitido?: () => void;
+  onContratoOmitido?: () => Promise<void> | void;
+  onRevocarOmitido?: () => Promise<void> | void;
+  updatingSwitch?: boolean;
 }
 
 function ContratoDigitalCardInner({
@@ -83,6 +84,7 @@ function ContratoDigitalCardInner({
   contratoOmitido = false,
   onContratoOmitido,
   onRevocarOmitido,
+  updatingSwitch = false,
   firmaRequerida = true,
   onFirmaRequeridaChange,
 }: ContratoDigitalCardProps) {
@@ -115,16 +117,16 @@ function ContratoDigitalCardInner({
           <div className="relative group">
             <ZenSwitch
               checked={incluirContrato}
-              onCheckedChange={(checked) => {
-                if (switchDisabled) return;
-                if (checked) onRevocarOmitido?.();
-                else onContratoOmitido?.();
+              onCheckedChange={async (checked) => {
+                if (switchDisabled || updatingSwitch) return;
+                if (checked) await onRevocarOmitido?.();
+                else await onContratoOmitido?.();
               }}
               label="Incluir Contrato Digital"
               labelClassName="text-sm text-zinc-300"
               variant="emerald"
               className="w-full"
-              disabled={switchDisabled}
+              disabled={switchDisabled || updatingSwitch}
             />
             {switchDisabled && (
               <div className="absolute inset-0 cursor-not-allowed" title="No se puede excluir un contrato que ya ha sido firmado por el cliente" />

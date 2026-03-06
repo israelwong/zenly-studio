@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
-import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { cancelarCierre, autorizarCotizacion, updateContratoDefinido, updateFirmaRequerida, updatePagoConfirmado } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract, actualizarFirmaRequeridaCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
@@ -122,6 +122,7 @@ export function usePromiseCierreLogic({
   const [contratoOmitido, setContratoOmitido] = useState(false);
   const [localPromiseData, setLocalPromiseData] = useState(promiseData);
   const toastShownRef = useRef(false);
+  const [updatingSwitch, setUpdatingSwitch] = useState(false);
 
   const [negociacionData, setNegociacionData] = useState<{
     negociacion_precio_original?: number | null;
@@ -712,6 +713,41 @@ export function usePromiseCierreLogic({
     }
   }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, anticipoMontoDefault, contratoOmitido, startProgressAnimation, stopProgressAnimation]);
 
+  // Handlers para switches de cierre (persisten en DB y disparan Realtime)
+  const handleContratoOmitido = useCallback(async () => {
+    setUpdatingSwitch(true);
+    try {
+      const result = await updateContratoDefinido(studioSlug, cotizacion.id, false);
+      if (result.success) {
+        setContratoOmitido(true);
+        toast.success('Contrato omitido');
+      } else {
+        toast.error(result.error || 'Error al actualizar');
+      }
+    } catch (error) {
+      toast.error('Error al actualizar switch');
+    } finally {
+      setUpdatingSwitch(false);
+    }
+  }, [studioSlug, cotizacion.id]);
+
+  const handleRevocarOmitido = useCallback(async () => {
+    setUpdatingSwitch(true);
+    try {
+      const result = await updateContratoDefinido(studioSlug, cotizacion.id, true);
+      if (result.success) {
+        setContratoOmitido(false);
+        toast.success('Contrato incluido');
+      } else {
+        toast.error(result.error || 'Error al actualizar');
+      }
+    } catch (error) {
+      toast.error('Error al actualizar switch');
+    } finally {
+      setUpdatingSwitch(false);
+    }
+  }, [studioSlug, cotizacion.id]);
+
   // Validar si se puede autorizar
   // Si firma_requerida y el contrato está firmado, exige pago_confirmado_estudio (Card de Activación)
   // Si firma_requerida es false, no se exige firma ni pago de activación para autorizar
@@ -785,6 +821,9 @@ export function usePromiseCierreLogic({
     setShowShareOptionsModal,
     contratoOmitido,
     setContratoOmitido,
+    handleContratoOmitido,
+    handleRevocarOmitido,
+    updatingSwitch,
     localPromiseData,
     setLocalPromiseData,
     negociacionData,

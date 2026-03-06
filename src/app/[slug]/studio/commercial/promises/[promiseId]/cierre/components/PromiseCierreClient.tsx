@@ -136,8 +136,9 @@ interface CierreColumn3Props {
   onRegenerateContract: () => void | Promise<void>;
   onEditarDatosClick: () => void;
   contratoOmitido: boolean;
-  onContratoOmitido: () => void;
-  onRevocarOmitido: () => void;
+  onContratoOmitido: () => Promise<void> | void;
+  onRevocarOmitido: () => Promise<void> | void;
+  updatingSwitch?: boolean;
   onAutorizar: () => void;
   onCancelarCierre: () => void;
   isAuthorizing: boolean;
@@ -180,6 +181,7 @@ const CierreColumn3 = memo(function CierreColumn3({
   contratoOmitido,
   onContratoOmitido,
   onRevocarOmitido,
+  updatingSwitch = false,
   onAutorizar,
   onCancelarCierre,
   isAuthorizing,
@@ -221,6 +223,7 @@ const CierreColumn3 = memo(function CierreColumn3({
             contratoOmitido={contratoOmitido}
             onContratoOmitido={onContratoOmitido}
             onRevocarOmitido={onRevocarOmitido}
+            updatingSwitch={updatingSwitch}
             firmaRequerida={firmaRequerida}
             onFirmaRequeridaChange={onFirmaRequeridaChange}
           />
@@ -568,8 +571,9 @@ export function PromiseCierreClient({
             onRegenerateContract={cierreLogic.handleRegenerateContract}
             onEditarDatosClick={cierreLogic.handleEditarDatosClick}
             contratoOmitido={cierreLogic.contratoOmitido}
-            onContratoOmitido={() => cierreLogic.setContratoOmitido(true)}
-            onRevocarOmitido={() => cierreLogic.setContratoOmitido(false)}
+            onContratoOmitido={cierreLogic.handleContratoOmitido}
+            onRevocarOmitido={cierreLogic.handleRevocarOmitido}
+            updatingSwitch={cierreLogic.updatingSwitch}
             onAutorizar={cierreLogic.handleAutorizar}
             onCancelarCierre={cierreLogic.handleOpenCancelModal}
             isAuthorizing={cierreLogic.isAuthorizing}

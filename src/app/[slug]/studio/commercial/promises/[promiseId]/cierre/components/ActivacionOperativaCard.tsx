@@ -9,6 +9,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { updatePagoConfirmado } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { toast } from 'sonner';
 
 /** Mapeo de nombres largos de métodos de pago a versiones cortas para UI */
 const mapearNombreMetodoPago = (nombre: string): string => {
@@ -181,7 +183,7 @@ export function ActivacionOperativaCard({
     onStagingChange?.(pagoStaging, validationState.isValid);
   }, [pagoStaging, validationState.isValid, onStagingChange]);
 
-  const handleSwitchChange = (checked: boolean) => {
+  const handleSwitchChange = async (checked: boolean) => {
     if (checked) {
       const totalNum = parseFloat(montoTotalRecibido);
       if (!montoTotalRecibido || isNaN(totalNum) || totalNum <= 0) {
@@ -189,11 +191,28 @@ export function ActivacionOperativaCard({
       }
     }
 
+    // Optimistic update
     setPagoConfirmadoUI(checked);
     onPagoConfirmadoOptimistic?.(checked);
 
     if (!checked) {
       setPagoStaging([]);
+    }
+
+    // Persistir en DB para disparar Realtime
+    try {
+      const result = await updatePagoConfirmado(studioSlug, cotizacionId, checked);
+      if (!result.success) {
+        // Rollback optimistic update
+        setPagoConfirmadoUI(!checked);
+        onPagoConfirmadoOptimistic?.(!checked);
+        toast.error(result.error || 'Error al actualizar pago');
+      }
+    } catch (error) {
+      // Rollback optimistic update
+      setPagoConfirmadoUI(!checked);
+      onPagoConfirmadoOptimistic?.(!checked);
+      toast.error('Error al actualizar pago');
     }
   };
 
