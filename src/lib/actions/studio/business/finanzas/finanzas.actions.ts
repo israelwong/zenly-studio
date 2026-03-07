@@ -172,7 +172,7 @@ export async function obtenerKPIsFinancieros(
 
         const { start, end } = getMonthRange(month);
 
-        // Ingresos: studio_pagos con status "paid" o "completed" del mes
+        // Ingresos: studio_pagos paid/completed y retained_by_cancellation (anticipo retenido al cancelar sigue en reportes)
         // Buscar a través de studio_users, promise o cotizacion
         // Si payment_date es null, usar created_at
         const ingresos = await prisma.studio_pagos.aggregate({
@@ -186,7 +186,7 @@ export async function obtenerKPIsFinancieros(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation'] },
                     },
                     {
                         OR: [
@@ -914,7 +914,7 @@ export async function obtenerMovimientos(
 
         // Obtener pagos (ingresos)
         // Si payment_date es null, usar created_at para filtrar
-        // Excluir pagos cancelados (solo mostrar pagos con status 'paid' o 'completed')
+        // Incluir paid/completed y retained_by_cancellation (anticipo retenido en reportes)
         const pagos = await prisma.studio_pagos.findMany({
             where: {
                 AND: [
@@ -926,8 +926,7 @@ export async function obtenerMovimientos(
                         ],
                     },
                     {
-                        // Solo pagos pagados/completados (excluir cancelados)
-                        status: { in: ['paid', 'completed'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation'] },
                     },
                     {
                         OR: [
@@ -3371,7 +3370,7 @@ export async function obtenerAnalisisFinanciero(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation'] },
                     },
                     {
                         OR: [
@@ -3619,7 +3618,7 @@ export async function obtenerAnalisisFinanciero(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation'] },
                     },
                     {
                         OR: [

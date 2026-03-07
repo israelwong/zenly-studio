@@ -3,6 +3,8 @@ import { unstable_cache } from 'next/cache';
 import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
 import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { obtenerMetodosPagoManuales } from '@/lib/actions/studio/config/metodos-pago.actions';
+import { getReminderByPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
 import { CierrePageInner } from './components/CierrePageInner';
 
 interface PromiseCierrePageProps {
@@ -42,6 +44,26 @@ export default async function PromiseCierrePage({ params }: PromiseCierrePagePro
     }
   }
 
-  const metodosPago = await getCachedMetodosPago(studioSlug);
-  return <CierrePageInner initialMetodosPago={metodosPago} />;
+  const [metodosPago, agendamientoResult, reminderResult] = await Promise.all([
+    getCachedMetodosPago(studioSlug),
+    obtenerAgendamientoPorPromise(studioSlug, promiseId).catch((err) => {
+      console.warn('[PromiseCierrePage] obtenerAgendamientoPorPromise error:', err?.message ?? err);
+      return { success: true as const, data: undefined };
+    }),
+    getReminderByPromise(studioSlug, promiseId).catch((err) => {
+      console.warn('[PromiseCierrePage] getReminderByPromise error:', err?.message ?? err);
+      return { success: true as const, data: null };
+    }),
+  ]);
+
+  const initialAgendamiento = agendamientoResult.success && agendamientoResult.data ? agendamientoResult.data : null;
+  const initialReminder = reminderResult.success && reminderResult.data != null ? reminderResult.data : null;
+
+  return (
+    <CierrePageInner
+      initialMetodosPago={metodosPago}
+      initialAgendamiento={initialAgendamiento}
+      initialReminder={initialReminder}
+    />
+  );
 }

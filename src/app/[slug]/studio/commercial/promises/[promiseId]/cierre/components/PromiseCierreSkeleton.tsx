@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Bell, CalendarClock } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 
 /** Skeleton para CotizacionCard (condiciones + cotización + auditoría) - altura alineada con vista actual */
@@ -232,40 +233,41 @@ export function PromiseCierreSkeleton() {
           </ZenCard>
         </div>
 
-        {/* Columna 2: Cotización - Skeleton */}
-        <div className="lg:col-span-1 flex flex-col h-full">
-          <ZenCard className="h-full flex flex-col">
-            <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
-              <div className="flex items-center justify-between">
-                <ZenCardTitle className="text-sm">
-                  <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
-                </ZenCardTitle>
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse" />
+        {/* Columna 2: Cotización (arriba) → Programar recordatorio (medio) → Agendar cita (abajo); mismo orden y gap que CierreColumn2 */}
+        <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+          <CotizacionCardSkeleton />
+          {/* Skeleton Programar recordatorio: paridad con SeguimientoMinimalCard vacía (dashed, campana a la izquierda) */}
+          <div
+            className="h-[72px] rounded-lg border-2 border-dashed border-zinc-600/70 bg-zinc-900/30 transition-all duration-200 flex flex-col justify-center"
+            aria-hidden
+          >
+            <div className="px-4 py-3 flex flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
+                  <Bell className="h-4 w-4 text-zinc-500" aria-hidden />
                 </div>
+                <div className="h-3 w-36 bg-zinc-800/50 rounded animate-pulse" />
               </div>
-            </ZenCardHeader>
-            <ZenCardContent className="p-4 flex-1 overflow-y-auto">
-              {/* Nombre de cotización */}
-              <div className="mb-4">
-                <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse mb-2" />
-                <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse" />
-              </div>
-
-              {/* Condiciones comerciales skeleton */}
-              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3 mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-6 w-20 bg-zinc-700 rounded animate-pulse" />
+              <div className="h-9 w-9 shrink-0 rounded-md bg-zinc-800/50 animate-pulse" />
+            </div>
+          </div>
+          {/* Skeleton Agendar cita: paridad con PromiseAppointmentCard vacía (dashed, calendario + '+' a la derecha) */}
+          <div
+            className="h-[72px] rounded-lg border-2 border-dashed border-zinc-600/70 bg-zinc-900/30 transition-all duration-200 flex flex-col justify-center"
+            aria-hidden
+          >
+            <div className="px-4 py-3 flex flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
+                  <CalendarClock className="h-4 w-4 text-zinc-500" aria-hidden />
                 </div>
-                <div className="space-y-2">
-                  <div className="h-3 w-full bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-3 w-3/4 bg-zinc-700 rounded animate-pulse" />
-                </div>
+                <div className="h-3 w-28 bg-zinc-800/50 rounded animate-pulse" />
               </div>
-            </ZenCardContent>
-          </ZenCard>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-800/50">
+                <span className="text-lg font-light leading-none text-zinc-500">+</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Columna 3: Contrato Digital, Pago Inicial y Acciones - Skeleton */}

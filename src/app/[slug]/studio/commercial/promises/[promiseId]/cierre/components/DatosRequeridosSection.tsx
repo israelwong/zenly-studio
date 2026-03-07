@@ -54,38 +54,36 @@ export const DatosRequeridosSection = memo(function DatosRequeridosSection({
   const listosParaAutorizarOmitido = contratoOmitido && !!minimosParaOmitido;
 
   return (
-    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
-      <div className="flex items-center gap-2 mb-2">
-        {contratoOmitido ? (
-          listosParaAutorizarOmitido ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+    <div className="rounded-lg overflow-hidden border border-zinc-700/50 bg-zinc-800/30 transition-all duration-200">
+      <div className="flex items-center justify-between gap-2 py-2.5 px-3 border-b border-zinc-700/50">
+        <div className="flex items-center gap-2 min-w-0">
+          {contratoOmitido ? (
+            listosParaAutorizarOmitido ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+            )
+          ) : clientPercentage === 100 ? (
+            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
           ) : (
-            <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-          )
-        ) : clientPercentage === 100 ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-        ) : (
-          <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-              {contratoOmitido
-                ? listosParaAutorizarOmitido
-                  ? 'Datos listos para autorizar (contrato omitido)'
-                  : `Datos Requeridos ${completedFields}/${totalFields}`
-                : `Datos Requeridos ${completedFields}/${totalFields}`}
-            </span>
-            <button
-              onClick={onEditarClick}
-              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-            >
-              Editar
-            </button>
-          </div>
+            <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+          )}
+          <span className="text-xs uppercase tracking-wide font-semibold truncate text-zinc-400">
+            {contratoOmitido
+              ? listosParaAutorizarOmitido
+                ? 'Datos listos para autorizar (contrato omitido)'
+                : `Datos Requeridos ${completedFields}/${totalFields}`
+              : `Datos Requeridos ${completedFields}/${totalFields}`}
+          </span>
         </div>
+        <button
+          onClick={onEditarClick}
+          className="h-7 min-h-[1.75rem] flex items-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
+        >
+          Editar
+        </button>
       </div>
-      <div className="border-t border-zinc-700/50 pt-2">
+      <div className="px-3 pb-3 pt-1.5">
         <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
           <div className="flex items-center gap-1">
             {clientCompletion.name ? (

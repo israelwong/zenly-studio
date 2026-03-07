@@ -7,6 +7,8 @@ import { EventFormModal } from '@/components/shared/promises';
 import { usePromiseContext } from '../../context/PromiseContext';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { usePromiseCierreLogic } from './usePromiseCierreLogic';
 import { CotizacionCard } from './CotizacionCard';
 import { CondicionesComercialeSelectorSimpleModal } from '../../components/condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
@@ -31,6 +33,9 @@ interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
   /** Métodos de pago inyectados desde el servidor (cache); evita fetch en cliente y re-request en cada remount */
   initialMetodosPago?: Array<{ id: string; payment_method_name: string }>;
+  /** Atomic seeding: recordatorio y agendamiento desde servidor para que ambas cards pinten a la vez */
+  initialAgendamiento?: AgendaItem | null;
+  initialReminder?: Reminder | null;
 }
 
 type CotizacionListItemType = CotizacionListItem;
@@ -54,6 +59,8 @@ interface CierreColumn2Props {
   isRemovingCondiciones: boolean;
   onMetadataUpdated?: () => void;
   isRefreshingMetadata?: boolean;
+  initialReminder?: Reminder | null;
+  initialAgendamiento?: AgendaItem | null;
 }
 
 const CierreColumn2 = memo(function CierreColumn2({
@@ -75,6 +82,8 @@ const CierreColumn2 = memo(function CierreColumn2({
   isRemovingCondiciones,
   onMetadataUpdated,
   isRefreshingMetadata,
+  initialReminder,
+  initialAgendamiento,
 }: CierreColumn2Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -101,11 +110,11 @@ const CierreColumn2 = memo(function CierreColumn2({
           isRefreshingMetadata={isRefreshingMetadata}
         />
       )}
-      {/* Recordatorio y agenda: mismos componentes que en pendientes para flujo fluido */}
+      {/* Recordatorio y agenda: atomic seeding desde servidor para pintar a la vez */}
       {promiseId && (
         <>
-          <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
-          <PromiseAppointmentCard studioSlug={studioSlug} promiseId={promiseId} />
+          <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} initialReminder={initialReminder} />
+          <PromiseAppointmentCard studioSlug={studioSlug} promiseId={promiseId} initialAgendamiento={initialAgendamiento} />
         </>
       )}
     </div>
@@ -283,6 +292,8 @@ const CierreColumn3 = memo(function CierreColumn3({
 export function PromiseCierreClient({
   initialCotizacionEnCierre,
   initialMetodosPago = [],
+  initialAgendamiento = null,
+  initialReminder = null,
 }: PromiseCierreClientProps) {
   const params = useParams();
   const router = useRouter();
@@ -566,6 +577,8 @@ export function PromiseCierreClient({
               isRemovingCondiciones={cierreLogic.isRemovingCondiciones}
               onMetadataUpdated={handleMetadataUpdated}
               isRefreshingMetadata={reloadingCotizaciones}
+              initialReminder={initialReminder}
+              initialAgendamiento={initialAgendamiento}
             />
           )}
 

@@ -99,10 +99,8 @@ export function AgendaPopover({
   const count = initialCount;
 
   const handleEventClick = (event: AgendaItem) => {
-    if (event.promise_id && !event.evento_id) {
-      router.push(`/${studioSlug}/studio/commercial/promises/${event.promise_id}`);
-    } else if (event.evento_id && event.promise_id) {
-      router.push(`/${studioSlug}/studio/commercial/promises/${event.promise_id}/eventos/${event.evento_id}`);
+    if (event.evento_id) {
+      router.push(`/${studioSlug}/studio/business/events/${event.evento_id}`);
     } else if (event.promise_id) {
       router.push(`/${studioSlug}/studio/commercial/promises/${event.promise_id}`);
     }

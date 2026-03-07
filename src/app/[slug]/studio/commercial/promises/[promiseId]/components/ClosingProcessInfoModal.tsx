@@ -21,6 +21,7 @@ interface ClosingProcessInfoModalProps {
   cotizacionName?: string;
   reminder?: ReminderInfo | null;
   isLoading?: boolean;
+  progressMessage?: string;
 }
 
 export function ClosingProcessInfoModal({
@@ -31,6 +32,7 @@ export function ClosingProcessInfoModal({
   cotizacionName,
   reminder,
   isLoading = false,
+  progressMessage,
 }: ClosingProcessInfoModalProps) {
   const [deleteReminder, setDeleteReminder] = useState(false);
 
@@ -64,7 +66,7 @@ export function ClosingProcessInfoModal({
       title="¿Pasar cotización a proceso de cierre?"
       description={
         isLoading
-          ? 'Procesando y redirigiendo...'
+          ? (progressMessage || 'Procesando y redirigiendo...')
           : cotizacionName
             ? `Estás a punto de pasar "${cotizacionName}" al proceso de cierre.`
             : 'Estás a punto de pasar esta cotización al proceso de cierre.'
@@ -72,7 +74,7 @@ export function ClosingProcessInfoModal({
       maxWidth="lg"
       onSave={handleConfirm}
       onCancel={handleCancel}
-      saveLabel={isLoading ? 'Procesando...' : 'Continuar'}
+      saveLabel={isLoading ? (progressMessage || 'Procesando...') : 'Continuar'}
       cancelLabel="Cancelar"
       closeOnClickOutside={false}
       isLoading={isLoading}

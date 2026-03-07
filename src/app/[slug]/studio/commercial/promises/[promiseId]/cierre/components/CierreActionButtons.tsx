@@ -50,7 +50,9 @@ export function CierreActionButtons({
   const exigePagoYNoConfirmado = requiereConfirmacionPago && !pagoConfirmadoLocal;
   const exigeFirmaYNoProcesada = contratoGenerado && firmaRequerida && !contratoFirmado;
 
-  const autorizarDisabled = isAuthorizing || loadingRegistro || !puedeAutorizar || exigeContratoYNoGenerado || exigePagoYNoConfirmado || exigeFirmaYNoProcesada || pagoUpdatePending || !pagoStagingValid;
+  // pagoStagingValid solo exige cuando se requiere confirmación de pago (contrato firmado + firma requerida)
+  const stagingBlock = requiereConfirmacionPago && !pagoStagingValid;
+  const autorizarDisabled = isAuthorizing || loadingRegistro || !puedeAutorizar || exigeContratoYNoGenerado || exigePagoYNoConfirmado || exigeFirmaYNoProcesada || pagoUpdatePending || stagingBlock;
   
   // Etiquetado semántico por contexto de carga (sin spinner manual, ZenButton lo maneja con loading prop)
   const getButtonText = () => {
@@ -65,6 +67,24 @@ export function CierreActionButtons({
 
   return (
     <div className="space-y-2">
+      {/* Mensaje dinámico: generar contrato (Caso A) o firma pendiente (Caso B) — arriba del botón Autorizar */}
+      {exigeContratoYNoGenerado && (
+        <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+          <Clock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
+          <p className="text-xs text-amber-300 leading-relaxed">
+            Se requiere generar el contrato para autorizar el evento.
+          </p>
+        </div>
+      )}
+      {!exigeContratoYNoGenerado && exigeFirmaYNoProcesada && (
+        <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+          <Clock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
+          <p className="text-xs text-amber-300 leading-relaxed">
+            Firma del contrato requerida para autorizar
+          </p>
+        </div>
+      )}
+
       <ZenButton
         variant="primary"
         className="w-full"
@@ -75,25 +95,7 @@ export function CierreActionButtons({
         {showIcon && <CheckCircle2 className="w-4 h-4 mr-2" />}
         {getButtonText()}
       </ZenButton>
-      
-      {/* Mensaje dinámico: generar contrato (Caso A) o firma pendiente (Caso B) */}
-      {exigeContratoYNoGenerado && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
-          <Clock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
-          <p className="text-xs text-amber-300 leading-relaxed">
-            Se requiere generar el contrato para autorizar el evento.
-          </p>
-        </div>
-      )}
-      {!exigeContratoYNoGenerado && exigeFirmaYNoProcesada && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
-          <Clock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
-          <p className="text-xs text-amber-300 leading-relaxed">
-            Se requiere la firma del contrato para autorizar el evento.
-          </p>
-        </div>
-      )}
-      
+
       <ZenButton
         variant="outline"
         className="w-full text-zinc-400 hover:text-red-400 hover:border-red-500"

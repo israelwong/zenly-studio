@@ -101,6 +101,7 @@ export function PromiseQuotesPanelCard({
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
   const cierrePayloadRef = useRef<PasarACierreOptions | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string>('');
   const [editingName, setEditingName] = useState(cotizacion.name);
   const [editingDescription, setEditingDescription] = useState(cotizacion.description ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -574,6 +575,7 @@ export function PromiseQuotesPanelCard({
     }
 
     setLoading(true);
+    setProgressMessage('Registrando anticipo...');
     try {
       if (shouldDeleteReminder && reminder) {
         try {
@@ -589,9 +591,14 @@ export function PromiseQuotesPanelCard({
       }
 
       const payload = cierrePayloadRef.current;
+      if (payload?.generar_contrato) {
+        await new Promise((r) => setTimeout(r, 400));
+        setProgressMessage('Generando contrato...');
+      }
       const result = await pasarACierre(studioSlug, cotizacion.id, payload);
       if (result.success) {
         setShowConfirmarCierreModal(false);
+        setProgressMessage('Abriendo cierre...');
         toast.success('Cotización pasada a proceso de cierre');
         if (onPasarACierre) {
           onPasarACierre(cotizacion.id);
@@ -602,7 +609,7 @@ export function PromiseQuotesPanelCard({
         setReminder(null);
         cierrePayloadRef.current = undefined;
         window.dispatchEvent(new CustomEvent('close-overlays'));
-        // Navegación explícita solo; sin refresh para no disparar el cadenero de pendiente (redirect por state !== 'pendiente')
+        // Navegación después de que el servidor haya persistido (revalidatePath ya ejecutado)
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
         });
@@ -610,6 +617,7 @@ export function PromiseQuotesPanelCard({
         toast.error(result.error || 'Error al pasar cotización a cierre');
         setShowClosingProcessInfoModal(false);
         setLoading(false);
+        setProgressMessage('');
         throw new Error(result.error ?? 'Error al pasar cotización a cierre');
       }
     } catch (error) {
@@ -619,6 +627,7 @@ export function PromiseQuotesPanelCard({
       }
       setShowClosingProcessInfoModal(false);
       setLoading(false);
+      setProgressMessage('');
       throw error;
     }
   };
@@ -1258,6 +1267,8 @@ export function PromiseQuotesPanelCard({
         cotizacionId={cotizacion.id}
         promiseId={promiseId ?? ''}
         cotizacionName={cotizacion.name}
+        isLoading={loading}
+        progressMessage={progressMessage}
       />
 
       {/* Modal informativo de proceso de cierre (recordatorio) */}
@@ -1278,6 +1289,7 @@ export function PromiseQuotesPanelCard({
         cotizacionName={cotizacion.name}
         reminder={reminder}
         isLoading={loading || loadingReminder}
+        progressMessage={progressMessage}
       />
 
       {/* Vista previa: abre al instante; sheet muestra skeletons mientras cargan datos */}

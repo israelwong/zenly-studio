@@ -213,15 +213,15 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
               </span>
             </div>
           )}
-          <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+          <div className="flex justify-between items-center pt-1.5 border-t border-zinc-700">
             <span className="text-sm font-semibold text-white">Total a pagar</span>
             <span className="text-lg font-bold text-emerald-400">
               {formatPrecioCierre(precioFinalAPagar)}
             </span>
           </div>
           {anticipoDisplay > 0 && (
-            <>
-              <div className="flex justify-between items-center pt-1 gap-1">
+            <div className="space-y-1 -mt-1">
+              <div className="flex justify-between items-center pt-0.5 gap-1">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="text-sm text-zinc-400">
                     {advanceType === 'fixed_amount'
@@ -266,7 +266,7 @@ export const ResumenPago = forwardRef<HTMLDivElement, ResumenPagoProps>(
                   {formatPrecioCierre(diferidoDisplay)}
                 </span>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

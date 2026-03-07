@@ -255,14 +255,15 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
 
   if (loading) {
     return (
-      <ZenCard variant="outlined" className="border-zinc-800">
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
-          <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
-        </ZenCardHeader>
-        <ZenCardContent className="p-4 space-y-3">
-          <div className="h-9 w-full bg-zinc-800 rounded animate-pulse" />
-          <div className="h-16 w-full bg-zinc-800 rounded animate-pulse" />
-          <div className="h-8 w-full bg-zinc-800 rounded animate-pulse" />
+      <ZenCard variant="outlined" padding="none" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 h-[72px] flex flex-col justify-center">
+        <ZenCardContent className="px-4 py-3 flex flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800/80">
+              <Bell className="h-4 w-4 text-zinc-500" aria-hidden />
+            </div>
+            <div className="h-3 w-36 bg-zinc-800/50 rounded animate-pulse" />
+          </div>
+          <div className="h-9 w-9 shrink-0 rounded-md bg-zinc-800/50 animate-pulse" />
         </ZenCardContent>
       </ZenCard>
     );

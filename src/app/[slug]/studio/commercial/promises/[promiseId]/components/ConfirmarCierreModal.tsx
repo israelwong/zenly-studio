@@ -4,9 +4,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ZenDialog, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Switch } from '@/components/ui/shadcn/switch';
+import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { Loader2, Lock, Globe, Pencil, DollarSign } from 'lucide-react';
 import { getDatosConfirmarCierre, getAuditoriaRentabilidadCierre, limpiarCondicionPactadaAlCancelarCierre, actualizarAnticipoCondicionNegociacionCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { obtenerMetodosPagoManuales } from '@/lib/actions/studio/config/metodos-pago.actions';
+import { getContractTemplates } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { AuditoriaRentabilidadCard } from '@/components/shared/commercial';
 import { ResumenPago } from '@/components/shared/precio';
@@ -83,6 +85,7 @@ interface ConfirmarCierreModalProps {
   promiseId: string;
   cotizacionName?: string;
   isLoading?: boolean;
+  progressMessage?: string;
 }
 
 export function ConfirmarCierreModal({
@@ -94,6 +97,7 @@ export function ConfirmarCierreModal({
   promiseId,
   cotizacionName,
   isLoading = false,
+  progressMessage,
 }: ConfirmarCierreModalProps) {
   const [loading, setLoading] = useState(true);
   const [cotizacion, setCotizacion] = useState<{
@@ -138,6 +142,12 @@ export function ConfirmarCierreModal({
   /** Método de pago seleccionado */
   const [metodosPago, setMetodosPago] = useState<Array<{ id: string; payment_method_name: string }>>([]);
   const [pagoMetodoId, setPagoMetodoId] = useState<string>('');
+  /** Configuración de formalización: generar contrato al pasar a cierre */
+  const [generarContrato, setGenerarContrato] = useState(false);
+  const [solicitarFirma, setSolicitarFirma] = useState(true);
+  const [contractTemplates, setContractTemplates] = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
+  const [templateId, setTemplateId] = useState<string>('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -145,6 +155,10 @@ export function ConfirmarCierreModal({
       setPagoConfirmado(false);
       setPagoMontoConfirmado('');
       setPagoMetodoId('');
+      setGenerarContrato(false);
+      setSolicitarFirma(true);
+      setContractTemplates([]);
+      setTemplateId('');
       isManualEditRef.current = false;
       
       // Cargar métodos de pago
@@ -239,6 +253,37 @@ export function ConfirmarCierreModal({
     }
   }, [anticipo, pagoConfirmado]);
 
+  // Cargar plantillas cuando se activa "Generar Contrato Digital"
+  useEffect(() => {
+    if (!isOpen || !generarContrato) return;
+    setLoadingTemplates(true);
+    const minDelay = new Promise((r) => setTimeout(r, 400)); // Mínimo tiempo para que se vea el skeleton
+    Promise.all([
+      getContractTemplates(studioSlug, { isActive: true }),
+      minDelay,
+    ])
+      .then(([res]) => {
+        if (res.success && res.data && res.data.length > 0) {
+          const list = res.data.map((t: { id: string; name: string; is_default?: boolean }) => ({
+            id: t.id,
+            name: t.name,
+            is_default: !!t.is_default,
+          }));
+          setContractTemplates(list);
+          const defaultT = list.find((t) => t.is_default) ?? list[0];
+          setTemplateId(defaultT?.id ?? '');
+        } else {
+          setContractTemplates([]);
+          setTemplateId('');
+        }
+      })
+      .catch(() => {
+        setContractTemplates([]);
+        setTemplateId('');
+      })
+      .finally(() => setLoadingTemplates(false));
+  }, [isOpen, studioSlug, generarContrato]);
+
   const buildPayload = (): PasarACierreOptions => {
     let basePayload: PasarACierreOptions;
     
@@ -287,7 +332,11 @@ export function ConfirmarCierreModal({
       basePayload.pago_monto_confirmado = montoFinal > 0 ? montoFinal : Math.round(totalAPagar * 0.1);
       basePayload.pago_metodo_id = pagoMetodoId || null;
     }
-    
+    if (generarContrato && templateId) {
+      basePayload.generar_contrato = true;
+      basePayload.template_id = templateId;
+      basePayload.solicitar_firma = solicitarFirma;
+    }
     return basePayload;
   };
 
@@ -385,7 +434,7 @@ export function ConfirmarCierreModal({
       maxWidth="lg"
       onSave={() => void handleConfirm()}
       onCancel={isSubmitting ? () => {} : handleClose}
-      saveLabel={isSubmitting ? 'Confirmando cierre...' : (isLoading ? 'Procesando...' : 'Pasar a Cierre')}
+      saveLabel={(isLoading || isSubmitting) && progressMessage ? progressMessage : (isSubmitting ? 'Confirmando cierre...' : (isLoading ? 'Procesando...' : 'Pasar a Cierre'))}
       cancelLabel="Cancelar"
       closeOnClickOutside={false}
       isLoading={isLoading || isSubmitting}
@@ -578,15 +627,13 @@ export function ConfirmarCierreModal({
 
             {/* Fase 28.0: Confirmación de Pago Inicial */}
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-1">
-                    Registro de Pago Inicial
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    ¿Ya recibiste el anticipo del cliente? Activa esta opción para registrarlo.
-                  </p>
-                </div>
+              <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-3">
+                Registro de Pago Inicial
+              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-zinc-500">
+                  ¿Ya recibiste el anticipo del cliente? Activa esta opción para registrarlo.
+                </p>
                 <Switch
                   checked={pagoConfirmado}
                   onCheckedChange={(checked) => {
@@ -601,7 +648,7 @@ export function ConfirmarCierreModal({
                 />
               </div>
               {pagoConfirmado && (
-                <div className="pt-3 border-t border-zinc-700/50 space-y-3">
+                <div className="mt-4 pt-5 border-t border-zinc-700/50 space-y-3">
                   <div className="flex gap-3 items-start">
                     <div className="space-y-2 w-32">
                       <label className="text-xs text-zinc-400 uppercase tracking-wide font-semibold block">
@@ -654,6 +701,63 @@ export function ConfirmarCierreModal({
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Configuración de Formalización: contrato y firma al pasar a cierre */}
+            <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+              <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-3">
+                Configuración de Formalización
+              </p>
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">Generar Contrato Digital</p>
+                    <p className="text-xs text-zinc-500">Al pasar a cierre se generará el contrato con la plantilla elegida.</p>
+                  </div>
+                  <Switch
+                    checked={generarContrato}
+                    onCheckedChange={setGenerarContrato}
+                    className="data-[state=checked]:bg-emerald-500"
+                  />
+                </div>
+                {generarContrato && (
+                  <>
+                    {loadingTemplates ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-3 w-20 rounded bg-zinc-600/80" />
+                        <Skeleton className="h-[42px] w-full rounded-lg bg-zinc-600/80" />
+                      </div>
+                    ) : contractTemplates.length > 0 ? (
+                      <div className="space-y-2">
+                        <label className="text-xs text-zinc-400 uppercase tracking-wide font-semibold block">
+                          Plantilla
+                        </label>
+                        <ZenSelect
+                          value={templateId}
+                          onValueChange={setTemplateId}
+                          options={contractTemplates.map((t) => ({ value: t.id, label: t.name }))}
+                          placeholder="Selecciona plantilla"
+                          disableSearch={contractTemplates.length <= 5}
+                          className="h-[42px]"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-500">No hay plantillas activas. Crea una en Configuración → Contratos.</p>
+                    )}
+                    <div className="flex items-start justify-between gap-3 pt-2 border-t border-zinc-700/50">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">Solicitar Firma Digital</p>
+                        <p className="text-xs text-zinc-500">El cliente firmará el contrato desde el enlace de cierre.</p>
+                      </div>
+                      <Switch
+                        checked={solicitarFirma}
+                        onCheckedChange={setSolicitarFirma}
+                        className="data-[state=checked]:bg-emerald-500"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {auditoria != null && (

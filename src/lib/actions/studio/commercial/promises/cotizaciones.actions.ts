@@ -3729,6 +3729,12 @@ export interface PasarACierreOptions {
   pago_monto_confirmado?: number;
   /** ID del método de pago seleccionado */
   pago_metodo_id?: string | null;
+  /** Configuración de formalización: generar contrato al pasar a cierre */
+  generar_contrato?: boolean;
+  /** ID de plantilla de contrato (requerido si generar_contrato es true) */
+  template_id?: string | null;
+  /** Solicitar firma digital del cliente (visible solo si se genera contrato) */
+  solicitar_firma?: boolean;
 }
 
 /**
@@ -3885,6 +3891,11 @@ export async function pasarACierre(
         }
       }
 
+      // Configuración de formalización: contrato y firma al pasar a cierre
+      const generarContrato = options?.generar_contrato === true && options?.template_id;
+      const templateIdCierre = generarContrato ? options!.template_id! : null;
+      const firmaRequerida = options?.solicitar_firma ?? true;
+
       // Fase 29.9.5: checkin_completed = true cuando el estudio autoriza/pasa a cierre (validación hecha por estudio)
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
@@ -3897,15 +3908,30 @@ export async function pasarACierre(
           pago_confirmado_estudio: pagoConfirmado,
           pago_monto: pagoMontoConfirmado,
           pago_metodo_id: options?.pago_metodo_id || null,
+          ...(generarContrato && templateIdCierre
+            ? {
+                contract_template_id: templateIdCierre,
+                contrato_definido: true,
+                firma_requerida: firmaRequerida,
+              }
+            : {}),
         },
         update: {
           previous_status: previousStatus,
           condiciones_comerciales_id: registroCondicionId,
           condiciones_comerciales_definidas: registroCondicionDefinidas,
           checkin_completed: true,
-          contract_template_id: null,
-          contract_content: null,
-          contrato_definido: false,
+          ...(generarContrato && templateIdCierre
+            ? {
+                contract_template_id: templateIdCierre,
+                contrato_definido: true,
+                firma_requerida: firmaRequerida,
+              }
+            : {
+                contract_template_id: null,
+                contract_content: null,
+                contrato_definido: false,
+              }),
           pago_confirmado_estudio: pagoConfirmado,
           pago_registrado: false,
           pago_concepto: null,
@@ -3942,10 +3968,31 @@ export async function pasarACierre(
       });
     }
 
+    // Generar contenido del contrato si se solicitó (render con plantilla y datos de la promesa)
+    const generarContrato = options?.generar_contrato === true && options?.template_id && cotizacion.promise_id;
+    if (generarContrato) {
+      try {
+        const { actualizarContratoCierre } = await import('./cotizaciones-cierre.actions');
+        const contractResult = await actualizarContratoCierre(
+          studioSlug,
+          cotizacionId,
+          options!.template_id!,
+          null,
+          cotizacion.promise_id
+        );
+        if (!contractResult.success) {
+          console.warn('[COTIZACIONES] Contrato no generado al pasar a cierre:', contractResult.error);
+        }
+      } catch (err) {
+        console.error('[COTIZACIONES] Error generando contrato al pasar a cierre:', err);
+      }
+    }
+
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cierre`);
       // ⚠️ CRÍTICO: Invalidar layout de rutas públicas para forzar frescura (usa mapeo centralizado)
       revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id), 'layout');
       revalidatePath(getPublicPromisePath(studioSlug, cotizacion.promise_id, 'pendientes'), 'layout');

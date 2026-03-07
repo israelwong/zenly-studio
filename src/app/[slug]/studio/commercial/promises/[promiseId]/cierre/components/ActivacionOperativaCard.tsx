@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenInput, ZenSelect, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Loader2, X, ChevronDown, ChevronUp, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, X, ChevronDown, ChevronUp, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
@@ -226,13 +226,12 @@ export function ActivacionOperativaCard({
     if (noColapsarAUnItem) return;
 
     if (tieneDistribucionPersistida && persisted.length >= 2) {
-      setPagoStaging((prev) => {
-        const inheritedMetodo = prev.find((p) => p.tipo === 'anticipo')?.metodoId ?? pagoData?.pago_metodo_id ?? null;
+      setPagoStaging(() => {
         const firstDate = persisted[0]?.payment_date ? new Date(persisted[0].payment_date) : fechaGlobal;
         return persisted.map((p, i) => ({
           id: i === 0 ? 'anticipo-1' : (i === 1 ? 'abono-2' : `abono-${i + 1}`),
           monto: p.amount,
-          metodoId: p.metodo_pago_id ?? inheritedMetodo,
+          metodoId: p.metodo_pago_id ?? null,
           fecha: p.payment_date ? new Date(p.payment_date) : firstDate,
           concepto: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'Anticipo' : 'Abono adicional',
           tipo: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'anticipo' : 'abono_cierre',
@@ -683,13 +682,14 @@ export function ActivacionOperativaCard({
         aria-hidden
       />
       {cardExpanded && (
-        <ZenCardContent className="p-4 space-y-4 min-h-[280px]">
+        <ZenCardContent className="p-4 space-y-4">
           {/* Una sola interfaz: sin pantallas intermedias; isSaving solo deshabilita controles y cambia texto del botón */}
-          {/* Advertencia firma pendiente solo si el contrato ya tiene contenido (evita pedir firma sobre plantilla no generada) */}
-          {contratoData?.hasContent === true && contratoData?.firma_requerida !== false && contratoData?.contract_signed_at == null && (
+          {/* Advertencia firma pendiente solo si el contrato tiene contenido, firma requerida y aún no firmado; no mostrar si el pago ya se registró en el paso anterior */}
+          {contratoData?.hasContent === true && contratoData?.firma_requerida !== false && contratoData?.contract_signed_at == null && !pagoData?.pago_confirmado_estudio && (
             <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-200">
-              <AlertDescription>
-                ⚠️ Firma pendiente: Se recomienda recibir la firma antes de registrar el pago, aunque puedes proceder bajo tu responsabilidad.
+              <AlertTriangle className="h-4 w-4 shrink-0 text-current" />
+              <AlertDescription className="text-xs">
+                Firma pendiente: Se recomienda recibir la firma antes de registrar el pago, aunque puedes proceder bajo tu responsabilidad.
               </AlertDescription>
             </Alert>
           )}

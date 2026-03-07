@@ -198,38 +198,38 @@ export const ContratoSection = memo(function ContratoSection({
   } else if (isClienteNuevo) {
     // Si el contrato está firmado (verificar desde tabla temporal)
     if (contratoFirmado) {
-      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
       contratoEstado = 'Contrato firmado';
       contratoColor = 'text-emerald-400';
       contratoBoton = null;
     } else {
       switch (cotizacionStatus) {
         case 'contract_pending':
-          contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+          contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
           contratoEstado = 'Pendiente de confirmación del cliente';
           contratoColor = 'text-amber-400';
           contratoBoton = null;
           break;
         case 'contract_generated':
-          contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+          contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />;
           contratoEstado = 'Generado, esperando firma del cliente';
           contratoColor = 'text-blue-400';
           contratoBoton = null;
           break;
         case 'contract_signed':
-          contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+          contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
           contratoEstado = 'Contrato firmado';
           contratoColor = 'text-emerald-400';
           contratoBoton = null;
           break;
         case 'en_cierre':
           if (tieneContratoGenerado) {
-            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />;
             contratoEstado = 'Generado, esperando firma del cliente';
             contratoColor = 'text-blue-400';
             contratoBoton = 'Editar';
           } else {
-            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
             contratoEstado = 'Pendiente de generación';
             contratoColor = 'text-amber-400';
             contratoBoton = 'Generar';
@@ -237,12 +237,12 @@ export const ContratoSection = memo(function ContratoSection({
           break;
         default:
           if (tieneContratoGenerado) {
-            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />;
             contratoEstado = 'Generado, esperando firma del cliente';
             contratoColor = 'text-blue-400';
             contratoBoton = 'Editar';
           } else {
-            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
             contratoEstado = 'Pendiente de generación';
             contratoColor = 'text-amber-400';
             contratoBoton = 'Generar';
@@ -252,17 +252,17 @@ export const ContratoSection = memo(function ContratoSection({
   } else {
     // Flujo manual del estudio: si ya está firmado, mostrar Contrato firmado
     if (contratoFirmado) {
-      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
       contratoEstado = 'Contrato firmado';
       contratoColor = 'text-emerald-400';
       contratoBoton = null;
     } else if (tieneContratoGenerado) {
-      contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+      contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />;
       contratoEstado = 'En espera de firma del cliente';
       contratoColor = 'text-blue-400';
       contratoBoton = 'Editar';
     } else {
-      contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+      contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
       contratoEstado = 'Clic aquí para seleccionar una plantilla de contrato';
       contratoColor = 'text-amber-400';
       contratoBoton = 'Definir';
@@ -389,6 +389,11 @@ export const ContratoSection = memo(function ContratoSection({
               <span className={`text-xs uppercase tracking-wide font-semibold truncate ${loadingRegistro ? 'text-zinc-500' : 'text-zinc-400'}`}>
                 {headerTitle}
               </span>
+              {contratoEstado === 'En espera de firma del cliente' && (
+                <ZenBadge variant="warning" size="sm" className="rounded-full bg-amber-500/10 text-amber-400 border-amber-500/30 px-2 py-0.5 text-[10px] font-medium shrink-0">
+                  Esperando firma
+                </ZenBadge>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {tieneContratoGenerado &&
@@ -445,27 +450,24 @@ export const ContratoSection = memo(function ContratoSection({
             </div>
           </div>
 
-          <div className="p-3 space-y-2">
+          <div className="px-3 pb-3 pt-1.5 space-y-2">
         {contratoOmitido && !tieneContratoGenerado && (
           <p className="text-xs text-zinc-500">Contrato omitido. Puedes autorizar sin generar contrato.</p>
         )}
         {contratoEstado && !contratoFirmado && !contratoOmitido && contratoBoton !== 'Definir' && (
           <div className="text-xs">
             {contratoEstado === 'En espera de firma del cliente' ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <ZenBadge variant="warning" size="sm" className="rounded-full bg-amber-500/10 text-amber-400 border-amber-500/30 px-2 py-0.5 text-[10px] font-medium shrink-0">
-                  {contratoEstado}
-                </ZenBadge>
-                {contractData?.contrato_definido && contractData?.contract_version && (
-                  <ZenBadge variant="secondary" size="sm" className="rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0">
+              contractData?.contrato_definido && contractData?.contract_version && !(contratoBoton && contractData?.contract_template_id) ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <ZenBadge variant="secondary" size="sm" className="rounded-full px-2 py-0.5 text-[10px] shrink-0">
                     Versión {contractData.contract_version}
                   </ZenBadge>
-                )}
-              </div>
+                </div>
+              ) : null
             ) : (
               <p className={contratoColor}>{contratoEstado}</p>
             )}
-            {contractData?.contrato_definido && contractData?.contract_version && contratoEstado !== 'En espera de firma del cliente' && (
+            {contractData?.contrato_definido && contractData?.contract_version && contratoEstado !== 'En espera de firma del cliente' && !(contratoBoton && contractData?.contract_template_id) && (
               <p className="text-zinc-500 mt-0.5">
                 Versión {contractData.contract_version}
                 {contractData.contract_version > 1 && contractData.ultima_version_info && (
@@ -483,13 +485,13 @@ export const ContratoSection = memo(function ContratoSection({
             )}
           </div>
         )}
-        {!contratoFirmado && !contratoEstado && contractData?.contrato_definido && contractData?.contract_version && (
+        {!contratoFirmado && !contratoEstado && contractData?.contrato_definido && contractData?.contract_version && !(contratoBoton && contractData?.contract_template_id) && (
           <p className="text-xs text-zinc-500">Versión {contractData.contract_version}</p>
         )}
 
       {/* Card de gestión de contrato */}
       {contratoBoton && contractData?.contract_template_id && (
-        <div className="pt-2 border-t border-zinc-700/50">
+        <div className="pt-2">
           <ContratoGestionCard
             studioSlug={studioSlug}
             promiseId={promiseId}
@@ -503,6 +505,7 @@ export const ContratoSection = memo(function ContratoSection({
             showOptionsModal={showContratoOptionsModal}
             onCloseOptionsModal={onCloseContratoOptionsModal}
             isContractSigned={contratoFirmado}
+            contractVersion={contractData?.contract_version}
           />
         </div>
       )}

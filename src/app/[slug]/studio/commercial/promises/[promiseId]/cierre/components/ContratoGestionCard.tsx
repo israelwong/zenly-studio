@@ -44,6 +44,7 @@ interface ContratoGestionCardProps {
   showOptionsModal?: boolean;
   onCloseOptionsModal?: () => void;
   isContractSigned?: boolean; // Indica si el contrato ya fue firmado
+  contractVersion?: number | null;
 }
 
 export const ContratoGestionCard = memo(function ContratoGestionCard({
@@ -59,6 +60,7 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
   onSuccess,
   showOptionsModal: externalShowOptionsModal,
   onCloseOptionsModal,
+  contractVersion,
 }: ContratoGestionCardProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
@@ -288,6 +290,11 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
           <div className="flex items-center gap-1.5 text-xs text-zinc-400">
             <FileText className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span className="truncate">{selectedTemplate.name}</span>
+            {contractVersion != null && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300 border border-zinc-600 shrink-0">
+                Versión {contractVersion}
+              </span>
+            )}
             {selectedTemplate.is_default && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
                 Default

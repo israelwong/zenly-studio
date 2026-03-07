@@ -688,7 +688,10 @@ Validaciones Estado:   2/2   (100%) ✅
 - `src/components/shared/condiciones-comerciales/CondicionComercialFormModal.tsx` – buscador ofertas, footer fijo, router.refresh
 - `src/components/ui/zen/modals/ZenDialog.tsx` – footer con flex-shrink-0 y bg-zinc-900
 
+**Plan de testing cierre (casos de uso y seteo → vista cliente):**  
+`.cursor/docs/plans/plan-testing-cierre-promesas-casos-uso.md` — incluye sección **8. Testing: seteo studio → vista cliente**.
+
 ---
 
-**Última actualización:** 19 de febrero de 2026  
+**Última actualización:** 6 de marzo de 2026  
 **Mantenido por:** Equipo ZEN Platform
