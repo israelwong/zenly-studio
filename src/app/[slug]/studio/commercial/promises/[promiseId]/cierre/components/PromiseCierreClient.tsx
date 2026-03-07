@@ -25,7 +25,7 @@ import { ZenConfirmModal, ZenDialog, ZenButton } from '@/components/ui/zen';
 import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
-import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, ActivacionOperativaCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
+import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
 import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
 import { PromiseAppointmentCard } from '../../pendiente/components/PromiseAppointmentCard';
 
@@ -239,31 +239,29 @@ const CierreColumn3 = memo(function CierreColumn3({
             firmaRequerida={firmaRequerida}
             onFirmaRequeridaChange={onFirmaRequeridaChange}
           />
-      {cotizacion?.status === 'en_cierre' &&
-        (contratoIsLoading ? (
-          <ActivacionOperativaCardSkeleton />
-        ) : onPagoConfirmSuccess ? (
-          <ActivacionOperativaCard
-            key={pagoCardKey}
-            studioSlug={studioSlug}
-            cotizacionId={cotizacion.id}
-            promiseId={promiseId}
-            contactId={contactId}
-            anticipoMonto={anticipoMonto}
-            pagoData={pagoData ?? null}
-            contratoData={{
-              firma_requerida: contractData?.firma_requerida,
-              contract_signed_at: contractData?.contract_signed_at,
-              hasContent: !!(contractData?.contrato_definido && (contractData?.contract_template_id || (contractData?.contract_content != null && String(contractData.contract_content).trim() !== ''))),
-            }}
-            prospectName={promiseData?.name}
-            onSuccess={onPagoConfirmSuccess}
-            metodosPago={metodosPago}
-            onTransitionPendingChange={onPagoTransitionPendingChange}
-            onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
-            onStagingChange={onPagoStagingChange}
-          />
-        ) : null)}
+      {cotizacion?.status === 'en_cierre' && onPagoConfirmSuccess && (
+        <ActivacionOperativaCard
+          key={pagoCardKey}
+          studioSlug={studioSlug}
+          cotizacionId={cotizacion.id}
+          promiseId={promiseId}
+          contactId={contactId}
+          anticipoMonto={anticipoMonto}
+          pagoData={pagoData ?? null}
+          loadingRegistro={contratoIsLoading}
+          contratoData={{
+            firma_requerida: contractData?.firma_requerida,
+            contract_signed_at: contractData?.contract_signed_at,
+            hasContent: !!(contractData?.contrato_definido && (contractData?.contract_template_id || (contractData?.contract_content != null && String(contractData.contract_content).trim() !== ''))),
+          }}
+          prospectName={promiseData?.name}
+          onSuccess={onPagoConfirmSuccess}
+          metodosPago={metodosPago}
+          onTransitionPendingChange={onPagoTransitionPendingChange}
+          onPagoConfirmadoOptimistic={onPagoConfirmadoOptimistic}
+          onStagingChange={onPagoStagingChange}
+        />
+      )}
       {contratoIsLoading ? (
         <CierreActionButtonsSkeleton />
       ) : (

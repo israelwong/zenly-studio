@@ -10,7 +10,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
-import { updatePagoConfirmado } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import {
   actualizarPagoCierre,
   registrarPagosCierreEnStudioPagos,
@@ -20,6 +19,7 @@ import {
   type PagoPersistidoItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { toast } from 'sonner';
+import { ActivacionOperativaCardSkeleton } from './PromiseCierreSkeleton';
 
 /** Fecha a YYYY-MM-DD (UTC) para comparar sin falsos dirty por hora/timezone */
 function dateToDayKey(d: Date | string | null | undefined): string {
@@ -123,6 +123,8 @@ interface ActivacionOperativaCardProps {
   onPagoConfirmadoOptimistic?: (checked: boolean) => void;
   /** Callback para enviar el staging al padre (validación y payload). Tercer param: isDirty (hay cambios sin guardar). */
   onStagingChange?: (staging: PagoStagingItem[], isValid: boolean, isDirty?: boolean) => void;
+  /** Mientras true solo se muestra el esqueleto; evita parpadeo y estado intermedio (datos parciales). */
+  loadingRegistro?: boolean;
 }
 
 export function ActivacionOperativaCard({
@@ -139,7 +141,13 @@ export function ActivacionOperativaCard({
   onTransitionPendingChange,
   onPagoConfirmadoOptimistic,
   onStagingChange,
+  loadingRegistro = false,
 }: ActivacionOperativaCardProps) {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   /** Solo controla expansión de la tarjeta (opciones para registrar pago). No persiste habilitar_pago. */
   const [cardExpanded, setCardExpanded] = useState(() => pagoData?.pago_confirmado_estudio === true);
   const [montoTotalRecibido, setMontoTotalRecibido] = useState(() => {
@@ -148,7 +156,22 @@ export function ActivacionOperativaCard({
       : pagoData?.pago_monto;
     return sum != null ? String(sum) : (anticipoMonto > 0 ? String(anticipoMonto) : '');
   });
-  const [pagoStaging, setPagoStaging] = useState<PagoStagingItem[]>([]);
+  /** Inicializar con 1 ítem desde registro si hay pago confirmado; evita pintar "Anticipo registrado por $X" sin distribución (2 estados). */
+  const [pagoStaging, setPagoStaging] = useState<PagoStagingItem[]>(() => {
+    if (pagoData?.pago_confirmado_estudio !== true) return [];
+    const monto = pagoData?.pago_monto != null ? Number(pagoData.pago_monto) : 0;
+    if (monto <= 0) return [];
+    const fecha = pagoData?.pago_fecha ? new Date(pagoData.pago_fecha) : new Date();
+    return [{
+      id: 'anticipo-1',
+      monto,
+      metodoId: pagoData?.pago_metodo_id ?? null,
+      fecha,
+      concepto: 'Anticipo',
+      tipo: 'anticipo',
+      isReadOnly: Math.abs(monto - anticipoMonto) < 0.01,
+    }];
+  });
   /** Primera fila (Anticipo) expandida por defecto para evitar parpadeo al habilitar el switch */
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() =>
     new Set(pagoData?.pago_confirmado_estudio === true ? ['anticipo-1'] : [])
@@ -161,7 +184,32 @@ export function ActivacionOperativaCard({
   const [pagosPersistidos, setPagosPersistidos] = useState<PagoPersistidoItem[] | null>(null);
   const [showDeshabilitarPagoModal, setShowDeshabilitarPagoModal] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [distributionReady, setDistributionReady] = useState(false);
+  const [userHasEdited, setUserHasEdited] = useState(false);
   const justSyncedFromServer = useRef(false);
+
+  // Sin pago confirmado (solo cuando pagoData ya llegó): listos para mostrar (switch OFF, sin distribución).
+  // No marcar listo cuando pagoData es null (carga inicial) para no pintar estado intermedio.
+  useEffect(() => {
+    if (pagoData != null && pagoData.pago_confirmado_estudio !== true) {
+      setDistributionReady(true);
+    }
+  }, [pagoData]);
+
+  // Distribución ya poblada por estado inicial (pagoData en mount): listos para mostrar.
+  useEffect(() => {
+    if (pagoData?.pago_confirmado_estudio === true && pagoStaging.length > 0) {
+      setDistributionReady(true);
+    }
+  }, [pagoData?.pago_confirmado_estudio, pagoStaging.length]);
+
+  // Sincronizar switch ON cuando el servidor dice que hay pago confirmado (datos del paso anterior o carga diferida)
+  useEffect(() => {
+    if (pagoData?.pago_confirmado_estudio === true && !cardExpanded && !isCleaning) {
+      setCardExpanded(true);
+      setExpandedCards((prev) => (prev.has('anticipo-1') ? prev : new Set(prev).add('anticipo-1')));
+    }
+  }, [pagoData?.pago_confirmado_estudio, cardExpanded, isCleaning]);
 
   // Cargar pagos persistidos cuando la tarjeta está expandida y el pago confirmado; no refetch si acabamos de sincronizar (evita re-render brusco)
   useEffect(() => {
@@ -176,8 +224,10 @@ export function ActivacionOperativaCard({
     }
     let cancelled = false;
     getPagosCierreByCotizacion(studioSlug, cotizacionId).then((res) => {
-      if (!cancelled && res.success && res.data) setPagosPersistidos(res.data);
-      else if (!cancelled) setPagosPersistidos(null);
+      if (cancelled) return;
+      if (res.success && res.data) setPagosPersistidos(res.data);
+      else setPagosPersistidos(null);
+      // No setDistributionReady aquí: el efecto de hidratación lo pondrá tras rellenar pagoStaging
     });
     return () => { cancelled = true; };
   }, [studioSlug, cotizacionId, cardExpanded, pagoData?.pago_confirmado_estudio]);
@@ -185,21 +235,44 @@ export function ActivacionOperativaCard({
   // Hidratar total y distribución desde persistidos (recarga o tras sync) para mostrar 2+ pagos correctos
   useEffect(() => {
     const persisted = pagosPersistidos ?? [];
-    if (persisted.length === 0) return;
-    const total = persisted.reduce((s, p) => s + p.amount, 0);
-    const firstDate = persisted[0]?.payment_date ? new Date(persisted[0].payment_date) : new Date();
-    setMontoTotalRecibido(String(total));
-    setFechaGlobal(firstDate);
-    setPagoStaging(persisted.map((p, i) => ({
-      id: i === 0 ? 'anticipo-1' : (i === 1 ? 'abono-2' : `abono-${i + 1}`),
-      monto: p.amount,
-      metodoId: p.metodo_pago_id ?? null,
-      fecha: p.payment_date ? new Date(p.payment_date) : firstDate,
-      concepto: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'Anticipo' : 'Abono adicional',
-      tipo: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'anticipo' : 'abono_cierre',
-      isReadOnly: i === 0 && Math.abs(p.amount - anticipoMonto) < 0.01,
-    })));
-  }, [pagosPersistidos, anticipoMonto]);
+    if (persisted.length > 0) {
+      const total = persisted.reduce((s, p) => s + p.amount, 0);
+      const firstDate = persisted[0]?.payment_date ? new Date(persisted[0].payment_date) : new Date();
+      setMontoTotalRecibido(String(total));
+      setFechaGlobal(firstDate);
+      setPagoStaging(persisted.map((p, i) => ({
+        id: i === 0 ? 'anticipo-1' : (i === 1 ? 'abono-2' : `abono-${i + 1}`),
+        monto: p.amount,
+        metodoId: p.metodo_pago_id ?? null,
+        fecha: p.payment_date ? new Date(p.payment_date) : firstDate,
+        concepto: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'Anticipo' : 'Abono adicional',
+        tipo: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'anticipo' : 'abono_cierre',
+        isReadOnly: i === 0 && Math.abs(p.amount - anticipoMonto) < 0.01,
+      })));
+      setDistributionReady(true);
+      return;
+    }
+    // Sin studio_pagos: hidratar desde registro de cierre (pago desde "Pasar a Cierre" o solo flag+monto)
+    if (cardExpanded && pagoData?.pago_confirmado_estudio === true && pagoData?.pago_monto != null && Number(pagoData.pago_monto) > 0) {
+      const monto = Number(pagoData.pago_monto);
+      const fecha = pagoData.pago_fecha ? new Date(pagoData.pago_fecha) : new Date();
+      setMontoTotalRecibido(String(monto));
+      setFechaGlobal(fecha);
+      setPagoStaging((prev) => {
+        if (prev.length > 0) return prev;
+        return [{
+          id: 'anticipo-1',
+          monto,
+          metodoId: pagoData?.pago_metodo_id ?? null,
+          fecha,
+          concepto: 'Anticipo',
+          tipo: 'anticipo',
+          isReadOnly: Math.abs(monto - anticipoMonto) < 0.01,
+        }];
+      });
+      setDistributionReady(true);
+    }
+  }, [pagosPersistidos, anticipoMonto, cardExpanded, pagoData?.pago_confirmado_estudio, pagoData?.pago_monto, pagoData?.pago_fecha, pagoData?.pago_metodo_id]);
 
   // Claves primitivas para deps (tamaño fijo; evita error "dependency array changed size")
   const pagosPersistidosLen = (pagosPersistidos ?? []).length;
@@ -302,6 +375,7 @@ export function ActivacionOperativaCard({
 
   // Sincronía: al cambiar fecha global, actualizar todos los items del staging
   const handleFechaGlobalChange = (d: Date) => {
+    setUserHasEdited(true);
     setFechaGlobal(d);
     setPagoStaging((prev) => prev.map((p) => ({ ...p, fecha: d })));
     setCalendarOpen(false);
@@ -335,53 +409,32 @@ export function ActivacionOperativaCard({
   }, [cardExpanded, montoTotalRecibido, pagoStaging]);
 
   const isDirty = useMemo(() => {
-    if (pagoData?.pago_confirmado_estudio !== true) return false;
+    if (pagoData?.pago_confirmado_estudio !== true || !userHasEdited) return false;
     return !stagingEqualsPersistido(pagoStaging, pagosPersistidos);
-  }, [pagoData?.pago_confirmado_estudio, pagoStaging, pagosPersistidos]);
+  }, [pagoData?.pago_confirmado_estudio, userHasEdited, pagoStaging, pagosPersistidos]);
+
+  /** true si hay que pedir confirmación antes de apagar el switch (evitar datos huérfanos) */
+  const tieneDatosDePago =
+    pagoData?.pago_confirmado_estudio === true ||
+    (pagosPersistidos != null && pagosPersistidos.length > 0);
 
   useEffect(() => {
     onStagingChange?.(pagoStaging, validationState.isValid, isDirty);
   }, [pagoStaging, validationState.isValid, isDirty, onStagingChange]);
 
-  /** Solo expande/colapsa la tarjeta para registrar pago. Al pasar a OFF con pagos ya registrados, mostrar modal de deshabilitar. */
+  /** Solo expande/colapsa la tarjeta. Al pasar a OFF con tieneDatosDePago, abrir modal y no cambiar estado. */
   const handleSwitchChange = async (checked: boolean) => {
     if (isCleaning || savingConfirmarAnticipo) return;
     if (checked) {
       setCardExpanded(true);
       setExpandedCards((prev) => new Set(prev).add('anticipo-1'));
-      // Inicializar monto con anticipo al habilitar si está vacío (p. ej. anticipoMonto llegó tras el primer render)
       const current = parseFloat(String(montoTotalRecibido || '').trim());
       if (!montoTotalRecibido?.trim() || isNaN(current) || current <= 0) {
         setMontoTotalRecibido(anticipoMonto > 0 ? String(anticipoMonto) : '');
       }
       return;
     }
-    // Evitar API cuando no hay nada que borrar: sin confirmación en servidor o ya tenemos lista vacía en memoria
-    if (pagoData?.pago_confirmado_estudio !== true) {
-      setCardExpanded(false);
-      setPagoStaging([]);
-      setPagosPersistidos(null);
-      setExpandedCards(new Set());
-      setMontoTotalRecibido(String(anticipoMonto));
-      setFechaGlobal(new Date());
-      return;
-    }
-    if (pagosPersistidos !== null) {
-      if (pagosPersistidos.length > 0) {
-        setShowDeshabilitarPagoModal(true);
-        return;
-      }
-      setCardExpanded(false);
-      setPagoStaging([]);
-      setPagosPersistidos(null);
-      setExpandedCards(new Set());
-      setMontoTotalRecibido(String(anticipoMonto));
-      setFechaGlobal(new Date());
-      return;
-    }
-    const res = await getPagosCierreByCotizacion(studioSlug, cotizacionId);
-    const tienePagos = res.success && (res.data?.length ?? 0) > 0;
-    if (tienePagos) {
+    if (tieneDatosDePago) {
       setShowDeshabilitarPagoModal(true);
       return;
     }
@@ -396,24 +449,23 @@ export function ActivacionOperativaCard({
   const handleConfirmarDeshabilitarPago = async () => {
     setIsCleaning(true);
     setShowDeshabilitarPagoModal(false);
-    setCardExpanded(false);
-    setPagoStaging([]);
-    setPagosPersistidos(null);
-    setMontoTotalRecibido(String(anticipoMonto));
-    setFechaGlobal(new Date());
-    setExpandedCards(new Set());
-    setCalendarOpen(false);
-    justSyncedFromServer.current = false;
-    onPagoConfirmadoOptimistic?.(false);
     try {
       const res = await deshabilitarConfirmacionPagoCierre(studioSlug, cotizacionId, promiseId);
       if (!res.success) {
         toast.error(res.error ?? 'Error al deshabilitar');
         return;
       }
-      await updatePagoConfirmado(studioSlug, cotizacionId, false);
+      setCardExpanded(false);
+      setPagoStaging([]);
+      setPagosPersistidos(null);
+      setMontoTotalRecibido(String(anticipoMonto));
+      setFechaGlobal(new Date());
+      setExpandedCards(new Set());
+      setCalendarOpen(false);
+      justSyncedFromServer.current = false;
+      onPagoConfirmadoOptimistic?.(false);
       onSuccess?.();
-      toast.success('Confirmación deshabilitada. El cliente ya no verá la tarjeta de anticipo confirmado.');
+      toast.success('Confirmación deshabilitada. Los registros de pago se han eliminado.');
     } catch {
       toast.error('Error al deshabilitar');
     } finally {
@@ -523,6 +575,7 @@ export function ActivacionOperativaCard({
         tipo: 'anticipo',
         isReadOnly: monto === anticipoMonto,
       }] : []);
+      setUserHasEdited(false);
       return;
     }
     const total = persisted.reduce((s, p) => s + p.amount, 0);
@@ -538,6 +591,7 @@ export function ActivacionOperativaCard({
       tipo: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'anticipo' : 'abono_cierre',
       isReadOnly: i === 0 && Math.abs(p.amount - anticipoMonto) < 0.01,
     })));
+    setUserHasEdited(false);
     toast.success('Distribución restaurada al último guardado.');
   };
 
@@ -592,6 +646,7 @@ export function ActivacionOperativaCard({
           tipo: (p.concept ?? '').toLowerCase().includes('anticipo') ? 'anticipo' : 'abono_cierre',
           isReadOnly: i === 0 && Math.abs(p.amount - anticipoMonto) < 0.01,
         })));
+        setUserHasEdited(false);
         justSyncedFromServer.current = true;
       }
       onSuccess?.();
@@ -604,6 +659,7 @@ export function ActivacionOperativaCard({
   };
 
   const handleUpdatePagoItem = (id: string, updates: Partial<PagoStagingItem>) => {
+    setUserHasEdited(true);
     setPagoStaging((prev) => {
       const updated = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
       // Herencia: si se actualiza el metodoId del anticipo, sincronizar al abono
@@ -625,6 +681,7 @@ export function ActivacionOperativaCard({
   };
 
   const handleRemovePagoItem = (id: string) => {
+    setUserHasEdited(true);
     setPagoStaging((prev) => {
       const filtered = prev.filter((p) => p.id !== id);
       
@@ -654,6 +711,11 @@ export function ActivacionOperativaCard({
   const isSyncingData = savingConfirmarAnticipo;
 
   const cardStyleConfirmed = cardConfirmed && !isCleaning;
+
+  const needsDistribution = (pagoData?.pago_confirmado_estudio === true) && pagoStaging.length === 0;
+  if (!isMounted || loadingRegistro || !distributionReady || needsDistribution) {
+    return <ActivacionOperativaCardSkeleton />;
+  }
 
   return (
     <ZenCard
@@ -702,7 +764,10 @@ export function ActivacionOperativaCard({
               <ZenInput
                 type="number"
                 value={montoTotalRecibido}
-                onChange={(e) => setMontoTotalRecibido(e.target.value)}
+                onChange={(e) => {
+                  setMontoTotalRecibido(e.target.value);
+                  setUserHasEdited(true);
+                }}
                 placeholder="0.00"
                 min={0}
                 step={0.01}

@@ -125,20 +125,68 @@ export function ContratoDigitalCardSkeleton() {
   );
 }
 
-/** Skeleton para ActivacionOperativaCard (Pago confirmado) — se muestra debajo de ContratoDigitalCard en CierreColumn3 */
+/** Skeleton para ActivacionOperativaCard: paridad con la card real (switch, monto/fecha, distribución pill, pie Anticipo registrado). */
 export function ActivacionOperativaCardSkeleton() {
   return (
-    <ZenCard className="border-amber-500/50 bg-amber-500/5">
+    <ZenCard className="border-zinc-700/50 bg-zinc-800/30 min-h-[350px] flex flex-col shadow-lg shadow-black/20">
       <ZenCardHeader className="py-3 px-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="h-4 w-32 bg-amber-500/20 rounded animate-pulse" />
-          <div className="h-5 w-10 bg-amber-500/20 rounded-full animate-pulse" />
+        <div className="flex flex-col gap-3 w-full">
+          <div className="flex items-center justify-between w-full gap-3">
+            <div className="h-6 w-11 bg-zinc-700 rounded-full animate-pulse shrink-0" />
+            <div className="h-4 w-44 bg-zinc-700 rounded animate-pulse shrink-0" />
+          </div>
         </div>
       </ZenCardHeader>
-      <div className="h-px shrink-0 bg-amber-500/20" aria-hidden />
-      <ZenCardContent className="p-4 space-y-4">
-        <div className="h-9 w-24 bg-zinc-800 rounded animate-pulse" />
-        <div className="h-4 w-3/4 bg-zinc-700/50 rounded animate-pulse" />
+      <div className="h-px shrink-0 bg-zinc-700/50" aria-hidden />
+      <ZenCardContent className="p-4 space-y-4 flex-1">
+        {/* Monto Total Recibido | Fecha de pago */}
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-1 flex-1 min-w-0">
+            <div className="h-3 w-28 bg-zinc-700/50 rounded animate-pulse" />
+            <div className="h-9 w-24 bg-zinc-800 rounded animate-pulse" />
+          </div>
+          <div className="space-y-1 min-w-0 shrink-0">
+            <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+            <div className="h-9 min-w-[10rem] bg-zinc-800 rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Distribución de pagos (N) + 1 pill */}
+        <div className="space-y-2">
+          <div className="h-3 w-40 bg-zinc-700/50 rounded animate-pulse uppercase tracking-wide" />
+          <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 overflow-hidden">
+            {/* Header pill: concepto | monto | método | chevron */}
+            <div className="px-3 py-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-3 w-16 bg-zinc-700/60 rounded animate-pulse" />
+                <div className="h-4 w-14 bg-zinc-700/60 rounded animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="h-3 w-20 bg-zinc-700/60 rounded animate-pulse" />
+                <div className="h-4 w-4 bg-zinc-700/60 rounded animate-pulse" />
+              </div>
+            </div>
+            {/* Expandido: Monto (Fijo) + Método de pago */}
+            <div className="px-4 pb-4 pt-3 space-y-3 border-t border-zinc-700/50">
+              <div className="grid grid-cols-[85px_1fr] gap-4">
+                <div className="space-y-1">
+                  <div className="h-3 w-14 bg-zinc-700/50 rounded animate-pulse" />
+                  <div className="h-9 bg-zinc-800 rounded animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+                  <div className="h-9 bg-zinc-800 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pie: Anticipo registrado por $X */}
+        <div className="pt-2 border-t border-zinc-700/50 flex items-start gap-2">
+          <div className="h-4 w-4 rounded-full bg-zinc-700/60 animate-pulse shrink-0 mt-0.5" />
+          <div className="h-4 w-48 bg-zinc-700/50 rounded animate-pulse" />
+        </div>
       </ZenCardContent>
     </ZenCard>
   );

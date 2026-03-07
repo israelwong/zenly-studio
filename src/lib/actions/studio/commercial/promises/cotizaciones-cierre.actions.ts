@@ -1696,8 +1696,8 @@ export async function sincronizarPagosCierre(
 }
 
 /**
- * Deshabilita la confirmación de pago: cancela todos los studio_pagos asociados a la cotización/promesa
- * y limpia el registro de cierre (pago_confirmado_estudio = false). Evita pagos huérfanos.
+ * Deshabilita la confirmación de pago: elimina físicamente los studio_pagos asociados a la cotización
+ * y resetea el registro de cierre (pago_confirmado_estudio: false, pago_monto: null, etc.). Evita datos huérfanos.
  */
 export async function deshabilitarConfirmacionPagoCierre(
   studioSlug: string,
@@ -1718,7 +1718,7 @@ export async function deshabilitarConfirmacionPagoCierre(
     if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
 
     const promiseIdToUse = promiseId ?? cotizacion.promise_id;
-    await prisma.studio_pagos.updateMany({
+    await prisma.studio_pagos.deleteMany({
       where: {
         OR: [
           { cotizacion_id: cotizacionId },
@@ -1726,7 +1726,6 @@ export async function deshabilitarConfirmacionPagoCierre(
         ],
         status: { in: ['completed', 'CONFIRMED', 'paid', 'succeeded'] },
       },
-      data: { status: 'canceled', updated_at: new Date() },
     });
 
     await actualizarPagoCierre(studioSlug, cotizacionId, {
