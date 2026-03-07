@@ -12,6 +12,8 @@ interface FinanceKPIsProps {
     utilidad: number;
     porCobrar: number;
     porPagar: number;
+    /** Ingresos por cancelación (retained_by_cancellation) — desglose visual dentro del total */
+    ingresosPorCancelacion?: number;
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
     netProfitability?: number;
@@ -25,6 +27,7 @@ export function FinanceKPIs({
     utilidad,
     porCobrar,
     porPagar,
+    ingresosPorCancelacion,
     totalProductionCosts,
     totalOperatingExpenses,
     netProfitability,
@@ -55,6 +58,11 @@ export function FinanceKPIs({
                             <p className="text-2xl font-bold text-emerald-400">
                                 {formatCurrency(ingresos)}
                             </p>
+                            {ingresosPorCancelacion != null && ingresosPorCancelacion > 0 && (
+                                <p className="text-xs text-amber-400/90 mt-1">
+                                    Ingresos por Cancelación: {formatCurrency(ingresosPorCancelacion)}
+                                </p>
+                            )}
                         </div>
                         <div className="p-2 bg-emerald-500/10 rounded-lg">
                             <Wallet className="h-5 w-5 text-emerald-400" />

@@ -6,8 +6,8 @@ export { PorPagarItemCard } from './PorPagarItemCard';
 export { MovimientosCard } from './MovimientosCard';
 export { MovimientoItemCard } from './MovimientoItemCard';
 export { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
-export { GastosRecurrentesCard } from './GastosRecurrentesCard';
 export { GastoRecurrenteItemCard } from './GastoRecurrenteItemCard';
+export { RecurrentesSheet } from './RecurrentesSheet';
 export { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
 export { PagoRapidoModal } from './PagoRapidoModal';
 

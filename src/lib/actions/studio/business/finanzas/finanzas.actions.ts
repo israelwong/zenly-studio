@@ -10,6 +10,8 @@ interface FinanceKPIs {
     utilidad: number;
     porCobrar: number;
     porPagar: number;
+    /** Monto incluido en ingresos que corresponde a retained_by_cancellation (ingresos por cancelación) */
+    ingresosPorCancelacion?: number;
     // ✅ Nuevos campos para owners
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
@@ -27,6 +29,14 @@ type FinanceKPIsResult =
     | { success: true; data: FinanceKPIs; debug?: FinanceKPIsDebug }
     | { success: false; error: string };
 
+/** Detalle de un pago dentro de un movimiento consolidado (split) */
+export interface TransactionDetail {
+    monto: number;
+    categoria: string;
+    concepto: string;
+    paymentStatus?: string;
+}
+
 export interface Transaction {
     id: string;
     fecha: Date;
@@ -34,11 +44,19 @@ export interface Transaction {
     concepto: string;
     categoria: string;
     monto: number;
-    nominaId?: string; // ID de la nómina si viene de "Por Pagar"
-    nominaPaymentType?: string; // Tipo de pago de nómina ('individual' | 'consolidado')
-    isGastoOperativo?: boolean; // Si es gasto operativo personalizado
-    totalDiscounts?: number; // Descuentos aplicados (solo para nóminas)
-    personalId?: string; // ID del personal si el gasto recurrente está asociado a un crew member
+    nominaId?: string;
+    nominaPaymentType?: string;
+    isGastoOperativo?: boolean;
+    totalDiscounts?: number;
+    personalId?: string;
+    promiseId?: string;
+    cotizacionId?: string;
+    paymentStatus?: string;
+    contactName?: string | null;
+    eventName?: string | null;
+    eventTypeName?: string | null;
+    /** Desglose cuando el movimiento agrupa varios pagos (mismo contact_id, cotizacion_id, payment_date) */
+    details?: TransactionDetail[];
 }
 
 interface PendingItem {
@@ -215,6 +233,35 @@ export async function obtenerKPIsFinancieros(
                 amount: true,
             },
         });
+
+        // Ingresos por cancelación (retained_by_cancellation) — mismo filtro de fecha, para desglose visual
+        const ingresosPorCancelacionAgg = await prisma.studio_pagos.aggregate({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { studio_users: { studio_id: studioId } },
+                            { promise: { studio_id: studioId } },
+                            { cotizaciones: { studio_id: studioId } },
+                        ],
+                    },
+                    { status: 'retained_by_cancellation' },
+                    {
+                        OR: [
+                            { payment_date: { gte: start, lte: end } },
+                            {
+                                AND: [
+                                    { payment_date: null },
+                                    { created_at: { gte: start, lte: end } },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            _sum: { amount: true },
+        });
+        const ingresosPorCancelacion = ingresosPorCancelacionAgg._sum.amount ?? 0;
 
         // Egresos: studio_gastos + studio_nominas (status "pagado") del mes
         const gastos = await prisma.studio_gastos.aggregate({
@@ -496,6 +543,7 @@ export async function obtenerKPIsFinancieros(
                 utilidad,
                 porCobrar: porCobrarTotal,
                 porPagar: porPagarTotal,
+                ingresosPorCancelacion: ingresosPorCancelacion > 0 ? ingresosPorCancelacion : undefined,
                 // ✅ Nuevos campos para owners
                 totalProductionCosts,
                 totalOperatingExpenses,
@@ -682,7 +730,7 @@ export async function obtenerMovimientosPorRango(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation', 'pending_refund'] },
                     },
                     {
                         OR: [
@@ -709,15 +757,20 @@ export async function obtenerMovimientosPorRango(
             },
             select: {
                 id: true,
+                contact_id: true,
                 payment_date: true,
                 created_at: true,
                 concept: true,
                 amount: true,
+                status: true,
                 transaction_category: true,
-                promise: {
-                    select: {
-                        name: true,
-                    },
+                cotizacion_id: true,
+                promise_id: true,
+                promise: { select: { name: true } },
+                cotizaciones: { select: { name: true } },
+                contact: { select: { name: true } },
+                eventos: {
+                    select: { event_type: { select: { name: true } } },
                 },
             },
             orderBy: [
@@ -725,6 +778,70 @@ export async function obtenerMovimientosPorRango(
                 { created_at: 'desc' },
             ],
         });
+
+        // Consolidar pagos por contact_id + cotizacion_id + misma fecha (día) + mismo status (no mezclar completed con pending_refund)
+        const pagosGrouped = new Map<string, typeof pagos>();
+        for (const pago of pagos) {
+            const date = pago.payment_date ?? pago.created_at;
+            const dateKey = date instanceof Date ? date.toISOString().slice(0, 10) : new Date(date).toISOString().slice(0, 10);
+            const key = `${pago.contact_id ?? ''}|${pago.cotizacion_id ?? ''}|${dateKey}|${pago.status ?? ''}`;
+            if (!pagosGrouped.has(key)) pagosGrouped.set(key, []);
+            pagosGrouped.get(key)!.push(pago);
+        }
+
+        const paymentTransactions: Transaction[] = [];
+        for (const group of pagosGrouped.values()) {
+            const first = group[0];
+            const fecha = first.payment_date ?? new Date(first.created_at);
+            const contactName = first.contact?.name ?? null;
+            const conceptoBase = contactName ? `Pago de ${contactName}` : (first.concept || first.promise?.name || first.cotizaciones?.name || 'Ingreso');
+
+            if (group.length === 1) {
+                const isPendingRefund = first.status === 'pending_refund';
+                paymentTransactions.push({
+                    id: first.id,
+                    fecha,
+                    fuente: 'evento',
+                    concepto: first.concept || first.promise?.name || first.cotizaciones?.name || 'Ingreso',
+                    categoria: first.transaction_category || 'Ingreso',
+                    monto: isPendingRefund ? -first.amount : first.amount,
+                    isGastoOperativo: first.transaction_category === 'manual',
+                    promiseId: first.promise_id ?? undefined,
+                    cotizacionId: first.cotizacion_id ?? undefined,
+                    paymentStatus: first.status,
+                    contactName,
+                    eventName: first.promise?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                });
+            } else {
+                const totalMonto = group.reduce((s, p) => s + p.amount, 0);
+                const hasPendingRefund = group.some((p) => p.status === 'pending_refund');
+                const hasRetained = group.some((p) => p.status === 'retained_by_cancellation');
+                const paymentStatus = hasPendingRefund ? 'pending_refund' : (hasRetained ? 'retained_by_cancellation' : 'completed');
+                const details: TransactionDetail[] = group.map((p) => ({
+                    monto: p.status === 'pending_refund' ? -p.amount : p.amount,
+                    categoria: p.transaction_category || 'Ingreso',
+                    concepto: p.concept || 'Ingreso',
+                    paymentStatus: p.status,
+                }));
+                paymentTransactions.push({
+                    id: first.id,
+                    fecha,
+                    fuente: 'evento',
+                    concepto: conceptoBase,
+                    categoria: 'Ingreso',
+                    monto: hasPendingRefund ? -totalMonto : totalMonto,
+                    isGastoOperativo: false,
+                    promiseId: first.promise_id ?? undefined,
+                    cotizacionId: first.cotizacion_id ?? undefined,
+                    paymentStatus,
+                    contactName,
+                    eventName: first.promise?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    details,
+                });
+            }
+        }
 
         // Obtener nóminas pagadas (egresos)
         // Incluir solo nóminas consolidadas (payment_type: 'consolidado') o individuales (payment_type: 'individual')
@@ -846,17 +963,9 @@ export async function obtenerMovimientosPorRango(
             },
         });
 
-        // Transformar y unificar
+        // Transformar y unificar (pagos ya consolidados en paymentTransactions)
         const transactions: Transaction[] = [
-            ...pagos.map((pago) => ({
-                id: pago.id,
-                fecha: pago.payment_date ?? new Date(pago.created_at),
-                fuente: 'evento' as const,
-                concepto: pago.concept || pago.promise?.name || 'Ingreso',
-                categoria: pago.transaction_category || 'Ingreso',
-                monto: pago.amount,
-                isGastoOperativo: pago.transaction_category === 'manual',
-            })),
+            ...paymentTransactions,
             ...nominas.map((nomina) => ({
                 id: nomina.id,
                 fecha: nomina.payment_date ?? nomina.updated_at ?? new Date(),
@@ -877,11 +986,10 @@ export async function obtenerMovimientosPorRango(
                 categoria: gasto.category,
                 monto: -gasto.amount,
                 isGastoOperativo: gasto.category === 'Operativo' || gasto.category === 'Recurrente',
-                personalId: gasto.personal_id || undefined, // ID del personal si el gasto está asociado
+                personalId: gasto.personal_id || undefined,
             })),
         ];
 
-        // Ordenar por fecha descendente
         transactions.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
 
         return {
@@ -913,8 +1021,7 @@ export async function obtenerMovimientos(
         const { start, end } = getMonthRange(month);
 
         // Obtener pagos (ingresos)
-        // Si payment_date es null, usar created_at para filtrar
-        // Incluir paid/completed y retained_by_cancellation (anticipo retenido en reportes)
+        // Incluir paid/completed, retained_by_cancellation (suman como ingresos) y pending_refund (distinción visual "Pendiente de devolución")
         const pagos = await prisma.studio_pagos.findMany({
             where: {
                 AND: [
@@ -926,7 +1033,7 @@ export async function obtenerMovimientos(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed', 'retained_by_cancellation'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation', 'pending_refund'] },
                     },
                     {
                         OR: [
@@ -953,15 +1060,20 @@ export async function obtenerMovimientos(
             },
             select: {
                 id: true,
+                contact_id: true,
                 payment_date: true,
                 created_at: true,
                 concept: true,
                 amount: true,
+                status: true,
                 transaction_category: true,
-                promise: {
-                    select: {
-                        name: true,
-                    },
+                cotizacion_id: true,
+                promise_id: true,
+                promise: { select: { name: true } },
+                cotizaciones: { select: { name: true } },
+                contact: { select: { name: true } },
+                eventos: {
+                    select: { event_type: { select: { name: true } } },
                 },
             },
             orderBy: [
@@ -969,6 +1081,70 @@ export async function obtenerMovimientos(
                 { created_at: 'desc' },
             ],
         });
+
+        // Consolidar pagos por contact_id + cotizacion_id + misma fecha (día) + mismo status (no mezclar completed con pending_refund)
+        const pagosGroupedMes = new Map<string, typeof pagos>();
+        for (const pago of pagos) {
+            const date = pago.payment_date ?? pago.created_at;
+            const dateKey = date instanceof Date ? date.toISOString().slice(0, 10) : new Date(date).toISOString().slice(0, 10);
+            const key = `${pago.contact_id ?? ''}|${pago.cotizacion_id ?? ''}|${dateKey}|${pago.status ?? ''}`;
+            if (!pagosGroupedMes.has(key)) pagosGroupedMes.set(key, []);
+            pagosGroupedMes.get(key)!.push(pago);
+        }
+
+        const paymentTransactionsMes: Transaction[] = [];
+        for (const group of pagosGroupedMes.values()) {
+            const first = group[0];
+            const fecha = first.payment_date ?? new Date(first.created_at);
+            const contactName = first.contact?.name ?? null;
+            const conceptoBase = contactName ? `Pago de ${contactName}` : (first.concept || first.promise?.name || first.cotizaciones?.name || 'Ingreso');
+
+            if (group.length === 1) {
+                const isPendingRefund = first.status === 'pending_refund';
+                paymentTransactionsMes.push({
+                    id: first.id,
+                    fecha,
+                    fuente: 'evento',
+                    concepto: first.concept || first.promise?.name || first.cotizaciones?.name || 'Ingreso',
+                    categoria: first.transaction_category || 'Ingreso',
+                    monto: isPendingRefund ? -first.amount : first.amount,
+                    isGastoOperativo: first.transaction_category === 'manual',
+                    promiseId: first.promise_id ?? undefined,
+                    cotizacionId: first.cotizacion_id ?? undefined,
+                    paymentStatus: first.status,
+                    contactName,
+                    eventName: first.promise?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                });
+            } else {
+                const totalMonto = group.reduce((s, p) => s + p.amount, 0);
+                const hasPendingRefund = group.some((p) => p.status === 'pending_refund');
+                const hasRetained = group.some((p) => p.status === 'retained_by_cancellation');
+                const paymentStatus = hasPendingRefund ? 'pending_refund' : (hasRetained ? 'retained_by_cancellation' : 'completed');
+                const details: TransactionDetail[] = group.map((p) => ({
+                    monto: p.status === 'pending_refund' ? -p.amount : p.amount,
+                    categoria: p.transaction_category || 'Ingreso',
+                    concepto: p.concept || 'Ingreso',
+                    paymentStatus: p.status,
+                }));
+                paymentTransactionsMes.push({
+                    id: first.id,
+                    fecha,
+                    fuente: 'evento',
+                    concepto: conceptoBase,
+                    categoria: 'Ingreso',
+                    monto: hasPendingRefund ? -totalMonto : totalMonto,
+                    isGastoOperativo: false,
+                    promiseId: first.promise_id ?? undefined,
+                    cotizacionId: first.cotizacion_id ?? undefined,
+                    paymentStatus,
+                    contactName,
+                    eventName: first.promise?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    details,
+                });
+            }
+        }
 
         // Obtener nóminas pagadas (egresos) del mes
         // Incluir solo nóminas consolidadas (payment_type: 'consolidado') o individuales (payment_type: 'individual')
@@ -1088,17 +1264,9 @@ export async function obtenerMovimientos(
             },
         });
 
-        // Transformar y unificar
+        // Transformar y unificar (pagos ya consolidados en paymentTransactionsMes)
         const transactions: Transaction[] = [
-            ...pagos.map((pago) => ({
-                id: pago.id,
-                fecha: pago.payment_date ?? new Date(pago.created_at),
-                fuente: 'evento' as const,
-                concepto: pago.concept || pago.promise?.name || 'Ingreso',
-                categoria: pago.transaction_category || 'Ingreso',
-                monto: pago.amount,
-                isGastoOperativo: pago.transaction_category === 'manual', // Identificar ingresos manuales
-            })),
+            ...paymentTransactionsMes,
             ...nominas.map((nomina) => ({
                 id: nomina.id,
                 fecha: nomina.payment_date ?? nomina.updated_at ?? new Date(),
@@ -1106,8 +1274,8 @@ export async function obtenerMovimientos(
                 concepto: nomina.concept || `Nómina - ${nomina.personal?.name || 'Personal'}`,
                 categoria: 'Nómina',
                 monto: -nomina.net_amount,
-                nominaId: nomina.id, // Identificar que viene de nómina pagada
-                nominaPaymentType: nomina.payment_type, // Tipo de pago
+                nominaId: nomina.id,
+                nominaPaymentType: nomina.payment_type,
                 isGastoOperativo: false,
                 totalDiscounts: nomina.total_discounts ? Number(nomina.total_discounts) : undefined,
             })),
@@ -1118,12 +1286,11 @@ export async function obtenerMovimientos(
                 concepto: gasto.concept,
                 categoria: gasto.category,
                 monto: -gasto.amount,
-                isGastoOperativo: gasto.category === 'Operativo' || gasto.category === 'Recurrente', // Identificar gastos personalizados
-                personalId: gasto.personal_id || undefined, // ID del personal si el gasto está asociado
+                isGastoOperativo: gasto.category === 'Operativo' || gasto.category === 'Recurrente',
+                personalId: gasto.personal_id || undefined,
             })),
         ];
 
-        // Ordenar por fecha descendente
         transactions.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
 
         return {
@@ -3680,6 +3847,262 @@ export async function obtenerAnalisisFinanciero(
         };
     } catch (error) {
         console.error('Error obteniendo análisis financiero:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+// --- Auditoría de integridad: pagos huérfanos ---
+
+export interface PagoHuerfano {
+    id: string;
+    monto: number;
+    created_at: Date;
+    concepto: string;
+    metodo_pago: string;
+}
+
+export type PagosHuerfanosResult =
+    | { success: true; data: PagoHuerfano[] }
+    | { success: false; error: string };
+
+/**
+ * Pagos huérfanos: cotizacion_id nulo o inexistente, y promise_id nulo o inexistente.
+ * Se scopean al studio por user, promise, cotización, condiciones o método de pago.
+ */
+export async function obtenerPagosHuerfanos(studioSlug: string): Promise<PagosHuerfanosResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) return { success: false, error: 'Studio no encontrado' };
+
+        const pagos = await prisma.studio_pagos.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { studio_users: { studio_id: studioId } },
+                            { promise: { studio_id: studioId } },
+                            { cotizaciones: { studio_id: studioId } },
+                            { condiciones_comerciales: { studio_id: studioId } },
+                            { metodos_pago: { studio_id: studioId } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { cotizacion_id: null },
+                            { cotizaciones: null },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { promise_id: null },
+                            { promise: null },
+                        ],
+                    },
+                ],
+            },
+            select: {
+                id: true,
+                amount: true,
+                created_at: true,
+                concept: true,
+                metodo_pago: true,
+            },
+            orderBy: { created_at: 'desc' },
+        });
+
+        return {
+            success: true,
+            data: pagos.map((p) => ({
+                id: p.id,
+                monto: p.amount,
+                created_at: p.created_at,
+                concepto: p.concept,
+                metodo_pago: p.metodo_pago,
+            })),
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+export interface CotizacionParaVincular {
+    id: string;
+    name: string;
+    promise_id: string | null;
+    promise_name: string | null;
+    evento_id: string | null;
+}
+
+export type BuscarCotizacionesParaVincularResult =
+    | { success: true; data: CotizacionParaVincular[] }
+    | { success: false; error: string };
+
+/**
+ * Cotizaciones del studio para vincular un pago (con promise y evento si aplica).
+ */
+export async function buscarCotizacionesParaVincular(
+    studioSlug: string,
+    search?: string
+): Promise<BuscarCotizacionesParaVincularResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) return { success: false, error: 'Studio no encontrado' };
+
+        const where: Parameters<typeof prisma.studio_cotizaciones.findMany>[0]['where'] = {
+            studio_id: studioId,
+            status: { notIn: ['cancelada'] },
+        };
+        if (search?.trim()) {
+            where.OR = [
+                { name: { contains: search.trim(), mode: 'insensitive' } },
+                { promise: { name: { contains: search.trim(), mode: 'insensitive' } } },
+            ];
+        }
+
+        const rows = await prisma.studio_cotizaciones.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                promise_id: true,
+                evento_id: true,
+                promise: { select: { name: true } },
+            },
+            orderBy: { updated_at: 'desc' },
+            take: 50,
+        });
+
+        return {
+            success: true,
+            data: rows.map((r) => ({
+                id: r.id,
+                name: r.name,
+                promise_id: r.promise_id,
+                promise_name: r.promise?.name ?? null,
+                evento_id: r.evento_id,
+            })),
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+export type VincularPagoManualmenteResult =
+    | { success: true }
+    | { success: false; error: string };
+
+/**
+ * Vincula un pago huérfano a una cotización. Valida que la cotización sea del mismo estudio.
+ * Si la cotización tiene evento_id, actualiza también evento_id del pago.
+ */
+export async function vincularPagoManualmente(
+    studioSlug: string,
+    pagoId: string,
+    cotizacionId: string
+): Promise<VincularPagoManualmenteResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) return { success: false, error: 'Studio no encontrado' };
+
+        const cotizacion = await prisma.studio_cotizaciones.findFirst({
+            where: { id: cotizacionId, studio_id: studioId },
+            select: { id: true, promise_id: true, evento_id: true },
+        });
+        if (!cotizacion) return { success: false, error: 'Cotización no encontrada o no pertenece al estudio' };
+
+        const pago = await prisma.studio_pagos.findFirst({
+            where: {
+                id: pagoId,
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                    { condiciones_comerciales: { studio_id: studioId } },
+                    { metodos_pago: { studio_id: studioId } },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!pago) return { success: false, error: 'Pago no encontrado o no pertenece al estudio' };
+
+        await prisma.studio_pagos.update({
+            where: { id: pagoId },
+            data: {
+                cotizacion_id: cotizacion.id,
+                promise_id: cotizacion.promise_id,
+                evento_id: cotizacion.evento_id,
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+export type EliminarPagoHuerfanoResult =
+    | { success: true }
+    | { success: false; error: string };
+
+/**
+ * Elimina permanentemente un pago huérfano (solo si sigue siendo huérfano y del studio).
+ */
+export async function eliminarPagoHuerfano(
+    studioSlug: string,
+    pagoId: string
+): Promise<EliminarPagoHuerfanoResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) return { success: false, error: 'Studio no encontrado' };
+
+        const pago = await prisma.studio_pagos.findFirst({
+            where: {
+                id: pagoId,
+                AND: [
+                    {
+                        OR: [
+                            { cotizacion_id: null },
+                            { cotizaciones: null },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { promise_id: null },
+                            { promise: null },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { studio_users: { studio_id: studioId } },
+                            { promise: { studio_id: studioId } },
+                            { cotizaciones: { studio_id: studioId } },
+                            { condiciones_comerciales: { studio_id: studioId } },
+                            { metodos_pago: { studio_id: studioId } },
+                        ],
+                    },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!pago) return { success: false, error: 'Pago no encontrado, ya está vinculado o no pertenece al estudio' };
+
+        await prisma.studio_pagos.delete({ where: { id: pagoId } });
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error desconocido',

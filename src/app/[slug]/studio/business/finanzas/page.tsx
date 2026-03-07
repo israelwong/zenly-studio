@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert, Repeat } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { FinanceKPIs } from './components/FinanceKPIs';
 import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
-import { GastosRecurrentesCard } from './components/GastosRecurrentesCard';
+import { RecurrentesSheet } from './components/RecurrentesSheet';
 import { HistorialSheet } from './components/HistorialSheet';
+import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
 import {
     obtenerKPIsFinancieros,
     obtenerMovimientos,
@@ -36,6 +37,7 @@ export default function FinanzasPage() {
         utilidad: 0,
         porCobrar: 0,
         porPagar: 0,
+        ingresosPorCancelacion: undefined as number | undefined,
         totalProductionCosts: undefined as number | undefined,
         totalOperatingExpenses: undefined as number | undefined,
         netProfitability: undefined as number | undefined,
@@ -49,6 +51,9 @@ export default function FinanzasPage() {
         concepto: string;
         categoria: string;
         monto: number;
+        promiseId?: string;
+        cotizacionId?: string;
+        paymentStatus?: string;
     }>>([]);
     const [porCobrar, setPorCobrar] = useState<Array<{
         id: string;
@@ -78,6 +83,8 @@ export default function FinanzasPage() {
         description?: string | null;
     }>>([]);
     const [historialOpen, setHistorialOpen] = useState(false);
+    const [auditoriaOpen, setAuditoriaOpen] = useState(false);
+    const [recurrentesSheetOpen, setRecurrentesSheetOpen] = useState(false);
 
     useEffect(() => {
         document.title = 'Zenly Studio - Finanzas';
@@ -167,16 +174,6 @@ export default function FinanzasPage() {
         console.log('Marcar pagado:', id);
     };
 
-    const handleAddExpense = () => {
-        // TODO: Implementar modal de agregar gasto fijo
-        console.log('Agregar gasto fijo');
-    };
-
-    const handleEditExpense = (id: string) => {
-        // TODO: Implementar modal de editar gasto fijo
-        console.log('Editar gasto fijo:', id);
-    };
-
     if (!mounted || !currentMonth) {
         return (
             <div className="h-[calc(100vh-80px)]">
@@ -261,6 +258,15 @@ export default function FinanzasPage() {
                                 <ZenButton
                                     variant="outline"
                                     size="sm"
+                                    onClick={() => setAuditoriaOpen(true)}
+                                    icon={ShieldAlert}
+                                    iconPosition="left"
+                                >
+                                    Auditoría de Integridad
+                                </ZenButton>
+                                <ZenButton
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => setHistorialOpen(true)}
                                     icon={History}
                                     iconPosition="left"
@@ -313,59 +319,36 @@ export default function FinanzasPage() {
                                     </div>
                                 </div>
 
-                                {/* Columna 2: Por Cobrar y Por Pagar */}
-                                <div className="lg:col-span-1 flex flex-col gap-6 min-h-0 overflow-hidden">
-                                    {/* Por Cobrar Skeleton */}
-                                    <div className="flex-1 min-h-0">
-                                        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
-                                            <div className="border-b border-zinc-800 px-4 py-3">
-                                                <div className="h-4 bg-zinc-700/50 rounded w-28 animate-pulse" />
-                                            </div>
-                                            <div className="p-4 flex-1 overflow-auto space-y-3">
-                                                {[1, 2, 3].map((i) => (
-                                                    <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
-                                                        <div className="h-3 bg-zinc-700/50 rounded w-32 animate-pulse" />
-                                                        <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
-                                                        <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
-                                                    </div>
-                                                ))}
-                                            </div>
+                                {/* Columna 2: Por Cobrar */}
+                                <div className="lg:col-span-1 flex flex-col min-h-0">
+                                    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                        <div className="border-b border-zinc-800 px-4 py-3">
+                                            <div className="h-4 bg-zinc-700/50 rounded w-28 animate-pulse" />
                                         </div>
-                                    </div>
-                                    {/* Por Pagar Skeleton */}
-                                    <div className="flex-1 min-h-0">
-                                        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
-                                            <div className="border-b border-zinc-800 px-4 py-3">
-                                                <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
-                                            </div>
-                                            <div className="p-4 flex-1 overflow-auto space-y-3">
-                                                {[1, 2, 3].map((i) => (
-                                                    <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
-                                                        <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
-                                                        <div className="h-4 bg-zinc-700/50 rounded w-20 animate-pulse" />
-                                                        <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
-                                                    </div>
-                                                ))}
-                                            </div>
+                                        <div className="p-4 flex-1 overflow-auto space-y-3">
+                                            {[1, 2, 3].map((i) => (
+                                                <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                    <div className="h-3 bg-zinc-700/50 rounded w-32 animate-pulse" />
+                                                    <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
+                                                    <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Columna 3: Gastos Recurrentes */}
+                                {/* Columna 3: Por Pagar */}
                                 <div className="lg:col-span-1 flex flex-col min-h-0">
                                     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
                                         <div className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-                                            <div className="h-4 bg-zinc-700/50 rounded w-36 animate-pulse" />
+                                            <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
                                             <div className="h-7 w-7 bg-zinc-700/50 rounded animate-pulse" />
                                         </div>
                                         <div className="p-4 flex-1 overflow-auto space-y-3">
-                                            {[1, 2, 3, 4].map((i) => (
+                                            {[1, 2, 3].map((i) => (
                                                 <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
-                                                        <div className="h-4 bg-zinc-700/50 rounded w-16 animate-pulse" />
-                                                    </div>
-                                                    <div className="h-2 bg-zinc-700/40 rounded w-20 animate-pulse" />
+                                                    <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
+                                                    <div className="h-4 bg-zinc-700/50 rounded w-20 animate-pulse" />
                                                     <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
                                                 </div>
                                             ))}
@@ -383,6 +366,7 @@ export default function FinanzasPage() {
                                     utilidad={kpis.utilidad}
                                     porCobrar={kpis.porCobrar}
                                     porPagar={kpis.porPagar}
+                                    ingresosPorCancelacion={kpis.ingresosPorCancelacion}
                                     totalProductionCosts={kpis.totalProductionCosts}
                                     totalOperatingExpenses={kpis.totalOperatingExpenses}
                                     netProfitability={kpis.netProfitability}
@@ -507,107 +491,86 @@ export default function FinanzasPage() {
                                     />
                                 </div>
 
-                                {/* Columna 2: Por Cobrar y Por Pagar */}
-                                <div className="lg:col-span-1 flex flex-col gap-6 min-h-0 overflow-hidden">
-                                    <div className="flex-1 min-h-0">
-                                        <PorCobrarCard
-                                            porCobrar={porCobrar}
-                                            studioSlug={studioSlug}
-                                            onRegistrarPago={handleRegistrarPago}
-                                            onPagoRegistrado={async () => {
-                                                // Recargar datos después de registrar pago
-                                                try {
-                                                    const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
-                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                        obtenerMovimientos(studioSlug, currentMonth!),
-                                                        obtenerPorCobrar(studioSlug),
-                                                    ]);
-                                                    if (kpisResult.success) {
-                                                        setKpis(kpisResult.data);
-                                                    }
-                                                    if (transactionsResult.success && transactionsResult.data) {
-                                                        setTransactions(transactionsResult.data);
-                                                    }
-                                                    if (porCobrarResult.success && porCobrarResult.data) {
-                                                        setPorCobrar(porCobrarResult.data);
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Error recargando datos:', error);
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="flex-1 min-h-0">
-                                        <PorPagarCard
-                                            porPagar={porPagar}
-                                            studioSlug={studioSlug}
-                                            onMarcarPagado={handleMarcarPagado}
-                                            onPagoConfirmado={async () => {
-                                                // Forzar refresh del router para invalidar cache
-                                                router.refresh();
-
-                                                // Recargar datos después de confirmar pago
-                                                try {
-                                                    // Pequeño delay para asegurar que la transacción se complete
-                                                    await new Promise(resolve => setTimeout(resolve, 200));
-
-                                                    const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
-                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                        obtenerMovimientos(studioSlug, currentMonth!),
-                                                        obtenerPorPagar(studioSlug),
-                                                    ]);
-                                                    if (kpisResult.success) {
-                                                        setKpis(kpisResult.data);
-                                                    }
-                                                    if (transactionsResult.success && transactionsResult.data) {
-                                                        setTransactions(transactionsResult.data);
-                                                    }
-                                                    if (porPagarResult.success && porPagarResult.data) {
-                                                        setPorPagar(porPagarResult.data);
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Error recargando datos:', error);
-                                                }
-                                            }}
-                                        />
-                                    </div>
+                                {/* Columna 2: Por Cobrar */}
+                                <div className="lg:col-span-1 flex flex-col min-h-0">
+                                    <PorCobrarCard
+                                        porCobrar={porCobrar}
+                                        studioSlug={studioSlug}
+                                        onRegistrarPago={handleRegistrarPago}
+                                        onPagoRegistrado={async () => {
+                                            try {
+                                                const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
+                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                    obtenerMovimientos(studioSlug, currentMonth!),
+                                                    obtenerPorCobrar(studioSlug),
+                                                ]);
+                                                if (kpisResult.success) setKpis(kpisResult.data);
+                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+                                                if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
+                                            } catch (error) {
+                                                console.error('Error recargando datos:', error);
+                                            }
+                                        }}
+                                    />
                                 </div>
 
-                                {/* Columna 3: Gastos Recurrentes */}
+                                {/* Columna 3: Por Pagar + Recurrentes (sheet) */}
                                 <div className="lg:col-span-1 flex flex-col min-h-0">
-                                    <GastosRecurrentesCard
+                                    <PorPagarCard
+                                        porPagar={porPagar}
+                                        studioSlug={studioSlug}
+                                        onMarcarPagado={handleMarcarPagado}
+                                        onPagoConfirmado={async () => {
+                                            router.refresh();
+                                            try {
+                                                await new Promise((r) => setTimeout(r, 200));
+                                                const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
+                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                    obtenerMovimientos(studioSlug, currentMonth!),
+                                                    obtenerPorPagar(studioSlug),
+                                                ]);
+                                                if (kpisResult.success) setKpis(kpisResult.data);
+                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+                                                if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+                                            } catch (error) {
+                                                console.error('Error recargando datos:', error);
+                                            }
+                                        }}
+                                        headerAction={
+                                            <ZenButton
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setRecurrentesSheetOpen(true)}
+                                                className="text-zinc-400 hover:text-zinc-300"
+                                            >
+                                                <Repeat className="h-4 w-4 mr-1" />
+                                                Recurrentes
+                                            </ZenButton>
+                                        }
+                                    />
+                                    <RecurrentesSheet
+                                        open={recurrentesSheetOpen}
+                                        onOpenChange={setRecurrentesSheetOpen}
                                         expenses={recurringExpenses}
                                         studioSlug={studioSlug}
-                                        onAddExpense={handleAddExpense}
-                                        onEditExpense={handleEditExpense}
                                         onGastoRegistrado={async () => {
-                                            // Recargar gastos recurrentes después de registrar
                                             try {
                                                 const expensesResult = await obtenerGastosRecurrentes(studioSlug, currentMonth);
-                                                if (expensesResult.success && expensesResult.data) {
-                                                    setRecurringExpenses(expensesResult.data);
-                                                }
+                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
                                             } catch (error) {
                                                 console.error('Error recargando gastos recurrentes:', error);
                                             }
                                         }}
                                         onGastoPagado={async () => {
-                                            // Recargar datos después de pagar gasto recurrente
                                             try {
                                                 const [kpisResult, transactionsResult, expensesResult] = await Promise.all([
                                                     obtenerKPIsFinancieros(studioSlug, currentMonth!),
                                                     obtenerMovimientos(studioSlug, currentMonth!),
                                                     obtenerGastosRecurrentes(studioSlug, currentMonth),
                                                 ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                                if (expensesResult.success && expensesResult.data) {
-                                                    setRecurringExpenses(expensesResult.data);
-                                                }
+                                                if (kpisResult.success) setKpis(kpisResult.data);
+                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
                                             } catch (error) {
                                                 console.error('Error recargando datos:', error);
                                             }
@@ -623,6 +586,11 @@ export default function FinanzasPage() {
             <HistorialSheet
                 open={historialOpen}
                 onOpenChange={setHistorialOpen}
+                studioSlug={studioSlug}
+            />
+            <AuditoriaIntegridadSheet
+                open={auditoriaOpen}
+                onOpenChange={setAuditoriaOpen}
                 studioSlug={studioSlug}
             />
         </div>

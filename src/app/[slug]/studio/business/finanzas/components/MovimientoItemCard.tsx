@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MoreVertical, FileText, X, Trash2, Edit } from 'lucide-react';
+import Link from 'next/link';
+import { MoreVertical, FileText, X, Trash2, Edit, ExternalLink } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -12,6 +13,7 @@ import {
     ZenDropdownMenuItem,
     ZenDropdownMenuSeparator,
     ZenConfirmModal,
+    ZenDialog,
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
 import { NominaReceipt } from '@/components/shared/payments/NominaReceipt';
@@ -21,6 +23,13 @@ import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+interface TransactionDetail {
+    monto: number;
+    categoria: string;
+    concepto: string;
+    paymentStatus?: string;
+}
+
 interface Transaction {
     id: string;
     fecha: Date;
@@ -28,11 +37,18 @@ interface Transaction {
     concepto: string;
     categoria: string;
     monto: number;
-    nominaId?: string; // ID de la nómina si viene de "Por Pagar"
-    nominaPaymentType?: string; // Tipo de pago de nómina ('individual' | 'consolidado')
-    isGastoOperativo?: boolean; // Si es gasto operativo personalizado
-    totalDiscounts?: number; // Descuentos aplicados (solo para nóminas)
-    personalId?: string; // ID del personal si el gasto recurrente está asociado a un crew member
+    nominaId?: string;
+    nominaPaymentType?: string;
+    isGastoOperativo?: boolean;
+    totalDiscounts?: number;
+    personalId?: string;
+    promiseId?: string;
+    cotizacionId?: string;
+    paymentStatus?: string;
+    contactName?: string | null;
+    eventName?: string | null;
+    eventTypeName?: string | null;
+    details?: TransactionDetail[];
 }
 
 interface MovimientoItemCardProps {
@@ -67,6 +83,9 @@ export function MovimientoItemCard({
     const [isCancellingNomina, setIsCancellingNomina] = useState(false);
     const [isEliminandoNomina, setIsEliminandoNomina] = useState(false);
     const [isEliminandoPago, setIsEliminandoPago] = useState(false);
+    const [showDesgloseDialog, setShowDesgloseDialog] = useState(false);
+
+    const isGroup = Boolean(transaction.details && transaction.details.length > 1);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -100,6 +119,14 @@ export function MovimientoItemCard({
     // Gasto recurrente con personal asociado (para mostrar comprobante y ocultar eliminar)
     const isRecurrenteConPersonal = isRecurrente && !!transaction.personalId;
 
+    const isPendienteDevolucion = transaction.paymentStatus === 'pending_refund';
+    const isRetenidoCancelacion = isIngreso && transaction.paymentStatus === 'retained_by_cancellation';
+
+    // Ingreso asociado a cotización/promesa (para mostrar enlace; incluye devoluciones pendientes)
+    const hasQuoteLink = (transaction.promiseId || transaction.cotizacionId) && (isIngreso || isPendienteDevolucion);
+    const promiseHref = transaction.promiseId
+        ? `/${studioSlug}/studio/commercial/promises/${transaction.promiseId}`
+        : null;
 
     const handleViewReceipt = () => {
         setIsReceiptModalOpen(true);
@@ -286,19 +313,59 @@ export function MovimientoItemCard({
                                         Recurrente
                                     </span>
                                 )}
+                                {hasQuoteLink && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-900/20 text-emerald-400 border border-emerald-800/30">
+                                        Cotización
+                                    </span>
+                                )}
+                                {isPendienteDevolucion && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-900/20 text-amber-400 border border-amber-800/30">
+                                        Pendiente de devolución
+                                    </span>
+                                )}
+                                {isRetenidoCancelacion && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-700/50 text-zinc-400 border border-zinc-600/50">
+                                        Anticipo retenido
+                                    </span>
+                                )}
                             </div>
+                            {(transaction.contactName || transaction.eventName || transaction.eventTypeName) && (
+                                <p className="text-xs text-zinc-400 mb-1">
+                                    {[transaction.contactName, transaction.eventName, transaction.eventTypeName]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </p>
+                            )}
                             <div className="flex items-center gap-3 flex-wrap">
                                 <p className="text-xs text-zinc-500">
                                     {formatDate(transaction.fecha)}
                                 </p>
+                                {hasQuoteLink && promiseHref && (
+                                    <Link
+                                        href={promiseHref}
+                                        className="text-xs text-emerald-400/90 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                                    >
+                                        Ver cotización
+                                        <ExternalLink className="h-3 w-3" />
+                                    </Link>
+                                )}
+                                {isGroup && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDesgloseDialog(true)}
+                                        className="text-xs text-zinc-400 hover:text-zinc-300 hover:underline inline-flex items-center gap-1"
+                                    >
+                                        Ver desglose
+                                    </button>
+                                )}
                                 <p
                                     className={cn(
                                         'text-base font-semibold',
                                         isIngreso ? 'text-emerald-400' : 'text-rose-400'
                                     )}
                                 >
-                                    {isIngreso ? '+' : ''}
-                                    {formatCurrency(Math.abs(transaction.monto))}
+                                    {transaction.monto > 0 ? '+' : ''}
+                                    {formatCurrency(transaction.monto)}
                                 </p>
                             </div>
                         </div>
@@ -554,6 +621,34 @@ export function MovimientoItemCard({
                 loading={isEliminandoPago}
                 loadingText="Eliminando..."
             />
+
+            {/* Dialog desglose de pagos agrupados */}
+            {isGroup && transaction.details && (
+                <ZenDialog
+                    isOpen={showDesgloseDialog}
+                    onClose={() => setShowDesgloseDialog(false)}
+                    title="Desglose de pago"
+                    description={`Total consolidado: ${formatCurrency(transaction.monto)}`}
+                    onCancel={() => setShowDesgloseDialog(false)}
+                    cancelLabel="Cerrar"
+                    cancelAlignRight
+                    maxWidth="sm"
+                >
+                    <ul className="space-y-3">
+                        {transaction.details.map((d, i) => (
+                            <li
+                                key={i}
+                                className="flex items-center justify-between gap-2 py-2 border-b border-zinc-700/50 last:border-0"
+                            >
+                                <span className="text-sm text-zinc-300">{d.concepto}</span>
+                                <span className={cn('text-sm font-medium', d.monto >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                                    {formatCurrency(d.monto)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </ZenDialog>
+            )}
         </>
     );
 }

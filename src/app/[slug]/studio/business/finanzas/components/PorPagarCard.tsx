@@ -11,9 +11,10 @@ interface PorPagarCardProps {
     studioSlug: string;
     onMarcarPagado: (id: string) => void;
     onPagoConfirmado?: () => void;
+    headerAction?: React.ReactNode;
 }
 
-export function PorPagarCard({ porPagar, studioSlug, onMarcarPagado, onPagoConfirmado }: PorPagarCardProps) {
+export function PorPagarCard({ porPagar, studioSlug, onMarcarPagado, onPagoConfirmado, headerAction }: PorPagarCardProps) {
     const totalPersonas = porPagar.length;
     const totalItems = porPagar.reduce((sum, p) => sum + p.items.length, 0);
 
@@ -24,12 +25,13 @@ export function PorPagarCard({ porPagar, studioSlug, onMarcarPagado, onPagoConfi
                     <div className="p-1.5 bg-rose-500/10 rounded-lg">
                         <CreditCard className="h-4 w-4 text-rose-400" />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         <ZenCardTitle className="text-base">Por Pagar</ZenCardTitle>
                         <p className="text-xs text-zinc-400 mt-0.5">
                             {totalPersonas} {totalPersonas === 1 ? 'personal' : 'personales'} • {totalItems} {totalItems === 1 ? 'concepto' : 'conceptos'}
                         </p>
                     </div>
+                    {headerAction}
                 </div>
             </ZenCardHeader>
             <ZenCardContent className="p-4 flex-1 overflow-auto">
