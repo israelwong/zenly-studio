@@ -2534,6 +2534,7 @@ export async function autorizarYCrearEvento(
           contract_version_snapshot: contratoSnapshot?.version || null,
           contract_signed_at_snapshot: contratoSnapshot?.signed_at || null,
           contract_signed_ip_snapshot: contratoSnapshot?.signed_ip || null,
+          firma_requerida_snapshot: contratoSnapshot != null ? (registroCierre.firma_requerida ?? null) : null,
           updated_at: new Date(),
         },
       });

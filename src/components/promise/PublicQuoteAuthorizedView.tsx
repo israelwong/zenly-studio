@@ -929,6 +929,7 @@ export function PublicQuoteAuthorizedView({
         eventDate={promise.event_date}
         variant="cierre"
         isContractSigned={isContractSigned}
+        firmaRequerida={firmaRequerida}
         cierreScenario={cierreScenario}
         coverImageUrl={promise.event_type_cover_image_url}
         coverVideoUrl={promise.event_type_cover_video_url}

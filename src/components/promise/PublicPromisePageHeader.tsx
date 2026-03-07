@@ -11,6 +11,8 @@ interface PublicPromisePageHeaderProps {
   eventDate: Date | string | null;
   variant?: 'pendientes' | 'negociacion' | 'cierre';
   isContractSigned?: boolean;
+  /** Si false, contrato fue "lectura confirmada" (no firma); usado en header para texto "leído" vs "firmado" */
+  firmaRequerida?: boolean;
   /** Escenario de cierre (A=Reserva en Trámite, B=Preparando, C=Firma, D=Revisión, E=Formalización Simplificada); define subtítulo y asesoría */
   cierreScenario?: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   minDaysToHire?: number;
@@ -35,6 +37,7 @@ export function PublicPromisePageHeader({
   eventDate,
   variant,
   isContractSigned = false,
+  firmaRequerida = true,
   cierreScenario = null,
   minDaysToHire = 30,
   coverImageUrl,
@@ -171,7 +174,7 @@ export function PublicPromisePageHeader({
                       {dateObj && formattedDate && (
                         <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
                       )}{' '}
-                      ha sido firmado exitosamente.
+                      {firmaRequerida ? 'ha sido firmado exitosamente.' : 'ha sido leído y confirmado.'}
                     </>
                   ) : cierreScenario === 'A' ? (
                     <>

@@ -2409,6 +2409,8 @@ model studio_cotizaciones {
   contract_version_snapshot        Int?
   contract_signed_at_snapshot       DateTime?
   contract_signed_ip_snapshot       String?
+  /** Snapshot al autorizar: si el contrato exigía firma (true) o solo lectura confirmada (false). Para bienvenido/post-autorización cuando cierre ya fue eliminado. */
+  firma_requerida_snapshot          Boolean?
 
   // Cancelación (al cancelar cierre con fondos: motivo, solicitante, fecha)
   cancel_reason                    String?  @db.Text

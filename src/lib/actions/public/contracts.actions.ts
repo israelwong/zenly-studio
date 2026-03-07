@@ -74,6 +74,7 @@ export async function signPublicContract(
             contract_signed_at: true,
             pago_confirmado_estudio: true,
             pago_monto: true,
+            firma_requerida: true,
           },
         },
         condicion_comercial_negociacion: {
@@ -172,13 +173,16 @@ export async function signPublicContract(
       cotizacion.cotizacion_cierre = { ...cotizacion.cotizacion_cierre!, ...cierreActualizado };
     }
 
-    // Notificación al estudio (trigger para UI/centro de notificaciones; Realtime se dispara por trigger DB en studio_cotizaciones_cierre)
+    // Notificación al estudio: texto según si fue firma o solo lectura confirmada
+    const firmaRequerida = cotizacion.cotizacion_cierre?.firma_requerida !== false;
     await createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       studio_id: studio.id,
       type: StudioNotificationType.CONTRACT_SIGNED,
-      title: "Contrato firmado por el cliente",
-      message: `${promise.contact.name} firmó el contrato de la cotización "${cotizacion.name}"`,
+      title: firmaRequerida ? "Contrato firmado por el cliente" : "Lectura confirmada de contrato",
+      message: firmaRequerida
+        ? `${promise.contact.name} firmó el contrato de la cotización "${cotizacion.name}"`
+        : `${promise.contact.name} confirmó la lectura del contrato de la cotización "${cotizacion.name}"`,
       priority: NotificationPriority.HIGH,
       contact_id: promise.contact.id,
       promise_id: promiseId,
@@ -201,7 +205,9 @@ export async function signPublicContract(
       data: {
         promise_id: promiseId,
         user_id: null,
-        content: `Cliente firmó el contrato de la cotización: "${cotizacion.name}"`,
+        content: firmaRequerida
+          ? `Cliente firmó el contrato de la cotización: "${cotizacion.name}"`
+          : `Cliente confirmó la lectura del contrato de la cotización: "${cotizacion.name}"`,
         log_type: "system",
         origin_context: "PROMISE",
         metadata: {

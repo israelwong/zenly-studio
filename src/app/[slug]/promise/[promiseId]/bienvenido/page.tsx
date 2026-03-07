@@ -50,6 +50,7 @@ export default async function BienvenidoPage({ params }: BienvenidoPageProps) {
       cotizacionData={cotizacionData}
       condicionesData={condicionesData}
       selectedByProspect={data.selectedByProspect}
+      firmaRequeridaContract={data.firmaRequeridaContract}
     />
   );
 }

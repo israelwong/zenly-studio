@@ -24,6 +24,8 @@ interface BienvenidoPageClientProps {
   contractId: string;
   /** false = flujo manual (estudio autorizó): mostrar confetti al entrar. */
   selectedByProspect?: boolean;
+  /** true = contrato fue firmado; false = solo lectura confirmada. Para texto "Ver contrato firmado" vs "Ver contrato". */
+  firmaRequeridaContract?: boolean;
   contract: {
     template_id: string | null;
     content: string | null;
@@ -60,6 +62,7 @@ export function BienvenidoPageClient({
   cotizacionData: cotizacionDataProp,
   condicionesData: condicionesDataProp,
   selectedByProspect = true,
+  firmaRequeridaContract = true,
 }: BienvenidoPageClientProps) {
   const router = useRouter();
   const [, setEventoId] = useState<string | null>(initialEventoId);
@@ -208,7 +211,7 @@ export function BienvenidoPageClient({
                   className="inline-flex h-auto py-0 px-0 -my-0.5 align-baseline font-medium text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500/50 hover:decoration-emerald-400 underline-offset-2"
                   onClick={() => setShowContractModal(true)}
                 >
-                  Ver contrato firmado
+                  {firmaRequeridaContract ? 'Ver contrato firmado' : 'Ver contrato'}
                 </ZenButton>
               </p>
             )}
@@ -235,7 +238,7 @@ export function BienvenidoPageClient({
       <ZenDialog
         isOpen={showContractModal}
         onClose={() => setShowContractModal(false)}
-        title="Contrato firmado"
+        title={firmaRequeridaContract ? 'Contrato firmado' : 'Contrato'}
         maxWidth="4xl"
       >
         {contract?.content?.trim() ? (

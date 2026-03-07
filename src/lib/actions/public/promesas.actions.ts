@@ -5638,6 +5638,8 @@ export async function getPublicPromiseBienvenidoData(
     eventoId: string | null;
     /** false = flujo manual (estudio autorizó); true = prospecto eligió desde el link. Usado para confetti en bienvenido. */
     selectedByProspect: boolean;
+    /** false = contrato fue "lectura confirmada"; true = contrato firmado. Para texto "Ver contrato firmado" vs "Ver contrato". */
+    firmaRequeridaContract: boolean;
     contract: {
       template_id: string | null;
       content: string | null;
@@ -5692,6 +5694,7 @@ export async function getPublicPromiseBienvenidoData(
         contract_template_id_snapshot: true,
         contract_version_snapshot: true,
         contract_signed_at_snapshot: true,
+        firma_requerida_snapshot: true,
         // Snapshots de condiciones comerciales (guardados en autorización)
         condiciones_comerciales_name_snapshot: true,
         condiciones_comerciales_description_snapshot: true,
@@ -5705,6 +5708,7 @@ export async function getPublicPromiseBienvenidoData(
             contract_content: true,
             contract_version: true,
             contract_signed_at: true,
+            firma_requerida: true,
             pago_monto: true,
             condiciones_comerciales: {
               select: {
@@ -5800,6 +5804,7 @@ export async function getPublicPromiseBienvenidoData(
         contractId: cotizacion.id,
         eventoId: cotizacion.evento_id,
         selectedByProspect: cotizacion.selected_by_prospect ?? false,
+        firmaRequeridaContract: cotizacion.firma_requerida_snapshot ?? (cierre?.firma_requerida !== false),
         contract,
       },
     };
