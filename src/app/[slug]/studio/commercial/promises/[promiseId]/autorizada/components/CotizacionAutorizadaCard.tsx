@@ -10,8 +10,8 @@ import {
   ZenCardHeader,
   ZenCardTitle,
   ZenButton,
-  ZenConfirmModal,
 } from '@/components/ui/zen';
+import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import { ResumenPago } from '@/components/shared/precio';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { toast } from 'sonner';
@@ -495,13 +495,17 @@ export function CotizacionAutorizadaCard({
               </ZenButton>
             </div>
 
-            <ZenConfirmModal
+            <CancelationWithFundsModal
               isOpen={showCancelEventModal}
               onClose={() => !isCancellingEvent && setShowCancelEventModal(false)}
-              onConfirm={async () => {
+              onConfirm={async (data) => {
                 setIsCancellingEvent(true);
                 try {
-                  const result = await cancelarEvento(studioSlug, eventoId);
+                  const result = await cancelarEvento(studioSlug, eventoId, {
+                    cancelReason: data.reason,
+                    cancelRequestedBy: data.requestedBy,
+                    fundDestination: data.fundDestination,
+                  });
                   if (result.success) {
                     toast.success('Evento cancelado correctamente');
                     setShowCancelEventModal(false);
@@ -517,11 +521,15 @@ export function CotizacionAutorizadaCard({
                 }
               }}
               title="Cancelar evento"
-              description="El evento pasará a estado cancelado. La cotización se desvinculará y la promesa volverá a etapa pendiente. Esta acción no se puede deshacer."
-              confirmText="Sí, cancelar evento"
-              cancelText="No cancelar"
-              variant="destructive"
-              loading={isCancellingEvent}
+              description={
+                <p className="text-sm text-zinc-400">
+                  El evento pasará a estado cancelado. La cotización se desvinculará y la promesa volverá a etapa pendiente.
+                  Indica el motivo, quién solicita la cancelación y el destino de los pagos confirmados.
+                </p>
+              }
+              isLoading={isCancellingEvent}
+              saveLabel="Sí, cancelar evento"
+              cancelLabel="No cancelar"
             />
 
             {/* Fecha de creación del evento */}

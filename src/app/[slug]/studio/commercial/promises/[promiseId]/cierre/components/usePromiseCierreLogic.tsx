@@ -105,9 +105,6 @@ export function usePromiseCierreLogic({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelFondosModal, setShowCancelFondosModal] = useState(false);
   const [pagosConfirmadosTotal, setPagosConfirmadosTotal] = useState(0);
-  const [cancelFondosMotivo, setCancelFondosMotivo] = useState('');
-  const [cancelFondosSolicitante, setCancelFondosSolicitante] = useState<'estudio' | 'cliente'>('estudio');
-  const [cancelFondosDestino, setCancelFondosDestino] = useState<'retain' | 'refund'>('retain');
   const [isCancelling, setIsCancelling] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [showConfirmAutorizarModal, setShowConfirmAutorizarModal] = useState(false);
@@ -624,17 +621,14 @@ export function usePromiseCierreLogic({
     const res = await getPagosConfirmadosParaCancelacion(studioSlug, cotizacion.id);
     if (res.success && res.hasPagosConfirmados) {
       setPagosConfirmadosTotal(res.totalAmount);
-      setCancelFondosMotivo('');
-      setCancelFondosSolicitante('estudio');
-      setCancelFondosDestino('retain');
       setShowCancelFondosModal(true);
     } else {
       setShowCancelModal(true);
     }
   }, [studioSlug, cotizacion.id]);
 
-  const handleCancelarCierreConFondos = useCallback(async () => {
-    const motivo = (cancelFondosMotivo ?? '').trim();
+  const handleCancelarCierreConFondos = useCallback(async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
+    const motivo = (data.reason ?? '').trim();
     if (!motivo) {
       toast.error('Indica el motivo de la cancelación');
       return;
@@ -643,8 +637,8 @@ export function usePromiseCierreLogic({
     try {
       const result = await cancelarCierreConFondos(studioSlug, cotizacion.id, {
         motivo,
-        solicitante: cancelFondosSolicitante,
-        destinoFondos: cancelFondosDestino,
+        solicitante: data.requestedBy,
+        destinoFondos: data.fundDestination,
       }, true);
       if (result.success) {
         toast.success('Cierre cancelado. Fondos gestionados según lo indicado.');
@@ -664,7 +658,7 @@ export function usePromiseCierreLogic({
     } finally {
       setIsCancelling(false);
     }
-  }, [studioSlug, cotizacion.id, promiseId, cancelFondosMotivo, cancelFondosSolicitante, cancelFondosDestino, onCierreCancelado, router]);
+  }, [studioSlug, cotizacion.id, promiseId, onCierreCancelado, router]);
 
   const handleEditarDatosClick = useCallback(() => setShowEditPromiseModal(true), []);
 
@@ -855,12 +849,6 @@ export function usePromiseCierreLogic({
     showCancelFondosModal,
     setShowCancelFondosModal,
     pagosConfirmadosTotal,
-    cancelFondosMotivo,
-    setCancelFondosMotivo,
-    cancelFondosSolicitante,
-    setCancelFondosSolicitante,
-    cancelFondosDestino,
-    setCancelFondosDestino,
     handleCancelarCierreConFondos,
     isCancelling,
     setIsCancelling,

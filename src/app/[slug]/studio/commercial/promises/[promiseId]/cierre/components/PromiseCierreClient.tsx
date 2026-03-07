@@ -19,7 +19,8 @@ import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplat
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { CierreActionButtons } from './CierreActionButtons';
-import { ZenConfirmModal, ZenDialog, ZenTextarea, ZenButton } from '@/components/ui/zen';
+import { ZenConfirmModal, ZenDialog, ZenButton } from '@/components/ui/zen';
+import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
 import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, ActivacionOperativaCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
@@ -800,91 +801,20 @@ export function PromiseCierreClient({
           />
 
           {/* Modal Gestión de Fondos por Cancelación (cuando hay pagos paid/completed) */}
-          <ZenDialog
+          <CancelationWithFundsModal
             isOpen={cierreLogic.showCancelFondosModal}
             onClose={() => !cierreLogic.isCancelling && cierreLogic.setShowCancelFondosModal(false)}
+            onConfirm={(data) => void cierreLogic.handleCancelarCierreConFondos(data)}
             title="Gestión de fondos por cancelación"
             description={
               <p className="text-sm text-zinc-400">
                 Hay {formatearMoneda(cierreLogic.pagosConfirmadosTotal)} en pagos confirmados. Indica motivo, quién solicita y el destino del dinero.
               </p>
             }
-            saveLabel={cierreLogic.isCancelling ? 'Cancelando...' : 'Confirmar y cancelar cierre'}
-            onSave={() => void cierreLogic.handleCancelarCierreConFondos()}
-            onCancel={() => cierreLogic.setShowCancelFondosModal(false)}
-            cancelLabel="Volver"
             isLoading={cierreLogic.isCancelling}
-            saveDisabled={!cierreLogic.cancelFondosMotivo?.trim()}
-            saveVariant="destructive"
-            maxWidth="md"
-          >
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1">Motivo de la cancelación *</label>
-                <ZenTextarea
-                  value={cierreLogic.cancelFondosMotivo}
-                  onChange={(e) => cierreLogic.setCancelFondosMotivo(e.target.value)}
-                  placeholder="Ej. Cliente solicitó cambio de fecha, evento pospuesto..."
-                  rows={3}
-                  className="bg-zinc-900 border-zinc-700"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">¿Quién solicita la cancelación? *</label>
-                <div className="flex gap-3 w-full">
-                  <ZenButton
-                    type="button"
-                    variant={cierreLogic.cancelFondosSolicitante === 'estudio' ? 'primary' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => cierreLogic.setCancelFondosSolicitante('estudio')}
-                  >
-                    Estudio
-                  </ZenButton>
-                  <ZenButton
-                    type="button"
-                    variant={cierreLogic.cancelFondosSolicitante === 'cliente' ? 'primary' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => cierreLogic.setCancelFondosSolicitante('cliente')}
-                  >
-                    Cliente
-                  </ZenButton>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">Destino del dinero</label>
-                <div className="space-y-2">
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 cursor-pointer hover:bg-zinc-800/80">
-                    <input
-                      type="radio"
-                      name="destinoFondos"
-                      checked={cierreLogic.cancelFondosDestino === 'retain'}
-                      onChange={() => cierreLogic.setCancelFondosDestino('retain')}
-                      className="mt-1 text-emerald-500"
-                    />
-                    <div>
-                      <span className="font-medium text-zinc-200">Retener anticipo (No reembolsable)</span>
-                      <p className="text-xs text-zinc-500 mt-0.5">Los pagos quedarán como retenidos por cancelación. No cuentan en balance de eventos activos; siguen en reportes de ingresos.</p>
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 cursor-pointer hover:bg-zinc-800/80">
-                    <input
-                      type="radio"
-                      name="destinoFondos"
-                      checked={cierreLogic.cancelFondosDestino === 'refund'}
-                      onChange={() => cierreLogic.setCancelFondosDestino('refund')}
-                      className="mt-1 text-emerald-500"
-                    />
-                    <div>
-                      <span className="font-medium text-zinc-200">Marcar para devolución</span>
-                      <p className="text-xs text-zinc-500 mt-0.5">Los pagos pasan a pendientes de reembolso. El cliente podrá ver el estado en su vista.</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </ZenDialog>
+            saveLabel="Confirmar y cancelar cierre"
+            cancelLabel="Volver"
+          />
 
           {/* Modal Confirmar Autorizar: se muestra al hacer click en "Autorizar y Crear Evento" */}
           <ZenConfirmModal

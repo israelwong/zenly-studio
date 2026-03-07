@@ -466,9 +466,13 @@ export async function obtenerEventoDetalle(
 export async function cancelarEvento(
   studioSlug: string,
   eventoId: string,
-  options?: { promiseTargetStageSlug?: 'pending' | 'canceled' }
+  options?: {
+    promiseTargetStageSlug?: 'pending' | 'canceled';
+    cancelReason?: string;
+    cancelRequestedBy?: 'estudio' | 'cliente';
+    fundDestination?: 'retain' | 'refund';
+  }
 ): Promise<CancelarEventoResponse> {
-  // Importar desde el archivo original temporalmente (Patrón Proxy)
   const { cancelarEvento: originalFunction } = await import('./events.actions');
   return originalFunction(studioSlug, eventoId, options);
 }

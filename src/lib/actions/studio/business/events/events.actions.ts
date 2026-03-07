@@ -1265,7 +1265,8 @@ export async function obtenerEventoDetalle(
 /**
  * Cancelar un evento
  * - Cambia status del evento a "CANCELLED"
- * - Actualiza cotización a "cancelada"
+ * - Actualiza cotización a "cancelada" y persiste cancel_reason, cancel_requested_by, cancelled_at
+ * - Si fundDestination === 'refund', marca pagos como canceled; si 'retain', los deja como ingresos históricos
  * - Quita etiqueta "Aprobado" de la promesa
  * - Mueve promesa a etapa elegida (pending o canceled) y agrega etiqueta "Cancelada"
  * - Registra log en promise_logs
@@ -1273,9 +1274,17 @@ export async function obtenerEventoDetalle(
 export async function cancelarEvento(
   studioSlug: string,
   eventoId: string,
-  options?: { promiseTargetStageSlug?: 'pending' | 'canceled' }
+  options?: {
+    promiseTargetStageSlug?: 'pending' | 'canceled';
+    cancelReason?: string;
+    cancelRequestedBy?: 'estudio' | 'cliente';
+    fundDestination?: 'retain' | 'refund';
+  }
 ): Promise<CancelarEventoResponse> {
   const targetStageSlug = options?.promiseTargetStageSlug ?? 'pending';
+  const cancelReason = options?.cancelReason?.trim() || null;
+  const cancelRequestedBy = options?.cancelRequestedBy ?? null;
+  const fundDestination = options?.fundDestination ?? 'retain';
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -1473,21 +1482,27 @@ export async function cancelarEvento(
             status: 'cancelada',
             evento_id: null, // Liberar relación con evento
             discount: null, // Limpiar descuento al cancelar
+            cancel_reason: cancelReason,
+            cancel_requested_by: cancelRequestedBy,
+            cancelled_at: new Date(),
             updated_at: new Date(),
           },
         });
 
-        // 2.2. Marcar pagos de esas cotizaciones como cancelados (aislamiento financiero: resumen no los suma)
-        await tx.studio_pagos.updateMany({
-          where: {
-            cotizacion_id: { in: cotizacionIds },
-            status: 'completed',
-          },
-          data: {
-            status: 'canceled',
-            updated_at: new Date(),
-          },
-        });
+        // 2.2. Destino de fondos: solo marcar pagos como cancelados si el staff eligió "devolución"
+        // Si fundDestination === 'retain', los pagos se mantienen como completed (ingresos históricos no reembolsables)
+        if (fundDestination === 'refund') {
+          await tx.studio_pagos.updateMany({
+            where: {
+              cotizacion_id: { in: cotizacionIds },
+              status: 'completed',
+            },
+            data: {
+              status: 'canceled',
+              updated_at: new Date(),
+            },
+          });
+        }
       }
 
       // 2.1. Fase 30.9.5: Limpiar registros de cierre y condiciones fantasma de TODAS las cotizaciones asociadas al evento
@@ -1574,7 +1589,8 @@ export async function cancelarEvento(
       });
 
       if (contratos.length > 0) {
-        // Cancelar todos los contratos activos (normalmente solo debería haber 1)
+        const contractCancelReason = cancelReason ?? 'Evento cancelado';
+        const contractInitiatedBy = cancelRequestedBy === 'cliente' ? 'client' : 'studio';
         await tx.studio_event_contracts.updateMany({
           where: {
             event_id: eventoId,
@@ -1585,8 +1601,8 @@ export async function cancelarEvento(
           data: {
             status: 'CANCELLED',
             cancelled_at: new Date(),
-            cancellation_reason: 'Evento cancelado',
-            cancellation_initiated_by: 'studio',
+            cancellation_reason: contractCancelReason,
+            cancellation_initiated_by: contractInitiatedBy,
             updated_at: new Date(),
           },
         });
