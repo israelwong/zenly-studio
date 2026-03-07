@@ -149,7 +149,10 @@ export function ActivacionOperativaCard({
     return sum != null ? String(sum) : (anticipoMonto > 0 ? String(anticipoMonto) : '');
   });
   const [pagoStaging, setPagoStaging] = useState<PagoStagingItem[]>([]);
-  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  /** Primera fila (Anticipo) expandida por defecto para evitar parpadeo al habilitar el switch */
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(() =>
+    new Set(pagoData?.pago_confirmado_estudio === true ? ['anticipo-1'] : [])
+  );
   const [fechaGlobal, setFechaGlobal] = useState<Date>(() =>
     pagoData?.pago_fecha ? new Date(pagoData.pago_fecha) : new Date()
   );
@@ -346,6 +349,12 @@ export function ActivacionOperativaCard({
     if (isCleaning || savingConfirmarAnticipo) return;
     if (checked) {
       setCardExpanded(true);
+      setExpandedCards((prev) => new Set(prev).add('anticipo-1'));
+      // Inicializar monto con anticipo al habilitar si está vacío (p. ej. anticipoMonto llegó tras el primer render)
+      const current = parseFloat(String(montoTotalRecibido || '').trim());
+      if (!montoTotalRecibido?.trim() || isNaN(current) || current <= 0) {
+        setMontoTotalRecibido(anticipoMonto > 0 ? String(anticipoMonto) : '');
+      }
       return;
     }
     // Evitar API cuando no hay nada que borrar: sin confirmación en servidor o ya tenemos lista vacía en memoria

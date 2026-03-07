@@ -118,6 +118,8 @@ export interface PublicCotizacion {
     signed_at?: Date | null;
     /** Si true, el estudio activó el switch de "Incluir Contrato"; si false, omitir flujo de contrato */
     contrato_definido?: boolean;
+    /** Si true, el estudio requiere anticipo del cliente (paso de pago habilitado en vista pública) */
+    habilitar_pago?: boolean;
     /** Si true, el cliente debe firmar antes de autorizar; si false, se puede autorizar sin firma */
     firma_requerida?: boolean;
     /** Fase 28.0: El estudio confirmó que ya recibió el anticipo */
@@ -144,6 +146,12 @@ export interface PublicCotizacion {
   diferido?: number;
   /** Descuento aplicado resuelto por el engine. Opcional hasta que el servidor lo envíe. */
   descuentoAplicado?: number;
+  /** Cancelación del cierre: motivo, quién solicitó y fecha. */
+  cancel_reason?: string | null;
+  cancel_requested_by?: string | null;
+  cancelled_at?: Date | null;
+  /** Estado del dinero tras cancelación: pending_refund | retained_by_cancellation. */
+  refund_status?: 'pending_refund' | 'retained_by_cancellation' | null;
 }
 
 export interface PublicPaquete {

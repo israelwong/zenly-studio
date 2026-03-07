@@ -28,6 +28,7 @@ interface PublicContractViewProps {
   contractContent: string | null;
   contractTemplateId?: string | null;
   contractVersion?: number;
+  firmaRequerida?: boolean;
   condicionesComerciales: {
     id: string;
     name: string;
@@ -62,6 +63,8 @@ interface PublicContractViewProps {
   cotizacionPrice: number;
   isSigned: boolean;
   eventTypeId?: string | null;
+  /** Si true, se muestra el paso "Sincronizando pago confirmado..." en el overlay de firma/lectura */
+  hasPagoConfirmado?: boolean;
 }
 
 export function PublicContractView({
@@ -77,6 +80,7 @@ export function PublicContractView({
   contractContent,
   contractTemplateId,
   contractVersion,
+  firmaRequerida = true,
   condicionesComerciales,
   promise,
   studio,
@@ -87,7 +91,9 @@ export function PublicContractView({
   cotizacionPrice,
   isSigned,
   eventTypeId,
+  hasPagoConfirmado = false,
 }: PublicContractViewProps) {
+  const stepCount = hasPagoConfirmado ? 4 : 3;
   const totalAPagar = totalAPagarProp ?? cotizacionPrice;
   const anticipo = anticipoProp ?? 0;
   const diferido = diferidoProp ?? 0;
@@ -127,9 +133,9 @@ export function PublicContractView({
     }
   }, [isSigned]);
 
-  // Fase 30.9: Cerrar modal solo cuando stepper completó (4 pasos) Y servidor terminó
+  // Fase 30.9: Cerrar modal solo cuando stepper completó (stepCount pasos) Y servidor terminó
   useEffect(() => {
-    if (!serverDone || completedSteps < 4) return;
+    if (!serverDone || completedSteps < stepCount) return;
     const t = setTimeout(() => {
       setIsSuccess(true);
       window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -140,7 +146,7 @@ export function PublicContractView({
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [serverDone, completedSteps, onClose, onContractSigned]);
+  }, [serverDone, completedSteps, stepCount, onClose, onContractSigned]);
 
   // Reset scroll-to-bottom al abrir/cerrar el modal
   useEffect(() => {
@@ -331,8 +337,8 @@ export function PublicContractView({
     }
     stepperIntervalRef.current = setInterval(() => {
       setCompletedSteps((s) => {
-        const next = Math.min(s + 1, 4);
-        if (next >= 4 && stepperIntervalRef.current) {
+        const next = Math.min(s + 1, stepCount);
+        if (next >= stepCount && stepperIntervalRef.current) {
           clearInterval(stepperIntervalRef.current);
           stepperIntervalRef.current = null;
         }
@@ -368,8 +374,8 @@ export function PublicContractView({
         setServerDone(true);
         setAutoConvertedToEvent(fromServer);
         toast.success('Contrato firmado exitosamente');
-        if (completedSteps < 4) {
-          setCompletedSteps(4);
+        if (completedSteps < stepCount) {
+          setCompletedSteps(stepCount);
         }
         if (stepperIntervalRef.current) {
           clearInterval(stepperIntervalRef.current);
@@ -569,7 +575,7 @@ export function PublicContractView({
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                    Firmar Contrato
+                    {firmaRequerida ? 'Firmar Contrato' : 'Confirmar lectura'}
                   </>
                 )}
               </ZenButton>
@@ -615,10 +621,12 @@ onClick={onClose}
         showCloseButton={!isSuccess && !isSigning}
         title={
           isSuccess
-            ? '¡Contrato firmado con éxito!'
+            ? (firmaRequerida ? '¡Contrato firmado con éxito!' : '¡Lectura confirmada!')
             : isSigning
-              ? 'Procesando tu firma...'
-              : '¿Confirmar firma del contrato?'
+              ? (firmaRequerida ? 'Procesando tu firma...' : 'Registrando lectura...')
+              : firmaRequerida 
+                ? '¿Confirmar firma del contrato?'
+                : '¿Confirmar lectura del contrato?'
         }
         description={
           isSuccess
@@ -634,15 +642,17 @@ onClick={onClose}
           {isSuccess ? (
             <div className="flex flex-col items-center justify-center gap-4 py-6" aria-live="polite">
               <CheckCircle2 className="h-12 w-12 text-emerald-400 shrink-0" />
-              <p className="text-sm font-medium text-zinc-200">¡Contrato firmado con éxito!</p>
+              <p className="text-sm font-medium text-zinc-200">
+                {firmaRequerida ? '¡Contrato firmado con éxito!' : '¡Lectura confirmada con éxito!'}
+              </p>
             </div>
           ) : isSigning ? (
             <div className="py-4 space-y-2" aria-live="polite" aria-busy="true">
               {[
-                { label: 'Validando firma digital...', key: 0 },
-                { label: 'Sincronizando pago confirmado...', key: 1, highlight: autoConvertedToEvent },
-                { label: 'Creando expediente del evento...', key: 2 },
-                { label: 'Preparando tu Portal de Cliente...', key: 3 },
+                { label: firmaRequerida ? 'Validando firma digital...' : 'Registrando lectura...', key: 0 },
+                ...(hasPagoConfirmado ? [{ label: 'Sincronizando pago confirmado...', key: 1, highlight: autoConvertedToEvent }] : []),
+                { label: 'Creando expediente del evento...', key: hasPagoConfirmado ? 2 : 1 },
+                { label: 'Preparando tu Portal de Cliente...', key: hasPagoConfirmado ? 3 : 2 },
               ].map(({ label, key, highlight }) => {
                 const done = key < completedSteps;
                 const current = key === completedSteps;
@@ -679,7 +689,10 @@ onClick={onClose}
           ) : (
             <>
               <p className="text-sm text-zinc-300">
-                Esta acción es irreversible. Asegúrate de haber leído y entendido todos los términos del contrato.
+                {firmaRequerida 
+                  ? 'Esta acción es irreversible. Asegúrate de haber leído y entendido todos los términos del contrato.'
+                  : 'Confirma que has revisado el documento. Esta acción registrará que has leído los términos del acuerdo.'
+                }
               </p>
               <div className="flex gap-2">
                 <ZenButton
@@ -695,7 +708,7 @@ onClick={onClose}
                   className="flex-1"
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2 shrink-0" />
-                  Confirmar Firma
+                  {firmaRequerida ? 'Confirmar Firma' : 'Confirmar Lectura'}
                 </ZenButton>
               </div>
             </>

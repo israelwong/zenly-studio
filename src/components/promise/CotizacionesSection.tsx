@@ -6,6 +6,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '
 import type { PublicCotizacion } from '@/types/public-promise';
 import { getDiscountMontoEnPesos } from '@/lib/utils/promise-public-financials';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
+import { EventoCanceladoCard } from './EventoCanceladoCard';
 
 interface CondicionComercial {
   id: string;
@@ -152,6 +153,9 @@ export function CotizacionesSection({
           {/* Lista de cotizaciones */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {cotizacionesOrdenadas.map((cotizacion) => {
+              if (cotizacion.cancelled_at) {
+                return <EventoCanceladoCard key={cotizacion.id} cotizacion={cotizacion} />;
+              }
               const finalPrice = calculateFinalPrice(cotizacion);
               const descuentoMonto = getDiscountMontoEnPesos(cotizacion);
               const descuentoPorcentaje = cotizacion.price > 0

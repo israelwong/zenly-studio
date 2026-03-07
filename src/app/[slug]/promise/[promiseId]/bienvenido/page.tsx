@@ -49,6 +49,7 @@ export default async function BienvenidoPage({ params }: BienvenidoPageProps) {
       contract={data.contract}
       cotizacionData={cotizacionData}
       condicionesData={condicionesData}
+      selectedByProspect={data.selectedByProspect}
     />
   );
 }

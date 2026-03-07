@@ -1085,6 +1085,9 @@ export async function getPublicPromisePendientes(
               order: true,
               evento_id: true,
               event_duration: true,
+              cancel_reason: true,
+              cancel_requested_by: true,
+              cancelled_at: true,
               cotizacion_items: {
                 select: {
                   id: true,
@@ -1472,8 +1475,36 @@ export async function getPublicPromisePendientes(
         event_duration: cot.event_duration ?? null,
         selected_by_prospect: cot.selected_by_prospect || false,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+        cancel_reason: (cot as any).cancel_reason ?? null,
+        cancel_requested_by: (cot as any).cancel_requested_by ?? null,
+        cancelled_at: (cot as any).cancelled_at ?? null,
+        refund_status: (cot as any).refund_status ?? null,
       };
     });
+
+    // 7.1 Para cotizaciones canceladas, resolver refund_status desde studio_pagos
+    const cancelledQuoteIds = promise.quotes.filter((q: any) => q.cancelled_at).map((q: any) => q.id);
+    if (cancelledQuoteIds.length > 0) {
+      const pagosCancelados = await prisma.studio_pagos.findMany({
+        where: {
+          cotizacion_id: { in: cancelledQuoteIds },
+          status: { in: ['pending_refund', 'retained_by_cancellation'] },
+        },
+        select: { cotizacion_id: true, status: true },
+      });
+      const refundByCot = new Map<string, 'pending_refund' | 'retained_by_cancellation'>();
+      for (const p of pagosCancelados) {
+        const current = refundByCot.get(p.cotizacion_id);
+        if (!current || p.status === 'pending_refund') refundByCot.set(p.cotizacion_id, p.status as 'pending_refund' | 'retained_by_cancellation');
+      }
+      for (const c of mappedCotizaciones) {
+        if (c.cancelled_at && c.id) {
+          const rs = refundByCot.get(c.id);
+          if (rs) (c as any).refund_status = rs;
+          else (c as any).refund_status = 'retained_by_cancellation';
+        }
+      }
+    }
 
     // 8. Mapear paquetes usando el engine de precios (SSoT)
     const mapearPaquetesStart = Date.now();
@@ -1804,6 +1835,9 @@ export async function getPublicPromiseActiveQuote(
               negociacion_precio_original: true,
               negociacion_precio_personalizado: true,
               precio_calculado: true,
+              cancel_reason: true,
+              cancel_requested_by: true,
+              cancelled_at: true,
               cotizacion_items: {
                 select: {
                   id: true,
@@ -3039,7 +3073,23 @@ export async function getPublicPromiseNegociacion(
       negociacion_precio_original: cotizacion.negociacion_precio_original ? Number(cotizacion.negociacion_precio_original) : null,
       negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,
       items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      cancel_reason: (cotizacion as any).cancel_reason ?? null,
+      cancel_requested_by: (cotizacion as any).cancel_requested_by ?? null,
+      cancelled_at: (cotizacion as any).cancelled_at ?? null,
+      refund_status: null as 'pending_refund' | 'retained_by_cancellation' | null,
     };
+
+    if ((cotizacion as any).cancelled_at && cotizacion.id) {
+      const pago = await prisma.studio_pagos.findFirst({
+        where: {
+          cotizacion_id: cotizacion.id,
+          status: { in: ['pending_refund', 'retained_by_cancellation'] },
+        },
+        select: { status: true },
+        orderBy: { created_at: 'desc' },
+      });
+      mappedCotizacion.refund_status = pago?.status as 'pending_refund' | 'retained_by_cancellation' ?? 'retained_by_cancellation';
+    }
 
     // 7. Obtener condiciones comerciales disponibles y términos (con Promise.allSettled)
     const [condicionesSettled, terminosSettled] = await Promise.allSettled([
@@ -4059,6 +4109,10 @@ export async function getPublicPromiseCierre(
             : (cotizacion as any).condiciones_comerciales
               ? mapC((cotizacion as any).condiciones_comerciales)
               : null;
+        const habilitarPagoCierre = (cierre as { habilitar_pago?: boolean }).habilitar_pago;
+        const habilitarPago = habilitarPagoCierre !== undefined
+          ? habilitarPagoCierre === true
+          : (Number(engineOut.anticipo) > 0);
         return {
           created_at: cierre.created_at || null,
           template_id: cierre.contract_template_id || null,
@@ -4066,6 +4120,7 @@ export async function getPublicPromiseCierre(
           version: cierre.contract_version ?? 1,
           signed_at: cierre.contract_signed_at || null,
           contrato_definido: (cierre as { contrato_definido?: boolean }).contrato_definido ?? false,
+          habilitar_pago: habilitarPago,
           firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
           pago_confirmado_estudio: cierre.pago_confirmado_estudio || false,
           pago_monto: cierre.pago_monto != null ? Number(cierre.pago_monto) : null,
@@ -5437,9 +5492,11 @@ export async function getPublicCotizacionContract(
             contract_version: true,
             contract_signed_at: true,
             contrato_definido: true,
+            habilitar_pago: true,
             firma_requerida: true,
             pago_confirmado_estudio: true,
             pago_monto: true,
+            pago_fecha: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -5491,7 +5548,12 @@ export async function getPublicCotizacionContract(
           content: null,
           version: 1,
           signed_at: null,
+          contrato_definido: false,
+          habilitar_pago: true,
           firma_requerida: true,
+          pago_confirmado_estudio: false,
+          pago_monto: null,
+          pago_fecha: null,
           condiciones_comerciales: null,
         }
       };
@@ -5526,6 +5588,9 @@ export async function getPublicCotizacionContract(
       condicionesComerciales = mapCond(cotizacion.condiciones_comerciales);
     }
 
+    const habilitarPagoCierre = (cierre as { habilitar_pago?: boolean }).habilitar_pago;
+    const habilitarPago = habilitarPagoCierre !== undefined ? habilitarPagoCierre === true : true;
+
     return {
       success: true,
       data: {
@@ -5534,9 +5599,11 @@ export async function getPublicCotizacionContract(
         version: cierre.contract_version || 1,
         signed_at: cierre.contract_signed_at,
         contrato_definido: (cierre as { contrato_definido?: boolean }).contrato_definido ?? false,
+        habilitar_pago: habilitarPago,
         firma_requerida: (cierre as { firma_requerida?: boolean }).firma_requerida !== false,
         pago_confirmado_estudio: (cierre as { pago_confirmado_estudio?: boolean }).pago_confirmado_estudio ?? false,
         pago_monto: (cierre as { pago_monto?: unknown }).pago_monto != null ? Number((cierre as { pago_monto: unknown }).pago_monto) : null,
+        pago_fecha: (cierre as { pago_fecha?: Date | null }).pago_fecha ?? null,
         condiciones_comerciales: condicionesComerciales,
       },
     };
@@ -5569,6 +5636,8 @@ export async function getPublicPromiseBienvenidoData(
     /** Id de contexto del contrato (cotizacion_id); en /bienvenido el contrato es certeza. */
     contractId: string;
     eventoId: string | null;
+    /** false = flujo manual (estudio autorizó); true = prospecto eligió desde el link. Usado para confetti en bienvenido. */
+    selectedByProspect: boolean;
     contract: {
       template_id: string | null;
       content: string | null;
@@ -5617,6 +5686,7 @@ export async function getPublicPromiseBienvenidoData(
       select: {
         id: true,
         evento_id: true,
+        selected_by_prospect: true,
         price: true,
         contract_content_snapshot: true,
         contract_template_id_snapshot: true,
@@ -5729,6 +5799,7 @@ export async function getPublicPromiseBienvenidoData(
         cotizacionId: cotizacion.id,
         contractId: cotizacion.id,
         eventoId: cotizacion.evento_id,
+        selectedByProspect: cotizacion.selected_by_prospect ?? false,
         contract,
       },
     };

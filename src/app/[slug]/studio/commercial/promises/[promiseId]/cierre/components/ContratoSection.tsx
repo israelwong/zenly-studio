@@ -144,10 +144,10 @@ export const ContratoSection = memo(function ContratoSection({
   };
 
   const handleViewContract = () => {
+    if (showCancelarContratoConfirm) return; // No abrir preview mientras el modal de cancelar está abierto
     if (contractData?.contract_template_id && contractTemplate) {
       setShowContractPreview(true);
     } else if (contractData?.contract_template_id) {
-      // Si no hay template cargado, cargar primero
       loadTemplate().then(() => {
         setShowContractPreview(true);
       });
@@ -157,6 +157,7 @@ export const ContratoSection = memo(function ContratoSection({
   const handleConfirmCancelarContrato = async () => {
     if (!onCancelarContrato) return;
     setIsCancellingContrato(true);
+    setShowContractPreview(false);
     try {
       await onCancelarContrato(contratoFirmado ? motivoCancelacion : undefined);
       setShowCancelarContratoConfirm(false);
@@ -167,6 +168,7 @@ export const ContratoSection = memo(function ContratoSection({
   };
 
   const handleOpenCancelarModal = () => {
+    setShowContractPreview(false); // Evitar que al cerrar el dropdown se abra el preview
     setMotivoCancelacion('');
     setShowCancelarContratoConfirm(true);
   };
@@ -272,7 +274,7 @@ export const ContratoSection = memo(function ContratoSection({
     : contratoOmitido
       ? 'Contrato omitido'
       : contratoFirmado
-        ? 'Contrato firmado'
+        ? (firmaRequerida ? 'Contrato firmado' : 'Contrato leído')
         : !tieneContratoGenerado
           ? 'Generar contrato digital'
           : 'Contrato Digital';
@@ -299,7 +301,7 @@ export const ContratoSection = memo(function ContratoSection({
             <div className="flex items-center gap-2 min-w-0">
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
               <span className="text-xs uppercase tracking-wide font-semibold text-emerald-400 truncate">
-                Contrato firmado
+                {firmaRequerida ? 'Contrato firmado' : 'Contrato leído'}
               </span>
             </div>
             {(onRegenerateContract || onCancelarContrato) && (
@@ -353,7 +355,7 @@ export const ContratoSection = memo(function ContratoSection({
             const textoFirma = normalized
               ? formatDisplayDate(normalized, { day: 'numeric', month: 'long', year: 'numeric' })
               : '';
-            const firmada = textoFirma ? `Firmada ${textoFirma}` : '';
+            const firmada = textoFirma ? (firmaRequerida ? `Firmada ${textoFirma}` : `Lectura confirmada ${textoFirma}`) : '';
             const line = [version, firmada].filter(Boolean).join(' · ');
             return line ? <p className="text-xs text-zinc-400">{line}</p> : null;
           })()}
@@ -506,7 +508,12 @@ export const ContratoSection = memo(function ContratoSection({
       )}
         {!contratoOmitido && tieneContratoGenerado && onFirmaRequeridaChange && (
           <div className="flex items-center justify-between gap-2 py-1 pt-2 border-t border-zinc-700/50">
-            <span className="text-xs text-zinc-400">Firma requerida</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-zinc-400">Firma requerida</span>
+              <p className="text-[10px] text-zinc-500 leading-tight">
+                Omitir para aprobación interna (pasará como pendiente de firma)
+              </p>
+            </div>
             <div className="scale-90 origin-right shrink-0">
               <ZenSwitch
                 checked={firmaRequerida !== false}
@@ -528,13 +535,16 @@ export const ContratoSection = memo(function ContratoSection({
           }
         }}
         onConfirm={handleConfirmCancelarContrato}
-        title={contratoFirmado ? "⚠️ Cancelar contrato firmado" : "Cancelar contrato"}
+        title={contratoFirmado ? (firmaRequerida ? "⚠️ Cancelar contrato firmado" : "⚠️ Cancelar contrato leído") : "Cancelar contrato"}
         description={
           contratoFirmado ? (
             <div className="space-y-3">
               <p className="text-zinc-300">
-                Este contrato ya fue <strong className="text-rose-400">firmado por el cliente</strong>. 
-                La cancelación invalidará la firma y revertirá el proceso.
+                Este contrato ya fue {firmaRequerida ? (
+                  <><strong className="text-rose-400">firmado por el cliente</strong>. La cancelación invalidará la firma y revertirá el proceso.</>
+                ) : (
+                  <><strong className="text-rose-400">leído y confirmado por el cliente</strong>. La cancelación revertirá el proceso.</>
+                )}
               </p>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-zinc-300">
@@ -543,7 +553,7 @@ export const ContratoSection = memo(function ContratoSection({
                 <textarea
                   value={motivoCancelacion}
                   onChange={(e) => setMotivoCancelacion(e.target.value)}
-                  placeholder="Explica por qué se cancela este contrato firmado (mínimo 10 caracteres)"
+                  placeholder={firmaRequerida ? "Explica por qué se cancela este contrato firmado (mínimo 10 caracteres)" : "Explica por qué se cancela este contrato (mínimo 10 caracteres)"}
                   className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none"
                   disabled={isCancellingContrato}
                 />

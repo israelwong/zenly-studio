@@ -61,7 +61,13 @@ export function PromiseRedirectOnAuthorized({
         if (STATUSES_APROBADOS.includes(newStatus)) {
           hasRedirectedRef.current = true;
           router.push(bienvenidoPath);
+          return;
         }
+      }
+      // Redirigir también cuando se asigna evento_id (estudio autorizó y creó evento)
+      if (changeInfo?.evento_id) {
+        hasRedirectedRef.current = true;
+        router.push(bienvenidoPath);
       }
     },
     [router, bienvenidoPath]

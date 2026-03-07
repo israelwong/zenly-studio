@@ -3973,6 +3973,152 @@ export async function pasarACierre(
   }
 }
 
+/** Status de studio_pagos que se consideran "pagados" para gestión de fondos en cancelación */
+const PAGOS_CONFIRMADOS_STATUS = ['paid', 'completed', 'succeeded', 'CONFIRMED'] as const;
+
+/**
+ * Indica si la cotización tiene pagos confirmados (paid/completed/succeeded) para mostrar modal de gestión de fondos.
+ */
+export async function getPagosConfirmadosParaCancelacion(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; hasPagosConfirmados: boolean; totalAmount: number; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, hasPagosConfirmados: false, totalAmount: 0, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, promise: { studio_id: studio.id } },
+      select: { id: true },
+    });
+    if (!cotizacion) return { success: false, hasPagosConfirmados: false, totalAmount: 0, error: 'Cotización no encontrada' };
+
+    const agg = await prisma.studio_pagos.aggregate({
+      where: {
+        cotizacion_id: cotizacionId,
+        status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+      },
+      _sum: { amount: true },
+      _count: { id: true },
+    });
+    const totalAmount = agg._sum?.amount != null ? Number(agg._sum.amount) : 0;
+    const hasPagosConfirmados = (agg._count?.id ?? 0) > 0;
+    return { success: true, hasPagosConfirmados, totalAmount };
+  } catch (error) {
+    console.error('[getPagosConfirmadosParaCancelacion]', error);
+    return {
+      success: false,
+      hasPagosConfirmados: false,
+      totalAmount: 0,
+      error: error instanceof Error ? error.message : 'Error al consultar pagos',
+    };
+  }
+}
+
+/**
+ * Cancela el proceso de cierre con gestión de fondos: actualiza pagos a retained_by_cancellation o pending_refund,
+ * guarda motivo y solicitante, luego ejecuta la misma lógica que cancelarCierre.
+ */
+export async function cancelarCierreConFondos(
+  studioSlug: string,
+  cotizacionId: string,
+  datos: { motivo: string; solicitante: 'estudio' | 'cliente'; destinoFondos: 'retain' | 'refund' },
+  desarchivarOtras: boolean = false
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, promise: { studio_id: studio.id } },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+    if (cotizacion.status !== 'en_cierre') {
+      return { success: false, error: 'Solo se pueden cancelar cotizaciones en proceso de cierre' };
+    }
+
+    const nuevoStatusPagos = datos.destinoFondos === 'retain' ? 'retained_by_cancellation' : 'pending_refund';
+
+    await prisma.$transaction(async (tx) => {
+      await tx.studio_pagos.updateMany({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+        },
+        data: { status: nuevoStatusPagos, updated_at: new Date() },
+      });
+
+      const registroCierre = await tx.studio_cotizaciones_cierre.findUnique({
+        where: { cotizacion_id: cotizacionId },
+        select: { previous_status: true },
+      });
+      const statusToRestore = registroCierre?.previous_status || 'pendiente';
+
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: statusToRestore,
+          selected_by_prospect: false,
+          visible_to_client: false,
+          selected_at: null,
+          cancel_reason: datos.motivo.trim() || null,
+          cancel_requested_by: datos.solicitante,
+          cancelled_at: new Date(),
+          updated_at: new Date(),
+        },
+      });
+
+      await tx.studio_condiciones_comerciales_negociacion.deleteMany({
+        where: { cotizacion_id: cotizacionId, studio_id: studio.id },
+      });
+      await tx.studio_cotizaciones_cierre.deleteMany({
+        where: { cotizacion_id: cotizacionId },
+      });
+
+      if (desarchivarOtras && cotizacion.promise_id) {
+        await tx.studio_cotizaciones.updateMany({
+          where: {
+            promise_id: cotizacion.promise_id,
+            id: { not: cotizacionId },
+            archived: true,
+            status: 'pendiente',
+          },
+          data: { archived: false, updated_at: new Date() },
+        });
+      }
+    }, { maxWait: 10000, timeout: 15000 });
+
+    if (cotizacion.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((e) => {
+        console.error('[COTIZACIONES] Error sincronizando pipeline al cancelar cierre con fondos:', e);
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`, 'max');
+      const { syncShortUrlRoute } = await import('./promise-short-url.actions');
+      await syncShortUrlRoute(studioSlug, cotizacion.promise_id).catch(() => {});
+    }
+
+    return { success: true, data: { id: cotizacion.id, name: cotizacion.name } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error cancelarCierreConFondos:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cancelar cierre',
+    };
+  }
+}
+
 /**
  * Cancela el proceso de cierre de una cotizaciรณn
  * - Cambia el status de 'en_cierre' a 'pendiente'
@@ -4012,6 +4158,18 @@ export async function cancelarCierre(
     }
 
     await prisma.$transaction(async (tx) => {
+      // 0. Barrido pagos fantasma: marcar como canceled todos los pagos asociados a esta cotización o promesa
+      await tx.studio_pagos.updateMany({
+        where: {
+          OR: [
+            { cotizacion_id: cotizacionId },
+            ...(cotizacion.promise_id ? [{ promise_id: cotizacion.promise_id }] : []),
+          ],
+          status: { in: ['completed', 'paid', 'succeeded', 'CONFIRMED'] },
+        },
+        data: { status: 'canceled', updated_at: new Date() },
+      });
+
       // 1. Obtener el estado anterior guardado en el registro de cierre
       const registroCierre = await tx.studio_cotizaciones_cierre.findUnique({
         where: { cotizacion_id: cotizacionId },
@@ -4107,7 +4265,9 @@ export async function cancelarCierre(
 }
 
 /**
- * Actualiza el switch contrato_definido en studio_cotizaciones_cierre
+ * Actualiza el switch contrato_definido en studio_cotizaciones_cierre.
+ * Regla de Limpieza: Si contrato_definido = false (Incluir Contrato OFF), se limpia
+ * firma_requerida y contract_signed_at para que el cliente no reciba basura lógica.
  */
 export async function updateContratoDefinido(
   studioSlug: string,
@@ -4133,12 +4293,23 @@ export async function updateContratoDefinido(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
+    const data: {
+      contrato_definido: boolean;
+      firma_requerida?: boolean;
+      contract_signed_at?: Date | null;
+      updated_at: Date;
+    } = {
+      contrato_definido: contratoDefinido,
+      updated_at: new Date(),
+    };
+    if (contratoDefinido === false) {
+      data.firma_requerida = false;
+      data.contract_signed_at = null;
+    }
+
     await prisma.studio_cotizaciones_cierre.update({
       where: { cotizacion_id: cotizacionId },
-      data: { 
-        contrato_definido: contratoDefinido,
-        updated_at: new Date(),
-      },
+      data,
     });
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
@@ -4152,6 +4323,47 @@ export async function updateContratoDefinido(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar switch',
+    };
+  }
+}
+
+/**
+ * Actualiza el switch habilitar_pago en studio_cotizaciones_cierre.
+ * Si false, el cliente no ve el paso de pago (caso ESPERA cuando contrato también está off).
+ */
+export async function updateHabilitarPago(
+  studioSlug: string,
+  cotizacionId: string,
+  habilitarPago: boolean
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Estudio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: { habilitar_pago: habilitarPago, updated_at: new Date() },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+    return { success: true, data: { id: cotizacionId } };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error actualizando habilitar_pago:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar',
     };
   }
 }

@@ -10,7 +10,8 @@ import { toast } from 'sonner';
 interface ContractPreviewForPromiseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void | Promise<void>;
+  /** solicitarFirma: true = generar y exigir firma del cliente; false = generar sin firma */
+  onConfirm: (solicitarFirma: boolean) => void | Promise<void>;
   onEdit: () => void;
   studioSlug: string;
   promiseId: string;
@@ -109,10 +110,10 @@ export function ContractPreviewForPromiseModal({
     return customContent || template.content;
   }, [customContent, template.content, eventData?.cotizacionData, eventData?.condicionesData]);
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (solicitarFirma: boolean) => {
     setConfirming(true);
     try {
-      await Promise.resolve(onConfirm());
+      await Promise.resolve(onConfirm(solicitarFirma));
     } finally {
       setConfirming(false);
     }
@@ -133,11 +134,8 @@ export function ContractPreviewForPromiseModal({
           : "Revisa el contrato antes de confirmar"
       }
       maxWidth="4xl"
-      onSave={isReadOnly ? undefined : handleConfirm}
+      onSave={undefined}
       onCancel={onClose}
-      saveLabel={isReadOnly ? undefined : (confirming ? "Confirmando plantilla" : "Confirmar plantilla")}
-      isLoading={confirming}
-      saveDisabled={!isReadOnly && (loading || confirming)}
       cancelLabel={isReadOnly ? "Cerrar" : "Cancelar"}
       cancelAlignRight={isReadOnly}
       closeOnClickOutside={false}
@@ -150,8 +148,31 @@ export function ContractPreviewForPromiseModal({
             onClick={onEdit}
           >
             <Edit2 className="h-4 w-4 mr-2" />
-            Editar para este cliente
+            Editar plantilla para este cliente
           </ZenButton>
+        ) : undefined
+      }
+      footerRightContent={
+        !isReadOnly ? (
+          <>
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={() => handleConfirm(false)}
+              disabled={loading || confirming}
+            >
+              Generar sin solicitar firma
+            </ZenButton>
+            <ZenButton
+              variant="primary"
+              size="sm"
+              onClick={() => handleConfirm(true)}
+              loading={confirming}
+              disabled={loading || confirming}
+            >
+              {confirming ? 'Generando…' : 'Generar y solicitar firma'}
+            </ZenButton>
+          </>
         ) : undefined
       }
     >

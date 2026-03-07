@@ -189,23 +189,6 @@ export function useCotizacionesRealtime({
             camposCriticos.forEach(campo => {
               if (oldRecord[campo] !== newRecord[campo]) {
                 camposCambiados.push(campo);
-                
-                // 🎨 Logs compactos de auditoría
-                const oldVal = oldRecord[campo];
-                const newVal = newRecord[campo];
-                
-                if (campo === 'contrato_definido') {
-                  console.log(`%c[Realtime] 📥 Incluir Contrato: ${oldVal} → ${newVal}`, 'color: #3b82f6; font-weight: bold;');
-                } else if (campo === 'firma_requerida') {
-                  console.log(`%c[Realtime] 📥 Firma Requerida: ${oldVal} → ${newVal}`, 'color: #f97316; font-weight: bold;');
-                } else if (campo === 'pago_confirmado_estudio') {
-                  console.log(`%c[Realtime] 📥 Pago Confirmado: ${oldVal} → ${newVal}`, 'color: #10b981; font-weight: bold;');
-                } else if (campo === 'contract_content' || campo === 'contract_template_id') {
-                  const status = campo === 'contract_content' 
-                    ? (newVal ? 'Generado' : 'Eliminado')
-                    : `Template: ${newVal || 'null'}`;
-                  console.log(`%c[Realtime] 📥 Contrato: ${status}`, 'color: #8b5cf6; font-weight: bold;');
-                }
               }
             });
             
@@ -468,9 +451,7 @@ export function useCotizacionesRealtime({
           .on('broadcast', { event: 'DELETE' }, handleDelete);
 
         await subscribeToChannel(channel, (status, err) => {
-          if (status === 'SUBSCRIBED') {
-            console.log(`%c[Realtime] ✓ Conectado a studio:${studioSlug}:cotizaciones`, 'color: #10b981; font-weight: bold;');
-          }
+          // Suscripción silenciosa
         });
 
         channelRef.current = channel;

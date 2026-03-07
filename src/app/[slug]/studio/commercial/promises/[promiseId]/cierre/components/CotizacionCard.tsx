@@ -123,12 +123,9 @@ function CotizacionCardInner({
 
   const anticipoOverride = pagoData?.pago_monto != null ? Number(pagoData.pago_monto) : null;
   const anticipo = anticipoOverride ?? anticipoFromCondition;
-  /** Diferido esperado (Total − Anticipo pactado). Usado por ResumenPago. */
-  const diferido = Math.max(0, totalFinalCierre - anticipo);
-  /** Monto realmente recibido: suma de studio_pagos (paid/completed/succeeded) para esta cotización. */
-  const montoRecibidoReal = pagoData?.pagos_confirmados_sum ?? 0;
-  /** Pendiente = Total a pagar − Pagos confirmados (nunca negativo). */
-  const pendienteReal = Math.max(0, totalFinalCierre - montoRecibidoReal);
+  /** Resumen de Cierre: inmutabilidad — siempre muestra el término comercial (Anticipo 10% = $3,600). No contaminar con pago registrado. */
+  const anticipoResumen = anticipoFromCondition;
+  const diferidoResumen = Math.max(0, totalFinalCierre - anticipoResumen);
   const anticipoModificado = anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01;
   /** Tipo y % para ResumenPago: prioridad registro cierre (advance_type_override) > condiciones. */
   const { advanceTypeDisplay, anticipoPorcentajeDisplay } = useMemo(() => {
@@ -152,8 +149,6 @@ function CotizacionCardInner({
     }
     return { advanceTypeDisplay: 'fixed_amount' as const, anticipoPorcentajeDisplay: null as number | null };
   }, [anticipoOverride, advanceType, anticipoPorcentaje, condicion?.advance_type, condicion?.advance_percentage, totalFinalCierre, pagoData?.advance_type_override, pagoData?.advance_percentage_override]);
-  /** Verde solo si lo recibido cumple o supera el anticipo pactado; si no, ámbar para indicar compromiso no cumplido. */
-  const recibidoCumpleAnticipo = anticipo <= 0 || montoRecibidoReal >= anticipo;
 
   const [showEditMetadataModal, setShowEditMetadataModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -381,8 +376,8 @@ function CotizacionCardInner({
                     precioConDescuento={totalFinalCierre}
                     advanceType={advanceTypeDisplay}
                     anticipoPorcentaje={anticipoPorcentajeDisplay}
-                    anticipo={anticipo}
-                    diferido={diferido}
+                    anticipo={anticipoResumen}
+                    diferido={diferidoResumen}
                     precioLista={precioLista}
                     montoCortesias={montoCortesias}
                     cortesiasCount={desgloseCierre.cortesias_count}
@@ -392,7 +387,7 @@ function CotizacionCardInner({
                     descuentoCondicionMonto={descuentoCondicionMonto}
                     ajusteCierre={ajusteCierre}
                     tieneConcesiones
-                    anticipoModificado={anticipoModificado}
+                    anticipoModificado={false}
                     pagoConfirmado={pagoData?.pago_confirmado_estudio ?? pagoData?.pago_registrado ?? false}
                     badgeEnCierre={cotizacion?.status === 'en_cierre'}
                     renderAnticipoActions={
@@ -469,26 +464,6 @@ function CotizacionCardInner({
                     )}
                   </PopoverContent>
                 </Popover>
-                {anticipo > 0 && cotizacion?.status !== 'en_cierre' && (
-                  <>
-                    <SeparadorZen variant="subtle" spacing="md" />
-                    <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Balance del Evento</p>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between text-zinc-300">
-                          <span>Pagos Confirmados</span>
-                          <span className={`font-medium ${recibidoCumpleAnticipo ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {formatearMoneda(montoRecibidoReal)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-zinc-300">
-                          <span>Pendiente (Diferido)</span>
-                          <span className="font-medium text-zinc-200">{formatearMoneda(pendienteReal)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
                 {mostrarAuditoria && (
                   <>
                     <SeparadorZen variant="subtle" spacing="md" />

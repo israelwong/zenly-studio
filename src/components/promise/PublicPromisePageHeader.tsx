@@ -11,6 +11,8 @@ interface PublicPromisePageHeaderProps {
   eventDate: Date | string | null;
   variant?: 'pendientes' | 'negociacion' | 'cierre';
   isContractSigned?: boolean;
+  /** Escenario de cierre (A=Reserva en Trámite, B=Preparando, C=Firma, D=Revisión, E=Formalización Simplificada); define subtítulo y asesoría */
+  cierreScenario?: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   minDaysToHire?: number;
   // Covers multimedia del tipo de evento
   coverImageUrl?: string | null;
@@ -33,6 +35,7 @@ export function PublicPromisePageHeader({
   eventDate,
   variant,
   isContractSigned = false,
+  cierreScenario = null,
   minDaysToHire = 30,
   coverImageUrl,
   coverVideoUrl,
@@ -88,8 +91,8 @@ export function PublicPromisePageHeader({
 
   const formattedRecommendedDate = recommendedDate ? formatDisplayDateLong(recommendedDate) : null;
 
-  // Determinar si hay cover multimedia
-  const hasCover = coverMediaType === 'image' && coverImageUrl || coverMediaType === 'video' && coverVideoUrl;
+  // Determinar si hay cover multimedia (ocultar en variant cierre)
+  const hasCover = variant !== 'cierre' && (coverMediaType === 'image' && coverImageUrl || coverMediaType === 'video' && coverVideoUrl);
 
   // Estilos condicionales: en preview mode (mobile) siempre sin rounded ni margin
   const sectionClasses = isPreviewMode
@@ -158,7 +161,7 @@ export function PublicPromisePageHeader({
 
             {/* Descripción principal - Varía según variant */}
             {variant === 'cierre' ? (
-              // Mensaje para ruta /cierre
+              // Mensaje para ruta /cierre (subtítulo según escenario A–E)
               <>
                 <p className={`text-sm md:text-base text-zinc-300 max-w-2xl mx-auto leading-relaxed ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
                   {isContractSigned ? (
@@ -169,6 +172,41 @@ export function PublicPromisePageHeader({
                         <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
                       )}{' '}
                       ha sido firmado exitosamente.
+                    </>
+                  ) : cierreScenario === 'A' ? (
+                    <>
+                      Estamos procesando los detalles finales de tu reserva para el evento de{' '}
+                      <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                      {dateObj && formattedDate && (
+                        <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                      )}
+                      .
+                    </>
+                  ) : cierreScenario === 'B' ? (
+                    <>
+                      Estamos preparando tu contrato para que lo puedas revisar y firmar.
+                    </>
+                  ) : cierreScenario === 'C' ? (
+                    <>
+                      Revisa y firma tu contrato para completar la reserva del evento de{' '}
+                      <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                      {dateObj && formattedDate && (
+                        <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                      )}
+                      .
+                    </>
+                  ) : cierreScenario === 'D' ? (
+                    <>
+                      Tu contrato está listo para revisión y confirmación de lectura.
+                    </>
+                  ) : cierreScenario === 'E' ? (
+                    <>
+                      Completa tu reserva realizando el anticipo para el evento de{' '}
+                      <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
+                      {dateObj && formattedDate && (
+                        <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+                      )}
+                      .
                     </>
                   ) : (
                     <>
@@ -181,13 +219,12 @@ export function PublicPromisePageHeader({
                     </>
                   )}
                 </p>
-                
-                {/* Mensaje de asesoría - En cierre: urgencia sin fecha específica */}
-                {!isContractSigned && (
+                {/* Asesoría cuando hay acción (C firma, E anticipo); omitir en A, B, D */}
+                {isContractSigned === false && (cierreScenario === 'C' || cierreScenario === 'E') ? (
                   <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
                     Te recomendamos completar la firma y el anticipo <span className="text-white font-medium">lo antes posible</span>. Ten en cuenta que <span className="text-amber-400/90 font-semibold">tu fecha solo estará asegurada al firmar el contrato y realizar el anticipo</span>, y puede ser reservada por otro cliente sin previo aviso.
                   </p>
-                )}
+                ) : null}
               </>
             ) : (
               // Mensaje para rutas /pendientes y /negociacion

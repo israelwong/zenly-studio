@@ -49,7 +49,7 @@ export const PublicContractCard = memo(function PublicContractCard({
   const firmaRequerida = contract?.firma_requerida !== false;
 
   return (
-    <ZenCard>
+    <ZenCard className="pb-6">
       <ZenCardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -63,7 +63,9 @@ export const PublicContractCard = memo(function PublicContractCard({
               <div>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   {isContractSigned
-                    ? 'Contrato firmado y autorizado'
+                    ? firmaRequerida
+                      ? 'Contrato firmado y autorizado'
+                      : 'Lectura confirmada y autorizada'
                     : hasContract || hasContractTemplate
                       ? firmaRequerida 
                         ? 'Listo para revisión y firma'
@@ -86,11 +88,11 @@ export const PublicContractCard = memo(function PublicContractCard({
           ) : isContractSigned ? (
             <ZenBadge variant="success" className="text-xs hidden md:flex">
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              Firmado
+              {firmaRequerida ? 'Firmado' : 'Leído'}
             </ZenBadge>
           ) : (hasContract || hasContractTemplate) ? (
             <ZenBadge variant="info" className="text-xs hidden md:flex">
-              Pendiente de firma
+              {firmaRequerida ? 'Pendiente de firma' : 'Pendiente de revisión'}
             </ZenBadge>
           ) : (
             <ZenBadge variant="warning" className="text-xs hidden md:flex">
@@ -120,7 +122,9 @@ export const PublicContractCard = memo(function PublicContractCard({
               <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
                 <p className="text-sm text-zinc-300 leading-relaxed">
                   {isContractSigned
-                    ? 'Tu contrato ha sido firmado correctamente..'
+                    ? firmaRequerida
+                      ? 'Tu contrato ha sido firmado correctamente.'
+                      : 'Has confirmado la lectura del contrato. Estamos esperando la autorización final del estudio para confirmar tu evento.'
                     : 'Revisa detalladamente tu contrato y confirma tu aceptación firmándolo digitalmente para continuar con el proceso.'}
                 </p>
                 {contract?.version && (
@@ -140,7 +144,7 @@ export const PublicContractCard = memo(function PublicContractCard({
                       className="w-full"
                       disabled={isRegeneratingContract}
                     >
-                      Ver contrato firmado
+                      {firmaRequerida ? 'Ver contrato firmado' : 'Ver contrato'}
                     </ZenButton>
                   )}
                   {eventoAuthorized ? (
@@ -153,13 +157,13 @@ export const PublicContractCard = memo(function PublicContractCard({
                       Ir a mi Portal de Cliente
                       <ChevronRight className="w-4 h-4 ml-2" />
                     </ZenButton>
-                  ) : (
+                  ) : firmaRequerida ? (
                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
                       <p className="text-sm text-amber-200/90">
                         Contrato firmado con éxito. Tu evento se activará en cuanto el estudio confirme tu depósito.
                       </p>
                     </div>
-                  )}
+                  ) : null}
                 </>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3">

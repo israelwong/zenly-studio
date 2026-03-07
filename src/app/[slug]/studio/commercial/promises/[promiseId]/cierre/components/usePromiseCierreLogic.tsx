@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
-import { cancelarCierre, autorizarCotizacion, updateContratoDefinido, updateFirmaRequerida, updatePagoConfirmado } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { cancelarCierre, cancelarCierreConFondos, getPagosConfirmadosParaCancelacion, autorizarCotizacion, updateContratoDefinido, updateFirmaRequerida, updatePagoConfirmado } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract, actualizarFirmaRequeridaCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
@@ -36,6 +36,7 @@ interface RegistroCierreLoadData {
     change_type: string;
     created_at: Date;
   } | null;
+  habilitar_pago?: boolean;
   pago_confirmado_estudio?: boolean;
   pago_registrado?: boolean;
   pago_concepto?: string | null;
@@ -102,6 +103,11 @@ export function usePromiseCierreLogic({
 }: UsePromiseCierreLogicProps) {
   const router = useRouter();
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCancelFondosModal, setShowCancelFondosModal] = useState(false);
+  const [pagosConfirmadosTotal, setPagosConfirmadosTotal] = useState(0);
+  const [cancelFondosMotivo, setCancelFondosMotivo] = useState('');
+  const [cancelFondosSolicitante, setCancelFondosSolicitante] = useState<'estudio' | 'cliente'>('estudio');
+  const [cancelFondosDestino, setCancelFondosDestino] = useState<'retain' | 'refund'>('retain');
   const [isCancelling, setIsCancelling] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [showConfirmAutorizarModal, setShowConfirmAutorizarModal] = useState(false);
@@ -162,6 +168,7 @@ export function usePromiseCierreLogic({
   } | null>(null);
 
   const [pagoData, setPagoData] = useState<{
+    habilitar_pago?: boolean;
     pago_confirmado_estudio?: boolean;
     pago_registrado?: boolean;
     pago_concepto?: string | null;
@@ -251,7 +258,9 @@ export function usePromiseCierreLogic({
           firma_requerida: data.firma_requerida !== false,
           ultima_version_info: data.ultima_version_info,
         });
+        setContratoOmitido(data.contrato_definido === false);
         setPagoData({
+          habilitar_pago: data.habilitar_pago !== false,
           pago_confirmado_estudio: data.pago_confirmado_estudio,
           pago_registrado: data.pago_registrado,
           pago_concepto: data.pago_concepto,
@@ -273,6 +282,7 @@ export function usePromiseCierreLogic({
         setAuditoriaRentabilidad(null);
         setCondicionesData(null);
         setContractData(null);
+        setContratoOmitido(false);
         setPagoData(null);
         setNegociacionData({ negociacion_precio_original: null, negociacion_precio_personalizado: null });
         setDesgloseCierre(null);
@@ -469,7 +479,7 @@ export function usePromiseCierreLogic({
     }, 150);
   }, []);
 
-  const handlePreviewConfirm = useCallback(async () => {
+  const handlePreviewConfirm = useCallback(async (solicitarFirma: boolean) => {
     if (!selectedTemplate) return;
 
     const result = await actualizarContratoCierre(
@@ -481,9 +491,16 @@ export function usePromiseCierreLogic({
     );
 
     if (result.success) {
+      const firmaResult = await actualizarFirmaRequeridaCierre(studioSlug, cotizacion.id, solicitarFirma);
+      if (!firmaResult.success) {
+        toast.error(firmaResult.error ?? 'Error al guardar opción de firma');
+      }
       toast.success('Plantilla de contrato seleccionada');
       setShowContratoPreview(false);
       setSelectedTemplate(null);
+      if (firmaResult.success) {
+        setContractData((prev) => (prev ? { ...prev, firma_requerida: solicitarFirma } : prev));
+      }
       await handleContratoSuccess();
     } else {
       toast.error(result.error || 'Error al guardar plantilla');
@@ -603,7 +620,52 @@ export function usePromiseCierreLogic({
     setShowConfirmAutorizarModal(true);
   }, []);
 
-  const handleOpenCancelModal = useCallback(() => setShowCancelModal(true), []);
+  const handleOpenCancelModal = useCallback(async () => {
+    const res = await getPagosConfirmadosParaCancelacion(studioSlug, cotizacion.id);
+    if (res.success && res.hasPagosConfirmados) {
+      setPagosConfirmadosTotal(res.totalAmount);
+      setCancelFondosMotivo('');
+      setCancelFondosSolicitante('estudio');
+      setCancelFondosDestino('retain');
+      setShowCancelFondosModal(true);
+    } else {
+      setShowCancelModal(true);
+    }
+  }, [studioSlug, cotizacion.id]);
+
+  const handleCancelarCierreConFondos = useCallback(async () => {
+    const motivo = (cancelFondosMotivo ?? '').trim();
+    if (!motivo) {
+      toast.error('Indica el motivo de la cancelación');
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const result = await cancelarCierreConFondos(studioSlug, cotizacion.id, {
+        motivo,
+        solicitante: cancelFondosSolicitante,
+        destinoFondos: cancelFondosDestino,
+      }, true);
+      if (result.success) {
+        toast.success('Cierre cancelado. Fondos gestionados según lo indicado.');
+        setShowCancelFondosModal(false);
+        onCierreCancelado?.(cotizacion.id);
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        router.refresh();
+        startTransition(() => {
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
+        });
+      } else {
+        toast.error(result.error || 'Error al cancelar cierre');
+      }
+    } catch (error) {
+      console.error('[handleCancelarCierreConFondos] Error:', error);
+      toast.error('Error al cancelar cierre');
+    } finally {
+      setIsCancelling(false);
+    }
+  }, [studioSlug, cotizacion.id, promiseId, cancelFondosMotivo, cancelFondosSolicitante, cancelFondosDestino, onCierreCancelado, router]);
+
   const handleEditarDatosClick = useCallback(() => setShowEditPromiseModal(true), []);
 
   const [authorizationProgress, setAuthorizationProgress] = useState(0);
@@ -720,6 +782,7 @@ export function usePromiseCierreLogic({
       const result = await updateContratoDefinido(studioSlug, cotizacion.id, false);
       if (result.success) {
         setContratoOmitido(true);
+        setContractData((prev) => (prev ? { ...prev, contrato_definido: false, firma_requerida: false } : prev));
         toast.success('Contrato omitido');
       } else {
         toast.error(result.error || 'Error al actualizar');
@@ -737,6 +800,7 @@ export function usePromiseCierreLogic({
       const result = await updateContratoDefinido(studioSlug, cotizacion.id, true);
       if (result.success) {
         setContratoOmitido(false);
+        setContractData((prev) => (prev ? { ...prev, contrato_definido: true } : prev));
         toast.success('Contrato incluido');
       } else {
         toast.error(result.error || 'Error al actualizar');
@@ -788,6 +852,16 @@ export function usePromiseCierreLogic({
     // Estados
     showCancelModal,
     setShowCancelModal,
+    showCancelFondosModal,
+    setShowCancelFondosModal,
+    pagosConfirmadosTotal,
+    cancelFondosMotivo,
+    setCancelFondosMotivo,
+    cancelFondosSolicitante,
+    setCancelFondosSolicitante,
+    cancelFondosDestino,
+    setCancelFondosDestino,
+    handleCancelarCierreConFondos,
     isCancelling,
     setIsCancelling,
     isAuthorizing,

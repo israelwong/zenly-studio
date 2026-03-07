@@ -11,7 +11,6 @@ import { usePromiseCierreLogic } from './usePromiseCierreLogic';
 import { CotizacionCard } from './CotizacionCard';
 import { CondicionesComercialeSelectorSimpleModal } from '../../components/condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
 import { ResumenCotizacion } from '@/components/shared/cotizaciones';
-import { ZenDialog } from '@/components/ui/zen';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { Loader2 } from 'lucide-react';
 import { ContratoDigitalCard } from './ContratoDigitalCard';
@@ -20,7 +19,8 @@ import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplat
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { CierreActionButtons } from './CierreActionButtons';
-import { ZenConfirmModal } from '@/components/ui/zen';
+import { ZenConfirmModal, ZenDialog, ZenTextarea, ZenButton } from '@/components/ui/zen';
+import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
 import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, ActivacionOperativaCardSkeleton, CierreActionButtonsSkeleton } from './PromiseCierreSkeleton';
 import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
@@ -154,11 +154,12 @@ interface CierreColumn3Props {
   onPagoConfirmadoOptimistic?: (checked: boolean) => void;
   pagoCardKey?: string;
   pagoStagingValid?: boolean;
-  onPagoStagingChange?: (staging: unknown[], isValid: boolean) => void;
+  onPagoStagingChange?: (staging: unknown[], isValid: boolean, isDirty?: boolean) => void;
   firmaRequerida?: boolean;
   onFirmaRequeridaChange?: (value: boolean) => void;
   /** true cuando se exige confirmación de pago para autorizar (firma requerida + contrato firmado) */
   requiereConfirmacionPago?: boolean;
+  contactId?: string | null;
 }
 
 const CierreColumn3 = memo(function CierreColumn3({
@@ -200,6 +201,7 @@ const CierreColumn3 = memo(function CierreColumn3({
   firmaRequerida = true,
   onFirmaRequeridaChange,
   requiereConfirmacionPago = false,
+  contactId = null,
 }: CierreColumn3Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -235,8 +237,16 @@ const CierreColumn3 = memo(function CierreColumn3({
             key={pagoCardKey}
             studioSlug={studioSlug}
             cotizacionId={cotizacion.id}
+            promiseId={promiseId}
+            contactId={contactId}
             anticipoMonto={anticipoMonto}
             pagoData={pagoData ?? null}
+            contratoData={{
+              firma_requerida: contractData?.firma_requerida,
+              contract_signed_at: contractData?.contract_signed_at,
+              hasContent: !!(contractData?.contrato_definido && (contractData?.contract_template_id || (contractData?.contract_content != null && String(contractData.contract_content).trim() !== ''))),
+            }}
+            prospectName={promiseData?.name}
             onSuccess={onPagoConfirmSuccess}
             metodosPago={metodosPago}
             onTransitionPendingChange={onPagoTransitionPendingChange}
@@ -257,6 +267,12 @@ const CierreColumn3 = memo(function CierreColumn3({
           requiereConfirmacionPago={requiereConfirmacionPago}
           pagoUpdatePending={pagoUpdatePending}
           pagoStagingValid={pagoStagingValid}
+          contratoData={{
+            firma_requerida: contractData?.firma_requerida,
+            contract_signed_at: contractData?.contract_signed_at,
+            contratoIncluido: !contratoOmitido,
+            contratoGenerado: !!(contractData?.contrato_definido && (contractData?.contract_template_id || contractData?.contract_content)),
+          }}
         />
       )}
     </div>
@@ -425,8 +441,8 @@ export function PromiseCierreClient({
     const anticipoFromCondition = isFixed && cond.advance_amount != null
       ? Number(cond.advance_amount)
       : (cond.advance_percentage != null ? Math.round(precioFinalCierre * (Number(cond.advance_percentage) / 100)) : 0);
-    const anticipoOverride = cierreLogic.pagoData?.pago_monto != null ? Number(cierreLogic.pagoData.pago_monto) : null;
-    const anticipo = anticipoOverride ?? anticipoFromCondition;
+    /** Resumen: inmutabilidad — anticipo comercial fijo; no contaminar con pago registrado. */
+    const anticipo = anticipoFromCondition;
     const diferido = Math.max(0, precioFinalCierre - anticipo);
     return {
       precioLista,
@@ -442,9 +458,9 @@ export function PromiseCierreClient({
       anticipoPorcentaje: cond.advance_percentage ?? null,
       anticipo,
       diferido,
-      anticipoModificado: anticipoOverride != null && Math.abs(anticipoOverride - anticipoFromCondition) >= 0.01,
+      anticipoModificado: false,
     };
-  }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.pagoData?.pago_monto, cierreLogic.negociacionData?.negociacion_precio_personalizado, cotizacionEnCierre?.price]);
+  }, [cierreLogic.desgloseCierre, cierreLogic.condicionesData?.condiciones_comerciales, cierreLogic.negociacionData?.negociacion_precio_personalizado, cotizacionEnCierre?.price]);
 
   // Early returns solo después de todos los hooks (regla de React).
   if (!contextPromiseData) {
@@ -586,10 +602,10 @@ export function PromiseCierreClient({
             onPagoTransitionPendingChange={setPagoUpdatePending}
             pagoConfirmadoLocal={pagoConfirmadoLocal}
             onPagoConfirmadoOptimistic={setPagoConfirmadoLocal}
-            pagoCardKey={cotizacionEnCierre ? `pago-${cotizacionEnCierre.id}-${cierreLogic.pagoData?.pago_confirmado_estudio}` : undefined}
+            pagoCardKey={cotizacionEnCierre ? `pago-${cotizacionEnCierre.id}` : undefined}
             pagoStagingValid={pagoStagingValid}
-            onPagoStagingChange={(staging, isValid) => {
-              setPagoStagingValid(isValid);
+            onPagoStagingChange={(staging, isValid, isDirty) => {
+              setPagoStagingValid(isValid && (isDirty !== true));
               setPagoStagingData(staging);
             }}
             firmaRequerida={cierreLogic.contractData?.firma_requerida !== false}
@@ -598,6 +614,7 @@ export function PromiseCierreClient({
               (cierreLogic.contractData?.firma_requerida !== false) &&
               !!cierreLogic.contractData?.contract_signed_at
             }
+            contactId={contextPromiseData?.contact_id ?? null}
           />
         </div>
       </div>
@@ -706,7 +723,7 @@ export function PromiseCierreClient({
                 condicionesComerciales={(cierreLogic.condicionesData?.condiciones_comerciales ?? null) as React.ComponentProps<typeof ResumenCotizacion>['condicionesComerciales']}
                 negociacionPrecioOriginal={cierreLogic.negociacionData.negociacion_precio_original}
                 negociacionPrecioPersonalizado={cierreLogic.negociacionData.negociacion_precio_personalizado}
-                anticipoOverride={cierreLogic.pagoData?.pago_monto != null ? Number(cierreLogic.pagoData.pago_monto) : null}
+                anticipoOverride={null}
                 resumenCierreOverride={resumenCierreOverride}
               />
             ) : (
@@ -758,22 +775,18 @@ export function PromiseCierreClient({
             />
           )}
 
-          {/* Modal Confirmar Cancelar Cierre */}
+          {/* Modal Confirmar Cancelar Cierre (sin pagos confirmados) */}
           <ZenConfirmModal
             isOpen={cierreLogic.showCancelModal}
             onClose={() => {
               cierreLogic.setShowCancelModal(false);
-              if (cierreLogic.isCancelling) {
-                cierreLogic.setIsCancelling(false);
-              }
+              if (cierreLogic.isCancelling) cierreLogic.setIsCancelling(false);
             }}
             onConfirm={cierreLogic.handleCancelarCierre}
             title="¿Cancelar proceso de cierre?"
             description={
               <div className="space-y-3">
-                <p className="text-sm text-zinc-300">
-                  Al cancelar el proceso de cierre:
-                </p>
+                <p className="text-sm text-zinc-300">Al cancelar el proceso de cierre:</p>
                 <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
                   <li>La cotización regresará a estado <strong className="text-zinc-300">Pendiente</strong></li>
                   <li>Se eliminarán todas las definiciones guardadas (condiciones, contrato, pago)</li>
@@ -781,10 +794,97 @@ export function PromiseCierreClient({
               </div>
             }
             confirmText={cierreLogic.isCancelling ? 'Cancelando...' : 'Sí, cancelar cierre'}
-            cancelText="No, mantener cierre"
+            cancelText="No cancelar"
             variant="destructive"
             loading={cierreLogic.isCancelling}
           />
+
+          {/* Modal Gestión de Fondos por Cancelación (cuando hay pagos paid/completed) */}
+          <ZenDialog
+            isOpen={cierreLogic.showCancelFondosModal}
+            onClose={() => !cierreLogic.isCancelling && cierreLogic.setShowCancelFondosModal(false)}
+            title="Gestión de fondos por cancelación"
+            description={
+              <p className="text-sm text-zinc-400">
+                Hay {formatearMoneda(cierreLogic.pagosConfirmadosTotal)} en pagos confirmados. Indica motivo, quién solicita y el destino del dinero.
+              </p>
+            }
+            saveLabel={cierreLogic.isCancelling ? 'Cancelando...' : 'Confirmar y cancelar cierre'}
+            onSave={() => void cierreLogic.handleCancelarCierreConFondos()}
+            onCancel={() => cierreLogic.setShowCancelFondosModal(false)}
+            cancelLabel="Volver"
+            isLoading={cierreLogic.isCancelling}
+            saveDisabled={!cierreLogic.cancelFondosMotivo?.trim()}
+            saveVariant="destructive"
+            maxWidth="md"
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1">Motivo de la cancelación *</label>
+                <ZenTextarea
+                  value={cierreLogic.cancelFondosMotivo}
+                  onChange={(e) => cierreLogic.setCancelFondosMotivo(e.target.value)}
+                  placeholder="Ej. Cliente solicitó cambio de fecha, evento pospuesto..."
+                  rows={3}
+                  className="bg-zinc-900 border-zinc-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">¿Quién solicita la cancelación? *</label>
+                <div className="flex gap-3 w-full">
+                  <ZenButton
+                    type="button"
+                    variant={cierreLogic.cancelFondosSolicitante === 'estudio' ? 'primary' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => cierreLogic.setCancelFondosSolicitante('estudio')}
+                  >
+                    Estudio
+                  </ZenButton>
+                  <ZenButton
+                    type="button"
+                    variant={cierreLogic.cancelFondosSolicitante === 'cliente' ? 'primary' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => cierreLogic.setCancelFondosSolicitante('cliente')}
+                  >
+                    Cliente
+                  </ZenButton>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Destino del dinero</label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 cursor-pointer hover:bg-zinc-800/80">
+                    <input
+                      type="radio"
+                      name="destinoFondos"
+                      checked={cierreLogic.cancelFondosDestino === 'retain'}
+                      onChange={() => cierreLogic.setCancelFondosDestino('retain')}
+                      className="mt-1 text-emerald-500"
+                    />
+                    <div>
+                      <span className="font-medium text-zinc-200">Retener anticipo (No reembolsable)</span>
+                      <p className="text-xs text-zinc-500 mt-0.5">Los pagos quedarán como retenidos por cancelación. No cuentan en balance de eventos activos; siguen en reportes de ingresos.</p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 cursor-pointer hover:bg-zinc-800/80">
+                    <input
+                      type="radio"
+                      name="destinoFondos"
+                      checked={cierreLogic.cancelFondosDestino === 'refund'}
+                      onChange={() => cierreLogic.setCancelFondosDestino('refund')}
+                      className="mt-1 text-emerald-500"
+                    />
+                    <div>
+                      <span className="font-medium text-zinc-200">Marcar para devolución</span>
+                      <p className="text-xs text-zinc-500 mt-0.5">Los pagos pasan a pendientes de reembolso. El cliente podrá ver el estado en su vista.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </ZenDialog>
 
           {/* Modal Confirmar Autorizar: se muestra al hacer click en "Autorizar y Crear Evento" */}
           <ZenConfirmModal

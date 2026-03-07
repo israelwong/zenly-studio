@@ -2410,6 +2410,11 @@ model studio_cotizaciones {
   contract_signed_at_snapshot       DateTime?
   contract_signed_ip_snapshot       String?
 
+  // Cancelación (al cancelar cierre con fondos: motivo, solicitante, fecha)
+  cancel_reason                    String?  @db.Text
+  cancel_requested_by              String?  // 'estudio' | 'cliente'
+  cancelled_at                     DateTime?
+
   cotizacion_costos                      studio_cotizacion_costos[]
   cotizacion_items                       studio_cotizacion_items[]
   cotizacion_visitas                     studio_cotizacion_visitas[]
@@ -2458,6 +2463,8 @@ model studio_cotizaciones_cierre {
   firma_requerida                   Boolean   @default(true)
   /** Fase 29.9.5: true si el check-in (validación datos) fue completado por cliente o estudio */
   checkin_completed                 Boolean   @default(false)
+  /** Si true, el estudio requiere anticipo del cliente (mostrar paso de pago); si false, no mostrar pago en vista pública */
+  habilitar_pago                   Boolean   @default(true)
   pago_confirmado_estudio           Boolean   @default(false)
   pago_registrado                   Boolean   @default(false)
   pago_concepto                     String?

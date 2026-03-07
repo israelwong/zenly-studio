@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, startTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
@@ -62,6 +62,8 @@ export function PromiseDetailHeader({
     onAutomateClick,
 }: PromiseDetailHeaderProps) {
     const router = useRouter();
+    const pathname = usePathname();
+    const isCierreRoute = pathname?.includes('/cierre') ?? false;
     const [mounted, setMounted] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -160,8 +162,8 @@ export function PromiseDetailHeader({
 
                         return null;
                     })()}
-                    {/* Dropdown menu: solo si no es modo foco */}
-                    {!focusMode && (() => {
+                    {/* Dropdown menu: no mostrar en ruta cierre; solo si no es modo foco */}
+                    {!focusMode && !isCierreRoute && (() => {
                         if (loading || !promiseData) {
                             return null;
                         }

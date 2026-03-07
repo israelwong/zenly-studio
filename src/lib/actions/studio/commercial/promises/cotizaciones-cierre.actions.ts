@@ -107,10 +107,10 @@ export async function obtenerRegistroCierre(
       prisma.studio_pagos.aggregate({
         where: {
           cotizacion_id: cotizacionId,
-          status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
-        },
-        _sum: { amount: true },
-      }),
+status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
+    },
+    _sum: { amount: true },
+  }),
     ]);
     const pagos_confirmados_sum = pagosAgg._sum?.amount != null ? Number(pagosAgg._sum.amount) : 0;
 
@@ -234,6 +234,7 @@ export async function obtenerRegistroCierre(
         contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
         firma_requerida: registro.firma_requerida ?? true,
+        habilitar_pago: registro.habilitar_pago,
         pago_confirmado_estudio: registro.pago_confirmado_estudio,
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
@@ -425,6 +426,7 @@ export async function obtenerDatosContratoCierre(
     contract_content?: string | null;
     contract_signed_at?: Date | null;
     contrato_definido?: boolean;
+    firma_requerida?: boolean;
     ultima_version_info?: {
       version: number;
       change_reason: string | null;
@@ -463,6 +465,7 @@ export async function obtenerDatosContratoCierre(
         contract_content: true,
         contract_signed_at: true,
         contrato_definido: true,
+        firma_requerida: true,
       },
     });
 
@@ -490,6 +493,7 @@ export async function obtenerDatosContratoCierre(
         contract_content: registro.contract_content,
         contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
+        firma_requerida: registro.firma_requerida ?? true,
         ultima_version_info: ultimaVersion ? {
           version: ultimaVersion.version,
           change_reason: ultimaVersion.change_reason,
@@ -1043,7 +1047,7 @@ export async function actualizarContratoCierre(
               promise_id: finalPromiseId,
               log_type: 'contract_cancelled_after_signature',
               content: motivoCancelacion || 'Contrato cancelado después de firma',
-              meta: motivoCancelacion ? { motivo_cancelacion: motivoCancelacion } : undefined,
+              metadata: motivoCancelacion ? { motivo_cancelacion: motivoCancelacion } : undefined,
             },
           });
         }
@@ -1503,6 +1507,316 @@ export async function actualizarPagoCierre(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar pago',
+    };
+  }
+}
+
+/** Items para persistir en studio_pagos (status completed, concept Anticipo / Abono adicional) */
+export interface RegistrarPagoCierreItem {
+  monto: number;
+  fecha: Date;
+  metodo_id: string | null;
+  concepto: string;
+}
+
+/** Pago persistido en studio_pagos (para comparación con staging) */
+export interface PagoPersistidoItem {
+  id: string;
+  amount: number;
+  concept: string;
+  payment_date: Date | null;
+  metodo_pago_id: string | null;
+}
+
+/**
+ * Obtiene los pagos de cierre ya registrados en studio_pagos para una cotización.
+ * Orden: Anticipo primero, luego Abono adicional (por id para estabilidad).
+ */
+export async function getPagosCierreByCotizacion(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; data?: PagoPersistidoItem[]; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    const rows = await prisma.studio_pagos.findMany({
+      where: {
+        cotizacion_id: cotizacionId,
+        status: { in: ['completed', 'paid', 'succeeded', 'CONFIRMED'] },
+      },
+      select: {
+        id: true,
+        amount: true,
+        concept: true,
+        payment_date: true,
+        metodo_pago_id: true,
+      },
+      orderBy: [{ concept: 'asc' }, { id: 'asc' }],
+    });
+    // Anticipo primero (concept puede be "Anticipo" or legacy), luego el resto
+    const sorted = [...rows].sort((a, b) => {
+      const isAnticipoA = (a.concept ?? '').toLowerCase().includes('anticipo');
+      const isAnticipoB = (b.concept ?? '').toLowerCase().includes('anticipo');
+      if (isAnticipoA && !isAnticipoB) return -1;
+      if (!isAnticipoA && isAnticipoB) return 1;
+      return 0;
+    });
+    const data: PagoPersistidoItem[] = sorted.map((r) => ({
+      id: r.id,
+      amount: Number(r.amount),
+      concept: r.concept ?? '',
+      payment_date: r.payment_date,
+      metodo_pago_id: r.metodo_pago_id,
+    }));
+    return { success: true, data };
+  } catch (error) {
+    console.error('[getPagosCierreByCotizacion] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener pagos',
+    };
+  }
+}
+
+/**
+ * Sincroniza studio_pagos con el staging: actualiza por índice, elimina sobrantes, crea nuevos.
+ * Requiere promise_id y contact_id. Actualiza también el registro de cierre (pago_monto, etc).
+ */
+export async function sincronizarPagosCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  payload: {
+    promise_id: string;
+    contact_id: string;
+    items: RegistrarPagoCierreItem[];
+    persistedIds: string[];
+  }
+): Promise<CierreResponse> {
+  try {
+    const { promise_id, contact_id, items, persistedIds } = payload;
+    if (!contact_id?.trim()) {
+      return { success: false, error: 'contact_id es obligatorio' };
+    }
+    if (!items?.length) {
+      return { success: false, error: 'Debe haber al menos un item de pago' };
+    }
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    const totalMonto = items.reduce((s, i) => s + i.monto, 0);
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const concept = i === 0 ? 'Anticipo' : 'Abono adicional';
+      let metodoPagoNombre = 'Manual';
+      if (item.metodo_id) {
+        const metodo = await prisma.studio_metodos_pago.findUnique({
+          where: { id: item.metodo_id },
+          select: { payment_method_name: true },
+        });
+        if (metodo) metodoPagoNombre = metodo.payment_method_name;
+      }
+      const paymentDate = item.fecha ? new Date(item.fecha) : new Date();
+
+      if (i < persistedIds.length) {
+        await prisma.studio_pagos.update({
+          where: { id: persistedIds[i] },
+          data: {
+            amount: item.monto,
+            concept: concept,
+            payment_date: paymentDate,
+            metodo_pago_id: item.metodo_id,
+            metodo_pago: metodoPagoNombre,
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        await prisma.studio_pagos.create({
+          data: {
+            cotizacion_id: cotizacionId,
+            promise_id,
+            contact_id,
+            amount: item.monto,
+            concept: concept,
+            payment_date: paymentDate,
+            metodo_pago_id: item.metodo_id,
+            metodo_pago: metodoPagoNombre,
+            status: 'completed',
+            transaction_type: 'ingreso',
+            transaction_category: 'abono',
+          },
+        });
+      }
+    }
+
+    const toDelete = persistedIds.slice(items.length);
+    if (toDelete.length > 0) {
+      await prisma.studio_pagos.updateMany({
+        where: { id: { in: toDelete } },
+        data: { status: 'canceled', updated_at: new Date() },
+      });
+    }
+
+    const primerItem = items[0];
+    await actualizarPagoCierre(studioSlug, cotizacionId, {
+      concepto: 'Anticipo',
+      monto: totalMonto,
+      fecha: primerItem?.fecha ?? new Date(),
+      metodo_id: primerItem?.metodo_id ?? null,
+    });
+
+    return { success: true, data: { id: '', cotizacion_id: cotizacionId } };
+  } catch (error) {
+    console.error('[sincronizarPagosCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al sincronizar pagos',
+    };
+  }
+}
+
+/**
+ * Deshabilita la confirmación de pago: cancela todos los studio_pagos asociados a la cotización/promesa
+ * y limpia el registro de cierre (pago_confirmado_estudio = false). Evita pagos huérfanos.
+ */
+export async function deshabilitarConfirmacionPagoCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  promiseId: string | null
+): Promise<CierreResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true, promise_id: true },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    const promiseIdToUse = promiseId ?? cotizacion.promise_id;
+    await prisma.studio_pagos.updateMany({
+      where: {
+        OR: [
+          { cotizacion_id: cotizacionId },
+          ...(promiseIdToUse ? [{ promise_id: promiseIdToUse }] : []),
+        ],
+        status: { in: ['completed', 'CONFIRMED', 'paid', 'succeeded'] },
+      },
+      data: { status: 'canceled', updated_at: new Date() },
+    });
+
+    await actualizarPagoCierre(studioSlug, cotizacionId, {
+      concepto: null,
+      monto: null,
+      fecha: null,
+      metodo_id: null,
+    });
+
+    return { success: true, data: { id: '', cotizacion_id: cotizacionId } };
+  } catch (error) {
+    console.error('[deshabilitarConfirmacionPagoCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al deshabilitar confirmación',
+    };
+  }
+}
+
+/**
+ * Crea registros en studio_pagos al confirmar anticipo desde Cierre.
+ * Status único: completed. Primer bloque = Anticipo, resto = Abono adicional.
+ * Requiere cotizacion_id, promise_id y contact_id (vinculación forzada).
+ */
+export async function registrarPagosCierreEnStudioPagos(
+  studioSlug: string,
+  cotizacionId: string,
+  payload: {
+    promise_id: string;
+    contact_id: string;
+    items: RegistrarPagoCierreItem[];
+  }
+): Promise<CierreResponse> {
+  try {
+    const { promise_id, contact_id, items } = payload;
+    if (!contact_id?.trim()) {
+      return { success: false, error: 'contact_id es obligatorio para registrar pagos' };
+    }
+    if (!items?.length) {
+      return { success: false, error: 'Debe haber al menos un item de pago' };
+    }
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: { id: true },
+    });
+    if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
+
+    const metodoIds = [...new Set(items.map((i) => i.metodo_id).filter(Boolean))] as string[];
+    const metodos = metodoIds.length > 0
+      ? await prisma.studio_metodos_pago.findMany({
+          where: { id: { in: metodoIds } },
+          select: { id: true, payment_method_name: true },
+        })
+      : [];
+    const metodoNombreById = Object.fromEntries(metodos.map((m) => [m.id, m.payment_method_name]));
+
+    const data = items.map((item, index) => {
+      const concept = index === 0 ? 'Anticipo' : 'Abono adicional';
+      const metodoPagoNombre = item.metodo_id ? (metodoNombreById[item.metodo_id] ?? 'Manual') : 'Manual';
+      const paymentDate = item.fecha ? new Date(item.fecha) : new Date();
+      return {
+        cotizacion_id: cotizacionId,
+        promise_id,
+        contact_id,
+        amount: item.monto,
+        concept,
+        payment_date: paymentDate,
+        metodo_pago_id: item.metodo_id,
+        metodo_pago: metodoPagoNombre,
+        status: 'completed' as const,
+        transaction_type: 'ingreso' as const,
+        transaction_category: 'abono' as const,
+      };
+    });
+
+    await prisma.studio_pagos.createMany({ data });
+    // Sin revalidatePath: la vista actualiza vía onSuccess + getPagosCierreByCotizacion en el cliente
+    return { success: true, data: { id: '', cotizacion_id: cotizacionId } };
+  } catch (error) {
+    console.error('[registrarPagosCierreEnStudioPagos] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al registrar pagos',
     };
   }
 }
@@ -2224,17 +2538,26 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.5. Persistencia financiera: prioridad staging → registro cierre
+      // 8.5. Persistencia financiera: prioridad staging → registro cierre (evitar duplicar si ya hay pagos)
       let pagoRegistrado = false;
       let montoDesdeRegistro = 0;
       let pagoConfirmadoEstudio = false;
       const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
-      
+
+      const pagosExistentesCount = await tx.studio_pagos.count({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
+        },
+      });
+      const yaTienePagos = pagosExistentesCount > 0;
+
       // Prioridad 1: Staging de pagos desde UI (confirmación manual con distribución)
-      if (options?.pagosStaging && options.pagosStaging.length > 0) {
+      if (!yaTienePagos && options?.pagosStaging && options.pagosStaging.length > 0) {
         console.log('💰 [PAGO] Creando pagos desde staging:', options.pagosStaging.length, 'items');
         
-        for (const pagoItem of options.pagosStaging) {
+        for (let index = 0; index < options.pagosStaging.length; index++) {
+          const pagoItem = options.pagosStaging[index];
           // Obtener nombre del método de pago
           let metodoPagoNombre = 'Manual';
           if (pagoItem.metodoId) {
@@ -2249,18 +2572,21 @@ export async function autorizarYCrearEvento(
 
           // Normalizar fecha
           const fechaPago = normalizePaymentDate(pagoItem.fecha);
-          
+          const concept = index === 0 ? 'Anticipo' : 'Abono adicional';
+          if (!contactId) {
+            throw new Error('contact_id es obligatorio para registrar pagos');
+          }
           await tx.studio_pagos.create({
             data: {
               cotizacion_id: cotizacionId,
               promise_id: promiseId,
-              contact_id: contactId || null,
+              contact_id: contactId,
               amount: pagoItem.monto,
-              concept: pagoItem.concepto,
+              concept,
               payment_date: fechaPago,
               metodo_pago_id: pagoItem.metodoId,
               metodo_pago: metodoPagoNombre,
-              status: 'CONFIRMED',
+              status: 'completed',
               transaction_type: 'ingreso',
               transaction_category: 'abono',
             },
@@ -2270,8 +2596,8 @@ export async function autorizarYCrearEvento(
         pagoRegistrado = true;
         pagoConfirmadoEstudio = true;
       }
-      // Prioridad 2: Registro de cierre (fallback legacy)
-      else {
+      // Prioridad 2: Registro de cierre (fallback legacy); no crear si ya hay pagos para esta cotización
+      else if (!yaTienePagos) {
         pagoConfirmadoEstudio = registroCierre.pago_confirmado_estudio === true;
         const rawMontoCierre = registroCierre.pago_monto;
         montoDesdeRegistro =
@@ -2302,24 +2628,30 @@ export async function autorizarYCrearEvento(
 
           const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
           const conceptoPago = registroCierre.pago_concepto || 'Anticipo';
-
+          if (!contactId) {
+            throw new Error('contact_id es obligatorio para registrar pagos');
+          }
           await tx.studio_pagos.create({
             data: {
               cotizacion_id: cotizacionId,
               promise_id: promiseId,
-              contact_id: contactId || null,
+              contact_id: contactId,
               amount: montoDesdeRegistro,
-              concept: conceptoPago,
+              concept: conceptoPago === 'Anticipo' ? 'Anticipo' : 'Abono adicional',
               payment_date: fechaPago,
               metodo_pago_id: registroCierre.pago_metodo_id,
               metodo_pago: metodoPagoNombre,
-              status: 'CONFIRMED',
+              status: 'completed',
               transaction_type: 'ingreso',
               transaction_category: 'abono',
             },
           });
           pagoRegistrado = true;
         }
+      } else if (yaTienePagos) {
+        // Pago ya persistido previamente (ej. botón "Confirmar Anticipo"); solo vincular, no duplicar
+        pagoRegistrado = true;
+        pagoConfirmadoEstudio = true;
       }
 
       // 8.6. Eliminar todas las etiquetas asociadas a la promesa

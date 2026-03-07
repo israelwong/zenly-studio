@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenDialog } from '@/components/ui/zen';
@@ -8,6 +8,7 @@ import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
 import type { CondicionesComercialesData, CotizacionRenderData } from '@/components/shared/contracts/types';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import type { EventContractData } from '@/types/contracts';
+import confetti from 'canvas-confetti';
 
 interface BienvenidoPageClientProps {
   studioSlug: string;
@@ -21,6 +22,8 @@ interface BienvenidoPageClientProps {
   initialEventoId: string | null;
   cotizacionId: string;
   contractId: string;
+  /** false = flujo manual (estudio autorizó): mostrar confetti al entrar. */
+  selectedByProspect?: boolean;
   contract: {
     template_id: string | null;
     content: string | null;
@@ -56,10 +59,30 @@ export function BienvenidoPageClient({
   contract,
   cotizacionData: cotizacionDataProp,
   condicionesData: condicionesDataProp,
+  selectedByProspect = true,
 }: BienvenidoPageClientProps) {
   const router = useRouter();
   const [, setEventoId] = useState<string | null>(initialEventoId);
   const [showContractModal, setShowContractModal] = useState(false);
+  const confettiFiredRef = useRef(false);
+
+  // Confetti solo en flujo manual (estudio autorizó; el cliente no eligió desde el link)
+  useEffect(() => {
+    if (selectedByProspect !== false || confettiFiredRef.current) return;
+    confettiFiredRef.current = true;
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'],
+      zIndex: 2147483647,
+    });
+    const t = setTimeout(() => {
+      confetti({ particleCount: 40, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 2147483647 });
+      confetti({ particleCount: 40, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 2147483647 });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [selectedByProspect]);
 
   const goToPortal = useCallback(() => {
     router.push(`/${studioSlug}/cliente/login`);
