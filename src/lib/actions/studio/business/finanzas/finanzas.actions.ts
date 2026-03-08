@@ -130,6 +130,8 @@ interface RecurringExpense {
     defaultCreditCardId?: string | null;
     /** Etiqueta para lista: "Efectivo", "Transferencia", "Tarjeta Nu" */
     paymentMethodLabel?: string | null;
+    /** Nombre de la tarjeta cuando paymentMethod es credit_card (ej. "Nu") */
+    defaultCreditCardName?: string | null;
 }
 
 /**
@@ -2001,6 +2003,7 @@ export async function obtenerGastosRecurrentes(
                     paymentMethod: gasto.payment_method ?? null,
                     defaultCreditCardId: gasto.default_credit_card_id ?? null,
                     paymentMethodLabel: paymentMethodToLabel(gasto.payment_method, gasto.default_credit_card?.name),
+                    defaultCreditCardName: gasto.default_credit_card?.name ?? null,
                     pagosMesActual: pagosCount,
                     totalPagosEsperados: totalPagosEsperados,
                     isCrewMember: false,
@@ -2078,6 +2081,7 @@ export async function obtenerGastosRecurrentes(
                     paymentMethod: member.salary_payment_method ?? null,
                     defaultCreditCardId: member.salary_default_credit_card_id ?? null,
                     paymentMethodLabel: paymentLabel(member.salary_payment_method, member.salary_default_credit_card?.name),
+                    defaultCreditCardName: member.salary_default_credit_card?.name ?? null,
                     pagosMesActual: pagosCount,
                     totalPagosEsperados: totalPagosEsperados,
                     isCrewMember: true,
@@ -3130,6 +3134,63 @@ export async function crearTarjetaCredito(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al crear tarjeta',
+        };
+    }
+}
+
+/**
+ * Actualizar nombre de tarjeta de crédito
+ */
+export async function actualizarTarjetaCredito(
+    studioSlug: string,
+    creditCardId: string,
+    data: { name: string }
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+        if (!data.name?.trim()) {
+            return { success: false, error: 'El nombre es requerido' };
+        }
+        await prisma.studio_credit_cards.update({
+            where: { id: creditCardId, studio_id: studioId },
+            data: { name: data.name.trim() },
+        });
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error actualizando tarjeta de crédito:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al actualizar tarjeta',
+        };
+    }
+}
+
+/**
+ * Eliminar tarjeta de crédito (las FK se ponen en null por schema)
+ */
+export async function eliminarTarjetaCredito(
+    studioSlug: string,
+    creditCardId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+        await prisma.studio_credit_cards.delete({
+            where: { id: creditCardId, studio_id: studioId },
+        });
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error eliminando tarjeta de crédito:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al eliminar tarjeta',
         };
     }
 }

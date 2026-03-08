@@ -7,11 +7,13 @@ import {
     ZenButton,
 } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
-import { CheckCircle2, Trash2 } from 'lucide-react';
+import { CheckCircle2, Trash2, ChevronDown, Plus, CreditCard, Settings } from 'lucide-react';
 import { crearGastoRecurrente, actualizarGastoRecurrente, obtenerGastoRecurrente, eliminarGastoRecurrente, obtenerTarjetasCredito } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ZenConfirmModal } from '@/components/ui/zen';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { CrearTarjetaCreditoModal } from '@/components/shared/modals';
 
 interface RegistrarGastoRecurrenteModalProps {
     isOpen: boolean;
@@ -59,6 +61,8 @@ export function RegistrarGastoRecurrenteModal({
     const [lastDayOfMonth, setLastDayOfMonth] = useState(false);
     const [tarjetas, setTarjetas] = useState<{ id: string; name: string }[]>([]);
     const [tarjetasLoading, setTarjetasLoading] = useState(false);
+    const [tarjetaPopoverOpen, setTarjetaPopoverOpen] = useState(false);
+    const [showCrearTarjetaModal, setShowCrearTarjetaModal] = useState(false);
 
     const loadExpenseData = useCallback(async () => {
         if (!expenseId) return;
@@ -125,6 +129,22 @@ export function RegistrarGastoRecurrenteModal({
             })
             .finally(() => setTarjetasLoading(false));
     }, [isOpen, studioSlug, metodoPago]);
+
+    useEffect(() => {
+        const handleTarjetasChanged = () => {
+            obtenerTarjetasCredito(studioSlug).then((res) => {
+                if (res.success && res.data) {
+                    setTarjetas(res.data);
+                    setCreditCardId((current) =>
+                        res.data!.some((c) => c.id === current) ? current : ''
+                    );
+                }
+            });
+        };
+        window.addEventListener('tarjetas-credito-changed', handleTarjetasChanged);
+        return () =>
+            window.removeEventListener('tarjetas-credito-changed', handleTarjetasChanged);
+    }, [studioSlug]);
 
     const handleSave = async () => {
         if (!concepto.trim()) {
@@ -368,19 +388,84 @@ export function RegistrarGastoRecurrenteModal({
                                     ))}
                                 </div>
                                 {metodoPago === 'credit_card' && (
-                                    <div className="space-y-1.5 pt-1">
-                                        <label className="text-xs text-zinc-400 block">Tarjeta</label>
-                                        <select
-                                            value={creditCardId}
-                                            onChange={(e) => setCreditCardId(e.target.value)}
-                                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                            disabled={tarjetasLoading}
-                                        >
-                                            <option value="">Seleccionar tarjeta</option>
-                                            {tarjetas.map((t) => (
-                                                <option key={t.id} value={t.id}>{t.name}</option>
-                                            ))}
-                                        </select>
+                                    <div className="space-y-1.5 pt-3 w-full">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <label className="text-xs text-zinc-400">Tarjeta</label>
+                                            <ZenButton
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => window.dispatchEvent(new CustomEvent('open-tarjetas-credito-modal'))}
+                                                className="text-zinc-400 hover:text-zinc-200 -my-1 h-7 px-2 text-xs gap-1.5"
+                                            >
+                                                <Settings className="h-3.5 w-3.5 shrink-0" />
+                                                Gestionar tarjetas
+                                            </ZenButton>
+                                        </div>
+                                        <Popover open={tarjetaPopoverOpen} onOpenChange={setTarjetaPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    disabled={tarjetasLoading}
+                                                    className={cn(
+                                                        'w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors',
+                                                        'bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50'
+                                                    )}
+                                                >
+                                                    <span className="truncate">
+                                                        {creditCardId
+                                                            ? tarjetas.find((t) => t.id === creditCardId)?.name ?? 'Seleccionar tarjeta'
+                                                            : 'Seleccionar tarjeta'}
+                                                    </span>
+                                                    <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                align="start"
+                                                className="w-[var(--radix-popover-trigger-width)] max-w-full p-0 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+                                            >
+                                                <div className="max-h-[280px] overflow-y-auto py-1">
+                                                    {tarjetas.length === 0 && !tarjetasLoading ? (
+                                                        <p className="px-3 py-4 text-sm text-zinc-400 text-center">
+                                                            No hay tarjetas registradas
+                                                        </p>
+                                                    ) : (
+                                                        tarjetas.map((t) => (
+                                                            <button
+                                                                key={t.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCreditCardId(t.id);
+                                                                    setTarjetaPopoverOpen(false);
+                                                                }}
+                                                                className={cn(
+                                                                    'w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left transition-colors',
+                                                                    creditCardId === t.id
+                                                                        ? 'bg-emerald-500/10 text-emerald-200'
+                                                                        : 'text-zinc-200 hover:bg-zinc-800'
+                                                                )}
+                                                            >
+                                                                <CreditCard className="h-4 w-4 shrink-0 text-zinc-400" />
+                                                                <span className="truncate">{t.name}</span>
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                    <div className="border-t border-zinc-700/80 mt-1 pt-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setTarjetaPopoverOpen(false);
+                                                                setShowCrearTarjetaModal(true);
+                                                            }}
+                                                            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                                                        >
+                                                            <Plus className="h-4 w-4 shrink-0" />
+                                                            Añadir tarjeta
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 )}
                             </div>
@@ -557,6 +642,17 @@ export function RegistrarGastoRecurrenteModal({
                     </div>
                 )}
             </ZenDialog>
+
+            <CrearTarjetaCreditoModal
+                isOpen={showCrearTarjetaModal}
+                onClose={() => setShowCrearTarjetaModal(false)}
+                studioSlug={studioSlug}
+                onSuccess={async (newCardId) => {
+                    const res = await obtenerTarjetasCredito(studioSlug);
+                    if (res.success && res.data) setTarjetas(res.data);
+                    setCreditCardId(newCardId);
+                }}
+            />
 
             {/* Modal de selección de tipo de eliminación */}
             <ZenConfirmModal

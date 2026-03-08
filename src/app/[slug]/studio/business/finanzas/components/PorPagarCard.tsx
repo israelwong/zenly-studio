@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     ZenCard,
     ZenCardContent,
@@ -16,8 +16,9 @@ import {
 import { PorPagarPersonalCard } from './PorPagarPersonalCard';
 import { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
 import { PorPagarPersonal } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
-import { pagarGastoRecurrente, cancelarPagoGastoRecurrente, eliminarGastoRecurrente } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
-import { Repeat, ArrowDown, Plus, MoreVertical, X, Trash2, Edit } from 'lucide-react';
+import { pagarGastoRecurrente, cancelarPagoGastoRecurrente, eliminarGastoRecurrente, obtenerTarjetasCredito } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
+import type { TarjetaCreditoItem } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
+import { Repeat, ArrowDown, Plus, MoreVertical, X, Trash2, Edit, Banknote, Landmark, CreditCard } from 'lucide-react';
 import {
     Tooltip,
     TooltipContent,
@@ -34,6 +35,9 @@ export interface RecurringExpenseForPorPagar {
     chargeDay?: number;
     pagosMesActual?: number;
     totalPagosEsperados?: number;
+    paymentMethod?: string | null;
+    paymentMethodLabel?: string | null;
+    defaultCreditCardName?: string | null;
 }
 
 interface PorPagarCardProps {
@@ -75,6 +79,39 @@ function getPaymentLabel(e: RecurringExpenseForPorPagar): string {
     return 'Pagar';
 }
 
+function PaymentMethodDisplay({ expense }: { expense: RecurringExpenseForPorPagar }) {
+    const method = expense.paymentMethod;
+    if (!method) return null;
+    if (method === 'efectivo') {
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <Banknote className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
+                Efectivo
+            </span>
+        );
+    }
+    if (method === 'transferencia') {
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <Landmark className="h-3.5 w-3.5 shrink-0 text-blue-400" aria-hidden />
+                Transferencia
+            </span>
+        );
+    }
+    if (method === 'credit_card') {
+        const cardName = expense.defaultCreditCardName || expense.paymentMethodLabel?.replace(/^Tarjeta\s+/i, '') || 'Tarjeta';
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <CreditCard className="h-3.5 w-3.5 shrink-0 text-rose-400" aria-hidden />
+                {cardName}
+            </span>
+        );
+    }
+    return expense.paymentMethodLabel ? (
+        <span className="text-xs text-zinc-400">{expense.paymentMethodLabel}</span>
+    ) : null;
+}
+
 export function PorPagarCard({
     porPagar,
     studioSlug,
@@ -96,6 +133,10 @@ export function PorPagarCard({
     const [deleteType, setDeleteType] = useState<'single' | 'all' | 'future'>('future');
     const [isDeleting, setIsDeleting] = useState(false);
     const [editRecurrenteId, setEditRecurrenteId] = useState<string | null>(null);
+    const [payRecurrenteMethod, setPayRecurrenteMethod] = useState<'efectivo' | 'transferencia' | 'credit_card' | null>(null);
+    const [payRecurrenteCreditCardId, setPayRecurrenteCreditCardId] = useState('');
+    const [tarjetasForPay, setTarjetasForPay] = useState<TarjetaCreditoItem[]>([]);
+    const [loadingTarjetas, setLoadingTarjetas] = useState(false);
 
     const totalItems = porPagar.reduce((sum, p) => sum + p.items.length, 0);
     const recurrentesPendientes = recurringExpenses.filter(
@@ -109,14 +150,37 @@ export function PorPagarCard({
         ? recurrentesPendientes.find((e) => e.id === cancelRecurrenteId)
         : null;
 
+    useEffect(() => {
+        if (payingExpenseId && studioSlug) {
+            setPayRecurrenteMethod(null);
+            setPayRecurrenteCreditCardId('');
+            setLoadingTarjetas(true);
+            obtenerTarjetasCredito(studioSlug)
+                .then((r) => {
+                    if (r.success && r.data) setTarjetasForPay(r.data);
+                    else setTarjetasForPay([]);
+                })
+                .finally(() => setLoadingTarjetas(false));
+        }
+    }, [payingExpenseId, studioSlug]);
+
     const handleConfirmPagarRecurrente = async () => {
-        if (!payingExpenseId) return;
+        if (!payingExpenseId || !payingExpense) return;
+        const method = payRecurrenteMethod ?? 'transferencia';
+        if (method === 'credit_card' && !payRecurrenteCreditCardId) {
+            toast.error('Selecciona una tarjeta');
+            return;
+        }
         setIsPaying(true);
         try {
-            const result = await pagarGastoRecurrente(studioSlug, payingExpenseId);
+            const result = await pagarGastoRecurrente(studioSlug, payingExpenseId, method === 'credit_card'
+                ? { creditCardId: payRecurrenteCreditCardId }
+                : { partialPayments: [{ payment_method: method, amount: payingExpense.amount }] });
             if (result.success) {
                 toast.success('Gasto recurrente pagado correctamente');
                 setPayingExpenseId(null);
+                setPayRecurrenteMethod(null);
+                setPayRecurrenteCreditCardId('');
                 await onPagoConfirmado?.();
             } else {
                 toast.error(result.error || 'Error al pagar');
@@ -128,6 +192,8 @@ export function PorPagarCard({
             setIsPaying(false);
         }
     };
+
+    const canConfirmPayRecurrente = payingExpense && (payRecurrenteMethod !== 'credit_card' || payRecurrenteCreditCardId);
 
     const handleConfirmCancelarUltimoPago = async () => {
         if (!cancelRecurrenteId) return;
@@ -271,10 +337,15 @@ export function PorPagarCard({
                                                     }
                                                 }}
                                             >
-                                                <div className="flex-1 min-w-0 flex flex-col items-start gap-0.5 px-3 py-2 text-left">
-                                                    <p className="text-sm font-medium text-zinc-200 truncate w-full">
-                                                        {e.name}
-                                                    </p>
+                                                <div className="flex-1 min-w-0 flex flex-col items-start gap-1 px-3 py-2 text-left">
+                                                    <div className="flex items-center gap-1.5 flex-wrap w-full min-w-0">
+                                                        <p className="text-sm font-medium text-zinc-200 truncate">
+                                                            {e.name}
+                                                        </p>
+                                                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-yellow-900/20 text-yellow-400 border border-yellow-800/30 shrink-0">
+                                                            Recurrente
+                                                        </span>
+                                                    </div>
                                                     <div className="flex items-center gap-2 flex-wrap">
                                                         <ArrowDown className="h-3.5 w-3.5 text-rose-400 shrink-0" aria-hidden />
                                                         <span className="text-sm text-rose-400 font-semibold">
@@ -285,6 +356,7 @@ export function PorPagarCard({
                                                             {getFrequencyLabel(e.frequency)}
                                                             {e.chargeDay != null ? ` - Día ${e.chargeDay}` : ''}
                                                         </span>
+                                                        <PaymentMethodDisplay expense={e} />
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-1 m-1 shrink-0">
@@ -363,19 +435,85 @@ export function PorPagarCard({
 
         <ZenConfirmModal
             isOpen={!!payingExpense}
-            onClose={() => setPayingExpenseId(null)}
+            onClose={() => {
+                setPayingExpenseId(null);
+                setPayRecurrenteMethod(null);
+                setPayRecurrenteCreditCardId('');
+            }}
             onConfirm={handleConfirmPagarRecurrente}
-            title="¿Confirmar el pago del gasto recurrente?"
+            title="Pagar gasto recurrente"
             description={
-                payingExpense
-                    ? `¿Deseas confirmar el pago de ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payingExpense.amount)} para "${payingExpense.name}"? Este pago se registrará como egreso en los movimientos del mes.`
-                    : ''
+                payingExpense ? (
+                    <div className="space-y-4">
+                        <p className="text-sm text-zinc-300">
+                            <span className="font-medium text-zinc-200">{payingExpense.name}</span>
+                            {' — '}
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payingExpense.amount)}
+                        </p>
+                        <div>
+                            <p className="text-xs font-medium text-zinc-500 mb-2">¿Con qué pagas?</p>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setPayRecurrenteMethod('efectivo')}
+                                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                        payRecurrenteMethod === 'efectivo' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                    }`}
+                                >
+                                    Efectivo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPayRecurrenteMethod('transferencia')}
+                                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                        payRecurrenteMethod === 'transferencia' ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                    }`}
+                                >
+                                    Transferencia
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPayRecurrenteMethod('credit_card')}
+                                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                        payRecurrenteMethod === 'credit_card' ? 'border-rose-500 bg-rose-500/10 text-rose-400' : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                    }`}
+                                >
+                                    Tarjeta
+                                </button>
+                            </div>
+                        </div>
+                        {payRecurrenteMethod === 'credit_card' && (
+                            <div>
+                                <label className="block text-xs font-medium text-zinc-500 mb-1">Tarjeta</label>
+                                {loadingTarjetas ? (
+                                    <p className="text-sm text-zinc-500">Cargando...</p>
+                                ) : tarjetasForPay.length === 0 ? (
+                                    <p className="text-sm text-amber-400">No hay tarjetas. Agrégalas primero.</p>
+                                ) : (
+                                    <select
+                                        value={payRecurrenteCreditCardId}
+                                        onChange={(e) => setPayRecurrenteCreditCardId(e.target.value)}
+                                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-200 text-sm"
+                                    >
+                                        <option value="">Seleccionar tarjeta</option>
+                                        {tarjetasForPay.map((c) => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.balance < 0 ? `(${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(c.balance)})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : ''
             }
-            confirmText="Sí, confirmar pago"
+            confirmText="Confirmar pago"
             cancelText="Cancelar"
             variant="default"
             loading={isPaying}
             loadingText="Confirmando..."
+            disabled={!canConfirmPayRecurrente}
         />
 
         <ZenConfirmModal

@@ -15,6 +15,12 @@ export {
     cancelarPagoRecurrentePorGastoId,
     confirmarDevolucion,
     obtenerAnalisisFinanciero,
+    pagarGastoRecurrente,
+    obtenerTarjetasCredito,
+    crearTarjetaCredito,
+    actualizarTarjetaCredito,
+    eliminarTarjetaCredito,
+    pagarTarjeta,
 } from './finanzas.actions';
 
-export type { PorPagarPersonal, AnalisisFinancieroData } from './finanzas.actions';
+export type { PorPagarPersonal, AnalisisFinancieroData, TarjetaCreditoItem } from './finanzas.actions';

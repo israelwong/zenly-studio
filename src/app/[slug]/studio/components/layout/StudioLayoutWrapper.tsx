@@ -17,6 +17,7 @@ import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideS
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
 import { HistorialSheetProvider } from '../context/HistorialSheetContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
+import { GestionarTarjetasModal, useGestionarTarjetasModal } from '@/components/shared/modals';
 import { CapacidadOperativaModal } from '@/components/shared/configuracion/CapacidadOperativaModal';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ZenDialog } from '@/components/ui/zen';
@@ -104,6 +105,7 @@ function StudioLayoutContent({
   const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
   const [showCapacidadModal, setShowCapacidadModal] = useState(false);
   const [showGastosRecurrentesModal, setShowGastosRecurrentesModal] = useState(false);
+  const gestionarTarjetas = useGestionarTarjetasModal();
 
   // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
   const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
@@ -134,6 +136,7 @@ function StudioLayoutContent({
     const handleOpenCapacidad = () => setShowCapacidadModal(true);
     const handleOpenGestionarTiposEventos = () => setShowEventTypesModal(true);
     const handleOpenGastosRecurrentes = () => setShowGastosRecurrentesModal(true);
+    const handleOpenTarjetasCredito = () => gestionarTarjetas.open();
 
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
@@ -146,6 +149,7 @@ function StudioLayoutContent({
     window.addEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
     window.addEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
     window.addEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
+    window.addEventListener('open-tarjetas-credito-modal', handleOpenTarjetasCredito);
 
     return () => {
       window.removeEventListener('open-terminos-modal', handleOpenTerminos);
@@ -159,8 +163,9 @@ function StudioLayoutContent({
       window.removeEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
       window.removeEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
       window.removeEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
+      window.removeEventListener('open-tarjetas-credito-modal', handleOpenTarjetasCredito);
     };
-  }, []);
+  }, [gestionarTarjetas.open]);
 
   const handlePromisesConfigClick = () => {
     if (promisesConfig?.openConfigCatalog) {
@@ -299,6 +304,19 @@ function StudioLayoutContent({
           },
           category: 'comercial',
           keywords: ['pagos', 'transferencia', 'clabe', 'tarjeta', 'efectivo'],
+        },
+        {
+          id: 'tarjetas-credito',
+          title: 'Tarjetas de Crédito',
+          description: 'Gestiona las tarjetas de crédito para gastos recurrentes y control de saldos',
+          icon: CreditCard,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-tarjetas-credito-modal'));
+            }, 100);
+          },
+          category: 'comercial',
+          keywords: ['tarjetas', 'crédito', 'credito', 'gastos recurrentes', 'saldos', 'finanzas'],
         },
         {
           id: 'gastos-recurrentes',
@@ -589,6 +607,12 @@ function StudioLayoutContent({
       <GastosRecurrentesModal
         open={showGastosRecurrentesModal}
         onClose={() => setShowGastosRecurrentesModal(false)}
+        studioSlug={studioSlug}
+      />
+
+      <GestionarTarjetasModal
+        isOpen={gestionarTarjetas.isOpen}
+        onClose={gestionarTarjetas.close}
         studioSlug={studioSlug}
       />
 
