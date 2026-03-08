@@ -13,7 +13,6 @@ import { FinanceKPIs } from './components/FinanceKPIs';
 import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
-import { RecurrentesSheet } from './components/RecurrentesSheet';
 import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
 import { RegistrarGastoRecurrenteModal } from './components/RegistrarGastoRecurrenteModal';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
@@ -106,7 +105,6 @@ export default function FinanzasPage() {
     const [rentabilidadPorTipo, setRentabilidadPorTipo] = useState<RentabilidadPorTipoEventoItem[]>([]);
     const [rentabilidadLoading, setRentabilidadLoading] = useState(false);
     const { openHistorial } = useHistorialSheet();
-    const [recurrentesSheetOpen, setRecurrentesSheetOpen] = useState(false);
     const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
     const [showNuevoRecurrenteModal, setShowNuevoRecurrenteModal] = useState(false);
 
@@ -702,7 +700,7 @@ export default function FinanzasPage() {
                                             await refetchData();
                                         }}
                                         recurringExpenses={recurringExpenses}
-                                        onOpenRecurrentes={() => setRecurrentesSheetOpen(true)}
+                                        onOpenRecurrentes={() => window.dispatchEvent(new CustomEvent('open-gastos-recurrentes-modal'))}
                                         onOpenNuevoRecurrente={() => setShowNuevoRecurrenteModal(true)}
                                         onOpenRecurrenteDetalle={(exp) => setRecurrenteDetalle(exp)}
                                     />
@@ -728,14 +726,6 @@ export default function FinanzasPage() {
                                             setShowNuevoRecurrenteModal(false);
                                             await refetchData();
                                         }}
-                                    />
-                                    <RecurrentesSheet
-                                        open={recurrentesSheetOpen}
-                                        onOpenChange={setRecurrentesSheetOpen}
-                                        expenses={recurringExpenses}
-                                        studioSlug={studioSlug}
-                                        onGastoRegistrado={refetchData}
-                                        onGastoPagado={refetchData}
                                     />
                                 </div>
 

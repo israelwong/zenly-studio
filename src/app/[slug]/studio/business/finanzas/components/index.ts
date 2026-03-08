@@ -8,6 +8,7 @@ export { MovimientoItemCard } from './MovimientoItemCard';
 export { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
 export { GastoRecurrenteItemCard } from './GastoRecurrenteItemCard';
 export { RecurrentesSheet } from './RecurrentesSheet';
+export { GastosRecurrentesModal } from './GastosRecurrentesModal';
 export { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
 export { PagoRapidoModal } from './PagoRapidoModal';
 

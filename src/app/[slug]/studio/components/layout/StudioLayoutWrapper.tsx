@@ -20,7 +20,7 @@ import { ConfigurationCatalogModal, type ConfigurationSection } from '@/componen
 import { CapacidadOperativaModal } from '@/components/shared/configuracion/CapacidadOperativaModal';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ZenDialog } from '@/components/ui/zen';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent, CalendarDays } from 'lucide-react';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent, CalendarDays, Repeat } from 'lucide-react';
 import { LocationManagerModal } from '@/components/shared/agenda/LocationManagerModal';
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -31,6 +31,7 @@ import { PaymentMethodsModal } from '@/components/shared/payments/PaymentMethods
 import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
 import { StudioContractDataModal } from '@/components/shared/contracts/StudioContractDataModal';
 import { TipoEventoManagementModal } from '@/components/shared/tipos-evento/TipoEventoManagementModal';
+import { GastosRecurrentesModal } from '@/app/[slug]/studio/business/finanzas/components/GastosRecurrentesModal';
 
 import type { IdentidadData } from '@/app/[slug]/studio/business/identity/types';
 import type { StorageStats } from '@/lib/actions/shared/calculate-storage.actions';
@@ -102,6 +103,7 @@ function StudioLayoutContent({
   const [showLocationsManagerModal, setShowLocationsManagerModal] = useState(false);
   const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
   const [showCapacidadModal, setShowCapacidadModal] = useState(false);
+  const [showGastosRecurrentesModal, setShowGastosRecurrentesModal] = useState(false);
 
   // Refrescar datos del header cuando se actualizan recordatorios (Scheduler, etc.)
   const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
@@ -131,6 +133,7 @@ function StudioLayoutContent({
     const handleOpenEventTypes = () => setShowEventTypesModal(true);
     const handleOpenCapacidad = () => setShowCapacidadModal(true);
     const handleOpenGestionarTiposEventos = () => setShowEventTypesModal(true);
+    const handleOpenGastosRecurrentes = () => setShowGastosRecurrentesModal(true);
 
     window.addEventListener('open-terminos-modal', handleOpenTerminos);
     window.addEventListener('open-aviso-modal', handleOpenAviso);
@@ -142,6 +145,7 @@ function StudioLayoutContent({
     window.addEventListener('open-event-types-modal', handleOpenEventTypes);
     window.addEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
     window.addEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
+    window.addEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
 
     return () => {
       window.removeEventListener('open-terminos-modal', handleOpenTerminos);
@@ -154,6 +158,7 @@ function StudioLayoutContent({
       window.removeEventListener('open-event-types-modal', handleOpenEventTypes);
       window.removeEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
       window.removeEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
+      window.removeEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
     };
   }, []);
 
@@ -294,6 +299,19 @@ function StudioLayoutContent({
           },
           category: 'comercial',
           keywords: ['pagos', 'transferencia', 'clabe', 'tarjeta', 'efectivo'],
+        },
+        {
+          id: 'gastos-recurrentes',
+          title: 'Gastos Recurrentes',
+          description: 'Renta, suscripciones y gastos fijos. Configura tu operación mensual.',
+          icon: Repeat,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-gastos-recurrentes-modal'));
+            }, 100);
+          },
+          category: 'comercial',
+          keywords: ['gastos', 'recurrentes', 'renta', 'suscripción', 'nómina', 'cuentas por pagar', 'finanzas'],
         },
         {
           id: 'contratos',
@@ -565,6 +583,12 @@ function StudioLayoutContent({
       <CapacidadOperativaModal
         isOpen={showCapacidadModal}
         onClose={() => setShowCapacidadModal(false)}
+        studioSlug={studioSlug}
+      />
+
+      <GastosRecurrentesModal
+        open={showGastosRecurrentesModal}
+        onClose={() => setShowGastosRecurrentesModal(false)}
         studioSlug={studioSlug}
       />
 
