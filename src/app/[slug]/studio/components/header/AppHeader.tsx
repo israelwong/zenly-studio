@@ -12,7 +12,7 @@ import { SubscriptionPopover } from '../ui/SubscriptionPopover';
 import { SubscriptionBadge } from '@/components/shared/subscription/SubscriptionBadge';
 import { GoogleStatusPopover } from '@/components/shared/integrations/GoogleStatusPopover';
 import { useCommercialNameShort } from '@/hooks/usePlatformConfig';
-import { CalendarCheck, ContactRound, Settings } from 'lucide-react';
+import { CalendarCheck, ContactRound, Settings, CircleDollarSign } from 'lucide-react';
 import { useAgendaCount } from '@/hooks/useAgendaCount';
 import { useRemindersCount } from '@/hooks/useRemindersCount';
 import { obtenerEstadoConexion } from '@/lib/integrations/google';
@@ -41,6 +41,7 @@ interface AppHeaderProps {
     onContactsClick?: () => void;
     onPromisesConfigClick?: () => void;
     onRemindersClick?: () => void;
+    onHistorialClick?: () => void;
 }
 
 export function AppHeader({
@@ -59,6 +60,7 @@ export function AppHeader({
     onContactsClick,
     onPromisesConfigClick,
     onRemindersClick,
+    onHistorialClick,
 }: AppHeaderProps) {
     const [isMounted, setIsMounted] = useState(false);
     const [hasGoogleCalendar, setHasGoogleCalendar] = useState(false);
@@ -282,6 +284,20 @@ export function AppHeader({
                     >
                         <Settings className="h-5 w-5" />
                         <span className="sr-only">Configurar</span>
+                    </ZenButton>
+                )}
+
+                {/* Historial Finanzas (acceso global) */}
+                {onHistorialClick && (
+                    <ZenButton
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                        onClick={onHistorialClick}
+                        title="Historial de transacciones"
+                    >
+                        <CircleDollarSign className="h-5 w-5" />
+                        <span className="sr-only">Historial de transacciones</span>
                     </ZenButton>
                 )}
 

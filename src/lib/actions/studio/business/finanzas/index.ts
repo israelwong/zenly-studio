@@ -13,6 +13,7 @@ export {
     cancelarNominaPagada,
     eliminarNominaPagada,
     cancelarPagoRecurrentePorGastoId,
+    confirmarDevolucion,
     obtenerAnalisisFinanciero,
 } from './finanzas.actions';
 

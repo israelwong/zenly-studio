@@ -337,6 +337,8 @@ export function ConfirmarCierreModal({
       basePayload.template_id = templateId;
       basePayload.solicitar_firma = solicitarFirma;
     }
+    // Al pasar a cierre, la cotización debe quedar visible para el prospecto (aunque estuviera oculta en pendiente)
+    basePayload.visible_to_client = true;
     return basePayload;
   };
 

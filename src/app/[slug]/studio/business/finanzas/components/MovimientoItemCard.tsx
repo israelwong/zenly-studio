@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { FileText, X, Trash2, Edit, ExternalLink, User, Calendar, FileSpreadsheet, Clock, Tag, ArrowUp, ArrowDown } from 'lucide-react';
+import { FileText, X, Trash2, Edit, ExternalLink, User, Calendar, FileSpreadsheet, Clock, Tag, ArrowUp, ArrowDown, CheckCircle } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -58,6 +58,7 @@ interface MovimientoItemCardProps {
     onGastoEliminado?: () => void;
     onNominaCancelada?: () => void;
     onGastoEditado?: () => void;
+    onDevolucionConfirmada?: () => void;
 }
 
 export function MovimientoItemCard({
@@ -67,6 +68,7 @@ export function MovimientoItemCard({
     onGastoEliminado,
     onNominaCancelada,
     onGastoEditado,
+    onDevolucionConfirmada,
 }: MovimientoItemCardProps) {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -84,8 +86,22 @@ export function MovimientoItemCard({
     const [isEliminandoNomina, setIsEliminandoNomina] = useState(false);
     const [isEliminandoPago, setIsEliminandoPago] = useState(false);
     const [showDesgloseDialog, setShowDesgloseDialog] = useState(false);
+    const [isConfirmandoDevolucion, setIsConfirmandoDevolucion] = useState(false);
 
     const isGroup = Boolean(transaction.details && transaction.details.length > 1);
+    /** Detalle para el sheet: agrupado (varios) o un solo ítem */
+    const sheetDetails: TransactionDetail[] =
+        transaction.details && transaction.details.length > 0
+            ? transaction.details
+            : [
+                  {
+                      concepto: transaction.concepto,
+                      categoria: transaction.categoria,
+                      monto: transaction.monto,
+                      paymentStatus: transaction.paymentStatus,
+                      metodoPago: transaction.metodoPago,
+                  },
+              ];
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -167,6 +183,7 @@ export function MovimientoItemCard({
         setIsCancelling(true);
         try {
             await onCancelarPago(transaction.id);
+            setShowDesgloseDialog(false);
             setShowConfirmModal(false);
         } catch (error) {
             console.error('Error cancelando pago:', error);
@@ -186,7 +203,8 @@ export function MovimientoItemCard({
             const result = await cancelarPagoRecurrentePorGastoId(studioSlug, transaction.id);
 
             if (result.success) {
-                toast.success('Pago recurrente cancelado correctamente');
+                toast.success('Pago recurrente cancelado. Vuelve a aparecer en Cuentas por Pagar.');
+                setShowDesgloseDialog(false);
                 setShowCancelRecurrenteModal(false);
                 await onGastoEliminado?.();
             } else {
@@ -210,8 +228,9 @@ export function MovimientoItemCard({
             const result = await eliminarGastoOperativo(studioSlug, transaction.id);
             if (result.success) {
                 toast.success('Gasto eliminado correctamente');
-                await onGastoEliminado?.();
+                setShowDesgloseDialog(false);
                 setShowDeleteConfirmModal(false);
+                await onGastoEliminado?.();
             } else {
                 toast.error(result.error || 'Error al eliminar gasto');
             }
@@ -240,8 +259,9 @@ export function MovimientoItemCard({
             const result = await cancelarNominaPagada(studioSlug, transaction.nominaId);
             if (result.success) {
                 toast.success('Nómina cancelada. Se ha agregado nuevamente a "Por Pagar"');
-                await onNominaCancelada?.();
+                setShowDesgloseDialog(false);
                 setShowCancelNominaModal(false);
+                await onNominaCancelada?.();
             } else {
                 toast.error(result.error || 'Error al cancelar nómina');
             }
@@ -266,8 +286,9 @@ export function MovimientoItemCard({
             const result = await eliminarNominaPagada(studioSlug, transaction.nominaId);
             if (result.success) {
                 toast.success('Nómina eliminada correctamente');
-                await onNominaCancelada?.();
+                setShowDesgloseDialog(false);
                 setShowEliminarNominaModal(false);
+                await onNominaCancelada?.();
             } else {
                 toast.error(result.error || 'Error al eliminar nómina');
             }
@@ -292,8 +313,9 @@ export function MovimientoItemCard({
             const result = await eliminarPago(studioSlug, transaction.id);
             if (result.success) {
                 toast.success('Pago eliminado correctamente');
-                await onCancelarPago(transaction.id);
+                setShowDesgloseDialog(false);
                 setShowEliminarPagoModal(false);
+                await onCancelarPago(transaction.id);
             } else {
                 toast.error(result.error || 'Error al eliminar pago');
             }
@@ -305,16 +327,36 @@ export function MovimientoItemCard({
         }
     };
 
+    const handleConfirmarDevolucion = async () => {
+        setIsConfirmandoDevolucion(true);
+        try {
+            const { confirmarDevolucion: confirmarDevolucionAction } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+            const result = await confirmarDevolucionAction(studioSlug, transaction.id);
+            if (result.success) {
+                toast.success('Devolución confirmada. El movimiento se actualizó.');
+                setShowDesgloseDialog(false);
+                await onDevolucionConfirmada?.();
+            } else {
+                toast.error(result.error || 'Error al confirmar devolución');
+            }
+        } catch (error) {
+            console.error('Error confirmando devolución:', error);
+            toast.error('Error al confirmar devolución');
+        } finally {
+            setIsConfirmandoDevolucion(false);
+        }
+    };
+
     return (
         <>
             <ZenCard
                 variant="default"
                 padding="sm"
-                className={cn("hover:border-zinc-700 transition-colors", isGroup && "cursor-pointer")}
-                onClick={isGroup ? () => setShowDesgloseDialog(true) : undefined}
-                onKeyDown={isGroup ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesgloseDialog(true); } } : undefined}
-                role={isGroup ? "button" : undefined}
-                tabIndex={isGroup ? 0 : undefined}
+                className="hover:border-zinc-700 transition-colors cursor-pointer"
+                onClick={() => setShowDesgloseDialog(true)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesgloseDialog(true); } }}
+                role="button"
+                tabIndex={0}
             >
                 <ZenCardContent className="p-0">
                     <div className="flex items-center justify-between">
@@ -519,57 +561,56 @@ export function MovimientoItemCard({
                 loadingText="Eliminando..."
             />
 
-            {/* Sheet lateral: desglose de pagos agrupados */}
-            {isGroup && transaction.details && (
-                <Sheet open={showDesgloseDialog} onOpenChange={setShowDesgloseDialog}>
-                    <SheetContent
-                        side="right"
-                        className="w-full sm:max-w-md bg-zinc-900 border-l border-zinc-800 flex flex-col p-0"
-                    >
-                        <SheetHeader className="border-b border-zinc-800 px-4 py-4 flex-shrink-0">
-                            <SheetTitle className="text-zinc-200">Detalles del movimiento</SheetTitle>
-                        </SheetHeader>
-                        <div className="p-4 flex-1 overflow-y-auto">
-                            <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-4 mb-4 space-y-2 text-sm">
-                                {transaction.contactName && (
-                                    <p className="flex items-center gap-2 min-w-0">
-                                        <User className="h-4 w-4 text-zinc-500 shrink-0" />
-                                        <span className="text-zinc-500 shrink-0">Contacto:</span>
-                                        <span className="text-zinc-300 truncate">{transaction.contactName}</span>
-                                    </p>
-                                )}
-                                {(transaction.eventTypeName || transaction.eventName) && (
-                                    <p className="flex items-center gap-2 min-w-0 flex-wrap">
-                                        <FileSpreadsheet className="h-4 w-4 text-zinc-500 shrink-0" />
-                                        {transaction.eventTypeName ? (
-                                            <ZenBadge
-                                                variant="outline"
-                                                className="bg-emerald-500/20 text-emerald-400 border-emerald-400/50 font-medium px-1.5 py-0 text-[10px] rounded-full shrink-0"
-                                            >
-                                                {transaction.eventTypeName}
-                                            </ZenBadge>
-                                        ) : null}
-                                        {transaction.eventName ? (
-                                            <span className="text-zinc-300 truncate">{transaction.eventName}</span>
-                                        ) : null}
-                                    </p>
-                                )}
+            {/* Sheet lateral: detalles del movimiento (todos los tipos) */}
+            <Sheet open={showDesgloseDialog} onOpenChange={setShowDesgloseDialog}>
+                <SheetContent
+                    side="right"
+                    className="w-full sm:max-w-md bg-zinc-900 border-l border-zinc-800 flex flex-col p-0"
+                >
+                    <SheetHeader className="border-b border-zinc-800 px-4 py-4 flex-shrink-0">
+                        <SheetTitle className="text-zinc-200">Detalles del movimiento</SheetTitle>
+                    </SheetHeader>
+                    <div className="p-4 flex-1 overflow-y-auto">
+                        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-4 mb-4 space-y-2 text-sm">
+                            {transaction.contactName && (
                                 <p className="flex items-center gap-2 min-w-0">
-                                    <Calendar className="h-4 w-4 text-zinc-500 shrink-0" />
-                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha evento:</span>
-                                    <span className="text-zinc-300">{transaction.eventDate ? formatEventDate(transaction.eventDate) : '—'}</span>
+                                    <User className="h-4 w-4 text-zinc-500 shrink-0" />
+                                    <span className="text-zinc-500 shrink-0">Contacto:</span>
+                                    <span className="text-zinc-300 truncate">{transaction.contactName}</span>
                                 </p>
-                                <p className="flex items-center gap-2 min-w-0">
-                                    <Clock className="h-4 w-4 text-zinc-500 shrink-0" />
-                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha de pago:</span>
-                                    <span className="text-zinc-300">{formatDate(transaction.fecha)}</span>
-                                </p>
-                            </div>
-                            <p className="text-xs font-medium text-zinc-500 mb-2">
-                                {transaction.details.length > 1 ? 'Pagos' : 'Pago'}
+                            )}
+                            {(transaction.eventTypeName || transaction.eventName) && (
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                    <FileSpreadsheet className="h-4 w-4 text-zinc-500 shrink-0" />
+                                    {transaction.eventTypeName ? (
+                                        <ZenBadge
+                                            variant="outline"
+                                            className="bg-emerald-500/20 text-emerald-400 border-emerald-400/50 font-medium px-1.5 py-0 text-[10px] rounded-full shrink-0"
+                                        >
+                                            {transaction.eventTypeName}
+                                        </ZenBadge>
+                                    ) : null}
+                                    {transaction.eventName ? (
+                                        <span className="text-zinc-300 truncate">{transaction.eventName}</span>
+                                    ) : null}
+                                </div>
+                            )}
+                            <p className="flex items-center gap-2 min-w-0">
+                                <Calendar className="h-4 w-4 text-zinc-500 shrink-0" />
+                                <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha evento:</span>
+                                <span className="text-zinc-300">{transaction.eventDate ? formatEventDate(transaction.eventDate) : '—'}</span>
                             </p>
-                            <div className="border border-zinc-700 rounded-lg overflow-hidden">
-                                {transaction.details.map((d, i) => (
+                            <p className="flex items-center gap-2 min-w-0">
+                                <Clock className="h-4 w-4 text-zinc-500 shrink-0" />
+                                <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha de pago:</span>
+                                <span className="text-zinc-300">{formatDate(transaction.fecha)}</span>
+                            </p>
+                        </div>
+                        <p className="text-xs font-medium text-zinc-500 mb-2">
+                            {sheetDetails.length > 1 ? 'Pagos' : 'Movimiento'}
+                        </p>
+                        <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                            {sheetDetails.map((d, i) => (
                                     <div
                                         key={i}
                                         className="flex items-center justify-between gap-3 px-4 py-3 border-b border-zinc-700 last:border-b-0"
@@ -591,7 +632,7 @@ export function MovimientoItemCard({
                                         </span>
                                     </div>
                                 ))}
-                                {transaction.details.length > 1 && (
+                                {sheetDetails.length > 1 && (
                                     <div className="flex items-center justify-between gap-3 px-4 py-4 bg-zinc-800/50">
                                         <p className="text-base font-semibold text-zinc-100">Total consolidado</p>
                                         <span className={cn('text-lg font-bold shrink-0 tabular-nums', transaction.monto >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
@@ -599,8 +640,8 @@ export function MovimientoItemCard({
                                         </span>
                                     </div>
                                 )}
-                            </div>
-                            {(transaction.eventoId || transaction.promiseId) && (
+                        </div>
+                        {(transaction.eventoId || transaction.promiseId) && (
                                 <div className="flex flex-wrap gap-3 mt-4">
                                     {transaction.eventoId && (
                                         <Link
@@ -625,6 +666,18 @@ export function MovimientoItemCard({
                         </div>
                         <div className="border-t border-zinc-800 p-4 flex flex-col gap-3 flex-shrink-0 bg-zinc-900/80">
                             <div className="flex flex-col gap-2">
+                                {isPendienteDevolucion && (
+                                    <ZenButton
+                                        variant="default"
+                                        size="sm"
+                                        className="w-full justify-center gap-2 h-8 bg-emerald-600 hover:bg-emerald-500 text-white"
+                                        onClick={handleConfirmarDevolucion}
+                                        disabled={isConfirmandoDevolucion}
+                                    >
+                                        <CheckCircle className="h-3.5 w-3.5" />
+                                        {isConfirmandoDevolucion ? 'Confirmando...' : 'Confirmar devolución (dinero regresado)'}
+                                    </ZenButton>
+                                )}
                                 {(isIngreso || isNominaPagada || isRecurrenteConPersonal) && (
                                     <ZenButton
                                         variant="outline"
@@ -694,7 +747,6 @@ export function MovimientoItemCard({
                         </div>
                     </SheetContent>
                 </Sheet>
-            )}
         </>
     );
 }

@@ -41,6 +41,8 @@ export function PromiseLayoutClient({
 
   /** Modo foco: edición de cotización o negociación; ocultar toolbar y regresar global */
   const isFocusMode = pathname?.includes('/cotizacion/') === true;
+  /** Ruta autorizada: vista de cotización autorizada; no mostrar toolbar */
+  const isAutorizadaRoute = pathname?.includes('/autorizada') === true;
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareModalMode, setShareModalMode] = useState<'default' | 'publish'>('default');
@@ -333,7 +335,7 @@ export function PromiseLayoutClient({
                 : undefined
             }
           />
-          {!isFocusMode && (
+          {!isFocusMode && !isAutorizadaRoute && (
           <PromiseDetailToolbar
             studioSlug={studioSlug}
             promiseId={promiseId}

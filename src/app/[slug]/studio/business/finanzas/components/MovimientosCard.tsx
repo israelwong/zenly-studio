@@ -13,6 +13,7 @@ import {
     ZenDropdownMenuContent,
     ZenDropdownMenuItem,
 } from '@/components/ui/zen';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import { MovimientoItemCard } from './MovimientoItemCard';
 import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
 
@@ -37,6 +38,7 @@ interface MovimientosCardProps {
     onGastoEliminado?: () => void;
     onNominaCancelada?: () => void;
     onGastoEditado?: () => void;
+    onDevolucionConfirmada?: () => void;
 }
 
 export function MovimientosCard({
@@ -49,6 +51,7 @@ export function MovimientosCard({
     onGastoEliminado,
     onNominaCancelada,
     onGastoEditado,
+    onDevolucionConfirmada,
 }: MovimientosCardProps) {
     const [showIngresoModal, setShowIngresoModal] = useState(false);
     const [showGastoModal, setShowGastoModal] = useState(false);
@@ -76,19 +79,29 @@ export function MovimientosCard({
                         <ZenCardTitle className="text-base mb-0 min-w-0 flex-1 flex items-center gap-2 flex-wrap">
                             <span className="truncate">Movimientos del Mes</span>
                             {transactions.length > 0 && (
-                                <span className="flex items-center gap-2 shrink-0 text-sm text-zinc-400">
-                                    <span className="inline-flex items-center gap-1" title="Ingresos">
-                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
-                                            <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />
-                                        </span>
-                                        {countIngresos}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1" title="Egresos">
-                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
-                                            <ArrowDown className="h-3.5 w-3.5 text-red-500" />
-                                        </span>
-                                        {countEgresos}
-                                    </span>
+                                <span className="flex items-center gap-2 shrink-0 text-sm">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-emerald-400">
+                                                <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                                                {countIngresos}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
+                                            Ingreso
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-red-400">
+                                                <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                                                {countEgresos}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
+                                            Egreso
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </span>
                             )}
                         </ZenCardTitle>
@@ -127,6 +140,7 @@ export function MovimientosCard({
                                     onGastoEliminado={onGastoEliminado}
                                     onNominaCancelada={onNominaCancelada}
                                     onGastoEditado={onGastoEditado}
+                                    onDevolucionConfirmada={onDevolucionConfirmada}
                                 />
                             ))}
                         </div>

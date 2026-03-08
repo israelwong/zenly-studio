@@ -3818,6 +3818,8 @@ export interface PasarACierreOptions {
   template_id?: string | null;
   /** Solicitar firma digital del cliente (visible solo si se genera contrato) */
   solicitar_firma?: boolean;
+  /** Al pasar a cierre, si la cotización estaba oculta se fuerza visible para el prospecto (default true) */
+  visible_to_client?: boolean;
 }
 
 /**
@@ -3924,7 +3926,7 @@ export async function pasarACierre(
           status: 'en_cierre',
           selected_by_prospect: false,
           selected_at: new Date(),
-          visible_to_client: true,
+          visible_to_client: options?.visible_to_client ?? true,
           updated_at: new Date(),
         },
       });

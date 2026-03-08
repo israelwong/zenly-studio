@@ -15,6 +15,7 @@ import { CrewMembersManager } from '@/components/shared/crew-members';
 import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/TareasOperativasSheet';
 import { RemindersSideSheet } from '@/components/shared/reminders/RemindersSideSheet';
 import { PromisesConfigProvider, usePromisesConfig } from '../../commercial/promises/context/PromisesConfigContext';
+import { HistorialSheetProvider } from '../context/HistorialSheetContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
 import { CapacidadOperativaModal } from '@/components/shared/configuracion/CapacidadOperativaModal';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
@@ -87,7 +88,7 @@ function StudioLayoutContent({
   const [crewSheetOpen, setCrewSheetOpen] = useState(false);
   const [tareasOperativasOpen, setTareasOperativasOpen] = useState(false);
   const [remindersSheetOpen, setRemindersSheetOpen] = useState(false);
-  
+
   // Estados para modales de configuración
   const [showCondicionesManager, setShowCondicionesManager] = useState(false);
   const [showTerminosManager, setShowTerminosManager] = useState(false);
@@ -381,27 +382,29 @@ function StudioLayoutContent({
   ];
 
   return (
+    <HistorialSheetProvider studioSlug={studioSlug}>
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* COLUMNA 1: Main Column (AppHeader + Sidebar + Content en flex-col) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* ✅ RESTAURADO: AppHeader con datos pre-cargados (modo optimizado) */}
         <AppHeader
           studioSlug={studioSlug}
-          initialIdentidadData={initialIdentidadData} // ✅ OPTIMIZACIÓN: Pasar datos pre-cargados
-          initialUserProfile={initialUserProfile} // ✅ Perfil usuario (nombre + avatar) desde obtenerPerfil
-          initialStorageData={initialStorageData} // ✅ OPTIMIZACIÓN: Pasar storage pre-calculado
-          initialAgendaCount={headerData.agendaCount} // ✅ Cargado en cliente después del primer render
-          initialRemindersCount={headerData.remindersCount} // ✅ Cargado en cliente después del primer render
-          initialHeaderUserId={headerData.headerUserId} // ✅ Cargado en cliente después del primer render
-          initialAgendaEvents={headerData.agendaEvents} // ✅ Cargado en cliente después del primer render
-          initialRemindersAlerts={headerData.remindersAlerts} // ✅ Cargado en cliente después del primer render
-          initialReminders={headerData.reminders} // ✅ Recordatorios de hoy + próximos
+          initialIdentidadData={initialIdentidadData}
+          initialUserProfile={initialUserProfile}
+          initialStorageData={initialStorageData}
+          initialAgendaCount={headerData.agendaCount}
+          initialRemindersCount={headerData.remindersCount}
+          initialHeaderUserId={headerData.headerUserId}
+          initialAgendaEvents={headerData.agendaEvents}
+          initialRemindersAlerts={headerData.remindersAlerts}
+          initialReminders={headerData.reminders}
           onCommandOpen={() => setCommandOpen(true)}
           onAgendaClick={handleAgendaClick}
           onTareasOperativasClick={handleTareasOperativasClick}
           onContactsClick={handleContactsClick}
           onRemindersClick={handleRemindersClick}
           onPromisesConfigClick={handlePromisesConfigClick}
+          onHistorialClick={() => window.dispatchEvent(new CustomEvent('open-historial-sheet'))}
         />
         <InfrastructureStatusBanner />
         
@@ -573,6 +576,7 @@ function StudioLayoutContent({
         scope="global"
       />
     </div>
+    </HistorialSheetProvider>
   );
 }
 

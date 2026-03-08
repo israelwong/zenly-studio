@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { History, ChevronLeft, ChevronRight, Download, FileText, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { History, ChevronLeft, ChevronRight, Download, FileText, Calendar, ArrowUp, ArrowDown, XCircle } from 'lucide-react';
 import {
     Sheet,
     SheetContent,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import { ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import { ZenCalendar } from '@/components/ui/zen';
 import { obtenerMovimientosPorRango, type Transaction } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { MovimientoItemCard } from './MovimientoItemCard';
@@ -19,6 +20,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateRange, SelectRangeEventHandler } from 'react-day-picker';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface HistorialSheetProps {
     open: boolean;
@@ -29,49 +31,48 @@ interface HistorialSheetProps {
 export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialSheetProps) {
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null);
     const [tempRange, setTempRange] = useState<DateRange | undefined>(undefined);
-    const [filterMode, setFilterMode] = useState<'month' | 'range'>('month');
+    const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
+    const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(false);
-    const [calendarOpen, setCalendarOpen] = useState(false);
     const [generatingPdf, setGeneratingPdf] = useState(false);
     const reportRef = useRef<HTMLDivElement>(null);
 
-    // Calcular rango del mes actual por defecto
     useEffect(() => {
-        if (open && filterMode === 'month') {
+        if (open && !customRange) {
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth();
-            const start = new Date(year, month, 1);
-            const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            setDateRange({ from: start, to: end });
+            setDateRange({ from: new Date(year, month, 1), to: new Date(year, month + 1, 0, 23, 59, 59, 999) });
+        } else if (open && customRange) {
+            setDateRange(customRange);
         }
-    }, [open, currentMonth, filterMode]);
+    }, [open, currentMonth, customRange]);
 
-    // Cargar transacciones cuando cambia el rango
+    const loadTransactions = useCallback(async () => {
+        if (!dateRange?.from || !dateRange?.to) return;
+        setLoading(true);
+        try {
+            const result = await obtenerMovimientosPorRango(
+                studioSlug,
+                dateRange.from,
+                dateRange.to
+            );
+            if (result.success && result.data) {
+                setTransactions(result.data);
+            }
+        } catch (error) {
+            console.error('Error cargando historial:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [dateRange?.from, dateRange?.to, studioSlug]);
+
     useEffect(() => {
         if (!open || !dateRange?.from || !dateRange?.to) return;
-
-        const loadTransactions = async () => {
-            setLoading(true);
-            try {
-                const result = await obtenerMovimientosPorRango(
-                    studioSlug,
-                    dateRange.from!,
-                    dateRange.to!
-                );
-                if (result.success && result.data) {
-                    setTransactions(result.data);
-                }
-            } catch (error) {
-                console.error('Error cargando historial:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         loadTransactions();
-    }, [open, dateRange, studioSlug]);
+    }, [open, dateRange, studioSlug, loadTransactions]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -110,13 +111,17 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
             toast.error('Selecciona un rango de fechas válido');
             return;
         }
+        setCustomRange({ from: tempRange.from, to: tempRange.to });
         setDateRange(tempRange);
-        setCalendarOpen(false);
+        setRangePopoverOpen(false);
+        setTempRange(undefined);
     };
 
-    const handleCancelDateRange = () => {
-        setTempRange(dateRange);
-        setCalendarOpen(false);
+    const clearCustomRange = () => {
+        setCustomRange(null);
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        setDateRange({ from: new Date(year, month, 1), to: new Date(year, month + 1, 0, 23, 59, 59, 999) });
     };
 
     const handleExportPDF = async () => {
@@ -239,9 +244,9 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
             <Sheet open={open} onOpenChange={onOpenChange}>
                 <SheetContent
                     side="right"
-                    className="w-full sm:max-w-2xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
+                    className="w-full max-w-[450px] bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
                 >
-                    <SheetHeader className="border-b border-zinc-800 pb-4 px-6 pt-6">
+                    <SheetHeader className="border-b border-zinc-800 pb-3 px-6 pt-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-green-600/20 rounded-lg">
                                 <History className="h-5 w-5 text-green-400" />
@@ -257,167 +262,183 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                         </div>
                     </SheetHeader>
 
-                    <div className="p-6 space-y-6">
-                        {/* Filtros */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                                <ZenButton
-                                    variant={filterMode === 'month' ? 'primary' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setFilterMode('month')}
-                                >
-                                    Por Mes
-                                </ZenButton>
-                                <ZenButton
-                                    variant={filterMode === 'range' ? 'primary' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setFilterMode('range')}
-                                >
-                                    Por Rango
-                                </ZenButton>
-                            </div>
-
-                            {filterMode === 'month' ? (
-                                <div className="flex items-center gap-2">
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handlePreviousMonth}
-                                        className="h-8 w-8 p-0"
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </ZenButton>
-                                    <div className="flex-1 text-center px-4 py-2 bg-zinc-800/50 rounded-lg">
-                                        <span className="text-sm font-semibold text-zinc-200 capitalize">
-                                            {currentMonth.toLocaleDateString('es-ES', {
-                                                month: 'long',
-                                                year: 'numeric',
-                                            })}
-                                        </span>
+                    <div className="pt-2 px-6 pb-6 space-y-4">
+                        {/* Esqueleto: selector + balance + transacciones */}
+                        {loading ? (
+                            <>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="h-8 w-[180px] rounded-md bg-zinc-800/50 animate-pulse" />
+                                    <div className="h-8 w-[120px] rounded-md bg-zinc-800/30 animate-pulse" />
+                                </div>
+                                <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-4 space-y-3">
+                                    <div className="h-3 w-28 bg-zinc-700/50 rounded animate-pulse" />
+                                    <div className="h-8 w-32 bg-zinc-700/50 rounded animate-pulse" />
+                                    <div className="flex gap-4">
+                                        <div className="h-4 w-20 bg-zinc-700/40 rounded animate-pulse" />
+                                        <div className="h-4 w-20 bg-zinc-700/40 rounded animate-pulse" />
                                     </div>
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleNextMonth}
-                                        className="h-8 w-8 p-0"
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </ZenButton>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="h-4 w-32 bg-zinc-800/50 rounded animate-pulse" />
+                                    <div className="space-y-2">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800/30 border border-zinc-800/50">
+                                                <div className="h-10 w-10 rounded-lg bg-zinc-700/50 animate-pulse shrink-0" />
+                                                <div className="flex-1 space-y-1.5 min-w-0">
+                                                    <div className="h-3.5 w-3/4 bg-zinc-700/50 rounded animate-pulse" />
+                                                    <div className="h-3 w-1/2 bg-zinc-700/40 rounded animate-pulse" />
+                                                </div>
+                                                <div className="h-5 w-16 bg-zinc-700/50 rounded animate-pulse shrink-0" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                        {/* Selector de fecha (homólogo al header de Finanzas) */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {customRange ? (
+                                <div className="flex items-center gap-0 h-8 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
+                                    <div className="flex items-center gap-1 h-8 px-2 min-w-0">
+                                        <span className="text-sm font-semibold text-emerald-400 truncate">
+                                            {format(customRange.from, 'dd MMM yyyy', { locale: es })} – {format(customRange.to, 'dd MMM yyyy', { locale: es })}
+                                        </span>
+                                        <ZenButton
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={clearCustomRange}
+                                            aria-label="Quitar rango"
+                                            className="h-8 w-8 p-0 shrink-0"
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                        </ZenButton>
+                                    </div>
                                 </div>
                             ) : (
-                                <Popover
-                                    open={calendarOpen}
-                                    onOpenChange={(isOpen) => {
-                                        setCalendarOpen(isOpen);
-                                        if (isOpen) {
-                                            setTempRange(dateRange);
-                                        }
-                                    }}
-                                >
-                                    <PopoverTrigger asChild>
+                                <>
+                                    <div className="flex items-center gap-0 h-8 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
                                         <ZenButton
-                                            variant="outline"
-                                            className="w-full justify-start"
-                                            icon={Calendar}
-                                            iconPosition="left"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handlePreviousMonth}
+                                            aria-label="Mes anterior"
+                                            className="h-8 w-8 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent shrink-0"
                                         >
-                                            {dateRange?.from ? (
-                                                dateRange.to ? (
-                                                    <>
-                                                        {format(dateRange.from, 'dd MMM', { locale: es })} -{' '}
-                                                        {format(dateRange.to, 'dd MMM', { locale: es })}
-                                                    </>
-                                                ) : (
-                                                    format(dateRange.from, 'dd MMM', { locale: es })
-                                                )
-                                            ) : (
-                                                'Seleccionar rango de fechas'
-                                            )}
+                                            <ChevronLeft className="h-4 w-4" />
                                         </ZenButton>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        className="w-auto p-0 bg-zinc-900 border-zinc-700"
-                                        align="start"
-                                    >
-                                        <div className="p-3">
+                                        <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="h-8 flex items-center justify-center px-2 min-w-[120px] text-center text-sm font-semibold capitalize text-emerald-100 hover:bg-emerald-900/40 transition-colors"
+                                                >
+                                                    {currentMonth.toLocaleDateString('es-ES', {
+                                                        month: 'long',
+                                                        year: 'numeric',
+                                                    }).replace(' de ', ' ')}
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-4 bg-zinc-900 border-zinc-800" align="center">
+                                                <div className="grid grid-cols-3 gap-1 text-sm">
+                                                    {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, i) => (
+                                                        <ZenButton
+                                                            key={m}
+                                                            variant={currentMonth.getMonth() === i ? 'default' : 'ghost'}
+                                                            size="sm"
+                                                            className="h-8"
+                                                            onClick={() => {
+                                                                const d = new Date(currentMonth);
+                                                                d.setMonth(i);
+                                                                setCurrentMonth(d);
+                                                                setMonthPopoverOpen(false);
+                                                            }}
+                                                        >
+                                                            {m}
+                                                        </ZenButton>
+                                                    ))}
+                                                </div>
+                                                <div className="flex items-center justify-center gap-1 border-t border-zinc-800 pt-2 mt-2">
+                                                    <ZenButton variant="ghost" size="sm" onClick={() => { const d = new Date(currentMonth); d.setFullYear(d.getFullYear() - 1); setCurrentMonth(d); }}>-</ZenButton>
+                                                    <span className="text-sm font-medium text-zinc-200 min-w-[4rem] text-center">{currentMonth.getFullYear()}</span>
+                                                    <ZenButton variant="ghost" size="sm" onClick={() => { const d = new Date(currentMonth); d.setFullYear(d.getFullYear() + 1); setCurrentMonth(d); }}>+</ZenButton>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                        <ZenButton
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleNextMonth}
+                                            aria-label="Mes siguiente"
+                                            className="h-8 w-8 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent shrink-0"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </ZenButton>
+                                    </div>
+                                    <Popover open={rangePopoverOpen} onOpenChange={(o) => { setRangePopoverOpen(o); if (!o) setTempRange(undefined); }}>
+                                        <PopoverTrigger asChild>
+                                            <ZenButton variant="outline" size="sm" className="h-8" icon={Calendar} iconPosition="left">
+                                                Definir Rango
+                                            </ZenButton>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-4 bg-zinc-900 border-zinc-800" align="end">
                                             <ZenCalendar
                                                 mode="range"
-                                                defaultMonth={tempRange?.from || dateRange?.from}
+                                                defaultMonth={tempRange?.from ?? dateRange?.from ?? currentMonth}
+                                                selected={tempRange}
+                                                onSelect={setTempRange as SelectRangeEventHandler}
                                                 numberOfMonths={2}
-                                                locale={es}
-                                                className="rounded-lg border shadow-sm"
-                                                {...(tempRange && { selected: tempRange })}
-                                                {...(setTempRange && { onSelect: setTempRange as SelectRangeEventHandler })}
                                             />
-                                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
-                                                <ZenButton
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={handleCancelDateRange}
-                                                >
-                                                    Cancelar
-                                                </ZenButton>
-                                                <ZenButton
-                                                    variant="primary"
-                                                    size="sm"
-                                                    onClick={handleApplyDateRange}
-                                                    disabled={!tempRange?.from || !tempRange?.to}
-                                                >
-                                                    Aplicar rango
-                                                </ZenButton>
+                                            <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-zinc-800">
+                                                <ZenButton variant="ghost" size="sm" onClick={() => setRangePopoverOpen(false)}>Cancelar</ZenButton>
+                                                <ZenButton size="sm" onClick={handleApplyDateRange} disabled={!tempRange?.from || !tempRange?.to}>Aplicar</ZenButton>
                                             </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
+                                        </PopoverContent>
+                                    </Popover>
+                                </>
                             )}
                         </div>
 
-                        {/* Totales */}
-                        <div className="grid grid-cols-3 gap-4">
-                            <ZenCard variant="default" padding="sm">
-                                <ZenCardContent className="p-4">
-                                    <p className="text-xs text-zinc-500 mb-1">Ingresos</p>
-                                    <p className="text-lg font-semibold text-emerald-400">
-                                        {formatCurrency(ingresos)}
-                                    </p>
-                                </ZenCardContent>
-                            </ZenCard>
-                            <ZenCard variant="default" padding="sm">
-                                <ZenCardContent className="p-4">
-                                    <p className="text-xs text-zinc-500 mb-1">Egresos</p>
-                                    <p className="text-lg font-semibold text-rose-400">
-                                        {formatCurrency(egresos)}
-                                    </p>
-                                </ZenCardContent>
-                            </ZenCard>
-                            <ZenCard variant="default" padding="sm">
-                                <ZenCardContent className="p-4">
-                                    <p className="text-xs text-zinc-500 mb-1">Balance</p>
-                                    <p
-                                        className={`text-lg font-semibold ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                                            }`}
-                                    >
-                                        {formatCurrency(balance)}
-                                    </p>
-                                </ZenCardContent>
-                            </ZenCard>
-                        </div>
+                        {/* Balance del periodo (alta densidad: una tarjeta con indicadores) */}
+                        <ZenCard variant="default" padding="none">
+                            <ZenCardContent className="px-4 py-3">
+                                <p className="text-sm text-zinc-400 mb-1">Balance del periodo</p>
+                                <p className={cn('text-2xl font-bold', balance >= 0 ? 'text-emerald-500' : 'text-red-500')}>
+                                    {formatCurrency(balance)}
+                                </p>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-emerald-400">
+                                                <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                                                {formatCurrency(ingresos)}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
+                                            Ingresos
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-red-400">
+                                                <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                                                {formatCurrency(egresos)}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
+                                            Egresos
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </ZenCardContent>
+                        </ZenCard>
 
                         {/* Lista de transacciones */}
                         <div className="space-y-2">
                             <h3 className="text-sm font-semibold text-zinc-300">
                                 Transacciones ({transactions.length})
                             </h3>
-                            {loading ? (
-                                <div className="space-y-2">
-                                    {[1, 2, 3].map((i) => (
-                                        <div
-                                            key={i}
-                                            className="h-20 bg-zinc-800/30 rounded-lg animate-pulse"
-                                        />
-                                    ))}
-                                </div>
-                            ) : transactions.length === 0 ? (
+                            {transactions.length === 0 ? (
                                 <div className="text-center py-8 text-zinc-500">
                                     <p>No hay transacciones en el período seleccionado</p>
                                 </div>
@@ -428,20 +449,34 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                                             key={transaction.id}
                                             transaction={transaction}
                                             studioSlug={studioSlug}
+                                            onCancelarPago={async (id) => {
+                                                try {
+                                                    const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
+                                                    const result = await cancelarPago(studioSlug, id);
+                                                    if (result.success) await loadTransactions();
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }}
+                                            onGastoEliminado={loadTransactions}
+                                            onNominaCancelada={loadTransactions}
+                                            onDevolucionConfirmada={loadTransactions}
                                         />
                                     ))}
                                 </div>
                             )}
                         </div>
+                            </>
+                        )}
                     </div>
 
-                    <SheetFooter className="border-t border-zinc-800 px-6 py-4 gap-2">
+                    <SheetFooter className="border-t border-zinc-800 px-6 py-4 flex flex-row gap-2">
                         <ZenButton
                             variant="outline"
                             onClick={handleExportCSV}
                             icon={Download}
                             iconPosition="left"
-                            className="flex-1"
+                            className="w-1/2"
                         >
                             Descargar CSV
                         </ZenButton>
@@ -450,7 +485,7 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                             onClick={handleExportPDF}
                             icon={FileText}
                             iconPosition="left"
-                            className="flex-1"
+                            className="w-1/2"
                             disabled={generatingPdf}
                         >
                             {generatingPdf ? 'Generando...' : 'Descargar PDF'}
@@ -470,11 +505,9 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                         <div style={{ display: 'flex', gap: '24px', fontSize: '12px', color: '#6b7280' }}>
                             <div>
                                 <strong>Período:</strong>{' '}
-                                {filterMode === 'month'
-                                    ? format(currentMonth, 'MMMM yyyy', { locale: es })
-                                    : dateRange?.from && dateRange?.to
-                                        ? `${format(dateRange.from, 'dd/MM/yyyy', { locale: es })} - ${format(dateRange.to, 'dd/MM/yyyy', { locale: es })}`
-                                        : ''}
+                                {customRange
+                                    ? `${format(customRange.from, 'dd/MM/yyyy', { locale: es })} - ${format(customRange.to, 'dd/MM/yyyy', { locale: es })}`
+                                    : format(currentMonth, 'MMMM yyyy', { locale: es })}
                             </div>
                             <div>
                                 <strong>Generado:</strong> {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: es })}

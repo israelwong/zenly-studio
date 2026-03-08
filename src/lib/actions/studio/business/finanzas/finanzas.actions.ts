@@ -771,6 +771,227 @@ export async function obtenerRentabilidadPorEvento(
     }
 }
 
+/** Helper: ingresos y egresos para un rango (reutilizado para histórico) */
+async function getIngresosEgresosForRange(
+    studioId: string,
+    start: Date,
+    end: Date
+): Promise<{ ingresos: number; egresos: number }> {
+    const ingresosAgg = await prisma.studio_pagos.aggregate({
+        where: {
+            AND: [
+                {
+                    OR: [
+                        { studio_users: { studio_id: studioId } },
+                        { promise: { studio_id: studioId } },
+                        { cotizaciones: { studio_id: studioId } },
+                    ],
+                },
+                { status: { in: ['paid', 'completed', 'retained_by_cancellation'] } },
+                {
+                    OR: [
+                        { payment_date: { gte: start, lte: end } },
+                        { AND: [{ payment_date: null }, { created_at: { gte: start, lte: end } }] },
+                    ],
+                },
+            ],
+        },
+        _sum: { amount: true },
+    });
+    const ingresos = ingresosAgg._sum.amount ?? 0;
+
+    const gastosSum = await prisma.studio_gastos.aggregate({
+        where: { studio_id: studioId, date: { gte: start, lte: end } },
+        _sum: { amount: true },
+    });
+    const gastosTotal = gastosSum._sum.amount ?? 0;
+
+    const nominasRaw = await prisma.studio_nominas.findMany({
+        where: {
+            studio_id: studioId,
+            status: 'pagado',
+            OR: [
+                { payment_date: { gte: start, lte: end } },
+                { AND: [{ payment_date: null }, { updated_at: { gte: start, lte: end } }] },
+            ],
+        },
+        select: {
+            id: true,
+            net_amount: true,
+            payment_type: true,
+            consolidated_payment_id: true,
+            personal_id: true,
+            payment_date: true,
+        },
+    });
+    const nominasConsolidadas = new Map<string, (typeof nominasRaw)[0]>();
+    const nominasIndividuales: (typeof nominasRaw) = [];
+    const idsConsolidados = new Set<string>();
+    for (const nomina of nominasRaw) {
+        if (nomina.payment_type === 'consolidado') {
+            nominasConsolidadas.set(nomina.id, nomina);
+            idsConsolidados.add(nomina.id);
+        }
+    }
+    for (const nomina of nominasRaw) {
+        if (nomina.payment_type === 'individual') {
+            if (nomina.consolidated_payment_id && idsConsolidados.has(nomina.consolidated_payment_id)) continue;
+            const posibleConsolidado = Array.from(nominasConsolidadas.values()).find(
+                (c) =>
+                    c.personal_id === nomina.personal_id &&
+                    c.payment_date &&
+                    nomina.payment_date &&
+                    Math.abs(c.payment_date.getTime() - nomina.payment_date.getTime()) < 1000
+            );
+            if (posibleConsolidado) continue;
+            nominasIndividuales.push(nomina);
+        }
+    }
+    const nominasTotal = [...nominasConsolidadas.values(), ...nominasIndividuales].reduce(
+        (sum, n) => sum + Number(n.net_amount),
+        0
+    );
+    const egresos = gastosTotal + nominasTotal;
+    return { ingresos, egresos };
+}
+
+export interface RentabilidadHistoricaMes {
+    year: number;
+    month: number;
+    monthLabel: string;
+    totalIngresos: number;
+    totalEgresos: number;
+    rentabilidadNeta: number;
+}
+
+export type RentabilidadHistoricaResult =
+    | { success: true; data: RentabilidadHistoricaMes[] }
+    | { success: false; error: string };
+
+/**
+ * Rentabilidad histórica por mes desde el inicio del estudio
+ */
+export async function obtenerRentabilidadHistoricaMeses(
+    studioSlug: string
+): Promise<RentabilidadHistoricaResult> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true, created_at: true },
+        });
+        if (!studio) return { success: false, error: 'Studio no encontrado' };
+        const studioId = studio.id;
+        const startFrom = new Date(studio.created_at);
+        startFrom.setDate(1);
+        startFrom.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const endTo = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const data: RentabilidadHistoricaMes[] = [];
+        let current = new Date(startFrom.getFullYear(), startFrom.getMonth(), 1);
+        const maxMonths = 120;
+        let count = 0;
+        while (current <= endTo && count < maxMonths) {
+            const start = new Date(current.getFullYear(), current.getMonth(), 1);
+            const end = new Date(current.getFullYear(), current.getMonth() + 1, 0, 23, 59, 59, 999);
+            const { ingresos, egresos } = await getIngresosEgresosForRange(studioId, start, end);
+            data.push({
+                year: current.getFullYear(),
+                month: current.getMonth() + 1,
+                monthLabel: `${MONTH_NAMES[current.getMonth()]} ${current.getFullYear()}`,
+                totalIngresos: ingresos,
+                totalEgresos: egresos,
+                rentabilidadNeta: ingresos - egresos,
+            });
+            current.setMonth(current.getMonth() + 1);
+            count++;
+        }
+        data.reverse();
+        return { success: true, data };
+    } catch (error) {
+        console.error('Error obteniendo rentabilidad histórica:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+export interface RentabilidadPorTipoEventoItem {
+    eventTypeId: string;
+    eventTypeName: string;
+    totalIngresos: number;
+    cantidadPagos: number;
+}
+
+export type RentabilidadPorTipoEventoResult =
+    | { success: true; data: RentabilidadPorTipoEventoItem[] }
+    | { success: false; error: string };
+
+/**
+ * Ingresos y volumen por tipo de evento (event_type_id en studio_pagos)
+ */
+export async function obtenerRentabilidadPorTipoEvento(
+    studioSlug: string
+): Promise<RentabilidadPorTipoEventoResult> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) return { success: false, error: 'Studio no encontrado' };
+
+        const pagos = await prisma.studio_pagos.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { studio_users: { studio_id: studioId } },
+                            { promise: { studio_id: studioId } },
+                            { cotizaciones: { studio_id: studioId } },
+                        ],
+                    },
+                    { status: { in: ['paid', 'completed', 'retained_by_cancellation'] } },
+                    { event_type_id: { not: null } },
+                ],
+            },
+            select: {
+                amount: true,
+                event_type_id: true,
+                event_type: { select: { id: true, name: true } },
+            },
+        });
+
+        const byType = new Map<
+            string,
+            { eventTypeName: string; totalIngresos: number; cantidadPagos: number }
+        >();
+        for (const p of pagos) {
+            const etId = p.event_type_id!;
+            const name = p.event_type?.name ?? 'Sin tipo';
+            const prev = byType.get(etId);
+            if (!prev) {
+                byType.set(etId, { eventTypeName: name, totalIngresos: p.amount, cantidadPagos: 1 });
+            } else {
+                prev.totalIngresos += p.amount;
+                prev.cantidadPagos += 1;
+            }
+        }
+        const data: RentabilidadPorTipoEventoItem[] = Array.from(byType.entries())
+            .map(([eventTypeId, v]) => ({
+                eventTypeId,
+                eventTypeName: v.eventTypeName,
+                totalIngresos: v.totalIngresos,
+                cantidadPagos: v.cantidadPagos,
+            }))
+            .sort((a, b) => b.totalIngresos - a.totalIngresos);
+        return { success: true, data };
+    } catch (error) {
+        console.error('Error obteniendo rentabilidad por tipo de evento:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
 /**
  * Obtener movimientos unificados (pagos, nóminas, gastos) por rango de fechas
  */
@@ -3426,6 +3647,52 @@ export async function eliminarGastoRecurrente(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al eliminar gasto recurrente',
+        };
+    }
+}
+
+/**
+ * Confirmar devolución: actualizar pago de pending_refund a refunded (dinero ya regresado al cliente)
+ */
+export async function confirmarDevolucion(
+    studioSlug: string,
+    pagoId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const pago = await prisma.studio_pagos.findFirst({
+            where: {
+                id: pagoId,
+                status: 'pending_refund',
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                ],
+            },
+            select: { id: true },
+        });
+
+        if (!pago) {
+            return { success: false, error: 'Pago pendiente de devolución no encontrado' };
+        }
+
+        await prisma.studio_pagos.update({
+            where: { id: pagoId },
+            data: { status: 'refunded' },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error confirmando devolución:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al confirmar devolución',
         };
     }
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert, Calendar, XCircle } from 'lucide-react';
+import { DollarSign, ChevronLeft, ChevronRight, Calendar, XCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenCalendar } from '@/components/ui/zen';
@@ -16,8 +16,9 @@ import { PorPagarCard } from './components/PorPagarCard';
 import { RecurrentesSheet } from './components/RecurrentesSheet';
 import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
 import { RegistrarGastoRecurrenteModal } from './components/RegistrarGastoRecurrenteModal';
-import { HistorialSheet } from './components/HistorialSheet';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
+import { ToolbarFinanzas } from './components/ToolbarFinanzas';
+import { useHistorialSheet } from '@/app/[slug]/studio/components/context/HistorialSheetContext';
 import {
     obtenerKPIsFinancieros,
     obtenerMovimientos,
@@ -25,9 +26,13 @@ import {
     obtenerPorPagar,
     obtenerGastosRecurrentes,
     obtenerRentabilidadPorEvento,
+    obtenerRentabilidadHistoricaMeses,
+    obtenerRentabilidadPorTipoEvento,
     verificarRolOwnerOAdmin,
     type PorPagarPersonal,
     type RentabilidadPorEvento,
+    type RentabilidadHistoricaMes,
+    type RentabilidadPorTipoEventoItem,
 } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
 export default function FinanzasPage() {
@@ -95,8 +100,12 @@ export default function FinanzasPage() {
         frequency?: string;
         description?: string | null;
     }>>([]);
-    const [historialOpen, setHistorialOpen] = useState(false);
     const [auditoriaOpen, setAuditoriaOpen] = useState(false);
+    const [finanzasTab, setFinanzasTab] = useState<'resumen' | 'rentabilidad'>('resumen');
+    const [rentabilidadHistorica, setRentabilidadHistorica] = useState<RentabilidadHistoricaMes[]>([]);
+    const [rentabilidadPorTipo, setRentabilidadPorTipo] = useState<RentabilidadPorTipoEventoItem[]>([]);
+    const [rentabilidadLoading, setRentabilidadLoading] = useState(false);
+    const { openHistorial } = useHistorialSheet();
     const [recurrentesSheetOpen, setRecurrentesSheetOpen] = useState(false);
     const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
     const [showNuevoRecurrenteModal, setShowNuevoRecurrenteModal] = useState(false);
@@ -109,6 +118,23 @@ export default function FinanzasPage() {
         setMounted(true);
         setCurrentMonth(new Date());
     }, []);
+
+    useEffect(() => {
+        if (finanzasTab !== 'rentabilidad') return;
+        let cancelled = false;
+        setRentabilidadLoading(true);
+        (async () => {
+            const [mesesRes, tipoRes] = await Promise.all([
+                obtenerRentabilidadHistoricaMeses(studioSlug),
+                obtenerRentabilidadPorTipoEvento(studioSlug),
+            ]);
+            if (cancelled) return;
+            if (mesesRes.success && mesesRes.data) setRentabilidadHistorica(mesesRes.data);
+            if (tipoRes.success && tipoRes.data) setRentabilidadPorTipo(tipoRes.data);
+            setRentabilidadLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [finanzasTab, studioSlug]);
 
     useEffect(() => {
         if (!mounted || !currentMonth) return;
@@ -247,43 +273,46 @@ export default function FinanzasPage() {
         <div className="h-[calc(100vh-80px)]">
             <ZenCard variant="default" padding="none" className="h-full flex flex-col">
                 <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-600/20 rounded-lg">
-                                <DollarSign className="h-5 w-5 text-green-400" />
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-green-600/20 rounded-lg">
+                                    <DollarSign className="h-5 w-5 text-green-400" />
+                                </div>
+                                <div>
+                                    <ZenCardTitle>Finanzas</ZenCardTitle>
+                                    <ZenCardDescription>
+                                        Gestiona las finanzas de tu estudio
+                                    </ZenCardDescription>
+                                </div>
                             </div>
-                            <div>
-                                <ZenCardTitle>Finanzas</ZenCardTitle>
-                                <ZenCardDescription>
-                                    Gestiona las finanzas de tu estudio
-                                </ZenCardDescription>
-                            </div>
-                        </div>
-                        {currentMonth && (
+                            {currentMonth && (
                             <div className="flex items-center gap-2">
                                 {customRange ? (
                                     <>
-                                        <div className="flex items-center gap-1 px-2 py-1 min-w-0">
-                                            <span className="text-sm font-semibold text-zinc-200 truncate">
-                                                {format(customRange.from, 'dd MMM yyyy', { locale: es })} – {format(customRange.to, 'dd MMM yyyy', { locale: es })}
-                                            </span>
-                                            <ZenButton
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setCustomRange(null);
-                                                    setCurrentMonth(new Date());
-                                                }}
-                                                aria-label="Quitar rango"
-                                                className="h-7 w-7 p-0 shrink-0"
-                                            >
-                                                <XCircle className="h-4 w-4" />
-                                            </ZenButton>
+                                        <div className="flex items-center gap-0 h-8 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
+                                            <div className="flex items-center gap-1 h-8 px-2 min-w-0">
+                                                <span className="text-sm font-semibold text-emerald-400 truncate">
+                                                    {format(customRange.from, 'dd MMM yyyy', { locale: es })} – {format(customRange.to, 'dd MMM yyyy', { locale: es })}
+                                                </span>
+                                                <ZenButton
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setCustomRange(null);
+                                                        setCurrentMonth(new Date());
+                                                    }}
+                                                    aria-label="Quitar rango"
+                                                    className="h-8 w-8 p-0 shrink-0"
+                                                >
+                                                    <XCircle className="h-4 w-4" />
+                                                </ZenButton>
+                                            </div>
                                         </div>
                                     </>
                                 ) : (
                                     <>
-                                        <div className="flex items-center gap-0 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
+                                        <div className="flex items-center gap-0 h-8 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
                                             <ZenButton
                                                 variant="ghost"
                                                 size="sm"
@@ -293,7 +322,7 @@ export default function FinanzasPage() {
                                                     setCurrentMonth(newDate);
                                                 }}
                                                 aria-label="Mes anterior"
-                                                className="h-7 w-7 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent"
+                                                className="h-8 w-8 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent shrink-0"
                                             >
                                                 <ChevronLeft className="h-4 w-4" />
                                             </ZenButton>
@@ -301,14 +330,12 @@ export default function FinanzasPage() {
                                                 <PopoverTrigger asChild>
                                                     <button
                                                         type="button"
-                                                        className="px-2 py-1 min-w-[140px] text-center text-emerald-100 hover:bg-emerald-900/40 transition-colors"
+                                                        className="h-8 flex items-center justify-center px-2 min-w-[140px] text-center text-sm font-semibold capitalize text-emerald-100 hover:bg-emerald-900/40 transition-colors"
                                                     >
-                                                        <span className="text-sm font-semibold capitalize">
-                                                            {currentMonth.toLocaleDateString('es-ES', {
-                                                                month: 'long',
-                                                                year: 'numeric',
-                                                            }).replace(' de ', ' ')}
-                                                        </span>
+                                                        {currentMonth.toLocaleDateString('es-ES', {
+                                                            month: 'long',
+                                                            year: 'numeric',
+                                                        }).replace(' de ', ' ')}
                                                     </button>
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-auto p-4 bg-zinc-900 border-zinc-800" align="center">
@@ -370,7 +397,7 @@ export default function FinanzasPage() {
                                                     setCurrentMonth(newDate);
                                                 }}
                                                 aria-label="Mes siguiente"
-                                                className="h-7 w-7 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent"
+                                                className="h-8 w-8 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent shrink-0"
                                             >
                                                 <ChevronRight className="h-4 w-4" />
                                             </ZenButton>
@@ -380,7 +407,7 @@ export default function FinanzasPage() {
                                             if (!open) setTempRange(undefined);
                                         }}>
                                             <PopoverTrigger asChild>
-                                                <ZenButton variant="outline" size="sm" icon={Calendar} iconPosition="left">
+                                                <ZenButton variant="outline" size="sm" className="h-8" icon={Calendar} iconPosition="left">
                                                     Definir Rango
                                                 </ZenButton>
                                             </PopoverTrigger>
@@ -415,31 +442,127 @@ export default function FinanzasPage() {
                                         </Popover>
                                     </>
                                 )}
-                                <ZenButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setAuditoriaOpen(true)}
-                                    icon={ShieldAlert}
-                                    iconPosition="left"
-                                >
-                                    Auditoría de Integridad
-                                </ZenButton>
-                                <ZenButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setHistorialOpen(true)}
-                                    icon={History}
-                                    iconPosition="left"
-                                >
-                                    Historial
-                                </ZenButton>
                             </div>
                         )}
+                        </div>
                     </div>
                 </ZenCardHeader>
 
+                <ToolbarFinanzas
+                    vistaActiva={finanzasTab}
+                    onVistaChange={setFinanzasTab}
+                    onHistorial={openHistorial}
+                    onAuditoria={() => setAuditoriaOpen(true)}
+                />
+
                 <ZenCardContent className="p-6 flex-1 min-h-0 flex flex-col overflow-hidden">
-                    {loading ? (
+                    {finanzasTab === 'rentabilidad' ? (
+                        <div className="flex flex-col gap-6 h-full overflow-auto">
+                            <div>
+                                <h3 className="text-sm font-semibold text-zinc-200 mb-3">Rentabilidad por mes</h3>
+                                {rentabilidadLoading ? (
+                                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 animate-pulse h-64" />
+                                ) : (
+                                    <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-zinc-800 bg-zinc-800/50">
+                                                    <th className="text-left py-3 px-4 font-medium text-zinc-300">Mes</th>
+                                                    <th className="text-right py-3 px-4 font-medium text-zinc-300">Ingresos</th>
+                                                    <th className="text-right py-3 px-4 font-medium text-zinc-300">Egresos</th>
+                                                    <th className="text-right py-3 px-4 font-medium text-zinc-300">Rentabilidad neta</th>
+                                                    <th className="text-right py-3 px-4 font-medium text-zinc-300">Tendencia</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {rentabilidadHistorica.map((row, idx) => {
+                                                    const prev = idx > 0 ? rentabilidadHistorica[idx - 1].rentabilidadNeta : null;
+                                                    const changePct = prev !== null && prev !== 0
+                                                        ? ((row.rentabilidadNeta - prev) / Math.abs(prev)) * 100
+                                                        : null;
+                                                    return (
+                                                        <tr key={`${row.year}-${row.month}`} className="border-b border-zinc-800/80 hover:bg-zinc-800/30">
+                                                            <td className="py-2.5 px-4 text-zinc-200">{row.monthLabel}</td>
+                                                            <td className="py-2.5 px-4 text-right text-emerald-400">
+                                                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(row.totalIngresos)}
+                                                            </td>
+                                                            <td className="py-2.5 px-4 text-right text-red-400">
+                                                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(row.totalEgresos)}
+                                                            </td>
+                                                            <td className={`py-2.5 px-4 text-right font-medium ${row.rentabilidadNeta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(row.rentabilidadNeta)}
+                                                            </td>
+                                                            <td className="py-2.5 px-4 text-right">
+                                                                {changePct !== null ? (
+                                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${changePct >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                        {changePct >= 0 ? <TrendingUp size={14} className="shrink-0" /> : <TrendingDown size={14} className="shrink-0" />}
+                                                                        {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-zinc-500 text-xs">—</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-zinc-200 mb-3">Rentabilidad por tipo de evento</h3>
+                                {rentabilidadLoading ? (
+                                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 animate-pulse h-40" />
+                                ) : (
+                                    (() => {
+                                        const totalPagos = rentabilidadPorTipo.reduce((s, r) => s + r.cantidadPagos, 0);
+                                        const totalIngresosGlobal = rentabilidadPorTipo.reduce((s, r) => s + r.totalIngresos, 0);
+                                        const ticketPromedioGlobal = totalPagos > 0 ? totalIngresosGlobal / totalPagos : 0;
+                                        return (
+                                            <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="border-b border-zinc-800 bg-zinc-800/50">
+                                                            <th className="text-left py-3 px-4 font-medium text-zinc-300">Tipo de evento</th>
+                                                            <th className="text-right py-3 px-4 font-medium text-zinc-300">Total ingresos</th>
+                                                            <th className="text-right py-3 px-4 font-medium text-zinc-300">Pagos</th>
+                                                            <th className="text-right py-3 px-4 font-medium text-zinc-300">Ticket Promedio</th>
+                                                            <th className="text-right py-3 px-4 font-medium text-zinc-300">Margen %</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {rentabilidadPorTipo.map((row) => {
+                                                            const ticketPromedio = row.cantidadPagos > 0 ? row.totalIngresos / row.cantidadPagos : 0;
+                                                            const esEstrella = ticketPromedioGlobal > 0 && ticketPromedio > ticketPromedioGlobal;
+                                                            return (
+                                                                <tr key={row.eventTypeId} className="border-b border-zinc-800/80 hover:bg-zinc-800/30">
+                                                                    <td className="py-2.5 px-4 text-zinc-200">{row.eventTypeName}</td>
+                                                                    <td className="py-2.5 px-4 text-right text-emerald-400">
+                                                                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(row.totalIngresos)}
+                                                                    </td>
+                                                                    <td className="py-2.5 px-4 text-right text-zinc-400">{row.cantidadPagos}</td>
+                                                                    <td className="py-2.5 px-4 text-right text-zinc-300">
+                                                                        <span className="inline-flex items-center gap-1 justify-end">
+                                                                            {row.cantidadPagos > 0
+                                                                                ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(ticketPromedio)
+                                                                                : '—'}
+                                                                            {esEstrella && <TrendingUp size={14} className="shrink-0 text-emerald-400" aria-label="Producto estrella" />}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-2.5 px-4 text-right text-zinc-500">—</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                            </div>
+                        </div>
+                    ) : loading ? (
                         <div className="flex flex-col gap-6 h-full">
                             {/* KPIs Skeleton */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
@@ -521,6 +644,7 @@ export default function FinanzasPage() {
                         <div className="flex flex-col gap-6 h-full">
                             <div className="flex-shrink-0">
                                 <FinanceKPIs
+                                    balanceLabel={customRange ? 'Balance del periodo' : `Balance de ${currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`}
                                     ingresos={kpis.ingresos}
                                     egresos={kpis.egresos}
                                     utilidad={kpis.utilidad}
@@ -549,6 +673,7 @@ export default function FinanzasPage() {
                                         onGastoEliminado={refetchData}
                                         onNominaCancelada={refetchData}
                                         onGastoEditado={refetchData}
+                                        onDevolucionConfirmada={refetchData}
                                         onCancelarPago={async (id) => {
                                             try {
                                                 const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
@@ -625,15 +750,10 @@ export default function FinanzasPage() {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    ) }
                 </ZenCardContent>
             </ZenCard>
 
-            <HistorialSheet
-                open={historialOpen}
-                onOpenChange={setHistorialOpen}
-                studioSlug={studioSlug}
-            />
             <AuditoriaIntegridadSheet
                 open={auditoriaOpen}
                 onOpenChange={setAuditoriaOpen}

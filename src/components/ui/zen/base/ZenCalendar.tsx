@@ -106,15 +106,15 @@ function ZenCalendar({
           defaultClassNames.week_number
         ),
         day: cn(
-          'relative w-full h-full p-0 text-center [&:last-child[data-selected=true]_button]:rounded-r-md [&:last-child[data-selected-single=true]_button]:rounded-r-md group/day aspect-square select-none',
+          'relative w-full p-0 text-center [&:last-child[data-selected=true]_button]:rounded-r-md [&:last-child[data-selected-single=true]_button]:rounded-r-md group/day select-none h-(--cell-size) min-h-(--cell-size)',
           props.showWeekNumber
             ? '[&:nth-child(2)[data-selected=true]_button]:rounded-l-md [&:nth-child(2)[data-selected-single=true]_button]:rounded-l-md'
             : '[&:first-child[data-selected=true]_button]:rounded-l-md [&:first-child[data-selected-single=true]_button]:rounded-l-md',
           defaultClassNames.day
         ),
-        range_start: cn('rounded-l-md bg-blue-600/20', defaultClassNames.range_start),
-        range_middle: cn('rounded-none bg-blue-600/10', defaultClassNames.range_middle),
-        range_end: cn('rounded-r-md bg-blue-600/20', defaultClassNames.range_end),
+        range_start: cn('rounded-l-md bg-blue-600/20 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_start),
+        range_middle: cn('rounded-none bg-blue-600/10 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_middle),
+        range_end: cn('rounded-r-md bg-blue-600/20 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_end),
         today: cn(
           'bg-zinc-800 text-zinc-200 rounded-md data-[selected=true]:rounded-none',
           defaultClassNames.today
@@ -201,20 +201,20 @@ function ZenCalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        'data-[selected-single=true]:bg-blue-600 data-[selected-single=true]:text-white data-[selected-single=true]:font-semibold',
-        'data-[selected=true]:bg-blue-600 data-[selected=true]:text-white data-[selected=true]:font-semibold',
+        defaultClassNames.day,
+        'data-[selected-single=true]:bg-blue-600 data-[selected-single=true]:text-white data-[selected-single=true]:font-semibold data-[selected-single=true]:opacity-100',
+        'data-[selected=true]:bg-blue-600 data-[selected=true]:text-white data-[selected=true]:font-semibold data-[selected=true]:opacity-100',
         'data-[range-middle=true]:bg-blue-600/20 data-[range-middle=true]:text-zinc-200',
         'data-[range-start=true]:bg-blue-600 data-[range-start=true]:text-white',
         'data-[range-end=true]:bg-blue-600 data-[range-end=true]:text-white',
         'group-data-[focused=true]/day:border-blue-500 group-data-[focused=true]/day:ring-blue-500/50',
-        'dark:hover:text-zinc-200 flex aspect-square size-auto w-full min-w-(--cell-size)',
-        'flex-col gap-1 leading-none font-normal group-data-[focused=true]/day:relative',
-        'group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px]',
+        'flex items-center justify-center p-0 font-normal leading-none text-center tabular-nums',
+        'size-(--cell-size) min-h-(--cell-size) rounded-md',
+        'group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px]',
         'data-[range-end=true]:rounded-md data-[range-end=true]:rounded-r-md',
-        'data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md',
-        'data-[range-start=true]:rounded-l-md hover:bg-zinc-800 transition-colors',
-        'text-zinc-300 [&>span]:text-xs [&>span]:opacity-70',
-        defaultClassNames.day,
+        'data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md data-[range-start=true]:rounded-l-md',
+        'hover:bg-zinc-800 transition-colors text-zinc-300',
+        '[&>span]:text-xs [&>span]:opacity-70 [&>span]:block [&>span]:text-center',
         className
       )}
       {...props}
