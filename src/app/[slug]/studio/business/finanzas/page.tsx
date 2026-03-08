@@ -1,9 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert } from 'lucide-react';
+import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert, Calendar, XCircle } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { ZenCalendar } from '@/components/ui/zen';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 import { FinanceKPIs } from './components/FinanceKPIs';
 import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
@@ -31,6 +36,10 @@ export default function FinanzasPage() {
     const studioSlug = params.slug as string;
 
     const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
+    const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null);
+    const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
+    const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
+    const [tempRange, setTempRange] = useState<DateRange | undefined>(undefined);
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [kpis, setKpis] = useState({
@@ -104,27 +113,27 @@ export default function FinanzasPage() {
     useEffect(() => {
         if (!mounted || !currentMonth) return;
 
+        const month = customRange ? customRange.from : currentMonth;
+        const options = customRange ? { fromDate: customRange.from, toDate: customRange.to } : undefined;
+
         const loadData = async () => {
             try {
                 setLoading(true);
-                
-                // Verificar rol de owner/admin primero
+
                 const roleResult = await verificarRolOwnerOAdmin(studioSlug);
                 setIsOwner(roleResult.success && roleResult.isOwner);
-                
-                // Cargar datos básicos
+
                 const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
                     await Promise.all([
-                        obtenerKPIsFinancieros(studioSlug, currentMonth),
-                        obtenerMovimientos(studioSlug, currentMonth),
+                        obtenerKPIsFinancieros(studioSlug, month, options),
+                        obtenerMovimientos(studioSlug, month, options),
                         obtenerPorCobrar(studioSlug),
                         obtenerPorPagar(studioSlug),
-                        obtenerGastosRecurrentes(studioSlug, currentMonth),
+                        obtenerGastosRecurrentes(studioSlug, currentMonth, options),
                     ]);
-                
-                // Cargar rentabilidad por evento solo si es owner
+
                 if (roleResult.success && roleResult.isOwner) {
-                    const rentabilidadResult = await obtenerRentabilidadPorEvento(studioSlug, currentMonth);
+                    const rentabilidadResult = await obtenerRentabilidadPorEvento(studioSlug, month, options);
                     if (rentabilidadResult.success && rentabilidadResult.data) {
                         setRentabilidadPorEvento(rentabilidadResult.data);
                     }
@@ -158,7 +167,34 @@ export default function FinanzasPage() {
         };
 
         loadData();
-    }, [mounted, currentMonth, studioSlug]);
+    }, [mounted, currentMonth, customRange, studioSlug]);
+
+    const refetchData = useCallback(async () => {
+        if (!currentMonth) return;
+        const month = customRange ? customRange.from : currentMonth;
+        const options = customRange ? { fromDate: customRange.from, toDate: customRange.to } : undefined;
+        try {
+            const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
+                await Promise.all([
+                    obtenerKPIsFinancieros(studioSlug, month, options),
+                    obtenerMovimientos(studioSlug, month, options),
+                    obtenerPorCobrar(studioSlug),
+                    obtenerPorPagar(studioSlug),
+                    obtenerGastosRecurrentes(studioSlug, currentMonth, options),
+                ]);
+            if (kpisResult.success) setKpis(kpisResult.data);
+            if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+            if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
+            if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+            if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
+            if (isOwner) {
+                const rentabilidadResult = await obtenerRentabilidadPorEvento(studioSlug, month, options);
+                if (rentabilidadResult.success && rentabilidadResult.data) setRentabilidadPorEvento(rentabilidadResult.data);
+            }
+        } catch (error) {
+            console.error('Error recargando datos:', error);
+        }
+    }, [currentMonth, customRange, studioSlug, isOwner]);
 
     const handleRegistrarGasto = () => {
         // TODO: Implementar modal de registro de gasto
@@ -225,42 +261,160 @@ export default function FinanzasPage() {
                         </div>
                         {currentMonth && (
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            const newDate = new Date(currentMonth);
-                                            newDate.setMonth(newDate.getMonth() - 1);
-                                            setCurrentMonth(newDate);
-                                        }}
-                                        aria-label="Mes anterior"
-                                        className="h-7 w-7 p-0"
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </ZenButton>
-                                    <div className="px-2 py-1 min-w-[140px] text-center">
-                                        <span className="text-sm font-semibold text-zinc-200 capitalize">
-                                            {currentMonth.toLocaleDateString('es-ES', {
-                                                month: 'long',
-                                                year: 'numeric',
-                                            }).replace(' de ', ' ')}
-                                        </span>
-                                    </div>
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            const newDate = new Date(currentMonth);
-                                            newDate.setMonth(newDate.getMonth() + 1);
-                                            setCurrentMonth(newDate);
-                                        }}
-                                        aria-label="Mes siguiente"
-                                        className="h-7 w-7 p-0"
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </ZenButton>
-                                </div>
+                                {customRange ? (
+                                    <>
+                                        <div className="flex items-center gap-1 px-2 py-1 min-w-0">
+                                            <span className="text-sm font-semibold text-zinc-200 truncate">
+                                                {format(customRange.from, 'dd MMM yyyy', { locale: es })} – {format(customRange.to, 'dd MMM yyyy', { locale: es })}
+                                            </span>
+                                            <ZenButton
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setCustomRange(null);
+                                                    setCurrentMonth(new Date());
+                                                }}
+                                                aria-label="Quitar rango"
+                                                className="h-7 w-7 p-0 shrink-0"
+                                            >
+                                                <XCircle className="h-4 w-4" />
+                                            </ZenButton>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-0 rounded-md border border-emerald-500/60 bg-emerald-950/50 overflow-hidden">
+                                            <ZenButton
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const newDate = new Date(currentMonth);
+                                                    newDate.setMonth(newDate.getMonth() - 1);
+                                                    setCurrentMonth(newDate);
+                                                }}
+                                                aria-label="Mes anterior"
+                                                className="h-7 w-7 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent"
+                                            >
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </ZenButton>
+                                            <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        className="px-2 py-1 min-w-[140px] text-center text-emerald-100 hover:bg-emerald-900/40 transition-colors"
+                                                    >
+                                                        <span className="text-sm font-semibold capitalize">
+                                                            {currentMonth.toLocaleDateString('es-ES', {
+                                                                month: 'long',
+                                                                year: 'numeric',
+                                                            }).replace(' de ', ' ')}
+                                                        </span>
+                                                    </button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-4 bg-zinc-900 border-zinc-800" align="center">
+                                                    <div className="flex flex-col gap-3">
+                                                        <div className="grid grid-cols-3 gap-1 text-sm">
+                                                            {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, i) => (
+                                                                <ZenButton
+                                                                    key={m}
+                                                                    variant={currentMonth.getMonth() === i ? 'default' : 'ghost'}
+                                                                    size="sm"
+                                                                    className="h-8"
+                                                                    onClick={() => {
+                                                                        const d = new Date(currentMonth);
+                                                                        d.setMonth(i);
+                                                                        setCurrentMonth(d);
+                                                                        setMonthPopoverOpen(false);
+                                                                    }}
+                                                                >
+                                                                    {m}
+                                                                </ZenButton>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex items-center justify-center gap-1 border-t border-zinc-800 pt-2">
+                                                            <ZenButton
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const d = new Date(currentMonth);
+                                                                     d.setFullYear(d.getFullYear() - 1);
+                                                                    setCurrentMonth(d);
+                                                                }}
+                                                            >
+                                                                -
+                                                            </ZenButton>
+                                                            <span className="text-sm font-medium text-zinc-200 min-w-[4rem] text-center">
+                                                                {currentMonth.getFullYear()}
+                                                            </span>
+                                                            <ZenButton
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const d = new Date(currentMonth);
+                                                                     d.setFullYear(d.getFullYear() + 1);
+                                                                    setCurrentMonth(d);
+                                                                }}
+                                                            >
+                                                                +
+                                                            </ZenButton>
+                                                        </div>
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <ZenButton
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const newDate = new Date(currentMonth);
+                                                    newDate.setMonth(newDate.getMonth() + 1);
+                                                    setCurrentMonth(newDate);
+                                                }}
+                                                aria-label="Mes siguiente"
+                                                className="h-7 w-7 p-0 text-emerald-200 hover:text-emerald-100 bg-transparent"
+                                            >
+                                                <ChevronRight className="h-4 w-4" />
+                                            </ZenButton>
+                                        </div>
+                                        <Popover open={rangePopoverOpen} onOpenChange={(open) => {
+                                            setRangePopoverOpen(open);
+                                            if (!open) setTempRange(undefined);
+                                        }}>
+                                            <PopoverTrigger asChild>
+                                                <ZenButton variant="outline" size="sm" icon={Calendar} iconPosition="left">
+                                                    Definir Rango
+                                                </ZenButton>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-4 bg-zinc-900 border-zinc-800" align="end">
+                                                <ZenCalendar
+                                                    mode="range"
+                                                    defaultMonth={tempRange?.from ?? currentMonth}
+                                                    selected={tempRange}
+                                                    onSelect={setTempRange}
+                                                    locale={es}
+                                                    numberOfMonths={2}
+                                                />
+                                                <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-zinc-800">
+                                                    <ZenButton variant="ghost" size="sm" onClick={() => setRangePopoverOpen(false)}>
+                                                        Cancelar
+                                                    </ZenButton>
+                                                    <ZenButton
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            if (tempRange?.from && tempRange?.to) {
+                                                                setCustomRange({ from: tempRange.from, to: tempRange.to });
+                                                                setRangePopoverOpen(false);
+                                                                setTempRange(undefined);
+                                                            }
+                                                        }}
+                                                        disabled={!tempRange?.from || !tempRange?.to}
+                                                    >
+                                                        Aplicar
+                                                    </ZenButton>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </>
+                                )}
                                 <ZenButton
                                     variant="outline"
                                     size="sm"
@@ -391,107 +545,19 @@ export default function FinanzasPage() {
                                         studioSlug={studioSlug}
                                         onRegistrarIngreso={handleRegistrarIngreso}
                                         onRegistrarGasto={handleRegistrarGasto}
-                                        onMovimientoRegistrado={async () => {
-                                            // Recargar datos después de registrar movimiento
-                                            try {
-                                                const [kpisResult, transactionsResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
-                                        onGastoEliminado={async () => {
-                                            // Recargar datos después de eliminar gasto
-                                            try {
-                                                const [kpisResult, transactionsResult, expensesResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerGastosRecurrentes(studioSlug, currentMonth),
-                                                ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                                if (expensesResult.success && expensesResult.data) {
-                                                    setRecurringExpenses(expensesResult.data);
-                                                }
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
-                                        onNominaCancelada={async () => {
-                                            // Recargar datos después de cancelar nómina
-                                            try {
-                                                const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerPorPagar(studioSlug),
-                                                ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                                if (porPagarResult.success && porPagarResult.data) {
-                                                    setPorPagar(porPagarResult.data);
-                                                }
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
-                                        onGastoEditado={async () => {
-                                            // Recargar datos después de editar gasto
-                                            try {
-                                                const [kpisResult, transactionsResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
+                                        onMovimientoRegistrado={refetchData}
+                                        onGastoEliminado={refetchData}
+                                        onNominaCancelada={refetchData}
+                                        onGastoEditado={refetchData}
                                         onCancelarPago={async (id) => {
                                             try {
                                                 const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
                                                 const result = await cancelarPago(studioSlug, id);
-
                                                 if (!result.success) {
                                                     console.error('Error cancelando pago:', result.error);
                                                     return;
                                                 }
-
-                                                // Recargar datos después de cancelar
-                                                const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerPorCobrar(studioSlug),
-                                                ]);
-                                                if (kpisResult.success) {
-                                                    setKpis(kpisResult.data);
-                                                }
-                                                if (transactionsResult.success && transactionsResult.data) {
-                                                    setTransactions(transactionsResult.data);
-                                                }
-                                                if (porCobrarResult.success && porCobrarResult.data) {
-                                                    setPorCobrar(porCobrarResult.data);
-                                                }
+                                                await refetchData();
                                             } catch (error) {
                                                 console.error('Error cancelando pago:', error);
                                             }
@@ -507,21 +573,8 @@ export default function FinanzasPage() {
                                         onMarcarPagado={handleMarcarPagado}
                                         onPagoConfirmado={async () => {
                                             router.refresh();
-                                            try {
-                                                await new Promise((r) => setTimeout(r, 200));
-                                                const [kpisResult, transactionsResult, porPagarResult, expensesResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerPorPagar(studioSlug),
-                                                    obtenerGastosRecurrentes(studioSlug, currentMonth),
-                                                ]);
-                                                if (kpisResult.success) setKpis(kpisResult.data);
-                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
-                                                if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
-                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
+                                            await new Promise((r) => setTimeout(r, 200));
+                                            await refetchData();
                                         }}
                                         recurringExpenses={recurringExpenses}
                                         onOpenRecurrentes={() => setRecurrentesSheetOpen(true)}
@@ -538,20 +591,7 @@ export default function FinanzasPage() {
                                             studioSlug={studioSlug}
                                             onPagoConfirmado={async () => {
                                                 setRecurrenteDetalle(null);
-                                                try {
-                                                    const [kpisResult, transactionsResult, porPagarResult, expensesResult] = await Promise.all([
-                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                        obtenerMovimientos(studioSlug, currentMonth!),
-                                                        obtenerPorPagar(studioSlug),
-                                                        obtenerGastosRecurrentes(studioSlug, currentMonth),
-                                                    ]);
-                                                    if (kpisResult.success) setKpis(kpisResult.data);
-                                                    if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
-                                                    if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
-                                                    if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
-                                                } catch (error) {
-                                                    console.error('Error recargando datos:', error);
-                                                }
+                                                await refetchData();
                                             }}
                                         />
                                     )}
@@ -561,14 +601,7 @@ export default function FinanzasPage() {
                                         studioSlug={studioSlug}
                                         onSuccess={async () => {
                                             setShowNuevoRecurrenteModal(false);
-                                            try {
-                                                const expensesResult = await obtenerGastosRecurrentes(studioSlug, currentMonth);
-                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
-                                                const porPagarResult = await obtenerPorPagar(studioSlug);
-                                                if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
+                                            await refetchData();
                                         }}
                                     />
                                     <RecurrentesSheet
@@ -576,28 +609,8 @@ export default function FinanzasPage() {
                                         onOpenChange={setRecurrentesSheetOpen}
                                         expenses={recurringExpenses}
                                         studioSlug={studioSlug}
-                                        onGastoRegistrado={async () => {
-                                            try {
-                                                const expensesResult = await obtenerGastosRecurrentes(studioSlug, currentMonth);
-                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando gastos recurrentes:', error);
-                                            }
-                                        }}
-                                        onGastoPagado={async () => {
-                                            try {
-                                                const [kpisResult, transactionsResult, expensesResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerGastosRecurrentes(studioSlug, currentMonth),
-                                                ]);
-                                                if (kpisResult.success) setKpis(kpisResult.data);
-                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
-                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
+                                        onGastoRegistrado={refetchData}
+                                        onGastoPagado={refetchData}
                                     />
                                 </div>
 
@@ -607,20 +620,7 @@ export default function FinanzasPage() {
                                         porCobrar={porCobrar}
                                         studioSlug={studioSlug}
                                         onRegistrarPago={handleRegistrarPago}
-                                        onPagoRegistrado={async () => {
-                                            try {
-                                                const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerPorCobrar(studioSlug),
-                                                ]);
-                                                if (kpisResult.success) setKpis(kpisResult.data);
-                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
-                                                if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
+                                        onPagoRegistrado={refetchData}
                                     />
                                 </div>
                             </div>

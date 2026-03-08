@@ -190,12 +190,24 @@ function getMonthRange(date: Date) {
     return { start, end };
 }
 
+export type FinanzasDateRangeOptions = { fromDate?: Date; toDate?: Date };
+
+function getRange(month: Date, options?: FinanzasDateRangeOptions) {
+    if (options?.fromDate != null && options?.toDate != null) {
+        const end = new Date(options.toDate);
+        end.setHours(23, 59, 59, 999);
+        return { start: options.fromDate, end };
+    }
+    return getMonthRange(month);
+}
+
 /**
- * Obtener KPIs financieros para un mes específico
+ * Obtener KPIs financieros para un mes o rango de fechas
  */
 export async function obtenerKPIsFinancieros(
     studioSlug: string,
-    month: Date
+    month: Date,
+    options?: FinanzasDateRangeOptions
 ): Promise<FinanceKPIsResult> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -203,7 +215,7 @@ export async function obtenerKPIsFinancieros(
             return { success: false, error: 'Studio no encontrado' };
         }
 
-        const { start, end } = getMonthRange(month);
+        const { start, end } = getRange(month, options);
 
         // Ingresos: studio_pagos paid/completed y retained_by_cancellation (anticipo retenido al cancelar sigue en reportes)
         // Buscar a través de studio_users, promise o cotizacion
@@ -641,7 +653,8 @@ type RentabilidadPorEventoResult =
  */
 export async function obtenerRentabilidadPorEvento(
     studioSlug: string,
-    month: Date
+    month: Date,
+    options?: FinanzasDateRangeOptions
 ): Promise<RentabilidadPorEventoResult> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -649,7 +662,7 @@ export async function obtenerRentabilidadPorEvento(
             return { success: false, error: 'Studio no encontrado' };
         }
 
-        const { start, end } = getMonthRange(month);
+        const { start, end } = getRange(month, options);
 
         // Obtener eventos autorizados del mes con sus cotizaciones
         const eventos = await prisma.studio_events.findMany({
@@ -1081,11 +1094,12 @@ export async function obtenerMovimientosPorRango(
 }
 
 /**
- * Obtener movimientos unificados (pagos, nóminas, gastos) para un mes
+ * Obtener movimientos unificados (pagos, nóminas, gastos) para un mes o rango
  */
 export async function obtenerMovimientos(
     studioSlug: string,
-    month: Date
+    month: Date,
+    options?: FinanzasDateRangeOptions
 ): Promise<{ success: boolean; data?: Transaction[]; error?: string }> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -1093,7 +1107,7 @@ export async function obtenerMovimientos(
             return { success: false, error: 'Studio no encontrado' };
         }
 
-        const { start, end } = getMonthRange(month);
+        const { start, end } = getRange(month, options);
 
         // Obtener pagos (ingresos)
         // Incluir paid/completed, retained_by_cancellation (suman como ingresos) y pending_refund (distinción visual "Pendiente de devolución")
@@ -1669,7 +1683,8 @@ function getWeeksInMonth(year: number, month: number): number {
  */
 export async function obtenerGastosRecurrentes(
     studioSlug: string,
-    month?: Date
+    month?: Date,
+    options?: FinanzasDateRangeOptions
 ): Promise<{ success: boolean; data?: RecurringExpense[]; error?: string }> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -1678,7 +1693,7 @@ export async function obtenerGastosRecurrentes(
         }
 
         const currentMonth = month || new Date();
-        const { start, end } = getMonthRange(currentMonth);
+        const { start, end } = getRange(currentMonth, options);
 
         const gastos = await prisma.studio_recurring_expenses.findMany({
             where: {
