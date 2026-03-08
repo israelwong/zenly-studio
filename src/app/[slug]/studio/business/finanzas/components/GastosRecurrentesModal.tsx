@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
 import { Plus } from 'lucide-react';
 import { GastoRecurrenteItemCard } from './GastoRecurrenteItemCard';
+import { NominaFijaItemCard } from './NominaFijaItemCard';
 import { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
 import { obtenerGastosRecurrentes } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
@@ -20,6 +21,8 @@ export interface RecurringExpenseForModal {
     totalPagosEsperados?: number;
     isCrewMember?: boolean;
     crewMemberId?: string;
+    lastDayOfMonth?: boolean;
+    paymentMethodLabel?: string | null;
 }
 
 interface GastosRecurrentesModalProps {
@@ -65,13 +68,17 @@ export function GastosRecurrentesModal({
         await onGastoRegistrado?.();
     };
 
+    const gastosNegocio = expenses.filter((e) => !e.isCrewMember);
+    const nominaFija = expenses.filter((e) => e.isCrewMember);
+    const totalGastos = gastosNegocio.length + nominaFija.length;
+
     return (
         <>
             <ZenDialog
                 isOpen={open}
                 onClose={onClose}
                 title="Gastos recurrentes"
-                description="Renta, suscripciones y gastos fijos. Configura qué pagar cada mes."
+                description="Costos fijos del negocio y nómina fija (salarios definidos en Personal)."
                 maxWidth="xl"
                 showCloseButton
                 closeOnClickOutside
@@ -80,7 +87,7 @@ export function GastosRecurrentesModal({
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-zinc-400">
-                            {loading ? '…' : `${expenses.length} gasto(s) recurrente(s)`}
+                            {loading ? '…' : `${totalGastos} ítem(s) en total`}
                         </p>
                         <ZenButton variant="primary" size="sm" onClick={() => setShowNuevoModal(true)}>
                             <Plus className="h-4 w-4 mr-2" />
@@ -109,31 +116,72 @@ export function GastosRecurrentesModal({
                                 </div>
                             ))}
                         </div>
-                    ) : expenses.length === 0 ? (
+                    ) : totalGastos === 0 ? (
                         <div className="text-center py-8">
-                            <p className="text-zinc-400 mb-4">No hay gastos recurrentes</p>
+                            <p className="text-zinc-400 mb-4">No hay gastos recurrentes ni nómina fija</p>
                             <ZenButton variant="outline" onClick={() => setShowNuevoModal(true)}>
                                 <Plus className="h-4 w-4 mr-2" />
                                 Crear primer gasto recurrente
                             </ZenButton>
                         </div>
                     ) : (
-                        <div className="space-y-2 max-h-[480px] overflow-y-auto overflow-x-hidden">
-                            {expenses.map((expense) => (
-                                <GastoRecurrenteItemCard
-                                    key={expense.id}
-                                    expense={expense}
-                                    studioSlug={studioSlug}
-                                    onEditado={() => {
-                                        loadExpenses();
-                                        onGastoRegistrado?.();
-                                    }}
-                                    onEliminado={() => {
-                                        loadExpenses();
-                                        onGastoRegistrado?.();
-                                    }}
-                                />
-                            ))}
+                        <div className="space-y-4 max-h-[480px] overflow-y-auto overflow-x-hidden">
+                            {/* Gastos del Negocio (manuales): crear/editar/eliminar aquí */}
+                            <section>
+                                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
+                                    Gastos del Negocio
+                                </h3>
+                                {gastosNegocio.length === 0 ? (
+                                    <p className="text-sm text-zinc-500 py-2">Renta, suscripciones, etc. Agrega uno con &quot;Nuevo Gasto&quot;.</p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {gastosNegocio.map((expense) => (
+                                            <li key={expense.id}>
+                                                <GastoRecurrenteItemCard
+                                                    expense={expense}
+                                                    studioSlug={studioSlug}
+                                                    onEditado={() => {
+                                                        loadExpenses();
+                                                        onGastoRegistrado?.();
+                                                    }}
+                                                    onEliminado={() => {
+                                                        loadExpenses();
+                                                        onGastoRegistrado?.();
+                                                    }}
+                                                />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </section>
+
+                            {/* Nómina Fija (solo lectura): salarios definidos en Personal */}
+                            <section>
+                                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
+                                    Nómina Fija
+                                </h3>
+                                {nominaFija.length === 0 ? (
+                                    <p className="text-sm text-zinc-500 py-2">Personal con salario fijo configurado en Personal aparecerá aquí.</p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {nominaFija.map((item) => (
+                                            <li key={item.id}>
+                                                <NominaFijaItemCard
+                                                    item={{
+                                                        id: item.id,
+                                                        name: item.name,
+                                                        amount: item.amount,
+                                                        frequency: item.frequency,
+                                                        description: item.description,
+                                                        crewMemberId: item.crewMemberId,
+                                                    }}
+                                                    studioSlug={studioSlug}
+                                                />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </section>
                         </div>
                     )}
                 </div>

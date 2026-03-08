@@ -8,6 +8,8 @@ import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 const METODO_EFECTIVO = ['Efectivo', 'efectivo'];
 /** Nombres de metodo_pago considerados bancos (SPEI, transferencia) */
 const METODO_BANCOS = ['SPEI', 'Transferencia', 'Transferencia bancaria', 'transferencia', 'spei'];
+/** Origen de dinero: tarjeta de crédito (gestión de deudas del negocio) */
+const ORIGEN_CREDIT_CARD = 'credit_card';
 
 interface FinanceKPIs {
     ingresos: number;
@@ -20,6 +22,8 @@ interface FinanceKPIs {
     /** Disponibilidad: suma de ingresos del mes por método de pago */
     efectivo?: number;
     bancos?: number;
+    /** Deuda total en tarjetas de crédito (suma de saldos negativos) */
+    deudaTarjetas?: number;
     // ✅ Nuevos campos para owners
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
@@ -119,8 +123,13 @@ interface RecurringExpense {
     description?: string | null;
     pagosMesActual?: number;
     totalPagosEsperados?: number;
-    isCrewMember?: boolean; // Para diferenciar crew members de gastos recurrentes normales
-    crewMemberId?: string; // ID del crew member si aplica
+    isCrewMember?: boolean;
+    crewMemberId?: string;
+    lastDayOfMonth?: boolean;
+    paymentMethod?: string | null;
+    defaultCreditCardId?: string | null;
+    /** Etiqueta para lista: "Efectivo", "Transferencia", "Tarjeta Nu" */
+    paymentMethodLabel?: string | null;
 }
 
 /**
@@ -330,6 +339,16 @@ export async function obtenerKPIsFinancieros(
         });
         const efectivo = efectivoAgg._sum.amount ?? 0;
         const bancos = bancosAgg._sum.amount ?? 0;
+
+        // Deuda en tarjetas de crédito (suma de saldos negativos)
+        const tarjetas = await prisma.studio_credit_cards.findMany({
+            where: { studio_id: studioId },
+            select: { balance: true },
+        });
+        const deudaTarjetas = tarjetas.reduce((sum, t) => {
+            const b = Number(t.balance);
+            return sum + (b < 0 ? b : 0);
+        }, 0);
 
         // Egresos: studio_gastos + studio_nominas (status "pagado") del mes
         const gastos = await prisma.studio_gastos.aggregate({
@@ -614,6 +633,7 @@ export async function obtenerKPIsFinancieros(
                 ingresosPorCancelacion: ingresosPorCancelacion > 0 ? ingresosPorCancelacion : undefined,
                 efectivo: efectivo > 0 ? efectivo : undefined,
                 bancos: bancos > 0 ? bancos : undefined,
+                deudaTarjetas: deudaTarjetas < 0 ? deudaTarjetas : undefined,
                 // ✅ Nuevos campos para owners
                 totalProductionCosts,
                 totalOperatingExpenses,
@@ -1926,32 +1946,39 @@ export async function obtenerGastosRecurrentes(
                 amount: true,
                 category: true,
                 charge_day: true,
+                last_day_of_month: true,
+                payment_method: true,
+                default_credit_card_id: true,
                 is_active: true,
                 frequency: true,
                 description: true,
+                default_credit_card: { select: { name: true } },
             },
             orderBy: {
                 created_at: 'desc',
             },
         });
 
+        const paymentMethodToLabel = (method: string | null | undefined, cardName?: string | null): string | null => {
+            if (!method) return null;
+            if (method === 'efectivo') return 'Efectivo';
+            if (method === 'transferencia') return 'Transferencia';
+            if (method === 'credit_card') return cardName ? `Tarjeta ${cardName}` : 'Tarjeta';
+            return method;
+        };
+
         // Para cada gasto recurrente, contar cuántos pagos se han hecho este mes
         const expensesFromRecurring: RecurringExpense[] = await Promise.all(
             gastos.map(async (gasto) => {
-                // Contar pagos del mes actual para este gasto recurrente
                 const pagosCount = await prisma.studio_gastos.count({
                     where: {
                         studio_id: studioId,
                         concept: gasto.name,
                         category: 'Recurrente',
-                        date: {
-                            gte: start,
-                            lte: end,
-                        },
+                        date: { gte: start, lte: end },
                     },
                 });
 
-                // Calcular total de pagos según frecuencia
                 let totalPagosEsperados = 1;
                 if (gasto.frequency === 'weekly') {
                     totalPagosEsperados = getWeeksInMonth(currentMonth.getFullYear(), currentMonth.getMonth());
@@ -1970,6 +1997,10 @@ export async function obtenerGastosRecurrentes(
                     isActive: gasto.is_active,
                     frequency: gasto.frequency,
                     description: gasto.description,
+                    lastDayOfMonth: gasto.last_day_of_month ?? false,
+                    paymentMethod: gasto.payment_method ?? null,
+                    defaultCreditCardId: gasto.default_credit_card_id ?? null,
+                    paymentMethodLabel: paymentMethodToLabel(gasto.payment_method, gasto.default_credit_card?.name),
                     pagosMesActual: pagosCount,
                     totalPagosEsperados: totalPagosEsperados,
                     isCrewMember: false,
@@ -1989,6 +2020,11 @@ export async function obtenerGastosRecurrentes(
                 name: true,
                 fixed_salary: true,
                 salary_frequency: true,
+                salary_charge_day: true,
+                salary_payment_method: true,
+                salary_default_credit_card_id: true,
+                salary_last_day_of_month: true,
+                salary_default_credit_card: { select: { name: true } },
             },
         });
 
@@ -2021,15 +2057,27 @@ export async function obtenerGastosRecurrentes(
                     totalPagosEsperados = 1;
                 }
 
+                const paymentLabel = (method: string | null | undefined, cardName?: string | null) => {
+                    if (!method) return null;
+                    if (method === 'efectivo') return 'Efectivo';
+                    if (method === 'transferencia') return 'Transferencia';
+                    if (method === 'credit_card') return cardName ? `Tarjeta ${cardName}` : 'Tarjeta';
+                    return method;
+                };
+
                 return {
-                    id: `crew-${member.id}`, // Prefijo para diferenciar
+                    id: `crew-${member.id}`,
                     name: member.name,
                     amount: amount,
                     category: 'Crew',
-                    chargeDay: 1, // Default para crew members
+                    chargeDay: member.salary_charge_day ?? 1,
                     isActive: true,
                     frequency: frequency,
                     description: `Salario fijo de ${member.name}`,
+                    lastDayOfMonth: member.salary_last_day_of_month ?? false,
+                    paymentMethod: member.salary_payment_method ?? null,
+                    defaultCreditCardId: member.salary_default_credit_card_id ?? null,
+                    paymentMethodLabel: paymentLabel(member.salary_payment_method, member.salary_default_credit_card?.name),
                     pagosMesActual: pagosCount,
                     totalPagosEsperados: totalPagosEsperados,
                     isCrewMember: true,
@@ -2763,6 +2811,9 @@ export async function crearGastoRecurrente(
         frequency: string;
         category: string;
         chargeDay: number;
+        lastDayOfMonth?: boolean;
+        paymentMethod?: string | null;
+        defaultCreditCardId?: string | null;
         personalId?: string | null;
     }
 ): Promise<{ success: boolean; error?: string; data?: { id: string } }> {
@@ -2787,6 +2838,9 @@ export async function crearGastoRecurrente(
                 frequency: data.frequency,
                 category: data.category,
                 charge_day: data.chargeDay,
+                last_day_of_month: data.lastDayOfMonth ?? false,
+                payment_method: data.paymentMethod || null,
+                default_credit_card_id: data.defaultCreditCardId || null,
                 is_active: true,
                 auto_generate: false,
             },
@@ -2819,6 +2873,8 @@ export async function pagarGastoRecurrente(
     options?: {
         totalDiscounts?: number;
         partialPayments?: Array<{ payment_method: string; amount: number }>;
+        /** ID de tarjeta de crédito (studio_credit_cards): pago con tarjeta, resta al saldo de la tarjeta */
+        creditCardId?: string;
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -2940,32 +2996,55 @@ export async function pagarGastoRecurrente(
         const totalDiscounts = options?.totalDiscounts ?? 0;
         const totalToPay = gastoRecurrente.amount - totalDiscounts;
         const partialPayments = options?.partialPayments ?? [];
+        const creditCardId = options?.creditCardId;
 
         // Determinar método de pago
         let paymentMethod = 'transferencia'; // Default
-        if (partialPayments.length > 0) {
+        if (creditCardId) {
+            paymentMethod = ORIGEN_CREDIT_CARD;
+        } else if (partialPayments.length > 0) {
             paymentMethod = partialPayments.length > 1 ? 'combinado' : partialPayments[0].payment_method;
         }
 
-        // Crear el gasto operativo asociado al gasto recurrente
-        const gasto = await prisma.studio_gastos.create({
-            data: {
-                studio_id: studioId,
-                user_id: studioUser.id,
-                concept: gastoRecurrente.name,
-                amount: totalToPay, // Monto neto después de descuentos
-                category: 'Recurrente',
-                date: new Date(),
-                description: gastoRecurrente.description || null,
-                status: 'activo',
-                personal_id: gastoRecurrente.crewMemberId || null, // Asociar con personal si es crew member
-                payment_method: paymentMethod,
-                // Nota: Para guardar descuentos y pagos parciales, necesitaríamos campos adicionales
-                // Por ahora solo guardamos el monto neto y el método de pago
-            },
-            select: {
-                id: true,
-            },
+        // Si paga con tarjeta, validar que la tarjeta existe y pertenece al studio
+        if (creditCardId) {
+            const card = await prisma.studio_credit_cards.findFirst({
+                where: { id: creditCardId, studio_id: studioId },
+                select: { id: true },
+            });
+            if (!card) {
+                return { success: false, error: 'Tarjeta de crédito no encontrada' };
+            }
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // Crear el gasto operativo asociado al gasto recurrente
+            await tx.studio_gastos.create({
+                data: {
+                    studio_id: studioId,
+                    user_id: studioUser.id,
+                    concept: gastoRecurrente.name,
+                    amount: totalToPay,
+                    category: 'Recurrente',
+                    date: new Date(),
+                    description: gastoRecurrente.description || null,
+                    status: 'activo',
+                    personal_id: gastoRecurrente.crewMemberId || null,
+                    payment_method: paymentMethod,
+                    credit_card_id: creditCardId || null,
+                },
+            });
+
+            // Si pagó con tarjeta, restar al saldo de la tarjeta (aumentar deuda)
+            if (creditCardId) {
+                await tx.studio_credit_cards.update({
+                    where: { id: creditCardId },
+                    data: {
+                        balance: { decrement: totalToPay },
+                        updated_at: new Date(),
+                    },
+                });
+            }
         });
 
         revalidatePath(`/${studioSlug}/studio/business/finanzas`);
@@ -2978,6 +3057,134 @@ export async function pagarGastoRecurrente(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al pagar gasto recurrente',
+        };
+    }
+}
+
+export interface TarjetaCreditoItem {
+    id: string;
+    name: string;
+    balance: number;
+}
+
+/**
+ * Obtener tarjetas de crédito del studio (para selector al pagar y dashboard)
+ */
+export async function obtenerTarjetasCredito(
+    studioSlug: string
+): Promise<{ success: boolean; data?: TarjetaCreditoItem[]; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+        const cards = await prisma.studio_credit_cards.findMany({
+            where: { studio_id: studioId },
+            select: { id: true, name: true, balance: true },
+            orderBy: { name: 'asc' },
+        });
+        return {
+            success: true,
+            data: cards.map((c) => ({
+                id: c.id,
+                name: c.name,
+                balance: Number(c.balance),
+            })),
+        };
+    } catch (error) {
+        console.error('Error obteniendo tarjetas de crédito:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al obtener tarjetas',
+        };
+    }
+}
+
+/**
+ * Crear tarjeta de crédito (solo nombre; balance inicia en 0)
+ */
+export async function crearTarjetaCredito(
+    studioSlug: string,
+    data: { name: string }
+): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+        if (!data.name?.trim()) {
+            return { success: false, error: 'El nombre es requerido' };
+        }
+        const card = await prisma.studio_credit_cards.create({
+            data: {
+                studio_id: studioId,
+                name: data.name.trim(),
+                balance: 0,
+            },
+            select: { id: true },
+        });
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true, data: { id: card.id } };
+    } catch (error) {
+        console.error('Error creando tarjeta de crédito:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al crear tarjeta',
+        };
+    }
+}
+
+/**
+ * Pagar tarjeta: mover dinero de BANKS (origen) a la tarjeta; reduce la deuda de la tarjeta.
+ * paymentMethod: 'transferencia' | 'efectivo' (origen del abono)
+ */
+export async function pagarTarjeta(
+    studioSlug: string,
+    creditCardId: string,
+    amount: number,
+    paymentMethod: 'transferencia' | 'efectivo' = 'transferencia'
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+        if (amount <= 0) {
+            return { success: false, error: 'El monto debe ser mayor a 0' };
+        }
+        const card = await prisma.studio_credit_cards.findFirst({
+            where: { id: creditCardId, studio_id: studioId },
+            select: { id: true },
+        });
+        if (!card) {
+            return { success: false, error: 'Tarjeta no encontrada' };
+        }
+
+        await prisma.$transaction(async (tx) => {
+            await tx.studio_credit_card_payments.create({
+                data: {
+                    studio_id: studioId,
+                    credit_card_id: creditCardId,
+                    amount,
+                    payment_method: paymentMethod,
+                },
+            });
+            await tx.studio_credit_cards.update({
+                where: { id: creditCardId },
+                data: {
+                    balance: { increment: amount },
+                    updated_at: new Date(),
+                },
+            });
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error pagando tarjeta:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al registrar abono a tarjeta',
         };
     }
 }
@@ -3093,7 +3300,7 @@ export async function actualizarGastoOperativo(
 export async function obtenerGastoRecurrente(
     studioSlug: string,
     expenseId: string
-): Promise<{ success: boolean; data?: { id: string; name: string; amount: number; description: string | null; frequency: string; category: string; charge_day: number; is_active: boolean }; error?: string }> {
+): Promise<{ success: boolean; data?: { id: string; name: string; amount: number; description: string | null; frequency: string; category: string; charge_day: number; is_active: boolean; payment_method: string | null; default_credit_card_id: string | null; last_day_of_month: boolean }; error?: string }> {
     try {
         const studioId = await getStudioId(studioSlug);
         if (!studioId) {
@@ -3150,6 +3357,9 @@ export async function obtenerGastoRecurrente(
                 frequency: true,
                 category: true,
                 charge_day: true,
+                last_day_of_month: true,
+                payment_method: true,
+                default_credit_card_id: true,
                 is_active: true,
                 personal_id: true,
             },
@@ -3164,6 +3374,7 @@ export async function obtenerGastoRecurrente(
             data: {
                 ...gasto,
                 description: gasto.description ?? null,
+                last_day_of_month: gasto.last_day_of_month ?? false,
             },
         };
     } catch (error) {
@@ -3188,6 +3399,9 @@ export async function actualizarGastoRecurrente(
         frequency: string;
         category?: string;
         chargeDay?: number;
+        lastDayOfMonth?: boolean;
+        paymentMethod?: string | null;
+        defaultCreditCardId?: string | null;
         personalId?: string | null;
     }
 ): Promise<{ success: boolean; error?: string }> {
@@ -3240,7 +3454,10 @@ export async function actualizarGastoRecurrente(
                 amount: data.amount,
                 frequency: data.frequency,
                 category: data.category || 'fijo',
-                charge_day: data.chargeDay || 1,
+                charge_day: data.chargeDay ?? 1,
+                last_day_of_month: data.lastDayOfMonth ?? false,
+                payment_method: data.paymentMethod !== undefined ? data.paymentMethod : undefined,
+                default_credit_card_id: data.defaultCreditCardId !== undefined ? data.defaultCreditCardId : undefined,
                 personal_id: data.personalId !== undefined ? data.personalId : undefined,
             },
         });
@@ -3723,8 +3940,6 @@ export async function cancelarNominaPagada(
                 concept: true,
                 net_amount: true,
                 payment_type: true,
-                personal_id: true,
-                payment_date: true,
             },
         });
 
@@ -3732,47 +3947,34 @@ export async function cancelarNominaPagada(
             return { success: false, error: 'Nómina pagada no encontrada' };
         }
 
-        // Si es una nómina consolidada, restaurar también las nóminas individuales asociadas
-        if (nomina.payment_type === 'consolidado' && nomina.personal_id && nomina.payment_date) {
+        // Siempre que sea consolidado: eliminar registro consolidado y revertir nóminas individuales asociadas
+        if (nomina.payment_type === 'consolidado') {
             await prisma.$transaction(async (tx) => {
-                // 1. Eliminar la nómina consolidada
+                // 1. Eliminar el registro consolidado
                 await tx.studio_nominas.delete({
                     where: { id: nominaId },
                 });
 
-                // 2. Restaurar las nóminas individuales asociadas
-                // Buscar nóminas que tienen este consolidado como referencia
-                const nominasParaRestaurar = await tx.studio_nominas.findMany({
+                // 2. Buscar todas las nóminas individuales cuyo consolidated_payment_id sea este y revertirlas
+                await tx.studio_nominas.updateMany({
                     where: {
                         studio_id: studioId,
                         consolidated_payment_id: nominaId,
                         status: 'pagado',
                     },
-                    select: { id: true },
+                    data: {
+                        status: 'pendiente',
+                        payment_date: null,
+                        paid_by: null,
+                        payment_method: null,
+                        consolidated_payment_id: null,
+                    },
                 });
-
-                // Restaurar las nóminas individuales
-                if (nominasParaRestaurar.length > 0) {
-                    await tx.studio_nominas.updateMany({
-                        where: {
-                            id: { in: nominasParaRestaurar.map(n => n.id) },
-                        },
-                        data: {
-                            status: 'pendiente',
-                            payment_date: null,
-                            paid_by: null,
-                            payment_method: null,
-                            consolidated_payment_id: null, // Limpiar la referencia al consolidado
-                        },
-                    });
-                }
             });
         } else {
-            // Si es una nómina individual, solo actualizar su status
+            // Nómina individual: solo actualizar su status
             await prisma.studio_nominas.update({
-                where: {
-                    id: nominaId,
-                },
+                where: { id: nominaId },
                 data: {
                     status: 'pendiente',
                     payment_date: null,

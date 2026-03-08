@@ -36,6 +36,10 @@ interface CrewMember {
   fixed_salary: number | null;
   salary_frequency?: string | null;
   variable_salary: number | null;
+  salary_payment_method?: string | null;
+  salary_default_credit_card_id?: string | null;
+  salary_charge_day?: number | null;
+  salary_last_day_of_month?: boolean | null;
   account: {
     id: string;
     email: string;

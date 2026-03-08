@@ -40,6 +40,17 @@ export const CrewMemberCreateSchema = z.object({
     .optional()
     .nullable(),
 
+  salary_payment_method: z
+    .enum(['efectivo', 'transferencia', 'credit_card'], { errorMap: () => ({ message: 'Método de pago inválido' }) })
+    .optional()
+    .nullable(),
+
+  salary_default_credit_card_id: z.string().optional().nullable(),
+
+  salary_charge_day: z.number().int().min(0).max(31).optional().nullable(),
+
+  salary_last_day_of_month: z.boolean().optional().nullable(),
+
   variable_salary: z
     .union([
       z.number().positive('El salario variable debe ser mayor a 0'),
@@ -98,6 +109,17 @@ export const CrewMemberUpdateSchema = z.object({
     })
     .optional()
     .nullable(),
+
+  salary_payment_method: z
+    .enum(['efectivo', 'transferencia', 'credit_card'], { errorMap: () => ({ message: 'Método de pago inválido' }) })
+    .optional()
+    .nullable(),
+
+  salary_default_credit_card_id: z.string().optional().nullable(),
+
+  salary_charge_day: z.number().int().min(0).max(31).optional().nullable(),
+
+  salary_last_day_of_month: z.boolean().optional().nullable(),
 
   variable_salary: z
     .union([

@@ -56,6 +56,10 @@ export async function obtenerCrewMembers(studioSlug: string) {
         fixed_salary: member.fixed_salary ? Number(member.fixed_salary) : null,
         salary_frequency: member.salary_frequency || null,
         variable_salary: member.variable_salary ? Number(member.variable_salary) : null,
+        salary_payment_method: member.salary_payment_method ?? null,
+        salary_default_credit_card_id: member.salary_default_credit_card_id ?? null,
+        salary_charge_day: member.salary_charge_day ?? null,
+        salary_last_day_of_month: member.salary_last_day_of_month ?? null,
         skills: member.skills.map((s) => ({
           id: s.skill.id,
           name: s.skill.name,
@@ -145,19 +149,24 @@ export async function crearCrewMember(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Crear crew member
+    const createData: Parameters<typeof prisma.studio_crew_members.create>[0]['data'] = {
+      studio_id: studio.id,
+      name: validated.name,
+      email: validated.email || null,
+      phone: validated.phone || null,
+      tipo: validated.tipo,
+      fixed_salary: validated.fixed_salary || null,
+      salary_frequency: validated.salary_frequency || null,
+      variable_salary: validated.variable_salary || null,
+      status: 'activo',
+    };
+    if (validated.salary_payment_method != null) createData.salary_payment_method = validated.salary_payment_method;
+    if (validated.salary_default_credit_card_id) createData.salary_default_credit_card_id = validated.salary_default_credit_card_id;
+    if (validated.salary_charge_day != null) createData.salary_charge_day = validated.salary_charge_day;
+    if (validated.salary_last_day_of_month != null) createData.salary_last_day_of_month = validated.salary_last_day_of_month;
+
     const crew = await prisma.studio_crew_members.create({
-      data: {
-        studio_id: studio.id,
-        name: validated.name,
-        email: validated.email || null,
-        phone: validated.phone || null,
-        tipo: validated.tipo,
-        fixed_salary: validated.fixed_salary || null,
-        salary_frequency: validated.salary_frequency || null,
-        variable_salary: validated.variable_salary || null,
-        status: 'activo',
-      },
+      data: createData,
       include: {
         skills: {
           include: {
@@ -228,7 +237,6 @@ export async function actualizarCrewMember(
       return { success: false, error: 'Crew member no encontrado' };
     }
 
-    // Actualizar datos básicos
     const updateData: {
       name: string;
       email: string | null;
@@ -238,6 +246,10 @@ export async function actualizarCrewMember(
       fixed_salary: number | null;
       salary_frequency: string | null;
       variable_salary: number | null;
+      salary_payment_method?: string | null;
+      salary_default_credit_card_id?: string | null;
+      salary_charge_day?: number | null;
+      salary_last_day_of_month?: boolean | null;
     } = {
       name: validated.name,
       email: validated.email || null,
@@ -248,9 +260,11 @@ export async function actualizarCrewMember(
       variable_salary: validated.variable_salary || null,
     };
 
-    if (validated.status !== undefined) {
-      updateData.status = validated.status;
-    }
+    if (validated.status !== undefined) updateData.status = validated.status;
+    if (validated.salary_payment_method !== undefined) updateData.salary_payment_method = validated.salary_payment_method;
+    if (validated.salary_default_credit_card_id !== undefined) updateData.salary_default_credit_card_id = validated.salary_default_credit_card_id || null;
+    if (validated.salary_charge_day !== undefined) updateData.salary_charge_day = validated.salary_charge_day;
+    if (validated.salary_last_day_of_month !== undefined) updateData.salary_last_day_of_month = validated.salary_last_day_of_month;
 
     const updated = await prisma.studio_crew_members.update({
       where: { id: crewMemberId },

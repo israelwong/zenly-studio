@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings2, Trash2, Calendar, CheckCircle2 } from 'lucide-react';
 import { ZenButton, ZenInput, ZenSelect, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
 import { crearCrewMember, actualizarCrewMember, eliminarCrewMember, checkCrewMemberAssociations } from '@/lib/actions/studio/crew';
+import { obtenerTarjetasCredito } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { toast } from 'sonner';
 import { SkillsInput } from './SkillsInput';
 import { CrewSkillsManageModal } from './CrewSkillsManageModal';
@@ -23,6 +24,10 @@ interface CrewMemberFormProps {
     salary_frequency?: string | null;
     variable_salary: number | null;
     skills: Array<{ id: string; name: string; is_primary: boolean }>;
+    salary_payment_method?: string | null;
+    salary_default_credit_card_id?: string | null;
+    salary_charge_day?: number | null;
+    salary_last_day_of_month?: boolean | null;
   } | null;
   onSuccess: (payload: Record<string, unknown>) => void;
   onCancel: () => void;
@@ -78,6 +83,11 @@ export function CrewMemberForm({
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
 
   // Función helper para inicializar formData
+  const DIAS_SEMANA = [
+    { value: 0, label: 'Domingo' }, { value: 1, label: 'Lunes' }, { value: 2, label: 'Martes' }, { value: 3, label: 'Miércoles' },
+    { value: 4, label: 'Jueves' }, { value: 5, label: 'Viernes' }, { value: 6, label: 'Sábado' },
+  ];
+
   const getInitialFormData = () => {
     if (!initialMember) {
       return {
@@ -90,22 +100,40 @@ export function CrewMemberForm({
         salary_frequency: 'monthly',
         variable_salary: '',
         skill_ids: [] as string[],
+        salary_payment_method: 'transferencia' as 'efectivo' | 'transferencia' | 'credit_card',
+        salary_default_credit_card_id: '',
+        salary_charge_day: 1,
+        salary_last_day_of_month: false,
       };
     }
     return {
       name: initialMember.name || '',
       email: initialMember.email ?? '',
-      phone: initialMember.phone ?? '', // null/undefined -> ''
+      phone: initialMember.phone ?? '',
       tipo: (initialMember.tipo as PersonalType) || 'OPERATIVO',
       status: initialMember.status || 'activo',
       fixed_salary: initialMember.fixed_salary?.toString() || '',
       salary_frequency: initialMember.salary_frequency || 'monthly',
       variable_salary: initialMember.variable_salary?.toString() || '',
       skill_ids: initialMember.skills?.map((s) => s.id) || [],
+      salary_payment_method: (initialMember.salary_payment_method as 'efectivo' | 'transferencia' | 'credit_card') || 'transferencia',
+      salary_default_credit_card_id: initialMember.salary_default_credit_card_id ?? '',
+      salary_charge_day: initialMember.salary_charge_day ?? 1,
+      salary_last_day_of_month: initialMember.salary_last_day_of_month ?? false,
     };
   };
 
   const [formData, setFormData] = useState(getInitialFormData());
+  const [tarjetas, setTarjetas] = useState<{ id: string; name: string }[]>([]);
+  const [tarjetasLoading, setTarjetasLoading] = useState(false);
+
+  useEffect(() => {
+    if (!studioSlug || formData.salary_payment_method !== 'credit_card') return;
+    setTarjetasLoading(true);
+    obtenerTarjetasCredito(studioSlug)
+      .then((res) => { if (res.success && res.data) setTarjetas(res.data); else setTarjetas([]); })
+      .finally(() => setTarjetasLoading(false));
+  }, [studioSlug, formData.salary_payment_method]);
 
   // Actualizar formData cuando initialMember cambia (para edición)
   useEffect(() => {
@@ -113,13 +141,17 @@ export function CrewMemberForm({
       setFormData({
         name: initialMember.name || '',
         email: initialMember.email ?? '',
-        phone: initialMember.phone ?? '', // null/undefined -> ''
+        phone: initialMember.phone ?? '',
         tipo: (initialMember.tipo as PersonalType) || 'OPERATIVO',
         status: initialMember.status || 'activo',
         fixed_salary: initialMember.fixed_salary?.toString() || '',
         salary_frequency: initialMember.salary_frequency || 'monthly',
         variable_salary: initialMember.variable_salary?.toString() || '',
         skill_ids: initialMember.skills?.map((s) => s.id) || [],
+        salary_payment_method: (initialMember.salary_payment_method as 'efectivo' | 'transferencia' | 'credit_card') || 'transferencia',
+        salary_default_credit_card_id: initialMember.salary_default_credit_card_id ?? '',
+        salary_charge_day: initialMember.salary_charge_day ?? 1,
+        salary_last_day_of_month: initialMember.salary_last_day_of_month ?? false,
       });
       setSalaryType(initialMember.fixed_salary ? 'fixed' : 'variable');
     } else {
@@ -133,12 +165,15 @@ export function CrewMemberForm({
         salary_frequency: 'monthly',
         variable_salary: '',
         skill_ids: [],
+        salary_payment_method: 'transferencia',
+        salary_default_credit_card_id: '',
+        salary_charge_day: 1,
+        salary_last_day_of_month: false,
       });
       setSalaryType('variable');
     }
-    // Limpiar errores al cambiar de miembro
     setErrors({});
-  }, [initialMember?.id]); // Solo cuando cambia el ID del miembro
+  }, [initialMember?.id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -282,12 +317,15 @@ export function CrewMemberForm({
         skill_ids: formData.skill_ids,
       };
 
-      // Si es salario fijo, establecer fixed_salary, salary_frequency y limpiar variable_salary
       if (salaryType === 'fixed') {
         const fixedValue = parseFloat(formData.fixed_salary);
         payload.fixed_salary = fixedValue;
         payload.salary_frequency = formData.salary_frequency || 'monthly';
         payload.variable_salary = null;
+        payload.salary_payment_method = formData.salary_payment_method;
+        payload.salary_default_credit_card_id = formData.salary_default_credit_card_id || null;
+        payload.salary_charge_day = formData.salary_frequency === 'monthly' && formData.salary_last_day_of_month ? 31 : formData.salary_charge_day;
+        payload.salary_last_day_of_month = formData.salary_frequency === 'monthly' ? formData.salary_last_day_of_month : false;
       } else {
         // Si es variable, establecer variable_salary y limpiar fixed_salary y salary_frequency
         const variableValue = formData.variable_salary
@@ -594,6 +632,113 @@ export function CrewMemberForm({
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Método de pago - Salario fijo */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-300">Método de pago</label>
+            <div className="flex flex-wrap gap-2">
+              {(['efectivo', 'transferencia', 'credit_card'] as const).map((m) => (
+                <label
+                  key={m}
+                  htmlFor={`salary-metodo-${m}`}
+                  className={cn(
+                    'relative flex items-center justify-center gap-2 h-[42px] min-h-[42px] px-3 rounded-lg border cursor-pointer transition-all',
+                    formData.salary_payment_method === m ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    id={`salary-metodo-${m}`}
+                    name="salary_payment_method"
+                    checked={formData.salary_payment_method === m}
+                    onChange={() => setFormData((prev) => ({
+                      ...prev,
+                      salary_payment_method: m,
+                      ...(m !== 'credit_card' ? { salary_default_credit_card_id: '' } : {}),
+                    }))}
+                    className="sr-only"
+                  />
+                  {formData.salary_payment_method === m && <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />}
+                  <span className={cn('text-sm font-medium', formData.salary_payment_method === m ? 'text-emerald-200' : 'text-zinc-300')}>
+                    {m === 'credit_card' ? 'Tarjeta de Crédito' : m === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {formData.salary_payment_method === 'credit_card' && (
+              <div className="mt-2">
+                <label className="text-xs text-zinc-400 block mb-1">Tarjeta</label>
+                <select
+                  value={formData.salary_default_credit_card_id}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, salary_default_credit_card_id: e.target.value }))}
+                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  disabled={tarjetasLoading}
+                >
+                  <option value="">Seleccionar tarjeta</option>
+                  {tarjetas.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Día de pago - Salario fijo */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-300">Día de pago</label>
+            {formData.salary_frequency === 'weekly' && (
+              <select
+                value={formData.salary_charge_day}
+                onChange={(e) => setFormData((prev) => ({ ...prev, salary_charge_day: Number(e.target.value) }))}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {DIAS_SEMANA.map((d) => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            )}
+            {formData.salary_frequency === 'biweekly' && (
+              <div className="flex gap-2">
+                <label
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 h-[42px] rounded-lg border cursor-pointer transition-all',
+                    formData.salary_charge_day === 1 ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                  )}
+                >
+                  <input type="radio" name="salary_biweekly" checked={formData.salary_charge_day === 1} onChange={() => setFormData((prev) => ({ ...prev, salary_charge_day: 1 }))} className="sr-only" />
+                  <span className="text-sm font-medium">1 y 15</span>
+                </label>
+                <label
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 h-[42px] rounded-lg border cursor-pointer transition-all',
+                    formData.salary_charge_day === 15 ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                  )}
+                >
+                  <input type="radio" name="salary_biweekly" checked={formData.salary_charge_day === 15} onChange={() => setFormData((prev) => ({ ...prev, salary_charge_day: 15 }))} className="sr-only" />
+                  <span className="text-sm font-medium">15 y último</span>
+                </label>
+              </div>
+            )}
+            {formData.salary_frequency === 'monthly' && (
+              <select
+                value={formData.salary_last_day_of_month ? 'last' : String(formData.salary_charge_day)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === 'last') {
+                    setFormData((prev) => ({ ...prev, salary_last_day_of_month: true, salary_charge_day: 31 }));
+                  } else {
+                    setFormData((prev) => ({ ...prev, salary_last_day_of_month: false, salary_charge_day: Number(v) }));
+                  }
+                }}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>Día {d}</option>
+                ))}
+                <option value="last">Último día del mes</option>
+              </select>
+            )}
           </div>
         </>
       )}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Users, Edit, Trash2, MoreVertical } from 'lucide-react';
 import { ZenButton, ZenInput, ZenBadge, ZenConfirmModal, ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenCardContent } from '@/components/ui/zen';
 import {
@@ -43,6 +44,10 @@ interface CrewMember {
   fixed_salary: number | null;
   salary_frequency?: string | null;
   variable_salary: number | null;
+  salary_payment_method?: string | null;
+  salary_default_credit_card_id?: string | null;
+  salary_charge_day?: number | null;
+  salary_last_day_of_month?: boolean | null;
 }
 
 interface PersonelPageClientProps {
@@ -50,6 +55,7 @@ interface PersonelPageClientProps {
 }
 
 export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
+  const searchParams = useSearchParams();
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -114,6 +120,20 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
     setIsModalOpen(true);
     isModalOpenRef.current = true;
   }, []);
+
+  // Abrir modal de edición cuando se navega con ?edit=memberId (ej. desde Gastos Recurrentes > Editar en Personal)
+  const editIdFromUrl = searchParams.get('edit');
+  const editIdHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loading && members.length > 0 && editIdFromUrl && editIdHandledRef.current !== editIdFromUrl) {
+      editIdHandledRef.current = editIdFromUrl;
+      const member = members.find((m) => m.id === editIdFromUrl);
+      if (member) {
+        handleEdit(member);
+      }
+      window.history.replaceState({}, '', `/${studioSlug}/studio/business/personel`);
+    }
+  }, [loading, members, editIdFromUrl, studioSlug, handleEdit]);
 
   const handleCloseModal = useCallback(() => {
     setTimeout(() => {

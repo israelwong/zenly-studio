@@ -803,6 +803,8 @@ model studios {
   content_analytics                               studio_content_analytics[]
   contract_templates                              studio_contract_templates[]
   cotizaciones                                    studio_cotizaciones[]
+  credit_cards                                    studio_credit_cards[]
+  credit_card_payments                            studio_credit_card_payments[]
   crew_members                                    studio_crew_members[]
   crew_skills                                     studio_crew_skills[]
   event_contracts                                 studio_event_contracts[]
@@ -2029,33 +2031,39 @@ model studio_scheduler_task_activity {
 }
 
 model studio_crew_members {
-  id               String                      @id @default(cuid())
-  studio_id        String
-  email            String?
-  tipo             PersonalType
-  status           String                      @default("activo")
-  created_at       DateTime                    @default(now())
-  updated_at       DateTime                    @updatedAt
-  clabe_account    String?
-  emergency_phone  String?
-  fixed_salary     Float?
-  name             String
-  order            Int?
-  phone            String?
-  variable_salary  Float?
-  salary_frequency String?
-  cotizacion_items         studio_cotizacion_items[]
-  scheduler_tasks_assigned studio_scheduler_event_tasks[] @relation("SchedulerTaskAssignedCrew")
-  account                  studio_crew_member_account?
-  skills                   studio_crew_member_skills[]
-  studio                   studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  gastos                   studio_gastos[]
-  nominas                  studio_nominas[]
-  recurring_expenses       studio_recurring_expenses[]
+  id                         String                      @id @default(cuid())
+  studio_id                  String
+  email                      String?
+  tipo                       PersonalType
+  status                     String                      @default("activo")
+  created_at                 DateTime                    @default(now())
+  updated_at                 DateTime                    @updatedAt
+  clabe_account              String?
+  emergency_phone            String?
+  fixed_salary               Float?
+  name                       String
+  order                      Int?
+  phone                      String?
+  variable_salary            Float?
+  salary_frequency           String?
+  salary_payment_method      String?
+  salary_default_credit_card_id String?
+  salary_charge_day         Int?
+  salary_last_day_of_month   Boolean                     @default(false)
+  cotizacion_items           studio_cotizacion_items[]
+  scheduler_tasks_assigned   studio_scheduler_event_tasks[] @relation("SchedulerTaskAssignedCrew")
+  account                    studio_crew_member_account?
+  skills                     studio_crew_member_skills[]
+  studio                     studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  gastos                     studio_gastos[]
+  nominas                    studio_nominas[]
+  recurring_expenses         studio_recurring_expenses[]
+  salary_default_credit_card studio_credit_cards?         @relation(fields: [salary_default_credit_card_id], references: [id], onDelete: SetNull)
 
   @@index([studio_id])
   @@index([status])
   @@index([tipo])
+  @@index([salary_default_credit_card_id])
 }
 
 model studio_crew_skills {
@@ -2767,6 +2775,37 @@ model studio_nomina_pagos_parciales {
   @@index([payment_date])
 }
 
+model studio_credit_cards {
+  id        String    @id @default(cuid())
+  studio_id String
+  name      String
+  balance   Decimal   @default(0) @db.Decimal(12, 2)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  studio    studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  payments  studio_credit_card_payments[]
+  gastos    studio_gastos[]
+  recurring_expenses studio_recurring_expenses[]
+  crew_members_salary_card studio_crew_members[]
+
+  @@index([studio_id])
+}
+
+model studio_credit_card_payments {
+  id             String   @id @default(cuid())
+  studio_id      String
+  credit_card_id String
+  amount         Decimal  @db.Decimal(12, 2)
+  payment_method String   @default("transferencia")
+  paid_at        DateTime @default(now())
+  created_at     DateTime @default(now())
+  studio         studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  credit_card    studio_credit_cards @relation(fields: [credit_card_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([credit_card_id])
+}
+
 model studio_gastos {
   id             String               @id @default(cuid())
   studio_id      String
@@ -2787,38 +2826,46 @@ model studio_gastos {
   supplier       String?
   user_id        String
   personal_id    String?
+  credit_card_id String?
   eventos        studio_events?       @relation(fields: [evento_id], references: [id])
   personal       studio_crew_members? @relation(fields: [personal_id], references: [id])
   studio         studios              @relation(fields: [studio_id], references: [id])
   user           studio_users         @relation(fields: [user_id], references: [id])
+  credit_card    studio_credit_cards? @relation(fields: [credit_card_id], references: [id], onDelete: SetNull)
 
   @@index([evento_id])
   @@index([date, category])
   @@index([studio_id])
   @@index([personal_id])
+  @@index([credit_card_id])
 }
 
 model studio_recurring_expenses {
-  id             String    @id @default(cuid())
-  studio_id      String
-  personal_id    String?
-  name           String
-  amount         Float
-  category       String    @default("fijo")
-  description    String?
-  frequency      String    @default("monthly")
-  charge_day     Int       @default(1)
-  is_active      Boolean   @default(true)
-  auto_generate  Boolean   @default(true)
-  last_generated DateTime?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
-  studio         studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  personal       studio_crew_members? @relation(fields: [personal_id], references: [id], onDelete: SetNull)
+  id                    String    @id @default(cuid())
+  studio_id             String
+  personal_id           String?
+  name                  String
+  amount                Float
+  category              String    @default("fijo")
+  description           String?
+  frequency             String    @default("monthly")
+  charge_day            Int       @default(1)
+  last_day_of_month     Boolean   @default(false)
+  payment_method        String?
+  default_credit_card_id String?
+  is_active             Boolean   @default(true)
+  auto_generate         Boolean   @default(true)
+  last_generated        DateTime?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  studio                studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  personal              studio_crew_members? @relation(fields: [personal_id], references: [id], onDelete: SetNull)
+  default_credit_card   studio_credit_cards? @relation(fields: [default_credit_card_id], references: [id], onDelete: SetNull)
 
   @@index([studio_id])
   @@index([is_active])
   @@index([personal_id])
+  @@index([default_credit_card_id])
 }
 
 model studio_revenue_products {

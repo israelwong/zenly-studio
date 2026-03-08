@@ -12,6 +12,10 @@ import { toast } from 'sonner';
 import { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
 import { cn } from '@/lib/utils';
 
+const DIAS_SEMANA_LABEL: Record<number, string> = {
+    0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado',
+};
+
 interface GastoRecurrente {
     id: string;
     name: string;
@@ -25,6 +29,8 @@ interface GastoRecurrente {
     totalPagosEsperados?: number;
     isCrewMember?: boolean;
     crewMemberId?: string;
+    lastDayOfMonth?: boolean;
+    paymentMethodLabel?: string | null;
 }
 
 interface GastoRecurrenteItemCardProps {
@@ -74,6 +80,28 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
                 return 'Mensual';
         }
     };
+
+    const getDaySummary = () => {
+        const freq = expense.frequency;
+        if (freq === 'monthly') {
+            if (expense.lastDayOfMonth) return 'Último día del mes';
+            return `Día ${expense.chargeDay ?? 1}`;
+        }
+        if (freq === 'biweekly') {
+            return expense.chargeDay === 15 ? '15 y último' : '1 y 15';
+        }
+        if (freq === 'weekly') {
+            const day = expense.chargeDay ?? 0;
+            return DIAS_SEMANA_LABEL[day] ?? `Día ${day}`;
+        }
+        return expense.chargeDay ? `Día ${expense.chargeDay}` : '';
+    };
+
+    const subtitle = [
+        getFrequencyLabel(expense.frequency),
+        getDaySummary() ? `(${getDaySummary()})` : '',
+        expense.paymentMethodLabel ? expense.paymentMethodLabel : '',
+    ].filter(Boolean).join(' - ');
 
     const handleEditarClick = () => {
         setIsEditModalOpen(true);
@@ -161,10 +189,7 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
                                 </p>
                                 <div className="flex items-center gap-1 text-xs text-zinc-500">
                                     <Calendar className="h-3 w-3" />
-                                    <span>
-                                        {getFrequencyLabel(expense.frequency)}
-                                        {!expense.isCrewMember && ` - Día ${expense.chargeDay}`}
-                                    </span>
+                                    <span>{subtitle || getFrequencyLabel(expense.frequency)}</span>
                                 </div>
                             </div>
                         </div>

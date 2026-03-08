@@ -1,17 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     ZenDialog,
     ZenInput,
-    ZenSwitch,
     ZenButton,
 } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
-import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
-import { CheckCircle2, Trash2, Search, UserX, ChevronRight } from 'lucide-react';
-import { crearGastoRecurrente, obtenerGastoRecurrente, eliminarGastoRecurrente } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
-import { obtenerCrewMembers } from '@/lib/actions/studio/crew';
+import { CheckCircle2, Trash2 } from 'lucide-react';
+import { crearGastoRecurrente, actualizarGastoRecurrente, obtenerGastoRecurrente, eliminarGastoRecurrente, obtenerTarjetasCredito } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ZenConfirmModal } from '@/components/ui/zen';
@@ -25,22 +22,17 @@ interface RegistrarGastoRecurrenteModalProps {
 }
 
 type Recurrencia = 'weekly' | 'biweekly' | 'monthly';
+type MetodoPago = 'efectivo' | 'transferencia' | 'credit_card';
 
-function PersonalSelectorSkeleton() {
-    return (
-        <div className="divide-y divide-zinc-700">
-            {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-zinc-700 animate-pulse" />
-                    <div className="flex-1 min-w-0 space-y-2">
-                        <div className="h-3.5 w-3/4 max-w-[140px] rounded bg-zinc-700 animate-pulse" />
-                        <div className="h-3 w-1/2 max-w-[80px] rounded bg-zinc-700/80 animate-pulse" />
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
+const DIAS_SEMANA = [
+    { value: 0, label: 'Domingo' },
+    { value: 1, label: 'Lunes' },
+    { value: 2, label: 'Martes' },
+    { value: 3, label: 'Miércoles' },
+    { value: 4, label: 'Jueves' },
+    { value: 5, label: 'Viernes' },
+    { value: 6, label: 'Sábado' },
+];
 
 export function RegistrarGastoRecurrenteModal({
     isOpen,
@@ -54,7 +46,6 @@ export function RegistrarGastoRecurrenteModal({
     const [descripcion, setDescripcion] = useState('');
     const [monto, setMonto] = useState('');
     const [recurrencia, setRecurrencia] = useState<Recurrencia>('monthly');
-    const [personalId, setPersonalId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -62,15 +53,12 @@ export function RegistrarGastoRecurrenteModal({
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteType, setDeleteType] = useState<'all' | 'future'>('future');
-    const [asociarAPersonal, setAsociarAPersonal] = useState(false);
-    const [selectedPersonalName, setSelectedPersonalName] = useState<string | null>(null);
-    const [showPersonalSelectorDialog, setShowPersonalSelectorDialog] = useState(false);
-    const [selectorMembers, setSelectorMembers] = useState<{ id: string; name: string; tipo: string | null }[]>([]);
-    const [selectorLoading, setSelectorLoading] = useState(false);
-    const [selectorSearch, setSelectorSearch] = useState('');
-    const [pendingPersonalId, setPendingPersonalId] = useState<string | null>(null);
-    const [pendingPersonalName, setPendingPersonalName] = useState<string | null>(null);
-    const openedPersonalFromSwitchRef = useRef(false);
+    const [metodoPago, setMetodoPago] = useState<MetodoPago>('transferencia');
+    const [creditCardId, setCreditCardId] = useState<string>('');
+    const [chargeDay, setChargeDay] = useState<number>(1);
+    const [lastDayOfMonth, setLastDayOfMonth] = useState(false);
+    const [tarjetas, setTarjetas] = useState<{ id: string; name: string }[]>([]);
+    const [tarjetasLoading, setTarjetasLoading] = useState(false);
 
     const loadExpenseData = useCallback(async () => {
         if (!expenseId) return;
@@ -78,26 +66,15 @@ export function RegistrarGastoRecurrenteModal({
         try {
             const result = await obtenerGastoRecurrente(studioSlug, expenseId);
             if (result.success && result.data) {
-                setConcepto(result.data.name);
-                setDescripcion(result.data.description || '');
-                setMonto(result.data.amount.toString());
-                setRecurrencia(result.data.frequency as Recurrencia);
-                const pid = result.data.personal_id ?? null;
-                setPersonalId(pid);
-                setAsociarAPersonal(pid != null);
-                if (pid) {
-                    try {
-                        const crewRes = await obtenerCrewMembers(studioSlug);
-                        if (crewRes.success && crewRes.data) {
-                            const name = crewRes.data.find((m) => m.id === pid)?.name ?? null;
-                            setSelectedPersonalName(name);
-                        }
-                    } catch {
-                        setSelectedPersonalName(null);
-                    }
-                } else {
-                    setSelectedPersonalName(null);
-                }
+                const d = result.data;
+                setConcepto(d.name);
+                setDescripcion(d.description || '');
+                setMonto(d.amount.toString());
+                setRecurrencia(d.frequency as Recurrencia);
+                setMetodoPago((d.payment_method as MetodoPago) || 'transferencia');
+                setCreditCardId(d.default_credit_card_id || '');
+                setChargeDay(d.charge_day ?? 1);
+                setLastDayOfMonth(d.last_day_of_month ?? false);
             } else {
                 toast.error(result.error || 'Error al cargar datos del gasto recurrente');
             }
@@ -123,38 +100,31 @@ export function RegistrarGastoRecurrenteModal({
     }, [isOpen, expenseId, isEditMode, loadExpenseData]);
 
     useEffect(() => {
-        if (showPersonalSelectorDialog) {
-            setPendingPersonalId(personalId);
-            setPendingPersonalName(selectedPersonalName);
-            setSelectorSearch('');
-            setSelectorLoading(true);
-            obtenerCrewMembers(studioSlug)
-                .then((res) => {
-                    if (res.success && res.data) {
-                        setSelectorMembers(res.data.map((m) => ({ id: m.id, name: m.name, tipo: m.tipo ?? null })));
-                    } else {
-                        setSelectorMembers([]);
-                    }
-                })
-                .catch(() => setSelectorMembers([]))
-                .finally(() => setSelectorLoading(false));
-        }
-    }, [showPersonalSelectorDialog, studioSlug]);
-
-    useEffect(() => {
         if (!isOpen) {
             setConcepto('');
             setDescripcion('');
             setMonto('');
             setRecurrencia('monthly');
-            setPersonalId(null);
-            setAsociarAPersonal(false);
-            setSelectedPersonalName(null);
-            setShowPersonalSelectorDialog(false);
+            setMetodoPago('transferencia');
+            setCreditCardId('');
+            setChargeDay(1);
+            setLastDayOfMonth(false);
             setError(null);
             setInitialLoading(true);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (metodoPago !== 'credit_card') return;
+        setTarjetasLoading(true);
+        obtenerTarjetasCredito(studioSlug)
+            .then((res) => {
+                if (res.success && res.data) setTarjetas(res.data);
+                else setTarjetas([]);
+            })
+            .finally(() => setTarjetasLoading(false));
+    }, [isOpen, studioSlug, metodoPago]);
 
     const handleSave = async () => {
         if (!concepto.trim()) {
@@ -175,19 +145,22 @@ export function RegistrarGastoRecurrenteModal({
         setLoading(true);
         setError(null);
 
+        const payload = {
+            name: concepto.trim(),
+            description: descripcion.trim() || null,
+            amount: parseFloat(monto),
+            frequency: recurrencia,
+            category: 'fijo',
+            chargeDay: recurrencia === 'monthly' && lastDayOfMonth ? 31 : chargeDay,
+            lastDayOfMonth: recurrencia === 'monthly' ? lastDayOfMonth : false,
+            paymentMethod: metodoPago,
+            defaultCreditCardId: metodoPago === 'credit_card' ? creditCardId || null : null,
+            personalId: null,
+        };
+
         try {
             if (isEditMode && expenseId) {
-                const { actualizarGastoRecurrente } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
-                const result = await actualizarGastoRecurrente(studioSlug, expenseId, {
-                    name: concepto.trim(),
-                    description: descripcion.trim() || null,
-                    amount: parseFloat(monto),
-                    frequency: recurrencia,
-                    category: 'fijo',
-                    chargeDay: 1,
-                    personalId: personalId || null,
-                });
-
+                const result = await actualizarGastoRecurrente(studioSlug, expenseId, payload);
                 if (result.success) {
                     toast.success('Gasto recurrente actualizado correctamente');
                     await onSuccess?.();
@@ -196,16 +169,7 @@ export function RegistrarGastoRecurrenteModal({
                     setError(result.error || 'Error al actualizar gasto recurrente');
                 }
             } else {
-                const result = await crearGastoRecurrente(studioSlug, {
-                    name: concepto.trim(),
-                    description: descripcion.trim() || null,
-                    amount: parseFloat(monto),
-                    frequency: recurrencia,
-                    category: 'fijo',
-                    chargeDay: 1,
-                    personalId: personalId || null,
-                });
-
+                const result = await crearGastoRecurrente(studioSlug, payload);
                 if (result.success) {
                     toast.success('Gasto recurrente registrado correctamente');
                     await onSuccess?.();
@@ -318,7 +282,8 @@ export function RegistrarGastoRecurrenteModal({
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="flex flex-col flex-1 min-h-0">
+                        <div className="space-y-4">
                         <ZenInput
                             label="Concepto"
                             value={concepto}
@@ -328,8 +293,8 @@ export function RegistrarGastoRecurrenteModal({
                             error={error && !concepto.trim() ? error : undefined}
                         />
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-zinc-300">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-zinc-300 block">
                                 Descripción <span className="text-zinc-500">(opcional, máx. 200 caracteres)</span>
                             </label>
                             <textarea
@@ -349,8 +314,8 @@ export function RegistrarGastoRecurrenteModal({
                             )}
                         </div>
 
-                        <div className="grid grid-cols-[minmax(0,120px)_1fr] gap-4">
-                            <div className="space-y-2">
+                        <div className="space-y-4">
+                            <div className="space-y-1.5 w-full">
                                 <ZenInput
                                     label="Monto"
                                     type="number"
@@ -372,15 +337,63 @@ export function RegistrarGastoRecurrenteModal({
                                     error={error && (!monto || parseFloat(monto) <= 0) ? error : undefined}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                                    Recurrencia <span className="text-red-400">*</span>
+                            <div className="rounded-xl border border-zinc-700/80 bg-zinc-800/20 p-4 space-y-1.5">
+                                <label className="text-sm font-medium text-zinc-300 block">
+                                    Método de pago
                                 </label>
-                                <div className="grid grid-cols-3 gap-2">
-                                <label
-                                    htmlFor="recurrencia-weekly"
-                                    className={cn(
-                                        'relative flex items-center justify-center gap-2 h-[42px] min-h-[42px] px-3 rounded-lg border cursor-pointer transition-all',
+                                <div className="grid grid-cols-3 gap-2 w-full">
+                                    {(['efectivo', 'transferencia', 'credit_card'] as const).map((m) => (
+                                        <label
+                                            key={m}
+                                            htmlFor={`metodo-${m}`}
+                                            className={cn(
+                                                'relative flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all min-w-0 text-sm',
+                                                metodoPago === m ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            )}
+                                        >
+                                            <input
+                                                type="radio"
+                                                id={`metodo-${m}`}
+                                                name="metodoPago"
+                                                value={m}
+                                                checked={metodoPago === m}
+                                                onChange={() => { setMetodoPago(m); if (m !== 'credit_card') setCreditCardId(''); }}
+                                                className="sr-only"
+                                            />
+                                            {metodoPago === m && <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />}
+                                            <span className={cn('text-sm font-medium', metodoPago === m ? 'text-emerald-200' : 'text-zinc-300')}>
+                                                {m === 'credit_card' ? 'T. Crédito' : m === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                                {metodoPago === 'credit_card' && (
+                                    <div className="space-y-1.5 pt-1">
+                                        <label className="text-xs text-zinc-400 block">Tarjeta</label>
+                                        <select
+                                            value={creditCardId}
+                                            onChange={(e) => setCreditCardId(e.target.value)}
+                                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                            disabled={tarjetasLoading}
+                                        >
+                                            <option value="">Seleccionar tarjeta</option>
+                                            {tarjetas.map((t) => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="rounded-xl border border-zinc-700/80 bg-zinc-800/20 p-4 space-y-4">
+                                <div className="space-y-1.5 w-full">
+                                    <label className="text-sm font-medium text-zinc-300 block">
+                                        Recurrencia <span className="text-red-400">*</span>
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2 w-full">
+                                    <label
+                                        htmlFor="recurrencia-weekly"
+                                        className={cn(
+                                            'relative flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all min-w-0 text-sm',
                                         recurrencia === 'weekly'
                                             ? 'border-emerald-500 bg-emerald-500/10'
                                             : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -398,10 +411,10 @@ export function RegistrarGastoRecurrenteModal({
                                     {recurrencia === 'weekly' && <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />}
                                     <span className={cn('text-sm font-medium', recurrencia === 'weekly' ? 'text-emerald-200' : 'text-zinc-300')}>Semanal</span>
                                 </label>
-                                <label
-                                    htmlFor="recurrencia-biweekly"
-                                    className={cn(
-                                        'relative flex items-center justify-center gap-2 h-[42px] min-h-[42px] px-3 rounded-lg border cursor-pointer transition-all',
+                                    <label
+                                        htmlFor="recurrencia-biweekly"
+                                        className={cn(
+                                            'relative flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all min-w-0 text-sm',
                                         recurrencia === 'biweekly'
                                             ? 'border-emerald-500 bg-emerald-500/10'
                                             : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -419,10 +432,10 @@ export function RegistrarGastoRecurrenteModal({
                                     {recurrencia === 'biweekly' && <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />}
                                     <span className={cn('text-sm font-medium', recurrencia === 'biweekly' ? 'text-emerald-200' : 'text-zinc-300')}>Quincenal</span>
                                 </label>
-                                <label
-                                    htmlFor="recurrencia-monthly"
-                                    className={cn(
-                                        'relative flex items-center justify-center gap-2 h-[42px] min-h-[42px] px-3 rounded-lg border cursor-pointer transition-all',
+                                    <label
+                                        htmlFor="recurrencia-monthly"
+                                        className={cn(
+                                            'relative flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all min-w-0 text-sm',
                                         recurrencia === 'monthly'
                                             ? 'border-emerald-500 bg-emerald-500/10'
                                             : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -440,178 +453,109 @@ export function RegistrarGastoRecurrenteModal({
                                     {recurrencia === 'monthly' && <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />}
                                     <span className={cn('text-sm font-medium', recurrencia === 'monthly' ? 'text-emerald-200' : 'text-zinc-300')}>Mensual</span>
                                 </label>
-                            </div>
-                            </div>
-                        </div>
+                                    </div>
+                                </div>
 
-                        <div className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-                            <ZenSwitch
-                                checked={asociarAPersonal}
-                                onCheckedChange={(checked) => {
-                                    setAsociarAPersonal(checked);
-                                    if (!checked) {
-                                        setPersonalId(null);
-                                        setSelectedPersonalName(null);
-                                    } else {
-                                        openedPersonalFromSwitchRef.current = true;
-                                        setShowPersonalSelectorDialog(true);
-                                    }
-                                }}
-                                label="Asociar a personal"
-                            />
-                            {asociarAPersonal && (
-                                <ZenButton
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full h-10 justify-between"
-                                    onClick={() => {
-                                        openedPersonalFromSwitchRef.current = false;
-                                        setShowPersonalSelectorDialog(true);
-                                    }}
-                                >
-                                    <span className="truncate">
-                                        {selectedPersonalName || 'Seleccionar miembro del personal'}
-                                    </span>
-                                    {selectedPersonalName ? (
-                                        <span className="text-xs text-zinc-500 shrink-0">Cambiar</span>
-                                    ) : (
-                                        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
-                                    )}
-                                </ZenButton>
-                            )}
+                                <div className="space-y-1.5 w-full">
+                                    <label className="text-sm font-medium text-zinc-300 block">
+                                        Día de pago
+                                    </label>
+                                {recurrencia === 'weekly' && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                        {DIAS_SEMANA.map((d) => {
+                                            const selected = chargeDay === d.value;
+                                            return (
+                                                <button
+                                                    key={d.value}
+                                                    type="button"
+                                                    onClick={() => setChargeDay(d.value)}
+                                                    className={cn(
+                                                        'flex items-center justify-center h-9 min-h-9 px-3 rounded-md border text-sm font-medium transition-all',
+                                                        selected
+                                                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                                                            : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600'
+                                                    )}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                {recurrencia === 'biweekly' && (
+                                    <div className="flex gap-2">
+                                        <label
+                                            className={cn(
+                                                'flex-1 flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all text-sm',
+                                                chargeDay === 1 ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            )}
+                                        >
+                                            <input type="radio" name="biweekly" checked={chargeDay === 1} onChange={() => setChargeDay(1)} className="sr-only" />
+                                            <span className="text-sm font-medium">1 y 15</span>
+                                        </label>
+                                        <label
+                                            className={cn(
+                                                'flex-1 flex items-center justify-center gap-1.5 h-9 min-h-9 px-3 rounded-md border cursor-pointer transition-all text-sm',
+                                                chargeDay === 15 ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            )}
+                                        >
+                                            <input type="radio" name="biweekly" checked={chargeDay === 15} onChange={() => setChargeDay(15)} className="sr-only" />
+                                            <span className="text-sm font-medium">15 y último</span>
+                                        </label>
+                                    </div>
+                                )}
+                                {recurrencia === 'monthly' && (
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-8 gap-1.5">
+                                            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                                                const selected = !lastDayOfMonth && chargeDay === d;
+                                                return (
+                                                    <button
+                                                        key={d}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setLastDayOfMonth(false);
+                                                            setChargeDay(d);
+                                                        }}
+                                                        className={cn(
+                                                            'flex items-center justify-center h-8 min-h-8 rounded-md border text-sm font-medium transition-all',
+                                                            selected
+                                                                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                                                                : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600'
+                                                        )}
+                                                    >
+                                                        {d}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setLastDayOfMonth(true);
+                                                setChargeDay(31);
+                                            }}
+                                            className={cn(
+                                                'w-full flex items-center justify-center h-9 rounded-md border text-sm font-medium transition-all',
+                                                lastDayOfMonth
+                                                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                                                    : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600'
+                                            )}
+                                        >
+                                            Último día del mes
+                                        </button>
+                                    </div>
+                                )}
+                                </div>
+                            </div>
                         </div>
 
                         {error && (concepto.trim() && monto && descripcion.length <= 200) && (
                             <p className="text-sm text-red-400">{error}</p>
                         )}
+                        </div>
                     </div>
                 )}
-            </ZenDialog>
-
-            {/* Diálogo selector de personal */}
-            <ZenDialog
-                isOpen={showPersonalSelectorDialog}
-                onClose={() => {
-                    if (openedPersonalFromSwitchRef.current && !personalId) {
-                        setAsociarAPersonal(false);
-                    }
-                    openedPersonalFromSwitchRef.current = false;
-                    setShowPersonalSelectorDialog(false);
-                }}
-                title="Seleccionar miembro del personal"
-                description="Busca y elige a un miembro para asociar al gasto recurrente."
-                maxWidth="md"
-                zIndex={10060}
-                onCancel={() => {
-                    if (openedPersonalFromSwitchRef.current && !personalId) {
-                        setAsociarAPersonal(false);
-                    }
-                    openedPersonalFromSwitchRef.current = false;
-                    setShowPersonalSelectorDialog(false);
-                }}
-                cancelLabel="Cancelar"
-                onSave={() => {
-                    setPersonalId(pendingPersonalId);
-                    setSelectedPersonalName(pendingPersonalName);
-                    openedPersonalFromSwitchRef.current = false;
-                    setShowPersonalSelectorDialog(false);
-                }}
-                saveLabel="Confirmar selección"
-                saveDisabled={false}
-            >
-                <div className="space-y-3">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                        <input
-                            type="text"
-                            value={selectorSearch}
-                            onChange={(e) => setSelectorSearch(e.target.value)}
-                            placeholder="Buscar por nombre..."
-                            className="w-full pl-8 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                    </div>
-                    <div className="max-h-[280px] overflow-y-auto rounded-lg border border-zinc-700 divide-y divide-zinc-700">
-                        {selectorLoading ? (
-                            <div className="max-h-[280px] overflow-y-auto rounded-lg border border-zinc-700">
-                                <PersonalSelectorSkeleton />
-                            </div>
-                        ) : (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setPendingPersonalId(null);
-                                        setPendingPersonalName(null);
-                                    }}
-                                    className={cn(
-                                        'w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors',
-                                        pendingPersonalId === null
-                                            ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500'
-                                            : 'hover:bg-zinc-800/70'
-                                    )}
-                                >
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700">
-                                        <UserX className="h-4 w-4 text-zinc-400" />
-                                    </div>
-                                    <span className="text-zinc-300">Sin asignar</span>
-                                    {pendingPersonalId === null && (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 ml-auto" />
-                                    )}
-                                </button>
-                                {(() => {
-                                    const filtered = selectorMembers
-                                        .filter((m) =>
-                                            !selectorSearch.trim()
-                                                ? true
-                                                : m.name.toLowerCase().includes(selectorSearch.trim().toLowerCase())
-                                        )
-                                        .sort((a, b) => (a.tipo ?? '').localeCompare(b.tipo ?? '') || a.name.localeCompare(b.name));
-                                    if (filtered.length === 0) {
-                                        return (
-                                            <div className="p-4 text-sm text-zinc-500 text-center">
-                                                No hay coincidencias
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <>
-                                            {filtered.map((member) => (
-                                                <button
-                                                    key={member.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPendingPersonalId(member.id);
-                                                        setPendingPersonalName(member.name);
-                                                    }}
-                                                    className={cn(
-                                                        'w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors',
-                                                        pendingPersonalId === member.id
-                                                            ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500'
-                                                            : 'hover:bg-zinc-800/70'
-                                                    )}
-                                                >
-                                                    <Avatar className="h-8 w-8 flex-shrink-0">
-                                                        <AvatarFallback className="bg-zinc-600 text-zinc-200 text-xs">
-                                                            {member.name.slice(0, 2).toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-zinc-200 truncate">{member.name}</div>
-                                                        <div className="text-xs text-zinc-500">{member.tipo ?? '—'}</div>
-                                                    </div>
-                                                    {pendingPersonalId === member.id && (
-                                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </>
-                                    );
-                                })()}
-                            </>
-                        )}
-                    </div>
-                </div>
             </ZenDialog>
 
             {/* Modal de selección de tipo de eliminación */}
