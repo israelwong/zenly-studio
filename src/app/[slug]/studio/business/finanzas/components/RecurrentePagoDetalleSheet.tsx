@@ -196,7 +196,7 @@ export function RecurrentePagoDetalleSheet({
             <Sheet open={isOpen} onOpenChange={handleSheetOpenChange} modal={false}>
                 <SheetContent
                     side="right"
-                    className="w-full sm:max-w-2xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
+                    className="w-full sm:max-w-md bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
                     showOverlay={false}
                     onInteractOutside={(e) => {
                         // Cuando el modal está abierto, no prevenir eventos para que los inputs funcionen

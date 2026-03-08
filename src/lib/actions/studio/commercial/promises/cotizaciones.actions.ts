@@ -54,6 +54,8 @@ import { getPromiseRouteStateFromSlug, type PromiseRouteState } from '@/lib/util
 import { getPublicPromisePath } from '@/lib/utils/public-promise-routing';
 import { calcularRentabilidadGlobal } from '@/lib/utils/negociacion-calc';
 import type { CotizacionItem } from '@/lib/utils/negociacion-calc';
+import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
+import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
 
 export interface CotizacionListItem {
   id: string;
@@ -3123,13 +3125,24 @@ export async function autorizarCotizacion(
 }
 
 /**
- * Cancela solo una cotizaciรณn autorizada/aprobada
- * - Cambia status a "cancelada"
- * - Libera evento_id si existe
+ * Opciones para cancelación con destino de fondos (homólogo a cancelarEvento / cancelarCierreConFondos).
+ * Obligatorias cuando la cotización tiene pagos confirmados.
+ */
+export interface CancelarCotizacionDatosFondos {
+  motivo: string;
+  solicitante: 'estudio' | 'cliente';
+  destinoFondos: 'retain' | 'refund';
+}
+
+/**
+ * Cancela solo una cotizaciรณn autorizada/aprobada.
+ * - Cambia status a "cancelada" y libera evento_id.
+ * - Si hay pagos confirmados, datos (motivo, solicitante, destinoFondos) son obligatorios: retain → retained_by_cancellation, refund → pending_refund.
  */
 export async function cancelarCotizacion(
   studioSlug: string,
-  cotizacionId: string
+  cotizacionId: string,
+  datos?: CancelarCotizacionDatosFondos
 ): Promise<CotizacionResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -3160,16 +3173,52 @@ export async function cancelarCotizacion(
       return { success: false, error: 'Solo se pueden cancelar cotizaciones autorizadas, aprobadas o en cierre' };
     }
 
-    await prisma.studio_cotizaciones.update({
-      where: { id: cotizacionId },
-      data: {
-        status: 'cancelada',
-        selected_by_prospect: false,
-        visible_to_client: false,
-        evento_id: null, // Liberar relaciรณn con evento
-        discount: null,
-        updated_at: new Date(),
+    const pagosCount = await prisma.studio_pagos.count({
+      where: {
+        cotizacion_id: cotizacionId,
+        status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
       },
+    });
+    if (pagosCount > 0) {
+      if (!datos?.destinoFondos || !datos.motivo?.trim()) {
+        return {
+          success: false,
+          error: 'Hay pagos confirmados. Indica motivo, solicitante y destino del dinero (retener o devolver).',
+        };
+      }
+    }
+
+    const nuevoStatusPagos = datos?.destinoFondos === 'refund' ? 'pending_refund' : (datos?.destinoFondos === 'retain' ? 'retained_by_cancellation' : null);
+
+    await prisma.$transaction(async (tx) => {
+      if (pagosCount > 0 && nuevoStatusPagos) {
+        await tx.studio_pagos.updateMany({
+          where: {
+            cotizacion_id: cotizacionId,
+            status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+          },
+          data: { status: nuevoStatusPagos, updated_at: new Date() },
+        });
+      }
+
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'cancelada',
+          selected_by_prospect: false,
+          visible_to_client: false,
+          evento_id: null,
+          discount: null,
+          ...(datos?.motivo?.trim()
+            ? {
+                cancel_reason: datos.motivo.trim(),
+                cancel_requested_by: datos.solicitante,
+                cancelled_at: new Date(),
+              }
+            : {}),
+          updated_at: new Date(),
+        },
+      });
     });
 
     // Sincronizar pipeline stage de la promesa
@@ -3208,13 +3257,13 @@ export async function cancelarCotizacion(
 }
 
 /**
- * Cancela una cotizaciรณn y elimina el evento asociado
- * - Cancela la cotizaciรณn
- * - Elimina el evento si existe y no tiene otras cotizaciones autorizadas
+ * Cancela una cotizaciรณn y elimina el evento asociado.
+ * - Si hay pagos confirmados, datos (motivo, solicitante, destinoFondos) son obligatorios (misma regla SSOT).
  */
 export async function cancelarCotizacionYEvento(
   studioSlug: string,
-  cotizacionId: string
+  cotizacionId: string,
+  datos?: CancelarCotizacionDatosFondos
 ): Promise<CotizacionResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -3244,9 +3293,36 @@ export async function cancelarCotizacionYEvento(
       return { success: false, error: 'Solo se pueden cancelar cotizaciones autorizadas o aprobadas' };
     }
 
+    const pagosCount = await prisma.studio_pagos.count({
+      where: {
+        cotizacion_id: cotizacionId,
+        status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+      },
+    });
+    if (pagosCount > 0) {
+      if (!datos?.destinoFondos || !datos.motivo?.trim()) {
+        return {
+          success: false,
+          error: 'Hay pagos confirmados. Indica motivo, solicitante y destino del dinero (retener o devolver).',
+        };
+      }
+    }
+
+    const nuevoStatusPagos = datos?.destinoFondos === 'refund' ? 'pending_refund' : (datos?.destinoFondos === 'retain' ? 'retained_by_cancellation' : null);
     const eventoId = cotizacion.evento_id;
 
     await prisma.$transaction(async (tx) => {
+      // 0. Destino de fondos (SSOT)
+      if (pagosCount > 0 && nuevoStatusPagos) {
+        await tx.studio_pagos.updateMany({
+          where: {
+            cotizacion_id: cotizacionId,
+            status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+          },
+          data: { status: nuevoStatusPagos, updated_at: new Date() },
+        });
+      }
+
       // 1. Cancelar cotizaciรณn
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
@@ -3255,6 +3331,13 @@ export async function cancelarCotizacionYEvento(
           visible_to_client: false,
           evento_id: null,
           discount: null,
+          ...(datos?.motivo?.trim()
+            ? {
+                cancel_reason: datos.motivo.trim(),
+                cancel_requested_by: datos.solicitante,
+                cancelled_at: new Date(),
+              }
+            : {}),
           updated_at: new Date(),
         },
       });
@@ -3942,6 +4025,70 @@ export async function pasarACierre(
         },
       });
 
+      // 2.1. Visibilidad financiera inmediata + split contable: si monto > A_req → anticipo + abono
+      const montoNum = pagoMontoConfirmado != null ? Number(pagoMontoConfirmado) : 0;
+      if (pagoConfirmado && montoNum > 0 && cotizacion.promise_id) {
+        const precioBase = Number(cotizacion.price ?? 0);
+        const aReq = await getAnticipoRequeridoCierre(tx, cotizacionId, precioBase, ajuste ? null : registroCondicionId);
+        const contactId = cotizacion.contact_id ?? cotizacion.promise?.contact_id ?? null;
+        let metodoPagoNombre = 'Manual';
+        if (options?.pago_metodo_id) {
+          const metodo = await tx.studio_metodos_pago.findUnique({
+            where: { id: options.pago_metodo_id },
+            select: { payment_method_name: true },
+          });
+          if (metodo) metodoPagoNombre = metodo.payment_method_name;
+        }
+        const existingAnticipo = await tx.studio_pagos.findFirst({
+          where: {
+            cotizacion_id: cotizacionId,
+            status: 'completed',
+            transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+          },
+          select: { id: true },
+        });
+        if (!existingAnticipo) {
+          const paymentDate = new Date();
+          const baseData = {
+            cotizacion_id: cotizacionId,
+            promise_id: cotizacion.promise_id,
+            contact_id: contactId,
+            payment_date: paymentDate,
+            metodo_pago_id: options?.pago_metodo_id ?? null,
+            metodo_pago: metodoPagoNombre,
+            status: 'completed' as const,
+            transaction_type: 'ingreso' as const,
+          };
+          if (aReq > 0 && montoNum > aReq) {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: aReq,
+                concept: 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: montoNum - aReq,
+                concept: 'Abono adicional',
+                transaction_category: TRANSACTION_CATEGORY.ABONO,
+              },
+            });
+          } else {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: montoNum,
+                concept: 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+          }
+        }
+      }
+
       // 3. Archivar las demás cotizaciones de la misma promesa (homólogo al flujo público)
       // Así listados y pipeline solo consideran la cotización en cierre; al cancelar cierre se desarchivan.
       if (cotizacion.promise_id) {
@@ -4105,12 +4252,11 @@ export async function cancelarCierreConFondos(
         where: { cotizacion_id: cotizacionId },
         select: { previous_status: true },
       });
-      const statusToRestore = registroCierre?.previous_status || 'pendiente';
-
+      // Cotización queda como cancelada y no visible al cliente (no publicada)
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
-          status: statusToRestore,
+          status: 'cancelada',
           selected_by_prospect: false,
           visible_to_client: false,
           selected_at: null,
@@ -4167,14 +4313,16 @@ export async function cancelarCierreConFondos(
 }
 
 /**
- * Cancela el proceso de cierre de una cotizaciรณn
+ * Cancela el proceso de cierre de una cotización.
  * - Cambia el status de 'en_cierre' a 'pendiente'
+ * - Opcional: guarda motivo y solicitante (auditoría, alineado con cancelarCierreConFondos)
  * - Desarchivar otras cotizaciones archivadas de la misma promesa (opcional)
  */
 export async function cancelarCierre(
   studioSlug: string,
   cotizacionId: string,
-  desarchivarOtras: boolean = false
+  desarchivarOtras: boolean = false,
+  datos?: { motivo: string; solicitante: 'estudio' | 'cliente' }
 ): Promise<CotizacionResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -4199,13 +4347,26 @@ export async function cancelarCierre(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Verificar que la cotizaciรณn estรฉ en cierre
     if (cotizacion.status !== 'en_cierre') {
       return { success: false, error: 'Solo se pueden cancelar cotizaciones en proceso de cierre' };
     }
 
+    // Blindaje: si hay pagos confirmados, obligar a usar cancelarCierreConFondos (destino del dinero)
+    const pagosCount = await prisma.studio_pagos.count({
+      where: {
+        cotizacion_id: cotizacionId,
+        status: { in: [...PAGOS_CONFIRMADOS_STATUS] },
+      },
+    });
+    if (pagosCount > 0) {
+      return {
+        success: false,
+        error: 'Hay pagos confirmados asociados a esta cotización. Usa "Cancelar cierre" con destino de fondos (retener o devolver) para indicar qué hacer con el dinero.',
+      };
+    }
+
     await prisma.$transaction(async (tx) => {
-      // 0. Barrido pagos fantasma: marcar como canceled todos los pagos asociados a esta cotización o promesa
+      // 0. Barrido pagos fantasma (solo si no hay confirmados; ya validado arriba): marcar como canceled
       await tx.studio_pagos.updateMany({
         where: {
           OR: [
@@ -4223,17 +4384,21 @@ export async function cancelarCierre(
         select: { previous_status: true },
       });
 
-      // 2. Restaurar el estado anterior (pendiente o negociacion)
-      // Si no hay registro o no tiene previous_status, usar 'pendiente' por defecto
-      const statusToRestore = registroCierre?.previous_status || 'pendiente';
-
+      // 2. Cotización queda como cancelada y no visible al cliente (cierre cancelado)
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
-          status: statusToRestore,
+          status: 'cancelada',
           selected_by_prospect: false,
           visible_to_client: false,
           selected_at: null,
+          ...(datos?.motivo?.trim()
+            ? {
+                cancel_reason: datos.motivo.trim(),
+                cancel_requested_by: datos.solicitante,
+                cancelled_at: new Date(),
+              }
+            : {}),
           updated_at: new Date(),
         },
       });

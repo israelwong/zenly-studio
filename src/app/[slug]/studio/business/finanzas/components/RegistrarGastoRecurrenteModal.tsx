@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     ZenDialog,
-    ZenButton,
     ZenInput,
 } from '@/components/ui/zen';
+import { CrewMemberSelector } from '@/components/shared/crew-members/CrewMemberSelector';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { Calendar, CheckCircle2, Trash2 } from 'lucide-react';
 import { crearGastoRecurrente, obtenerGastoRecurrente, eliminarGastoRecurrente } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
@@ -35,6 +35,7 @@ export function RegistrarGastoRecurrenteModal({
     const [descripcion, setDescripcion] = useState('');
     const [monto, setMonto] = useState('');
     const [recurrencia, setRecurrencia] = useState<Recurrencia>('monthly');
+    const [personalId, setPersonalId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -53,6 +54,7 @@ export function RegistrarGastoRecurrenteModal({
                 setDescripcion(result.data.description || '');
                 setMonto(result.data.amount.toString());
                 setRecurrencia(result.data.frequency as Recurrencia);
+                setPersonalId(result.data.personal_id ?? null);
             } else {
                 toast.error(result.error || 'Error al cargar datos del gasto recurrente');
             }
@@ -83,6 +85,7 @@ export function RegistrarGastoRecurrenteModal({
             setDescripcion('');
             setMonto('');
             setRecurrencia('monthly');
+            setPersonalId(null);
             setError(null);
             setInitialLoading(true);
         }
@@ -117,6 +120,7 @@ export function RegistrarGastoRecurrenteModal({
                     frequency: recurrencia,
                     category: 'fijo',
                     chargeDay: 1,
+                    personalId: personalId || null,
                 });
 
                 if (result.success) {
@@ -133,7 +137,8 @@ export function RegistrarGastoRecurrenteModal({
                     amount: parseFloat(monto),
                     frequency: recurrencia,
                     category: 'fijo',
-                    chargeDay: 1, // Por defecto día 1, se puede ajustar después
+                    chargeDay: 1,
+                    personalId: personalId || null,
                 });
 
                 if (result.success) {
@@ -276,6 +281,19 @@ export function RegistrarGastoRecurrenteModal({
                             required
                             error={error && (!monto || parseFloat(monto) <= 0) ? error : undefined}
                         />
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-zinc-300">
+                                Personal <span className="text-zinc-500">(opcional)</span>
+                            </label>
+                            <CrewMemberSelector
+                                studioSlug={studioSlug}
+                                selectedMemberId={personalId}
+                                onSelect={setPersonalId}
+                                placeholder="Asociar a un miembro del personal"
+                                searchable
+                            />
+                        </div>
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-zinc-300 pb-2">

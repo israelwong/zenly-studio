@@ -1072,7 +1072,7 @@ export function PublicQuoteAuthorizedView({
                               <div className="space-y-3 max-w-md">
                                 <h3 className="text-2xl font-bold text-zinc-100">Estamos preparando tu portal</h3>
                                 <p className="text-sm text-zinc-400 leading-relaxed">
-                                  Para que puedas acceder a él y dar seguimiento a tu evento.
+                                  En breve podrás acceder a tu portal de cliente para dar seguimiento a tu evento.
                                 </p>
                               </div>
                             </>

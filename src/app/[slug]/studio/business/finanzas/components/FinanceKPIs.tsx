@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Wallet, TrendingUp, TrendingDown, Building, DollarSign, BarChart3 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Building2, Banknote, DollarSign, BarChart3 } from 'lucide-react';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { cn } from '@/lib/utils';
 import type { RentabilidadPorEvento } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
@@ -14,6 +14,9 @@ interface FinanceKPIsProps {
     porPagar: number;
     /** Ingresos por cancelación (retained_by_cancellation) — desglose visual dentro del total */
     ingresosPorCancelacion?: number;
+    /** Disponibilidad: efectivo (caja) y bancos (SPEI/transferencia) del mes */
+    efectivo?: number;
+    bancos?: number;
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
     netProfitability?: number;
@@ -28,6 +31,8 @@ export function FinanceKPIs({
     porCobrar,
     porPagar,
     ingresosPorCancelacion,
+    efectivo = 0,
+    bancos = 0,
     totalProductionCosts,
     totalOperatingExpenses,
     netProfitability,
@@ -43,108 +48,117 @@ export function FinanceKPIs({
 
     const costoOperacion = (totalProductionCosts ?? 0) + (totalOperatingExpenses ?? 0);
 
+    const totalDisponible = efectivo + bancos;
+    const netoProyectado = porCobrar - porPagar;
+    const mesActual = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
     return (
         <div className="space-y-6">
-            <div className={cn(
-                "grid grid-cols-1 md:grid-cols-2 gap-4",
-                isOwner ? "lg:grid-cols-6" : "lg:grid-cols-4"
-            )}>
-            {/* Ingreso Mensual */}
-            <ZenCard variant="default" padding="md">
-                <ZenCardContent className="p-0">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm text-zinc-400 mb-1">Ingresos del mes</p>
-                            <p className="text-2xl font-bold text-emerald-400">
-                                {formatCurrency(ingresos)}
-                            </p>
-                            {ingresosPorCancelacion != null && ingresosPorCancelacion > 0 && (
-                                <p className="text-xs text-amber-400/90 mt-1">
-                                    Ingresos por Cancelación: {formatCurrency(ingresosPorCancelacion)}
+            {/* Fila superior: 3 tarjetas de alta densidad */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Balance del mes (ingresos - egresos con desglose) */}
+                <ZenCard variant="default" padding="md">
+                    <ZenCardContent className="p-0">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm text-zinc-400 mb-1">Balance de {mesActual}</p>
+                                <p
+                                    className={cn(
+                                        'text-2xl font-bold',
+                                        utilidad >= 0 ? 'text-emerald-500' : 'text-red-500'
+                                    )}
+                                >
+                                    {formatCurrency(utilidad)}
                                 </p>
-                            )}
-                        </div>
-                        <div className="p-2 bg-emerald-500/10 rounded-lg">
-                            <Wallet className="h-5 w-5 text-emerald-400" />
-                        </div>
-                    </div>
-                </ZenCardContent>
-            </ZenCard>
-
-            {/* Egreso Mensual */}
-            <ZenCard variant="default" padding="md">
-                <ZenCardContent className="p-0">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm text-zinc-400 mb-1">Egresos del mes</p>
-                            <p className="text-2xl font-bold text-rose-400">
-                                {formatCurrency(egresos)}
-                            </p>
-                        </div>
-                        <div className="p-2 bg-rose-500/10 rounded-lg">
-                            <TrendingDown className="h-5 w-5 text-rose-400" />
-                        </div>
-                    </div>
-                </ZenCardContent>
-            </ZenCard>
-
-            {/* Balance del Mes */}
-            <ZenCard variant="default" padding="md">
-                <ZenCardContent className="p-0">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm text-zinc-400 mb-1">Balance del mes</p>
-                            <p
-                                className={cn(
-                                    'text-2xl font-bold',
-                                    utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                    <span className="inline-flex items-center gap-1 text-sm text-zinc-400">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />
+                                        </span>
+                                        {formatCurrency(ingresos)}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 text-sm text-zinc-400">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowDown className="h-3.5 w-3.5 text-red-500" />
+                                        </span>
+                                        {formatCurrency(egresos)}
+                                    </span>
+                                </div>
+                                {ingresosPorCancelacion != null && ingresosPorCancelacion > 0 && (
+                                    <p className="text-xs text-amber-400/90 mt-1">
+                                        Incl. cancelación: {formatCurrency(ingresosPorCancelacion)}
+                                    </p>
                                 )}
-                            >
-                                {formatCurrency(utilidad)}
-                            </p>
+                            </div>
                         </div>
-                        <div
-                            className={cn(
-                                'p-2 rounded-lg',
-                                utilidad >= 0
-                                    ? 'bg-emerald-500/10'
-                                    : 'bg-rose-500/10'
-                            )}
-                        >
-                            <TrendingUp
-                                className={cn(
-                                    'h-5 w-5',
-                                    utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                                )}
-                            />
-                        </div>
-                    </div>
-                </ZenCardContent>
-            </ZenCard>
+                    </ZenCardContent>
+                </ZenCard>
 
-            {/* Proyección Global */}
-            <ZenCard variant="default" padding="md">
-                <ZenCardContent className="p-0">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm text-zinc-400 mb-1">Proyección Global</p>
-                            <p className="text-xs text-zinc-500">
-                                Por Cobrar: {formatCurrency(porCobrar)}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                                Por Pagar: {formatCurrency(porPagar)}
-                            </p>
+                {/* 2. Disponibilidad (Total = Efectivo + Bancos, desglose en footer) */}
+                <ZenCard variant="default" padding="md">
+                    <ZenCardContent className="p-0">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm text-zinc-400 mb-1">Disponibilidad</p>
+                                <p className="text-2xl font-bold text-zinc-200">
+                                    {formatCurrency(totalDisponible)}
+                                </p>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-zinc-400">
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="p-1 bg-zinc-800/50 rounded">
+                                            <Banknote className="h-3.5 w-3.5 text-amber-400" />
+                                        </span>
+                                        {formatCurrency(efectivo)}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="p-1 bg-zinc-800/50 rounded">
+                                            <Building2 className="h-3.5 w-3.5 text-blue-400" />
+                                        </span>
+                                        {formatCurrency(bancos)}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="p-2 bg-blue-500/10 rounded-lg">
-                            <Building className="h-5 w-5 text-blue-400" />
-                        </div>
-                    </div>
-                </ZenCardContent>
-            </ZenCard>
+                    </ZenCardContent>
+                </ZenCard>
 
-            {/* ✅ Nuevas tarjetas solo para owners */}
+                {/* 3. Proyección Global (Neto = Por Cobrar - Por Pagar, desglose en footer) */}
+                <ZenCard variant="default" padding="md">
+                    <ZenCardContent className="p-0">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm text-zinc-400 mb-1">Proyección Global</p>
+                                <p
+                                    className={cn(
+                                        'text-2xl font-bold',
+                                        netoProyectado >= 0 ? 'text-emerald-500' : 'text-red-500'
+                                    )}
+                                >
+                                    {formatCurrency(netoProyectado)}
+                                </p>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                    <span className="inline-flex items-center gap-1 text-sm text-zinc-400" title="Por Cobrar">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />
+                                        </span>
+                                        {formatCurrency(porCobrar)}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 text-sm text-zinc-400" title="Por Pagar">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowDown className="h-3.5 w-3.5 text-red-500" />
+                                        </span>
+                                        {formatCurrency(porPagar)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </ZenCardContent>
+                </ZenCard>
+            </div>
+
+            {/* Segunda fila: tarjetas solo para owners */}
             {isOwner && (
-                <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Costo de Operación */}
                     <ZenCard variant="default" padding="md">
                         <ZenCardContent className="p-0">
@@ -193,9 +207,8 @@ export function FinanceKPIs({
                             </div>
                         </ZenCardContent>
                     </ZenCard>
-                </>
-            )}
             </div>
+            )}
 
             {/* Tabla de Rentabilidad por Proyecto (solo para owners) */}
             {isOwner && rentabilidadPorEvento.length > 0 && (

@@ -18,6 +18,8 @@ interface CancelationWithFundsModalProps {
   isLoading?: boolean;
   saveLabel?: string;
   cancelLabel?: string;
+  /** Si false, oculta la sección "Destino del dinero" (cuando no hay pagos confirmados) */
+  showFundDestination?: boolean;
 }
 
 export function CancelationWithFundsModal({
@@ -29,6 +31,7 @@ export function CancelationWithFundsModal({
   isLoading = false,
   saveLabel = 'Confirmar y cancelar',
   cancelLabel = 'Volver',
+  showFundDestination = true,
 }: CancelationWithFundsModalProps) {
   const [reason, setReason] = useState('');
   const [requestedBy, setRequestedBy] = useState<'estudio' | 'cliente'>('estudio');
@@ -99,6 +102,9 @@ export function CancelationWithFundsModal({
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2">Destino del dinero</label>
+          {!showFundDestination && (
+            <p className="text-xs text-zinc-500 mb-2">No hay pagos confirmados en esta cotización; el destino aplica si hubiera pagos.</p>
+          )}
           <div className="space-y-2">
             <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/50 cursor-pointer hover:bg-zinc-800/80">
               <input

@@ -1,4 +1,4 @@
-import React, { cache } from 'react';
+import React, { cache, use } from 'react';
 import { ZenSidebarProvider } from '@/components/ui/zen/layout/ZenSidebar';
 import { ZenMagicChatProvider } from './components/ZenMagic';
 import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsSheetContext';
@@ -174,15 +174,13 @@ const getCachedRemindersAlerts = cache(async (studioSlug: string): Promise<Remin
   });
 });
 
-export default async function StudioLayout({
+async function StudioLayoutAsync({
+    slug,
     children,
-    params,
 }: {
+    slug: string;
     children: React.ReactNode;
-    params: { slug: string };
 }) {
-    const { slug } = await params;
-
     // Cross-Studio gatekeeper: bloquea acceso si el usuario no es miembro del studio
     await assertStudioAccess(slug);
 
@@ -230,4 +228,15 @@ export default async function StudioLayout({
             </RealtimeProvider>
         </SessionTimeoutProvider>
     );
+}
+
+export default function StudioLayout({
+    children,
+    params,
+}: {
+    children: React.ReactNode;
+    params: Promise<{ slug: string }>;
+}) {
+    const { slug } = use(params);
+    return <StudioLayoutAsync slug={slug}>{children}</StudioLayoutAsync>;
 }

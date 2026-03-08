@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Wallet } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { PorCobrarItemCard } from './PorCobrarItemCard';
 
@@ -37,17 +36,16 @@ export function PorCobrarCard({
 }: PorCobrarCardProps) {
     return (
         <ZenCard variant="default" padding="none" className="h-full flex flex-col">
-            <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0 px-4 py-3">
-                <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                        <Wallet className="h-4 w-4 text-emerald-400" />
-                    </div>
-                    <div className="flex-1">
-                        <ZenCardTitle className="text-base">Por Cobrar</ZenCardTitle>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                            {porCobrar.length} {porCobrar.length === 1 ? 'pendiente' : 'pendientes'}
-                        </p>
-                    </div>
+            <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0 h-14 px-4 flex items-center">
+                <div className="flex items-center gap-3 w-full min-w-0">
+                    <ZenCardTitle className="text-base mb-0 truncate flex-1 min-w-0 flex items-center gap-2">
+                        {porCobrar.length > 0 && (
+                            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-2 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 shrink-0">
+                                {porCobrar.length}
+                            </span>
+                        )}
+                        <span className="truncate">Cuentas por Cobrar</span>
+                    </ZenCardTitle>
                 </div>
             </ZenCardHeader>
             <ZenCardContent className="p-4 flex-1 overflow-auto">

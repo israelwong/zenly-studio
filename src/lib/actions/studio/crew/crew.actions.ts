@@ -183,6 +183,9 @@ export async function crearCrewMember(
     }
 
     revalidatePath(`/${studioSlug}/studio/crew`);
+    if (validated.fixed_salary != null) {
+      revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+    }
     return { success: true, data: crew };
   } catch (error) {
     console.error('[CREW] Error creando crew member:', error);
@@ -285,6 +288,9 @@ export async function actualizarCrewMember(
     }
 
     revalidatePath(`/${studioSlug}/studio/crew`);
+    if (validated.fixed_salary !== undefined || validated.salary_frequency !== undefined) {
+      revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+    }
     return { success: true, data: updated };
   } catch (error) {
     console.error('[CREW] Error actualizando crew member:', error);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -65,12 +65,33 @@ export function MovimientosCard({
         await onMovimientoRegistrado?.();
     };
 
+    const countIngresos = transactions.filter((t) => t.monto > 0).length;
+    const countEgresos = transactions.filter((t) => t.monto < 0).length;
+
     return (
         <>
             <ZenCard variant="default" padding="none" className="h-full flex flex-col">
-                <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0 px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        <ZenCardTitle className="text-base">Movimientos del Mes</ZenCardTitle>
+                <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0 h-14 px-4 flex items-center">
+                    <div className="flex items-center justify-between gap-2 w-full min-w-0">
+                        <ZenCardTitle className="text-base mb-0 min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                            <span className="truncate">Movimientos del Mes</span>
+                            {transactions.length > 0 && (
+                                <span className="flex items-center gap-2 shrink-0 text-sm text-zinc-400">
+                                    <span className="inline-flex items-center gap-1" title="Ingresos">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />
+                                        </span>
+                                        {countIngresos}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1" title="Egresos">
+                                        <span className="inline-flex items-center justify-center p-1 bg-zinc-800/50 rounded">
+                                            <ArrowDown className="h-3.5 w-3.5 text-red-500" />
+                                        </span>
+                                        {countEgresos}
+                                    </span>
+                                </span>
+                            )}
+                        </ZenCardTitle>
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
                                 <ZenButton variant="ghost" size="sm" className="h-7 w-7 p-0">

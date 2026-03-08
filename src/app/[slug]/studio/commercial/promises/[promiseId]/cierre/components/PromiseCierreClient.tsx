@@ -787,44 +787,27 @@ export function PromiseCierreClient({
             />
           )}
 
-          {/* Modal Confirmar Cancelar Cierre (sin pagos confirmados) */}
-          <ZenConfirmModal
-            isOpen={cierreLogic.showCancelModal}
-            onClose={() => {
-              cierreLogic.setShowCancelModal(false);
-              if (cierreLogic.isCancelling) cierreLogic.setIsCancelling(false);
-            }}
-            onConfirm={cierreLogic.handleCancelarCierre}
-            title="¿Cancelar proceso de cierre?"
-            description={
-              <div className="space-y-3">
-                <p className="text-sm text-zinc-300">Al cancelar el proceso de cierre:</p>
-                <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
-                  <li>La cotización regresará a estado <strong className="text-zinc-300">Pendiente</strong></li>
-                  <li>Se eliminarán todas las definiciones guardadas (condiciones, contrato, pago)</li>
-                </ul>
-              </div>
-            }
-            confirmText={cierreLogic.isCancelling ? 'Cancelando...' : 'Sí, cancelar cierre'}
-            cancelText="No cancelar"
-            variant="destructive"
-            loading={cierreLogic.isCancelling}
-          />
-
-          {/* Modal Gestión de Fondos por Cancelación (cuando hay pagos paid/completed) */}
+          {/* Modal único: Cancelar Cierre — siempre pide motivo y quién canceló; si hay pagos, también destino del dinero */}
           <CancelationWithFundsModal
             isOpen={cierreLogic.showCancelFondosModal}
             onClose={() => !cierreLogic.isCancelling && cierreLogic.setShowCancelFondosModal(false)}
             onConfirm={(data) => void cierreLogic.handleCancelarCierreConFondos(data)}
-            title="Gestión de fondos por cancelación"
+            title="Cancelar proceso de cierre"
             description={
-              <p className="text-sm text-zinc-400">
-                Hay {formatearMoneda(cierreLogic.pagosConfirmadosTotal)} en pagos confirmados. Indica motivo, quién solicita y el destino del dinero.
-              </p>
+              cierreLogic.pagosConfirmadosTotal > 0 ? (
+                <p className="text-sm text-zinc-400">
+                  Hay {formatearMoneda(cierreLogic.pagosConfirmadosTotal)} en pagos confirmados. Indica motivo, quién solicita la cancelación y el destino del dinero.
+                </p>
+              ) : (
+                <p className="text-sm text-zinc-400">
+                  La cotización volverá a <strong className="text-zinc-300">Pendiente</strong> y se eliminarán condiciones, contrato y pago del cierre. Indica motivo y quién solicita la cancelación.
+                </p>
+              )
             }
             isLoading={cierreLogic.isCancelling}
             saveLabel="Confirmar y cancelar cierre"
             cancelLabel="Volver"
+            showFundDestination={cierreLogic.pagosConfirmadosTotal > 0}
           />
 
           {/* Modal Confirmar Autorizar: se muestra al hacer click en "Autorizar y Crear Evento" */}

@@ -4,6 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
+/** Nombres de metodo_pago considerados efectivo (caja) */
+const METODO_EFECTIVO = ['Efectivo', 'efectivo'];
+/** Nombres de metodo_pago considerados bancos (SPEI, transferencia) */
+const METODO_BANCOS = ['SPEI', 'Transferencia', 'Transferencia bancaria', 'transferencia', 'spei'];
+
 interface FinanceKPIs {
     ingresos: number;
     egresos: number;
@@ -12,6 +17,9 @@ interface FinanceKPIs {
     porPagar: number;
     /** Monto incluido en ingresos que corresponde a retained_by_cancellation (ingresos por cancelación) */
     ingresosPorCancelacion?: number;
+    /** Disponibilidad: suma de ingresos del mes por método de pago */
+    efectivo?: number;
+    bancos?: number;
     // ✅ Nuevos campos para owners
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
@@ -35,6 +43,7 @@ export interface TransactionDetail {
     categoria: string;
     concepto: string;
     paymentStatus?: string;
+    metodoPago?: string;
 }
 
 export interface Transaction {
@@ -55,8 +64,14 @@ export interface Transaction {
     contactName?: string | null;
     eventName?: string | null;
     eventTypeName?: string | null;
+    /** Fecha del evento (cuando la transacción viene de un evento) */
+    eventDate?: Date | null;
+    /** ID del evento (para enlace Ver evento) */
+    eventoId?: string | null;
     /** Desglose cuando el movimiento agrupa varios pagos (mismo contact_id, cotizacion_id, payment_date) */
     details?: TransactionDetail[];
+    /** Método de pago (para icono en UI: Efectivo, SPEI, Transferencia, etc.) */
+    metodoPago?: string;
 }
 
 interface PendingItem {
@@ -262,6 +277,47 @@ export async function obtenerKPIsFinancieros(
             _sum: { amount: true },
         });
         const ingresosPorCancelacion = ingresosPorCancelacionAgg._sum.amount ?? 0;
+
+        // Disponibilidad: Efectivo (caja) y Bancos (SPEI/Transferencia) del mes
+        const baseIngresosWhere = {
+            AND: [
+                {
+                    OR: [
+                        { studio_users: { studio_id: studioId } },
+                        { promise: { studio_id: studioId } },
+                        { cotizaciones: { studio_id: studioId } },
+                    ],
+                },
+                { status: { in: ['paid', 'completed', 'retained_by_cancellation'] as const } },
+                {
+                    OR: [
+                        { payment_date: { gte: start, lte: end } },
+                        {
+                            AND: [
+                                { payment_date: null },
+                                { created_at: { gte: start, lte: end } },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+        const efectivoAgg = await prisma.studio_pagos.aggregate({
+            where: {
+                ...baseIngresosWhere,
+                metodo_pago: { in: METODO_EFECTIVO },
+            },
+            _sum: { amount: true },
+        });
+        const bancosAgg = await prisma.studio_pagos.aggregate({
+            where: {
+                ...baseIngresosWhere,
+                metodo_pago: { in: METODO_BANCOS },
+            },
+            _sum: { amount: true },
+        });
+        const efectivo = efectivoAgg._sum.amount ?? 0;
+        const bancos = bancosAgg._sum.amount ?? 0;
 
         // Egresos: studio_gastos + studio_nominas (status "pagado") del mes
         const gastos = await prisma.studio_gastos.aggregate({
@@ -544,6 +600,8 @@ export async function obtenerKPIsFinancieros(
                 porCobrar: porCobrarTotal,
                 porPagar: porPagarTotal,
                 ingresosPorCancelacion: ingresosPorCancelacion > 0 ? ingresosPorCancelacion : undefined,
+                efectivo: efectivo > 0 ? efectivo : undefined,
+                bancos: bancos > 0 ? bancos : undefined,
                 // ✅ Nuevos campos para owners
                 totalProductionCosts,
                 totalOperatingExpenses,
@@ -758,6 +816,7 @@ export async function obtenerMovimientosPorRango(
             select: {
                 id: true,
                 contact_id: true,
+                evento_id: true,
                 payment_date: true,
                 created_at: true,
                 concept: true,
@@ -766,11 +825,21 @@ export async function obtenerMovimientosPorRango(
                 transaction_category: true,
                 cotizacion_id: true,
                 promise_id: true,
-                promise: { select: { name: true } },
+                metodo_pago: true,
+                promise: {
+                    select: {
+                        name: true,
+                        event_date: true,
+                        event_type: { select: { name: true } },
+                    },
+                },
                 cotizaciones: { select: { name: true } },
                 contact: { select: { name: true } },
                 eventos: {
-                    select: { event_type: { select: { name: true } } },
+                    select: {
+                        event_date: true,
+                        event_type: { select: { name: true } },
+                    },
                 },
             },
             orderBy: [
@@ -811,7 +880,10 @@ export async function obtenerMovimientosPorRango(
                     paymentStatus: first.status,
                     contactName,
                     eventName: first.promise?.name ?? null,
-                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? first.promise?.event_type?.name ?? null,
+                    eventDate: first.eventos?.event_date ?? first.promise?.event_date ?? null,
+                    eventoId: first.evento_id ?? null,
+                    metodoPago: first.metodo_pago ?? undefined,
                 });
             } else {
                 const totalMonto = group.reduce((s, p) => s + p.amount, 0);
@@ -823,6 +895,7 @@ export async function obtenerMovimientosPorRango(
                     categoria: p.transaction_category || 'Ingreso',
                     concepto: p.concept || 'Ingreso',
                     paymentStatus: p.status,
+                    metodoPago: p.metodo_pago ?? undefined,
                 }));
                 paymentTransactions.push({
                     id: first.id,
@@ -837,8 +910,10 @@ export async function obtenerMovimientosPorRango(
                     paymentStatus,
                     contactName,
                     eventName: first.promise?.name ?? null,
-                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? first.promise?.event_type?.name ?? null,
+                    eventDate: first.eventos?.event_date ?? first.promise?.event_date ?? null,
                     details,
+                    metodoPago: first.metodo_pago ?? undefined,
                 });
             }
         }
@@ -1061,6 +1136,7 @@ export async function obtenerMovimientos(
             select: {
                 id: true,
                 contact_id: true,
+                evento_id: true,
                 payment_date: true,
                 created_at: true,
                 concept: true,
@@ -1069,11 +1145,21 @@ export async function obtenerMovimientos(
                 transaction_category: true,
                 cotizacion_id: true,
                 promise_id: true,
-                promise: { select: { name: true } },
+                metodo_pago: true,
+                promise: {
+                    select: {
+                        name: true,
+                        event_date: true,
+                        event_type: { select: { name: true } },
+                    },
+                },
                 cotizaciones: { select: { name: true } },
                 contact: { select: { name: true } },
                 eventos: {
-                    select: { event_type: { select: { name: true } } },
+                    select: {
+                        event_date: true,
+                        event_type: { select: { name: true } },
+                    },
                 },
             },
             orderBy: [
@@ -1114,7 +1200,10 @@ export async function obtenerMovimientos(
                     paymentStatus: first.status,
                     contactName,
                     eventName: first.promise?.name ?? null,
-                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? first.promise?.event_type?.name ?? null,
+                    eventDate: first.eventos?.event_date ?? first.promise?.event_date ?? null,
+                    eventoId: first.evento_id ?? null,
+                    metodoPago: first.metodo_pago ?? undefined,
                 });
             } else {
                 const totalMonto = group.reduce((s, p) => s + p.amount, 0);
@@ -1126,6 +1215,7 @@ export async function obtenerMovimientos(
                     categoria: p.transaction_category || 'Ingreso',
                     concepto: p.concept || 'Ingreso',
                     paymentStatus: p.status,
+                    metodoPago: p.metodo_pago ?? undefined,
                 }));
                 paymentTransactionsMes.push({
                     id: first.id,
@@ -1140,8 +1230,11 @@ export async function obtenerMovimientos(
                     paymentStatus,
                     contactName,
                     eventName: first.promise?.name ?? null,
-                    eventTypeName: first.eventos?.event_type?.name ?? null,
+                    eventTypeName: first.eventos?.event_type?.name ?? first.promise?.event_type?.name ?? null,
+                    eventDate: first.eventos?.event_date ?? first.promise?.event_date ?? null,
+                    eventoId: first.evento_id ?? null,
                     details,
+                    metodoPago: first.metodo_pago ?? undefined,
                 });
             }
         }
@@ -2434,6 +2527,7 @@ export async function crearGastoRecurrente(
         frequency: string;
         category: string;
         chargeDay: number;
+        personalId?: string | null;
     }
 ): Promise<{ success: boolean; error?: string; data?: { id: string } }> {
     try {
@@ -2450,6 +2544,7 @@ export async function crearGastoRecurrente(
         const gasto = await prisma.studio_recurring_expenses.create({
             data: {
                 studio_id: studioId,
+                personal_id: data.personalId || null,
                 name: data.name.trim(),
                 description: data.description?.trim() || null,
                 amount: data.amount,
@@ -2820,6 +2915,7 @@ export async function obtenerGastoRecurrente(
                 category: true,
                 charge_day: true,
                 is_active: true,
+                personal_id: true,
             },
         });
 
@@ -2829,7 +2925,10 @@ export async function obtenerGastoRecurrente(
 
         return {
             success: true,
-            data: gasto,
+            data: {
+                ...gasto,
+                description: gasto.description ?? null,
+            },
         };
     } catch (error) {
         console.error('Error obteniendo gasto recurrente:', error);
@@ -2853,6 +2952,7 @@ export async function actualizarGastoRecurrente(
         frequency: string;
         category?: string;
         chargeDay?: number;
+        personalId?: string | null;
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -2905,6 +3005,7 @@ export async function actualizarGastoRecurrente(
                 frequency: data.frequency,
                 category: data.category || 'fijo',
                 charge_day: data.chargeDay || 1,
+                personal_id: data.personalId !== undefined ? data.personalId : undefined,
             },
         });
 

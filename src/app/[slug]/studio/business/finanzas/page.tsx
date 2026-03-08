@@ -9,6 +9,7 @@ import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
 import { RecurrentesSheet } from './components/RecurrentesSheet';
+import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
 import { HistorialSheet } from './components/HistorialSheet';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
 import {
@@ -38,6 +39,8 @@ export default function FinanzasPage() {
         porCobrar: 0,
         porPagar: 0,
         ingresosPorCancelacion: undefined as number | undefined,
+        efectivo: 0,
+        bancos: 0,
         totalProductionCosts: undefined as number | undefined,
         totalOperatingExpenses: undefined as number | undefined,
         netProfitability: undefined as number | undefined,
@@ -85,6 +88,7 @@ export default function FinanzasPage() {
     const [historialOpen, setHistorialOpen] = useState(false);
     const [auditoriaOpen, setAuditoriaOpen] = useState(false);
     const [recurrentesSheetOpen, setRecurrentesSheetOpen] = useState(false);
+    const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
 
     useEffect(() => {
         document.title = 'Zenly Studio - Finanzas';
@@ -319,25 +323,7 @@ export default function FinanzasPage() {
                                     </div>
                                 </div>
 
-                                {/* Columna 2: Por Cobrar */}
-                                <div className="lg:col-span-1 flex flex-col min-h-0">
-                                    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
-                                        <div className="border-b border-zinc-800 px-4 py-3">
-                                            <div className="h-4 bg-zinc-700/50 rounded w-28 animate-pulse" />
-                                        </div>
-                                        <div className="p-4 flex-1 overflow-auto space-y-3">
-                                            {[1, 2, 3].map((i) => (
-                                                <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
-                                                    <div className="h-3 bg-zinc-700/50 rounded w-32 animate-pulse" />
-                                                    <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
-                                                    <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Columna 3: Por Pagar */}
+                                {/* Columna 2: Por Pagar (urgencia/solvencia) */}
                                 <div className="lg:col-span-1 flex flex-col min-h-0">
                                     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
                                         <div className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
@@ -349,6 +335,24 @@ export default function FinanzasPage() {
                                                 <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
                                                     <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
                                                     <div className="h-4 bg-zinc-700/50 rounded w-20 animate-pulse" />
+                                                    <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Columna 3: Por Cobrar (futuro/proyección) */}
+                                <div className="lg:col-span-1 flex flex-col min-h-0">
+                                    <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                        <div className="border-b border-zinc-800 px-4 py-3">
+                                            <div className="h-4 bg-zinc-700/50 rounded w-28 animate-pulse" />
+                                        </div>
+                                        <div className="p-4 flex-1 overflow-auto space-y-3">
+                                            {[1, 2, 3].map((i) => (
+                                                <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                    <div className="h-3 bg-zinc-700/50 rounded w-32 animate-pulse" />
+                                                    <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
                                                     <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
                                                 </div>
                                             ))}
@@ -367,6 +371,8 @@ export default function FinanzasPage() {
                                     porCobrar={kpis.porCobrar}
                                     porPagar={kpis.porPagar}
                                     ingresosPorCancelacion={kpis.ingresosPorCancelacion}
+                                    efectivo={kpis.efectivo}
+                                    bancos={kpis.bancos}
                                     totalProductionCosts={kpis.totalProductionCosts}
                                     totalOperatingExpenses={kpis.totalOperatingExpenses}
                                     netProfitability={kpis.netProfitability}
@@ -491,30 +497,7 @@ export default function FinanzasPage() {
                                     />
                                 </div>
 
-                                {/* Columna 2: Por Cobrar */}
-                                <div className="lg:col-span-1 flex flex-col min-h-0">
-                                    <PorCobrarCard
-                                        porCobrar={porCobrar}
-                                        studioSlug={studioSlug}
-                                        onRegistrarPago={handleRegistrarPago}
-                                        onPagoRegistrado={async () => {
-                                            try {
-                                                const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
-                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
-                                                    obtenerMovimientos(studioSlug, currentMonth!),
-                                                    obtenerPorCobrar(studioSlug),
-                                                ]);
-                                                if (kpisResult.success) setKpis(kpisResult.data);
-                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
-                                                if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
-                                            } catch (error) {
-                                                console.error('Error recargando datos:', error);
-                                            }
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Columna 3: Por Pagar + Recurrentes (sheet) */}
+                                {/* Columna 2: Por Pagar (urgencia/solvencia) + Recurrentes */}
                                 <div className="lg:col-span-1 flex flex-col min-h-0">
                                     <PorPagarCard
                                         porPagar={porPagar}
@@ -524,18 +507,23 @@ export default function FinanzasPage() {
                                             router.refresh();
                                             try {
                                                 await new Promise((r) => setTimeout(r, 200));
-                                                const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
+                                                const [kpisResult, transactionsResult, porPagarResult, expensesResult] = await Promise.all([
                                                     obtenerKPIsFinancieros(studioSlug, currentMonth!),
                                                     obtenerMovimientos(studioSlug, currentMonth!),
                                                     obtenerPorPagar(studioSlug),
+                                                    obtenerGastosRecurrentes(studioSlug, currentMonth),
                                                 ]);
                                                 if (kpisResult.success) setKpis(kpisResult.data);
                                                 if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
                                                 if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
                                             } catch (error) {
                                                 console.error('Error recargando datos:', error);
                                             }
                                         }}
+                                        recurringExpenses={recurringExpenses}
+                                        onOpenRecurrentes={() => setRecurrentesSheetOpen(true)}
+                                        onOpenRecurrenteDetalle={(exp) => setRecurrenteDetalle(exp)}
                                         headerAction={
                                             <ZenButton
                                                 variant="ghost"
@@ -548,6 +536,33 @@ export default function FinanzasPage() {
                                             </ZenButton>
                                         }
                                     />
+                                    {recurrenteDetalle && (
+                                        <RecurrentePagoDetalleSheet
+                                            isOpen={!!recurrenteDetalle}
+                                            onClose={() => setRecurrenteDetalle(null)}
+                                            expenseId={recurrenteDetalle.id}
+                                            expenseName={recurrenteDetalle.name}
+                                            expenseAmount={recurrenteDetalle.amount}
+                                            studioSlug={studioSlug}
+                                            onPagoConfirmado={async () => {
+                                                setRecurrenteDetalle(null);
+                                                try {
+                                                    const [kpisResult, transactionsResult, porPagarResult, expensesResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                        obtenerPorPagar(studioSlug),
+                                                        obtenerGastosRecurrentes(studioSlug, currentMonth),
+                                                    ]);
+                                                    if (kpisResult.success) setKpis(kpisResult.data);
+                                                    if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+                                                    if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+                                                    if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
+                                                } catch (error) {
+                                                    console.error('Error recargando datos:', error);
+                                                }
+                                            }}
+                                        />
+                                    )}
                                     <RecurrentesSheet
                                         open={recurrentesSheetOpen}
                                         onOpenChange={setRecurrentesSheetOpen}
@@ -571,6 +586,29 @@ export default function FinanzasPage() {
                                                 if (kpisResult.success) setKpis(kpisResult.data);
                                                 if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
                                                 if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
+                                            } catch (error) {
+                                                console.error('Error recargando datos:', error);
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Columna 3: Por Cobrar (futuro/proyección) */}
+                                <div className="lg:col-span-1 flex flex-col min-h-0">
+                                    <PorCobrarCard
+                                        porCobrar={porCobrar}
+                                        studioSlug={studioSlug}
+                                        onRegistrarPago={handleRegistrarPago}
+                                        onPagoRegistrado={async () => {
+                                            try {
+                                                const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
+                                                    obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                    obtenerMovimientos(studioSlug, currentMonth!),
+                                                    obtenerPorCobrar(studioSlug),
+                                                ]);
+                                                if (kpisResult.success) setKpis(kpisResult.data);
+                                                if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
+                                                if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
                                             } catch (error) {
                                                 console.error('Error recargando datos:', error);
                                             }

@@ -1665,6 +1665,7 @@ model studio_events {
   gastos                 studio_gastos[]
   nominas                studio_nominas[]
   notifications          studio_notifications[]
+  pagos                  studio_pagos[]
   scheduler              studio_scheduler_event_instances?
   external_service_sales studio_external_service_sales[]
   scheduler_date_reminders studio_scheduler_date_reminders[]
@@ -2049,6 +2050,7 @@ model studio_crew_members {
   studio                   studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   gastos                   studio_gastos[]
   nominas                  studio_nominas[]
+  recurring_expenses       studio_recurring_expenses[]
 
   @@index([studio_id])
   @@index([status])
@@ -2658,6 +2660,7 @@ model studio_pagos {
   condiciones_comerciales_id             String?
   condiciones_comerciales_metodo_pago_id String?
   cotizacion_id                          String?
+  evento_id                              String?
   created_at                             DateTime                                    @default(now())
   metodo_pago_id                         String?
   updated_at                             DateTime                                    @updatedAt
@@ -2674,6 +2677,7 @@ model studio_pagos {
   condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago? @relation(fields: [condiciones_comerciales_metodo_pago_id], references: [id])
   contact                                studio_contacts?                            @relation(fields: [contact_id], references: [id])
   cotizaciones                           studio_cotizaciones?                        @relation(fields: [cotizacion_id], references: [id])
+  eventos                                studio_events?                              @relation(fields: [evento_id], references: [id], onDelete: SetNull)
   metodos_pago                           studio_metodos_pago?                        @relation(fields: [metodo_pago_id], references: [id])
   promise                                studio_promises?                            @relation(fields: [promise_id], references: [id])
   studio_users                           studio_users?                               @relation(fields: [user_id], references: [id])
@@ -2683,6 +2687,7 @@ model studio_pagos {
   @@index([contact_id])
   @@index([promise_id])
   @@index([cotizacion_id])
+  @@index([evento_id])
 }
 
 model studio_nominas {
@@ -2792,6 +2797,7 @@ model studio_gastos {
 model studio_recurring_expenses {
   id             String    @id @default(cuid())
   studio_id      String
+  personal_id    String?
   name           String
   amount         Float
   category       String    @default("fijo")
@@ -2804,9 +2810,11 @@ model studio_recurring_expenses {
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
   studio         studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  personal       studio_crew_members? @relation(fields: [personal_id], references: [id], onDelete: SetNull)
 
   @@index([studio_id])
   @@index([is_active])
+  @@index([personal_id])
 }
 
 model studio_revenue_products {

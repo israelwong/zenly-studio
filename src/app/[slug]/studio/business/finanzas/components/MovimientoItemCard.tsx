@@ -2,24 +2,19 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { MoreVertical, FileText, X, Trash2, Edit, ExternalLink } from 'lucide-react';
+import { FileText, X, Trash2, Edit, ExternalLink, User, Calendar, FileSpreadsheet, Clock, Tag, ArrowUp, ArrowDown } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
     ZenButton,
-    ZenDropdownMenu,
-    ZenDropdownMenuTrigger,
-    ZenDropdownMenuContent,
-    ZenDropdownMenuItem,
-    ZenDropdownMenuSeparator,
     ZenConfirmModal,
-    ZenDialog,
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
 import { NominaReceipt } from '@/components/shared/payments/NominaReceipt';
 import { RecurrenteReceipt } from '@/components/shared/payments/RecurrenteReceipt';
 import { eliminarGastoOperativo, obtenerServiciosNomina } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +23,7 @@ interface TransactionDetail {
     categoria: string;
     concepto: string;
     paymentStatus?: string;
+    metodoPago?: string;
 }
 
 interface Transaction {
@@ -48,7 +44,10 @@ interface Transaction {
     contactName?: string | null;
     eventName?: string | null;
     eventTypeName?: string | null;
+    eventDate?: Date | null;
+    eventoId?: string | null;
     details?: TransactionDetail[];
+    metodoPago?: string;
 }
 
 interface MovimientoItemCardProps {
@@ -101,6 +100,23 @@ export function MovimientoItemCard({
             hour: '2-digit',
             minute: '2-digit',
         }).format(date);
+    };
+
+    const formatEventDate = (date: Date | null | undefined) => {
+        if (!date) return null;
+        return new Intl.DateTimeFormat('es-ES', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+        }).format(new Date(date));
+    };
+
+    const metodoPagoLabel = (metodo?: string | null) => {
+        if (!metodo) return null;
+        const m = String(metodo).toLowerCase();
+        if (m.includes('efectivo')) return 'Efectivo';
+        if (m.includes('spei') || m.includes('transferencia')) return 'Transferencia';
+        return metodo;
     };
 
     const isIngreso = transaction.monto > 0;
@@ -290,7 +306,15 @@ export function MovimientoItemCard({
 
     return (
         <>
-            <ZenCard variant="default" padding="sm" className="hover:border-zinc-700 transition-colors">
+            <ZenCard
+                variant="default"
+                padding="sm"
+                className={cn("hover:border-zinc-700 transition-colors", isGroup && "cursor-pointer")}
+                onClick={isGroup ? () => setShowDesgloseDialog(true) : undefined}
+                onKeyDown={isGroup ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesgloseDialog(true); } } : undefined}
+                role={isGroup ? "button" : undefined}
+                tabIndex={isGroup ? 0 : undefined}
+            >
                 <ZenCardContent className="p-0">
                     <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
@@ -340,151 +364,23 @@ export function MovimientoItemCard({
                                 <p className="text-xs text-zinc-500">
                                     {formatDate(transaction.fecha)}
                                 </p>
-                                {hasQuoteLink && promiseHref && (
-                                    <Link
-                                        href={promiseHref}
-                                        className="text-xs text-emerald-400/90 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
-                                    >
-                                        Ver cotización
-                                        <ExternalLink className="h-3 w-3" />
-                                    </Link>
-                                )}
-                                {isGroup && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDesgloseDialog(true)}
-                                        className="text-xs text-zinc-400 hover:text-zinc-300 hover:underline inline-flex items-center gap-1"
-                                    >
-                                        Ver desglose
-                                    </button>
-                                )}
-                                <p
-                                    className={cn(
-                                        'text-base font-semibold',
-                                        isIngreso ? 'text-emerald-400' : 'text-rose-400'
+                                <div className="flex items-center gap-1.5">
+                                    {isIngreso ? (
+                                        <ArrowUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" aria-hidden />
+                                    ) : (
+                                        <ArrowDown className="h-3.5 w-3.5 text-rose-400 shrink-0" aria-hidden />
                                     )}
-                                >
-                                    {transaction.monto > 0 ? '+' : ''}
-                                    {formatCurrency(transaction.monto)}
-                                </p>
+                                    <p
+                                        className={cn(
+                                            'text-xs font-semibold',
+                                            isIngreso ? 'text-emerald-400' : 'text-rose-400'
+                                        )}
+                                    >
+                                        {formatCurrency(Math.abs(transaction.monto))}
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                        <ZenDropdownMenu>
-                            <ZenDropdownMenuTrigger asChild>
-                                <ZenButton variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                </ZenButton>
-                            </ZenDropdownMenuTrigger>
-                            <ZenDropdownMenuContent align="end">
-                                {isIngreso && (
-                                    <>
-                                        <ZenDropdownMenuItem
-                                            onClick={handleViewReceipt}
-                                            className="gap-2"
-                                        >
-                                            <FileText className="h-4 w-4" />
-                                            Ver Comprobante
-                                        </ZenDropdownMenuItem>
-                                        {isIngresoPersonalizado && (
-                                            <ZenDropdownMenuItem
-                                                onClick={handleEditarGastoClick}
-                                                className="gap-2"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                                Editar
-                                            </ZenDropdownMenuItem>
-                                        )}
-                                    </>
-                                )}
-                                {isGastoPersonalizado && !isRecurrenteConPersonal && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleEditarGastoClick}
-                                        className="gap-2"
-                                    >
-                                        <Edit className="h-4 w-4" />
-                                        Editar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                <ZenDropdownMenuSeparator />
-                                {/* Comprobante - disponible para nóminas y gastos recurrentes con personal */}
-                                {(isNominaPagada || isRecurrenteConPersonal) && (
-                                    <ZenDropdownMenuItem
-                                        onClick={isNominaPagada ? handleViewNominaReceipt : handleViewRecurrenteReceipt}
-                                        className="gap-2"
-                                    >
-                                        <FileText className="h-4 w-4" />
-                                        Comprobante
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {/* Cancelar - disponible para todos */}
-                                {isNominaPagada && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleCancelarNominaClick}
-                                        className="gap-2"
-                                    >
-                                        <X className="h-4 w-4" />
-                                        Cancelar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {isRecurrente && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleCancelarRecurrenteClick}
-                                        className="gap-2"
-                                    >
-                                        <X className="h-4 w-4" />
-                                        Cancelar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {onCancelarPago && isIngreso && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleCancelarClick}
-                                        className="gap-2"
-                                    >
-                                        <X className="h-4 w-4" />
-                                        Cancelar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                <ZenDropdownMenuSeparator />
-                                {/* Eliminar - disponible para todos EXCEPTO pagos recurrentes con personal */}
-                                {isNominaPagada && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleEliminarNominaClick}
-                                        className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Eliminar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {onCancelarPago && isIngreso && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleEliminarPagoClick}
-                                        className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Eliminar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {/* No mostrar Eliminar para gastos recurrentes con personal (solo se puede cancelar) */}
-                                {isGastoPersonalizado && !isRecurrenteConPersonal && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleEliminarGastoClick}
-                                        className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Eliminar
-                                    </ZenDropdownMenuItem>
-                                )}
-                                {isEgresoOperativo && !isGastoPersonalizado && !isRecurrente && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleEliminarGastoClick}
-                                        className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Eliminar
-                                    </ZenDropdownMenuItem>
-                                )}
-                            </ZenDropdownMenuContent>
-                        </ZenDropdownMenu>
                     </div>
                 </ZenCardContent>
             </ZenCard>
@@ -622,32 +518,177 @@ export function MovimientoItemCard({
                 loadingText="Eliminando..."
             />
 
-            {/* Dialog desglose de pagos agrupados */}
+            {/* Sheet lateral: desglose de pagos agrupados */}
             {isGroup && transaction.details && (
-                <ZenDialog
-                    isOpen={showDesgloseDialog}
-                    onClose={() => setShowDesgloseDialog(false)}
-                    title="Desglose de pago"
-                    description={`Total consolidado: ${formatCurrency(transaction.monto)}`}
-                    onCancel={() => setShowDesgloseDialog(false)}
-                    cancelLabel="Cerrar"
-                    cancelAlignRight
-                    maxWidth="sm"
-                >
-                    <ul className="space-y-3">
-                        {transaction.details.map((d, i) => (
-                            <li
-                                key={i}
-                                className="flex items-center justify-between gap-2 py-2 border-b border-zinc-700/50 last:border-0"
-                            >
-                                <span className="text-sm text-zinc-300">{d.concepto}</span>
-                                <span className={cn('text-sm font-medium', d.monto >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
-                                    {formatCurrency(d.monto)}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                </ZenDialog>
+                <Sheet open={showDesgloseDialog} onOpenChange={setShowDesgloseDialog}>
+                    <SheetContent
+                        side="right"
+                        className="w-full sm:max-w-md bg-zinc-900 border-l border-zinc-800 flex flex-col p-0"
+                    >
+                        <SheetHeader className="border-b border-zinc-800 px-4 py-4 flex-shrink-0">
+                            <SheetTitle className="text-zinc-200">Detalles del movimiento</SheetTitle>
+                        </SheetHeader>
+                        <div className="p-4 flex-1 overflow-y-auto">
+                            <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-4 mb-4 space-y-2 text-sm">
+                                {transaction.contactName && (
+                                    <p className="flex items-center gap-2 min-w-0">
+                                        <User className="h-4 w-4 text-zinc-500 shrink-0" />
+                                        <span className="text-zinc-500 shrink-0">Contacto:</span>
+                                        <span className="text-zinc-300 truncate">{transaction.contactName}</span>
+                                    </p>
+                                )}
+                                {transaction.eventName && (
+                                    <p className="flex items-center gap-2 min-w-0">
+                                        <FileSpreadsheet className="h-4 w-4 text-zinc-500 shrink-0" />
+                                        <span className="text-zinc-500 shrink-0">Evento:</span>
+                                        <span className="text-zinc-300 truncate">{transaction.eventName}</span>
+                                    </p>
+                                )}
+                                <p className="flex items-center gap-2 min-w-0">
+                                    <Tag className="h-4 w-4 text-zinc-500 shrink-0" />
+                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Tipo de evento:</span>
+                                    <span className="text-zinc-300">{transaction.eventTypeName ?? '—'}</span>
+                                </p>
+                                <p className="flex items-center gap-2 min-w-0">
+                                    <Calendar className="h-4 w-4 text-zinc-500 shrink-0" />
+                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha evento:</span>
+                                    <span className="text-zinc-300">{transaction.eventDate ? formatEventDate(transaction.eventDate) : '—'}</span>
+                                </p>
+                                <p className="flex items-center gap-2 min-w-0">
+                                    <Clock className="h-4 w-4 text-zinc-500 shrink-0" />
+                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha de pago:</span>
+                                    <span className="text-zinc-300">{formatDate(transaction.fecha)}</span>
+                                </p>
+                            </div>
+                            <p className="text-xs font-medium text-zinc-500 mb-2">
+                                {transaction.details.length > 1 ? 'Pagos' : 'Pago'}
+                            </p>
+                            <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                                {transaction.details.map((d, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center justify-between gap-3 px-4 py-3 border-b border-zinc-700 last:border-b-0"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-zinc-200 truncate">{d.concepto}</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-xs text-zinc-500">{d.categoria}</span>
+                                                {metodoPagoLabel(d.metodoPago) && (
+                                                    <>
+                                                        <span className="text-zinc-600">·</span>
+                                                        <span className="text-xs text-zinc-500">{metodoPagoLabel(d.metodoPago)}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className={cn('text-sm font-medium shrink-0 tabular-nums', d.monto >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                                            {formatCurrency(d.monto)}
+                                        </span>
+                                    </div>
+                                ))}
+                                {transaction.details.length > 1 && (
+                                    <div className="flex items-center justify-between gap-3 px-4 py-4 bg-zinc-800/50">
+                                        <p className="text-base font-semibold text-zinc-100">Total consolidado</p>
+                                        <span className={cn('text-lg font-bold shrink-0 tabular-nums', transaction.monto >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                                            {formatCurrency(transaction.monto)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            {(transaction.eventoId || transaction.promiseId) && (
+                                <div className="flex flex-wrap gap-3 mt-4">
+                                    {transaction.eventoId && (
+                                        <Link
+                                            href={`/${studioSlug}/studio/business/events/${transaction.eventoId}`}
+                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:underline"
+                                        >
+                                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                                            Ver evento
+                                        </Link>
+                                    )}
+                                    {transaction.promiseId && (
+                                        <Link
+                                            href={`/${studioSlug}/studio/commercial/promises/${transaction.promiseId}`}
+                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:underline"
+                                        >
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                            Ver cotización
+                                        </Link>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="border-t border-zinc-800 p-4 flex flex-col gap-3 flex-shrink-0 bg-zinc-900/80">
+                            <div className="flex flex-col gap-2">
+                                {(isIngreso || isNominaPagada || isRecurrenteConPersonal) && (
+                                    <ZenButton
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full justify-center gap-2 h-8"
+                                        onClick={() => {
+                                            setShowDesgloseDialog(false);
+                                            if (isIngreso) handleViewReceipt();
+                                            else isNominaPagada ? handleViewNominaReceipt() : handleViewRecurrenteReceipt();
+                                        }}
+                                    >
+                                        <FileText className="h-3.5 w-3.5" />
+                                        Ver Comprobante
+                                    </ZenButton>
+                                )}
+                                {(isIngresoPersonalizado || (isGastoPersonalizado && !isRecurrenteConPersonal)) && (
+                                    <ZenButton
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full justify-center gap-2 h-8"
+                                        onClick={() => {
+                                            setShowDesgloseDialog(false);
+                                            handleEditarGastoClick();
+                                        }}
+                                    >
+                                        <Edit className="h-3.5 w-3.5" />
+                                        Editar
+                                    </ZenButton>
+                                )}
+                            </div>
+                            {((isNominaPagada || isRecurrente || (onCancelarPago && isIngreso)) || (isNominaPagada || (onCancelarPago && isIngreso) || (isGastoPersonalizado && !isRecurrenteConPersonal) || (isEgresoOperativo && !isGastoPersonalizado && !isRecurrente))) && (
+                                <div className="flex gap-2">
+                                    {(isNominaPagada || isRecurrente || (onCancelarPago && isIngreso)) && (
+                                        <ZenButton
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 justify-center gap-1.5 h-8 text-xs"
+                                            onClick={() => {
+                                                setShowDesgloseDialog(false);
+                                                if (isNominaPagada) handleCancelarNominaClick();
+                                                else if (isRecurrente) handleCancelarRecurrenteClick();
+                                                else handleCancelarClick();
+                                            }}
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                            Cancelar
+                                        </ZenButton>
+                                    )}
+                                    {(isNominaPagada || (onCancelarPago && isIngreso) || (isGastoPersonalizado && !isRecurrenteConPersonal) || (isEgresoOperativo && !isGastoPersonalizado && !isRecurrente)) && (
+                                        <ZenButton
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 justify-center gap-1.5 h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
+                                            onClick={() => {
+                                                setShowDesgloseDialog(false);
+                                                if (isNominaPagada) handleEliminarNominaClick();
+                                                else if (onCancelarPago && isIngreso) handleEliminarPagoClick();
+                                                else handleEliminarGastoClick();
+                                            }}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Eliminar
+                                        </ZenButton>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </SheetContent>
+                </Sheet>
             )}
         </>
     );

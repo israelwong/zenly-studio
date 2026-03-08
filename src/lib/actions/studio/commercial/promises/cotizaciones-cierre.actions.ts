@@ -16,6 +16,8 @@ import { checkDateConflict } from '@/lib/utils/booking-conflict';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent } from '@/lib/utils/contract-financial-snapshot';
 import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
+import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
 
 interface CierreResponse {
   success: boolean;
@@ -1457,12 +1459,13 @@ export async function actualizarPagoCierre(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Verificar que la cotizaci?n pertenece al studio
+    // Verificar que la cotización pertenece al studio y traer promise/contact/price para studio_pagos y A_req
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
         studio_id: studio.id,
       },
+      select: { id: true, promise_id: true, contact_id: true, price: true, promise: { select: { contact_id: true } } },
     });
 
     if (!cotizacion) {
@@ -1472,6 +1475,7 @@ export async function actualizarPagoCierre(
     // Determinar si es pago registrado o promesa de pago; si hay monto/concepto/fecha = pago recibido (confirmado estudio)
     const esPromesaDePago = !pagoData.concepto && !pagoData.monto && !pagoData.fecha;
     const pagoConfirmadoEstudio = !esPromesaDePago;
+    const montoNum = pagoData.monto != null ? Number(pagoData.monto) : 0;
 
     const registro = await prisma.studio_cotizaciones_cierre.upsert({
       where: { cotizacion_id: cotizacionId },
@@ -1493,6 +1497,125 @@ export async function actualizarPagoCierre(
         pago_metodo_id: pagoData.metodo_id,
       },
     });
+
+    // Visibilidad inmediata en Finanzas + split contable: si monto > A_req → anticipo + abono
+    if (pagoConfirmadoEstudio && montoNum > 0 && cotizacion.promise_id) {
+      const precioBase = Number(cotizacion.price ?? 0);
+      const aReq = await getAnticipoRequeridoCierre(prisma, cotizacionId, precioBase, registro.condiciones_comerciales_id ?? undefined);
+      const contactId = cotizacion.contact_id ?? cotizacion.promise?.contact_id ?? null;
+      let metodoPagoNombre = 'Manual';
+      if (pagoData.metodo_id) {
+        const metodo = await prisma.studio_metodos_pago.findUnique({
+          where: { id: pagoData.metodo_id },
+          select: { payment_method_name: true },
+        });
+        if (metodo) metodoPagoNombre = metodo.payment_method_name;
+      }
+      const paymentDate = pagoData.fecha ? new Date(pagoData.fecha) : new Date();
+      const baseData = {
+        cotizacion_id: cotizacionId,
+        promise_id: cotizacion.promise_id,
+        contact_id: contactId,
+        payment_date: paymentDate,
+        metodo_pago_id: pagoData.metodo_id,
+        metodo_pago: metodoPagoNombre,
+        status: 'completed' as const,
+        transaction_type: 'ingreso' as const,
+      };
+
+      const existingAnticipo = await prisma.studio_pagos.findFirst({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: 'completed',
+          transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+        },
+        select: { id: true },
+      });
+      const existingAbono = await prisma.studio_pagos.findFirst({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: 'completed',
+          transaction_category: TRANSACTION_CATEGORY.ABONO,
+        },
+        select: { id: true },
+      });
+
+      if (aReq > 0 && montoNum > aReq) {
+        // Split: anticipo A_req + abono (M_staff - A_req)
+        if (existingAnticipo) {
+          await prisma.studio_pagos.update({
+            where: { id: existingAnticipo.id },
+            data: {
+              amount: aReq,
+              concept: 'Anticipo',
+              payment_date: paymentDate,
+              metodo_pago_id: pagoData.metodo_id,
+              metodo_pago: metodoPagoNombre,
+              updated_at: new Date(),
+            },
+          });
+        } else {
+          await prisma.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: aReq,
+              concept: 'Anticipo',
+              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+            },
+          });
+        }
+        const abonoAmount = montoNum - aReq;
+        if (existingAbono) {
+          await prisma.studio_pagos.update({
+            where: { id: existingAbono.id },
+            data: {
+              amount: abonoAmount,
+              concept: 'Abono adicional',
+              payment_date: paymentDate,
+              metodo_pago_id: pagoData.metodo_id,
+              metodo_pago: metodoPagoNombre,
+              updated_at: new Date(),
+            },
+          });
+        } else {
+          await prisma.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: abonoAmount,
+              concept: 'Abono adicional',
+              transaction_category: TRANSACTION_CATEGORY.ABONO,
+            },
+          });
+        }
+      } else {
+        // Todo como anticipo; si había abono previo por split anterior, eliminamos o dejamos (mejor actualizar anticipo y borrar abono para mantener 1 línea)
+        if (existingAnticipo) {
+          await prisma.studio_pagos.update({
+            where: { id: existingAnticipo.id },
+            data: {
+              amount: montoNum,
+              concept: pagoData.concepto?.trim() || 'Anticipo',
+              payment_date: paymentDate,
+              metodo_pago_id: pagoData.metodo_id,
+              metodo_pago: metodoPagoNombre,
+              updated_at: new Date(),
+            },
+          });
+        } else {
+          await prisma.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: montoNum,
+              concept: pagoData.concepto?.trim() || 'Anticipo',
+              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+            },
+          });
+        }
+        if (existingAbono) {
+          await prisma.studio_pagos.delete({ where: { id: existingAbono.id } });
+        }
+      }
+    }
 
     // Sin revalidatePath: actualización local vía setPagoData en el cliente
     return {
@@ -1651,6 +1774,7 @@ export async function sincronizarPagosCierre(
           },
         });
       } else {
+        const transactionCategory = i === 0 ? TRANSACTION_CATEGORY.ANTICIPO : TRANSACTION_CATEGORY.ABONO;
         await prisma.studio_pagos.create({
           data: {
             cotizacion_id: cotizacionId,
@@ -1663,7 +1787,7 @@ export async function sincronizarPagosCierre(
             metodo_pago: metodoPagoNombre,
             status: 'completed',
             transaction_type: 'ingreso',
-            transaction_category: 'abono',
+            transaction_category: transactionCategory,
           },
         });
       }
@@ -1793,6 +1917,7 @@ export async function registrarPagosCierreEnStudioPagos(
       const concept = index === 0 ? 'Anticipo' : 'Abono adicional';
       const metodoPagoNombre = item.metodo_id ? (metodoNombreById[item.metodo_id] ?? 'Manual') : 'Manual';
       const paymentDate = item.fecha ? new Date(item.fecha) : new Date();
+      const transaction_category = index === 0 ? TRANSACTION_CATEGORY.ANTICIPO : TRANSACTION_CATEGORY.ABONO;
       return {
         cotizacion_id: cotizacionId,
         promise_id,
@@ -1804,7 +1929,7 @@ export async function registrarPagosCierreEnStudioPagos(
         metodo_pago: metodoPagoNombre,
         status: 'completed' as const,
         transaction_type: 'ingreso' as const,
-        transaction_category: 'abono' as const,
+        transaction_category,
       };
     });
 
@@ -2573,6 +2698,7 @@ export async function autorizarYCrearEvento(
           // Normalizar fecha
           const fechaPago = normalizePaymentDate(pagoItem.fecha);
           const concept = index === 0 ? 'Anticipo' : 'Abono adicional';
+          const transactionCategory = index === 0 ? TRANSACTION_CATEGORY.ANTICIPO : TRANSACTION_CATEGORY.ABONO;
           if (!contactId) {
             throw new Error('contact_id es obligatorio para registrar pagos');
           }
@@ -2588,7 +2714,7 @@ export async function autorizarYCrearEvento(
               metodo_pago: metodoPagoNombre,
               status: 'completed',
               transaction_type: 'ingreso',
-              transaction_category: 'abono',
+              transaction_category: transactionCategory,
             },
           });
         }
@@ -2614,45 +2740,72 @@ export async function autorizarYCrearEvento(
         console.log('💰 [PAGO] Creando pago desde registro cierre:', debeCrearPago, '(monto:', montoDesdeRegistro, ')');
 
         if (debeCrearPago) {
-          // Obtener nombre del método de pago
           let metodoPagoNombre = 'Manual';
           if (registroCierre.pago_metodo_id) {
             const metodoPago = await tx.studio_metodos_pago.findUnique({
               where: { id: registroCierre.pago_metodo_id },
               select: { payment_method_name: true },
             });
-            if (metodoPago) {
-              metodoPagoNombre = metodoPago.payment_method_name;
-            }
+            if (metodoPago) metodoPagoNombre = metodoPago.payment_method_name;
           }
 
           const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
-          const conceptoPago = registroCierre.pago_concepto || 'Anticipo';
           if (!contactId) {
             throw new Error('contact_id es obligatorio para registrar pagos');
           }
-          await tx.studio_pagos.create({
-            data: {
-              cotizacion_id: cotizacionId,
-              promise_id: promiseId,
-              contact_id: contactId,
-              amount: montoDesdeRegistro,
-              concept: conceptoPago === 'Anticipo' ? 'Anticipo' : 'Abono adicional',
-              payment_date: fechaPago,
-              metodo_pago_id: registroCierre.pago_metodo_id,
-              metodo_pago: metodoPagoNombre,
-              status: 'completed',
-              transaction_type: 'ingreso',
-              transaction_category: 'abono',
-            },
-          });
+
+          const aReq = await getAnticipoRequeridoCierre(tx, cotizacionId, precioBase, registroCierre.condiciones_comerciales_id ?? undefined);
+          const baseData = {
+            cotizacion_id: cotizacionId,
+            promise_id: promiseId,
+            contact_id: contactId,
+            payment_date: fechaPago,
+            metodo_pago_id: registroCierre.pago_metodo_id,
+            metodo_pago: metodoPagoNombre,
+            status: 'completed' as const,
+            transaction_type: 'ingreso' as const,
+          };
+
+          if (aReq > 0 && montoDesdeRegistro > aReq) {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: aReq,
+                concept: 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: montoDesdeRegistro - aReq,
+                concept: 'Abono adicional',
+                transaction_category: TRANSACTION_CATEGORY.ABONO,
+              },
+            });
+          } else {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: montoDesdeRegistro,
+                concept: 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+          }
           pagoRegistrado = true;
         }
       } else if (yaTienePagos) {
-        // Pago ya persistido previamente (ej. botón "Confirmar Anticipo"); solo vincular, no duplicar
+        // Pago ya persistido (ej. creado en "Pasar a Cierre" o "Confirmar Anticipo"); solo vincular evento_id, no duplicar
         pagoRegistrado = true;
         pagoConfirmadoEstudio = true;
       }
+
+      // 8.5.1. Vincular todos los pagos de esta cotización al evento (incl. anticipo creado en pasarACierre)
+      await tx.studio_pagos.updateMany({
+        where: { cotizacion_id: cotizacionId },
+        data: { evento_id: evento.id, updated_at: new Date() },
+      });
 
       // 8.6. Eliminar todas las etiquetas asociadas a la promesa
       await tx.studio_promises_tags.deleteMany({

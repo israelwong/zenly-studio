@@ -136,6 +136,22 @@ Documentos de flujos operativos explícitos (UI → componentes → Server Actio
 
 ---
 
+### 5a. Rutas de promesa (por scope)
+**Carpeta:** [promises/](promises/)
+
+Documentación por **scope** de las tres rutas bajo `[promiseId]`: pendiente, cierre, autorizada. Cada doc describe la pantalla (layout, componentes, carga de datos); los **flows** describen las secuencias de negocio.
+
+| Documento | Descripción |
+|-----------|-------------|
+| [promises/README.md](promises/README.md) | Índice: las 3 rutas, criterio de redirección (`determinePromiseState`, `getPromisePathFromState`), layout compartido. |
+| [promises/cierre.md](promises/cierre.md) | Ruta **cierre**: page, datos, 3 columnas, CotizacionCard, ContratoDigitalCard, ActivacionOperativaCard, CierreActionButtons, skeletons, flujos. |
+| promises/pendiente.md | (Por documentar) Ruta pendiente. |
+| promises/autorizada.md | (Por documentar) Ruta autorizada. |
+
+**Cuándo consultar:** Mantener o extender una pantalla de detalle de promesa; entender qué muestra cada ruta y con qué componentes.
+
+---
+
 ### 5b. Contratos y condiciones comerciales (SSOT)
 **Archivo principal:** [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md)  
 **Estado:** ✅ SSOT (2026-03-02)
@@ -232,9 +248,10 @@ Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotiz
 │   ├── README.md          # Este archivo
 │   ├── components/       # Componentes compartidos (ResumenPago, etc.)
 │   ├── flows/            # Flujos paso a paso (pasar a cierre, contratos, autorización)
-│   │   ├── flujo-cierre-cotizacion.md   # SSOT cierre (público + Pasar a Cierre)
-│   │   ├── contracts-flow.md
-│   │   └── flujo-autorizar-y-crear-evento.md
+│   ├── promises/         # Rutas de promesa por scope (pendiente, cierre, autorizada)
+│   │   ├── README.md     # Índice y criterio de redirección
+│   │   ├── cierre.md     # Doc detallada ruta cierre
+│   │   └── ...
 │   └── ... (contracts-flow, promise-detalle, etc.)
 │
 ├── analysis/              # Análisis técnicos específicos

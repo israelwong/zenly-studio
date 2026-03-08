@@ -619,12 +619,8 @@ export function usePromiseCierreLogic({
 
   const handleOpenCancelModal = useCallback(async () => {
     const res = await getPagosConfirmadosParaCancelacion(studioSlug, cotizacion.id);
-    if (res.success && res.hasPagosConfirmados) {
-      setPagosConfirmadosTotal(res.totalAmount);
-      setShowCancelFondosModal(true);
-    } else {
-      setShowCancelModal(true);
-    }
+    setPagosConfirmadosTotal(res.success && res.hasPagosConfirmados ? res.totalAmount : 0);
+    setShowCancelFondosModal(true);
   }, [studioSlug, cotizacion.id]);
 
   const handleCancelarCierreConFondos = useCallback(async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
@@ -635,13 +631,17 @@ export function usePromiseCierreLogic({
     }
     setIsCancelling(true);
     try {
-      const result = await cancelarCierreConFondos(studioSlug, cotizacion.id, {
-        motivo,
-        solicitante: data.requestedBy,
-        destinoFondos: data.fundDestination,
-      }, true);
+      const hasPagos = pagosConfirmadosTotal > 0;
+      const result = hasPagos
+        ? await cancelarCierreConFondos(studioSlug, cotizacion.id, {
+            motivo,
+            solicitante: data.requestedBy,
+            destinoFondos: data.fundDestination,
+          }, true)
+        : await cancelarCierre(studioSlug, cotizacion.id, true, { motivo, solicitante: data.requestedBy });
+
       if (result.success) {
-        toast.success('Cierre cancelado. Fondos gestionados según lo indicado.');
+        toast.success(hasPagos ? 'Cierre cancelado. Fondos gestionados según lo indicado.' : 'Proceso de cierre cancelado.');
         setShowCancelFondosModal(false);
         onCierreCancelado?.(cotizacion.id);
         window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -658,7 +658,7 @@ export function usePromiseCierreLogic({
     } finally {
       setIsCancelling(false);
     }
-  }, [studioSlug, cotizacion.id, promiseId, onCierreCancelado, router]);
+  }, [studioSlug, cotizacion.id, promiseId, onCierreCancelado, router, pagosConfirmadosTotal]);
 
   const handleEditarDatosClick = useCallback(() => setShowEditPromiseModal(true), []);
 

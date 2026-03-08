@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import {
   Popover,
@@ -29,6 +29,8 @@ interface CrewMemberSelectorProps {
   onSelect: (memberId: string | null) => void;
   placeholder?: string;
   className?: string;
+  /** Muestra campo de búsqueda para filtrar por nombre */
+  searchable?: boolean;
 }
 
 export function CrewMemberSelector({
@@ -37,10 +39,12 @@ export function CrewMemberSelector({
   onSelect,
   placeholder = 'Seleccionar personal',
   className,
+  searchable = false,
 }: CrewMemberSelectorProps) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const loadMembers = async () => {
@@ -65,10 +69,16 @@ export function CrewMemberSelector({
     }
   }, [open, studioSlug, members.length]);
 
+  const filteredMembers = useMemo(() => {
+    if (!searchable || !searchQuery.trim()) return members;
+    const q = searchQuery.trim().toLowerCase();
+    return members.filter((m) => m.name.toLowerCase().includes(q));
+  }, [members, searchable, searchQuery]);
+
   const selectedMember = members.find((m) => m.id === selectedMemberId);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearchQuery(''); }}>
       <PopoverTrigger asChild>
         <ZenButton
           variant="outline"
@@ -88,6 +98,20 @@ export function CrewMemberSelector({
           <div className="p-4 text-sm text-zinc-400">No hay personal disponible</div>
         ) : (
           <div className="max-h-[300px] overflow-y-auto">
+            {searchable && (
+              <div className="p-2 border-b border-zinc-800 sticky top-0 bg-zinc-900">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por nombre..."
+                    className="w-full pl-8 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+            )}
             <button
               onClick={() => {
                 onSelect(null);
@@ -103,7 +127,7 @@ export function CrewMemberSelector({
               </div>
               <span className="text-zinc-300">Sin asignar</span>
             </button>
-            {members.map((member) => (
+            {(searchable ? filteredMembers : members).map((member) => (
               <button
                 key={member.id}
                 onClick={() => {

@@ -1481,7 +1481,9 @@ export async function cancelarEvento(
           data: {
             status: 'cancelada',
             evento_id: null, // Liberar relación con evento
-            discount: null, // Limpiar descuento al cancelar
+            discount: null,
+            selected_by_prospect: false,
+            visible_to_client: false, // No publicada/visible al cliente cuando evento cancelado
             cancel_reason: cancelReason,
             cancel_requested_by: cancelRequestedBy,
             cancelled_at: new Date(),
@@ -1489,20 +1491,16 @@ export async function cancelarEvento(
           },
         });
 
-        // 2.2. Destino de fondos: solo marcar pagos como cancelados si el staff eligió "devolución"
-        // Si fundDestination === 'retain', los pagos se mantienen como completed (ingresos históricos no reembolsables)
-        if (fundDestination === 'refund') {
-          await tx.studio_pagos.updateMany({
-            where: {
-              cotizacion_id: { in: cotizacionIds },
-              status: 'completed',
-            },
-            data: {
-              status: 'canceled',
-              updated_at: new Date(),
-            },
-          });
-        }
+        // 2.2. Destino de fondos (SSOT): retain → retained_by_cancellation; refund → pending_refund
+        const statusesPagados = ['paid', 'completed', 'succeeded', 'CONFIRMED'];
+        const nuevoStatus = fundDestination === 'retain' ? 'retained_by_cancellation' : 'pending_refund';
+        await tx.studio_pagos.updateMany({
+          where: {
+            cotizacion_id: { in: cotizacionIds },
+            status: { in: statusesPagados },
+          },
+          data: { status: nuevoStatus, updated_at: new Date() },
+        });
       }
 
       // 2.1. Fase 30.9.5: Limpiar registros de cierre y condiciones fantasma de TODAS las cotizaciones asociadas al evento
