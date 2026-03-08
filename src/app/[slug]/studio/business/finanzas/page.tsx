@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert, Repeat } from 'lucide-react';
+import { DollarSign, ChevronLeft, ChevronRight, History, ShieldAlert } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { FinanceKPIs } from './components/FinanceKPIs';
 import { MovimientosCard } from './components/MovimientosCard';
@@ -10,6 +10,7 @@ import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
 import { RecurrentesSheet } from './components/RecurrentesSheet';
 import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
+import { RegistrarGastoRecurrenteModal } from './components/RegistrarGastoRecurrenteModal';
 import { HistorialSheet } from './components/HistorialSheet';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
 import {
@@ -89,6 +90,7 @@ export default function FinanzasPage() {
     const [auditoriaOpen, setAuditoriaOpen] = useState(false);
     const [recurrentesSheetOpen, setRecurrentesSheetOpen] = useState(false);
     const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
+    const [showNuevoRecurrenteModal, setShowNuevoRecurrenteModal] = useState(false);
 
     useEffect(() => {
         document.title = 'Zenly Studio - Finanzas';
@@ -523,18 +525,8 @@ export default function FinanzasPage() {
                                         }}
                                         recurringExpenses={recurringExpenses}
                                         onOpenRecurrentes={() => setRecurrentesSheetOpen(true)}
+                                        onOpenNuevoRecurrente={() => setShowNuevoRecurrenteModal(true)}
                                         onOpenRecurrenteDetalle={(exp) => setRecurrenteDetalle(exp)}
-                                        headerAction={
-                                            <ZenButton
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setRecurrentesSheetOpen(true)}
-                                                className="text-zinc-400 hover:text-zinc-300"
-                                            >
-                                                <Repeat className="h-4 w-4 mr-1" />
-                                                Recurrentes
-                                            </ZenButton>
-                                        }
                                     />
                                     {recurrenteDetalle && (
                                         <RecurrentePagoDetalleSheet
@@ -563,6 +555,22 @@ export default function FinanzasPage() {
                                             }}
                                         />
                                     )}
+                                    <RegistrarGastoRecurrenteModal
+                                        isOpen={showNuevoRecurrenteModal}
+                                        onClose={() => setShowNuevoRecurrenteModal(false)}
+                                        studioSlug={studioSlug}
+                                        onSuccess={async () => {
+                                            setShowNuevoRecurrenteModal(false);
+                                            try {
+                                                const expensesResult = await obtenerGastosRecurrentes(studioSlug, currentMonth);
+                                                if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
+                                                const porPagarResult = await obtenerPorPagar(studioSlug);
+                                                if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+                                            } catch (error) {
+                                                console.error('Error recargando datos:', error);
+                                            }
+                                        }}
+                                    />
                                     <RecurrentesSheet
                                         open={recurrentesSheetOpen}
                                         onOpenChange={setRecurrentesSheetOpen}

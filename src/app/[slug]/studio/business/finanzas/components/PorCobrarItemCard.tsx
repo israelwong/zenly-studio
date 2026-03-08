@@ -74,7 +74,7 @@ export function PorCobrarItemCard({
 
     return (
         <>
-            <ZenCard variant="default" padding="sm" className="hover:border-zinc-700 transition-colors">
+            <ZenCard variant="default" padding="sm" className="hover:border-zinc-700 transition-colors cursor-pointer">
                 <ZenCardContent className="p-0">
                     <div className="flex items-start justify-between mb-2">
                         <div className="flex-1 min-w-0">

@@ -1465,7 +1465,7 @@ export async function actualizarPagoCierre(
         id: cotizacionId,
         studio_id: studio.id,
       },
-      select: { id: true, promise_id: true, contact_id: true, price: true, promise: { select: { contact_id: true } } },
+      select: { id: true, promise_id: true, contact_id: true, price: true, event_type_id: true, promise: { select: { contact_id: true } } },
     });
 
     if (!cotizacion) {
@@ -1512,6 +1512,7 @@ export async function actualizarPagoCierre(
         if (metodo) metodoPagoNombre = metodo.payment_method_name;
       }
       const paymentDate = pagoData.fecha ? new Date(pagoData.fecha) : new Date();
+      const eventTypeId = cotizacion.event_type_id ?? null;
       const baseData = {
         cotizacion_id: cotizacionId,
         promise_id: cotizacion.promise_id,
@@ -1521,6 +1522,7 @@ export async function actualizarPagoCierre(
         metodo_pago: metodoPagoNombre,
         status: 'completed' as const,
         transaction_type: 'ingreso' as const,
+        event_type_id: eventTypeId,
       };
 
       const existingAnticipo = await prisma.studio_pagos.findFirst({
@@ -1551,6 +1553,7 @@ export async function actualizarPagoCierre(
               payment_date: paymentDate,
               metodo_pago_id: pagoData.metodo_id,
               metodo_pago: metodoPagoNombre,
+              event_type_id: eventTypeId,
               updated_at: new Date(),
             },
           });
@@ -1574,6 +1577,7 @@ export async function actualizarPagoCierre(
               payment_date: paymentDate,
               metodo_pago_id: pagoData.metodo_id,
               metodo_pago: metodoPagoNombre,
+              event_type_id: eventTypeId,
               updated_at: new Date(),
             },
           });
@@ -1598,6 +1602,7 @@ export async function actualizarPagoCierre(
               payment_date: paymentDate,
               metodo_pago_id: pagoData.metodo_id,
               metodo_pago: metodoPagoNombre,
+              event_type_id: eventTypeId,
               updated_at: new Date(),
             },
           });
@@ -1742,10 +1747,11 @@ export async function sincronizarPagosCierre(
 
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: { id: cotizacionId, studio_id: studio.id },
-      select: { id: true },
+      select: { id: true, event_type_id: true },
     });
     if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
 
+    const eventTypeId = cotizacion.event_type_id ?? null;
     const totalMonto = items.reduce((s, i) => s + i.monto, 0);
 
     for (let i = 0; i < items.length; i++) {
@@ -1770,6 +1776,7 @@ export async function sincronizarPagosCierre(
             payment_date: paymentDate,
             metodo_pago_id: item.metodo_id,
             metodo_pago: metodoPagoNombre,
+            event_type_id: eventTypeId,
             updated_at: new Date(),
           },
         });
@@ -1788,6 +1795,7 @@ export async function sincronizarPagosCierre(
             status: 'completed',
             transaction_type: 'ingreso',
             transaction_category: transactionCategory,
+            event_type_id: eventTypeId,
           },
         });
       }
@@ -1900,7 +1908,7 @@ export async function registrarPagosCierreEnStudioPagos(
 
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: { id: cotizacionId, studio_id: studio.id },
-      select: { id: true },
+      select: { id: true, event_type_id: true },
     });
     if (!cotizacion) return { success: false, error: 'Cotización no encontrada' };
 
@@ -1913,6 +1921,7 @@ export async function registrarPagosCierreEnStudioPagos(
       : [];
     const metodoNombreById = Object.fromEntries(metodos.map((m) => [m.id, m.payment_method_name]));
 
+    const eventTypeId = cotizacion.event_type_id ?? null;
     const data = items.map((item, index) => {
       const concept = index === 0 ? 'Anticipo' : 'Abono adicional';
       const metodoPagoNombre = item.metodo_id ? (metodoNombreById[item.metodo_id] ?? 'Manual') : 'Manual';
@@ -1930,6 +1939,7 @@ export async function registrarPagosCierreEnStudioPagos(
         status: 'completed' as const,
         transaction_type: 'ingreso' as const,
         transaction_category,
+        event_type_id: eventTypeId,
       };
     });
 
@@ -2715,10 +2725,11 @@ export async function autorizarYCrearEvento(
               status: 'completed',
               transaction_type: 'ingreso',
               transaction_category: transactionCategory,
+              event_type_id: cotizacion.event_type_id ?? null,
             },
           });
         }
-        
+
         pagoRegistrado = true;
         pagoConfirmadoEstudio = true;
       }
@@ -2755,6 +2766,7 @@ export async function autorizarYCrearEvento(
           }
 
           const aReq = await getAnticipoRequeridoCierre(tx, cotizacionId, precioBase, registroCierre.condiciones_comerciales_id ?? undefined);
+          const eventTypeId = cotizacion.event_type_id ?? null;
           const baseData = {
             cotizacion_id: cotizacionId,
             promise_id: promiseId,
@@ -2764,6 +2776,7 @@ export async function autorizarYCrearEvento(
             metodo_pago: metodoPagoNombre,
             status: 'completed' as const,
             transaction_type: 'ingreso' as const,
+            event_type_id: eventTypeId,
           };
 
           if (aReq > 0 && montoDesdeRegistro > aReq) {
@@ -2801,10 +2814,14 @@ export async function autorizarYCrearEvento(
         pagoConfirmadoEstudio = true;
       }
 
-      // 8.5.1. Vincular todos los pagos de esta cotización al evento (incl. anticipo creado en pasarACierre)
+      // 8.5.1. Vincular todos los pagos de esta cotización al evento y tipo de evento (incl. anticipo creado en pasarACierre)
       await tx.studio_pagos.updateMany({
         where: { cotizacion_id: cotizacionId },
-        data: { evento_id: evento.id, updated_at: new Date() },
+        data: {
+          evento_id: evento.id,
+          event_type_id: cotizacion.event_type_id ?? null,
+          updated_at: new Date(),
+        },
       });
 
       // 8.6. Eliminar todas las etiquetas asociadas a la promesa

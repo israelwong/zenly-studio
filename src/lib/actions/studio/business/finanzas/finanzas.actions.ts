@@ -4210,3 +4210,74 @@ export async function eliminarPagoHuerfano(
         };
     }
 }
+
+/**
+ * Backfill temporal: asigna event_type_id a studio_pagos que lo tengan null.
+ * Origen: cotización → promesa → evento (en ese orden).
+ * Ejecutar una vez tras aplicar la migración event_type_id; luego puede dejarse de usar.
+ */
+export async function backfillEventTypeIdEnPagos(studioSlug: string): Promise<
+    { success: true; updated: number; total: number } | { success: false; error: string }
+> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+        if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+        const pagosSinTipo = await prisma.studio_pagos.findMany({
+            where: {
+                event_type_id: null,
+                OR: [
+                    { cotizaciones: { studio_id: studio.id } },
+                    { promise: { studio_id: studio.id } },
+                    { eventos: { studio_id: studio.id } },
+                ],
+            },
+            select: { id: true, cotizacion_id: true, promise_id: true, evento_id: true },
+        });
+        const total = pagosSinTipo.length;
+        if (total === 0) return { success: true, updated: 0, total: 0 };
+
+        let updated = 0;
+        for (const pago of pagosSinTipo) {
+            let eventTypeId: string | null = null;
+            if (pago.cotizacion_id) {
+                const c = await prisma.studio_cotizaciones.findUnique({
+                    where: { id: pago.cotizacion_id },
+                    select: { event_type_id: true },
+                });
+                eventTypeId = c?.event_type_id ?? null;
+            }
+            if (!eventTypeId && pago.promise_id) {
+                const prom = await prisma.studio_promises.findUnique({
+                    where: { id: pago.promise_id },
+                    select: { event_type_id: true },
+                });
+                eventTypeId = prom?.event_type_id ?? null;
+            }
+            if (!eventTypeId && pago.evento_id) {
+                const ev = await prisma.studio_events.findUnique({
+                    where: { id: pago.evento_id },
+                    select: { event_type_id: true },
+                });
+                eventTypeId = ev?.event_type_id ?? null;
+            }
+            if (eventTypeId) {
+                await prisma.studio_pagos.update({
+                    where: { id: pago.id },
+                    data: { event_type_id: eventTypeId, updated_at: new Date() },
+                });
+                updated++;
+            }
+        }
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true, updated, total };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error en backfill',
+        };
+    }
+}

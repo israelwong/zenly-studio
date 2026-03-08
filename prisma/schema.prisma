@@ -1073,6 +1073,7 @@ model studio_event_types {
   color              String?                    // Color hex para identificación
   icon               String?                    // Nombre de icono (lucide-react)
   contract_templates studio_contract_templates[]
+  pagos              studio_pagos[]
   quotes             studio_cotizaciones[]
   studio             studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   events             studio_events[]
@@ -2661,6 +2662,7 @@ model studio_pagos {
   condiciones_comerciales_metodo_pago_id String?
   cotizacion_id                          String?
   evento_id                              String?
+  event_type_id                          String?
   created_at                             DateTime                                    @default(now())
   metodo_pago_id                         String?
   updated_at                             DateTime                                    @updatedAt
@@ -2677,6 +2679,7 @@ model studio_pagos {
   condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago? @relation(fields: [condiciones_comerciales_metodo_pago_id], references: [id])
   contact                                studio_contacts?                            @relation(fields: [contact_id], references: [id])
   cotizaciones                           studio_cotizaciones?                        @relation(fields: [cotizacion_id], references: [id])
+  event_type                             studio_event_types?                         @relation(fields: [event_type_id], references: [id], onDelete: SetNull)
   eventos                                studio_events?                              @relation(fields: [evento_id], references: [id], onDelete: SetNull)
   metodos_pago                           studio_metodos_pago?                        @relation(fields: [metodo_pago_id], references: [id])
   promise                                studio_promises?                            @relation(fields: [promise_id], references: [id])
@@ -2688,6 +2691,7 @@ model studio_pagos {
   @@index([promise_id])
   @@index([cotizacion_id])
   @@index([evento_id])
+  @@index([event_type_id])
 }
 
 model studio_nominas {

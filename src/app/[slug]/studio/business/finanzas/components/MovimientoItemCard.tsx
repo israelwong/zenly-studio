@@ -7,6 +7,7 @@ import {
     ZenCard,
     ZenCardContent,
     ZenButton,
+    ZenBadge,
     ZenConfirmModal,
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
@@ -537,18 +538,22 @@ export function MovimientoItemCard({
                                         <span className="text-zinc-300 truncate">{transaction.contactName}</span>
                                     </p>
                                 )}
-                                {transaction.eventName && (
-                                    <p className="flex items-center gap-2 min-w-0">
+                                {(transaction.eventTypeName || transaction.eventName) && (
+                                    <p className="flex items-center gap-2 min-w-0 flex-wrap">
                                         <FileSpreadsheet className="h-4 w-4 text-zinc-500 shrink-0" />
-                                        <span className="text-zinc-500 shrink-0">Evento:</span>
-                                        <span className="text-zinc-300 truncate">{transaction.eventName}</span>
+                                        {transaction.eventTypeName ? (
+                                            <ZenBadge
+                                                variant="outline"
+                                                className="bg-emerald-500/20 text-emerald-400 border-emerald-400/50 font-medium px-1.5 py-0 text-[10px] rounded-full shrink-0"
+                                            >
+                                                {transaction.eventTypeName}
+                                            </ZenBadge>
+                                        ) : null}
+                                        {transaction.eventName ? (
+                                            <span className="text-zinc-300 truncate">{transaction.eventName}</span>
+                                        ) : null}
                                     </p>
                                 )}
-                                <p className="flex items-center gap-2 min-w-0">
-                                    <Tag className="h-4 w-4 text-zinc-500 shrink-0" />
-                                    <span className="text-zinc-500 shrink-0 whitespace-nowrap">Tipo de evento:</span>
-                                    <span className="text-zinc-300">{transaction.eventTypeName ?? '—'}</span>
-                                </p>
                                 <p className="flex items-center gap-2 min-w-0">
                                     <Calendar className="h-4 w-4 text-zinc-500 shrink-0" />
                                     <span className="text-zinc-500 shrink-0 whitespace-nowrap">Fecha evento:</span>

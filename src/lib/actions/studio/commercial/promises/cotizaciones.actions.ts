@@ -4058,6 +4058,7 @@ export async function pasarACierre(
             metodo_pago: metodoPagoNombre,
             status: 'completed' as const,
             transaction_type: 'ingreso' as const,
+            event_type_id: cotizacion.event_type_id ?? null,
           };
           if (aReq > 0 && montoNum > aReq) {
             await tx.studio_pagos.create({

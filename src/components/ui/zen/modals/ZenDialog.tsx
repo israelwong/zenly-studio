@@ -249,7 +249,7 @@ export function ZenDialog({
                 )}
               </div>
               {/* Derecha: Cancelar (si cancelAlignRight) + Eliminar (si deleteOnRight) + Guardar + footerRightContent */}
-              <div className="flex items-center gap-2 ml-auto">
+              <div className={cn("flex items-center gap-2 ml-auto", footerRightContent && "flex-1 min-w-0")}>
                 {onCancel && cancelAlignRight && (
                   <ZenButton
                     variant={cancelVariant}
