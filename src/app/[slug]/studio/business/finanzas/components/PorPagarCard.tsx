@@ -12,7 +12,7 @@ import {
 import { PorPagarPersonalCard } from './PorPagarPersonalCard';
 import { PorPagarPersonal } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { pagarGastoRecurrente } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
-import { Repeat } from 'lucide-react';
+import { Repeat, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface RecurringExpenseForPorPagar {
@@ -148,6 +148,7 @@ export function PorPagarCard({
                                                         {e.name}
                                                     </p>
                                                     <div className="flex items-center gap-2 flex-wrap">
+                                                        <ArrowDown className="h-3.5 w-3.5 text-rose-400 shrink-0" aria-hidden />
                                                         <span className="text-sm text-rose-400 font-semibold">
                                                             {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(e.amount)}
                                                         </span>

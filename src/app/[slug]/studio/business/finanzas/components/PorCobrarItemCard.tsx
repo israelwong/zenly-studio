@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { MoreVertical, Eye, DollarSign } from 'lucide-react';
+import { MoreVertical, Eye, DollarSign, ArrowUp } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -82,6 +82,7 @@ export function PorCobrarItemCard({
                                 {item.concepto}
                             </p>
                             <div className="flex items-center gap-3 flex-wrap">
+                                <ArrowUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" aria-hidden />
                                 <p className="text-base text-emerald-400 font-semibold">
                                     {formatCurrency(item.monto)}
                                 </p>
