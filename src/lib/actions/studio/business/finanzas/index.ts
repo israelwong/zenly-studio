@@ -3,6 +3,7 @@ export {
     obtenerMovimientos,
     obtenerPorCobrar,
     obtenerPorPagar,
+    obtenerDevolucionesPendientes,
     obtenerGastosRecurrentes,
     pagarNominasPersonal,
     obtenerServiciosNomina,
@@ -14,6 +15,7 @@ export {
     eliminarNominaPagada,
     cancelarPagoRecurrentePorGastoId,
     confirmarDevolucion,
+    confirmarDevolucionMultiple,
     obtenerAnalisisFinanciero,
     pagarGastoRecurrente,
     obtenerTarjetasCredito,
@@ -23,4 +25,4 @@ export {
     pagarTarjeta,
 } from './finanzas.actions';
 
-export type { PorPagarPersonal, AnalisisFinancieroData, TarjetaCreditoItem } from './finanzas.actions';
+export type { PorPagarPersonal, DevolucionPendiente, DevolucionPendienteGrupo, AnalisisFinancieroData, TarjetaCreditoItem } from './finanzas.actions';

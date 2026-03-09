@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { FileText, X, Trash2, Edit, ExternalLink, User, Calendar, FileSpreadsheet, Clock, Tag, ArrowUp, ArrowDown, CheckCircle } from 'lucide-react';
+import { FileText, X, Trash2, Edit, ExternalLink, User, Calendar, FileSpreadsheet, Clock, Tag, ArrowUp, ArrowDown, CheckCircle, Wallet, Landmark } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -15,6 +15,7 @@ import { NominaReceipt } from '@/components/shared/payments/NominaReceipt';
 import { RecurrenteReceipt } from '@/components/shared/payments/RecurrenteReceipt';
 import { eliminarGastoOperativo, obtenerServiciosNomina } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
+import { UniversalFinanceModal } from '@/components/shared/finanzas/UniversalFinanceModal';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ interface Transaction {
     eventoId?: string | null;
     details?: TransactionDetail[];
     metodoPago?: string;
+    paymentIds?: string[];
 }
 
 interface MovimientoItemCardProps {
@@ -59,6 +61,8 @@ interface MovimientoItemCardProps {
     onNominaCancelada?: () => void;
     onGastoEditado?: () => void;
     onDevolucionConfirmada?: () => void;
+    /** Si se pasa, al hacer clic se abre el detalle en el sheet del padre (no el local) */
+    onOpenDetails?: (transaction: Transaction) => void;
 }
 
 export function MovimientoItemCard({
@@ -69,8 +73,10 @@ export function MovimientoItemCard({
     onNominaCancelada,
     onGastoEditado,
     onDevolucionConfirmada,
+    onOpenDetails,
 }: MovimientoItemCardProps) {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [showPaymentSourceModal, setShowPaymentSourceModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [showCancelNominaModal, setShowCancelNominaModal] = useState(false);
     const [showCancelRecurrenteModal, setShowCancelRecurrenteModal] = useState(false);
@@ -86,7 +92,6 @@ export function MovimientoItemCard({
     const [isEliminandoNomina, setIsEliminandoNomina] = useState(false);
     const [isEliminandoPago, setIsEliminandoPago] = useState(false);
     const [showDesgloseDialog, setShowDesgloseDialog] = useState(false);
-    const [isConfirmandoDevolucion, setIsConfirmandoDevolucion] = useState(false);
 
     const isGroup = Boolean(transaction.details && transaction.details.length > 1);
     /** Detalle para el sheet: agrupado (varios) o un solo ítem */
@@ -327,24 +332,19 @@ export function MovimientoItemCard({
         }
     };
 
-    const handleConfirmarDevolucion = async () => {
-        setIsConfirmandoDevolucion(true);
-        try {
-            const { confirmarDevolucion: confirmarDevolucionAction } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
-            const result = await confirmarDevolucionAction(studioSlug, transaction.id);
-            if (result.success) {
-                toast.success('Devolución confirmada. El movimiento se actualizó.');
-                setShowDesgloseDialog(false);
-                await onDevolucionConfirmada?.();
-            } else {
-                toast.error(result.error || 'Error al confirmar devolución');
-            }
-        } catch (error) {
-            console.error('Error confirmando devolución:', error);
-            toast.error('Error al confirmar devolución');
-        } finally {
-            setIsConfirmandoDevolucion(false);
-        }
+    const handleOpenDetails = () => {
+        if (onOpenDetails) onOpenDetails(transaction);
+        else setShowDesgloseDialog(true);
+    };
+
+    const handleConfirmarDevolucionClick = () => {
+        setShowPaymentSourceModal(true);
+    };
+
+    const handleDevolucionSuccess = async () => {
+        setShowPaymentSourceModal(false);
+        setShowDesgloseDialog(false);
+        await onDevolucionConfirmada?.();
     };
 
     return (
@@ -353,8 +353,8 @@ export function MovimientoItemCard({
                 variant="default"
                 padding="sm"
                 className="cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/40"
-                onClick={() => setShowDesgloseDialog(true)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesgloseDialog(true); } }}
+                onClick={handleOpenDetails}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpenDetails(); } }}
                 role="button"
                 tabIndex={0}
                 aria-label={`Ver detalles de ${transaction.concepto}`}
@@ -408,6 +408,15 @@ export function MovimientoItemCard({
                                 <p className="text-xs text-zinc-500">
                                     {formatDate(transaction.fecha)}
                                 </p>
+                                {transaction.metodoPago && (
+                                    <span className="flex items-center gap-1 text-zinc-500" title={metodoPagoLabel(transaction.metodoPago) ?? undefined}>
+                                        {String(transaction.metodoPago).toLowerCase().includes('efectivo') ? (
+                                            <Wallet className="h-3.5 w-3.5 text-amber-400 shrink-0" aria-hidden />
+                                        ) : (
+                                            <Landmark className="h-3.5 w-3.5 text-blue-400 shrink-0" aria-hidden />
+                                        )}
+                                    </span>
+                                )}
                                 <div className="flex items-center gap-1.5">
                                     {isIngreso ? (
                                         <ArrowUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" aria-hidden />
@@ -562,7 +571,8 @@ export function MovimientoItemCard({
                 loadingText="Eliminando..."
             />
 
-            {/* Sheet lateral: detalles del movimiento (todos los tipos) */}
+            {/* Sheet lateral: solo cuando el padre no controla el detalle (onOpenDetails) */}
+            {!onOpenDetails && (
             <Sheet open={showDesgloseDialog} onOpenChange={setShowDesgloseDialog}>
                 <SheetContent
                     side="right"
@@ -672,11 +682,10 @@ export function MovimientoItemCard({
                                         variant="default"
                                         size="sm"
                                         className="w-full justify-center gap-2 h-8 bg-emerald-600 hover:bg-emerald-500 text-white"
-                                        onClick={handleConfirmarDevolucion}
-                                        disabled={isConfirmandoDevolucion}
+                                        onClick={handleConfirmarDevolucionClick}
                                     >
                                         <CheckCircle className="h-3.5 w-3.5" />
-                                        {isConfirmandoDevolucion ? 'Confirmando...' : 'Confirmar devolución (dinero regresado)'}
+                                        Confirmar devolución (dinero regresado)
                                     </ZenButton>
                                 )}
                                 {(isIngreso || isNominaPagada || isRecurrenteConPersonal) && (
@@ -748,6 +757,25 @@ export function MovimientoItemCard({
                         </div>
                     </SheetContent>
                 </Sheet>
+            )}
+
+            {!onOpenDetails && (
+                <UniversalFinanceModal
+                    isOpen={showPaymentSourceModal}
+                    onClose={() => setShowPaymentSourceModal(false)}
+                    studioSlug={studioSlug}
+                    mode="refund"
+                    data={{
+                        amount: Math.abs(transaction.monto),
+                        title: 'Devolución',
+                        paymentIds: transaction.paymentIds ?? [transaction.id],
+                        contactName: transaction.contactName,
+                        eventName: transaction.eventName,
+                        eventTypeName: transaction.eventTypeName,
+                    }}
+                    onSuccess={handleDevolucionSuccess}
+                />
+            )}
         </>
     );
 }

@@ -162,6 +162,8 @@ export interface Transaction {
     metodoPago?: string;
     /** Origen de pago guardado al momento del registro (historial inmutable; priorizar sobre relación por ID) */
     paymentSourceName?: string | null;
+    /** IDs de studio_pagos que representa este movimiento (para confirmar devolución en bloque) */
+    paymentIds?: string[];
 }
 
 interface PendingItem {
@@ -197,6 +199,22 @@ export interface PorPagarPersonal {
         fecha: Date;
         nominaId: string;
     }>;
+}
+
+export interface DevolucionPendiente {
+    id: string;
+    contactName: string | null;
+    eventName: string | null;
+    amount: number;
+}
+
+/** Agrupado por promise_id para la sección Devoluciones pendientes */
+export interface DevolucionPendienteGrupo {
+    promiseId: string | null;
+    contactName: string | null;
+    eventName: string | null;
+    totalAmount: number;
+    payments: Array<{ id: string; concept: string; amount: number }>;
 }
 
 interface RecurringExpense {
@@ -703,12 +721,43 @@ export async function obtenerKPIsFinancieros(
             porPagarRecurrentes += pendiente;
         }
 
+        // Devoluciones pendientes: pasivo (por pagar) hasta que se confirmen
+        const porPagarDevolucionesAgg = await prisma.studio_pagos.aggregate({
+            where: {
+                status: 'pending_refund',
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                    { eventos: { studio_id: studioId } },
+                ],
+            },
+            _sum: { amount: true },
+        });
+        const porPagarDevoluciones = Number(porPagarDevolucionesAgg._sum.amount ?? 0);
+
+        // Egresos por devoluciones confirmadas en el mes (restan del balance; payment_date se asigna al confirmar)
+        const devolucionesRefundedAgg = await prisma.studio_pagos.aggregate({
+            where: {
+                status: 'refunded',
+                payment_date: { gte: start, lte: end },
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                    { eventos: { studio_id: studioId } },
+                ],
+            },
+            _sum: { amount: true },
+        });
+        const devolucionesRefundedTotal = Number(devolucionesRefundedAgg._sum.amount ?? 0);
+
         const ingresosTotal = ingresos._sum.amount ?? 0;
         const gastosTotal = gastos._sum.amount ?? 0;
-        const egresosTotal = gastosTotal + nominasTotal;
+        const egresosTotal = gastosTotal + nominasTotal + devolucionesRefundedTotal;
         const utilidad = ingresosTotal - egresosTotal;
         const porCobrarTotal = totalPorCobrar;
-        const porPagarTotal = (porPagarNominas._sum.net_amount ?? 0) + porPagarRecurrentes;
+        const porPagarTotal = (porPagarNominas._sum.net_amount ?? 0) + porPagarRecurrentes + porPagarDevoluciones;
 
         // ✅ Calcular costos y gastos de producción de cotizaciones autorizadas del mes
         // Buscar eventos autorizados que se celebraron en el mes (EventStatus: ACTIVE, IN_PROGRESS, COMPLETED)
@@ -1526,7 +1575,7 @@ export async function obtenerMovimientos(
                         ],
                     },
                     {
-                        status: { in: ['paid', 'completed', 'retained_by_cancellation', 'pending_refund'] },
+                        status: { in: ['paid', 'completed', 'retained_by_cancellation', 'pending_refund', 'refunded'] },
                     },
                     {
                         OR: [
@@ -1605,13 +1654,15 @@ export async function obtenerMovimientos(
 
             if (group.length === 1) {
                 const isPendingRefund = first.status === 'pending_refund';
+                const isRefunded = first.status === 'refunded';
+                const monto = isRefunded ? -first.amount : (isPendingRefund ? -first.amount : first.amount);
                 paymentTransactionsMes.push({
                     id: first.id,
                     fecha,
                     fuente: 'evento',
-                    concepto: conceptoBase,
-                    categoria: first.transaction_category || 'Ingreso',
-                    monto: isPendingRefund ? -first.amount : first.amount,
+                    concepto: isRefunded ? `Devolución · ${conceptoBase}` : conceptoBase,
+                    categoria: first.transaction_category || (isRefunded ? 'devolucion' : 'Ingreso'),
+                    monto,
                     isGastoOperativo: first.transaction_category === 'manual',
                     promiseId: first.promise_id ?? undefined,
                     cotizacionId: first.cotizacion_id ?? undefined,
@@ -1622,26 +1673,30 @@ export async function obtenerMovimientos(
                     eventDate: first.eventos?.event_date ?? first.promise?.event_date ?? null,
                     eventoId: first.evento_id ?? null,
                     metodoPago: first.metodo_pago ?? undefined,
+                    paymentIds: [first.id],
                 });
             } else {
                 const totalMonto = group.reduce((s, p) => s + p.amount, 0);
                 const hasPendingRefund = group.some((p) => p.status === 'pending_refund');
+                const hasRefunded = group.some((p) => p.status === 'refunded');
                 const hasRetained = group.some((p) => p.status === 'retained_by_cancellation');
-                const paymentStatus = hasPendingRefund ? 'pending_refund' : (hasRetained ? 'retained_by_cancellation' : 'completed');
+                const paymentStatus = hasPendingRefund ? 'pending_refund' : (hasRefunded ? 'refunded' : (hasRetained ? 'retained_by_cancellation' : 'completed'));
                 const details: TransactionDetail[] = group.map((p) => ({
-                    monto: p.status === 'pending_refund' ? -p.amount : p.amount,
+                    monto: p.status === 'pending_refund' || p.status === 'refunded' ? -p.amount : p.amount,
                     categoria: p.transaction_category || 'Ingreso',
                     concepto: p.concept || 'Ingreso',
                     paymentStatus: p.status,
                     metodoPago: p.metodo_pago ?? undefined,
                 }));
+                const grupoMonto = hasRefunded ? -totalMonto : (hasPendingRefund ? -totalMonto : totalMonto);
+                const grupoConcepto = hasRefunded ? `Devolución · ${conceptoBase}` : conceptoBase;
                 paymentTransactionsMes.push({
                     id: first.id,
                     fecha,
                     fuente: 'evento',
-                    concepto: conceptoBase,
-                    categoria: 'Ingreso',
-                    monto: hasPendingRefund ? -totalMonto : totalMonto,
+                    concepto: grupoConcepto,
+                    categoria: hasRefunded ? 'devolucion' : 'Ingreso',
+                    monto: grupoMonto,
                     isGastoOperativo: false,
                     promiseId: first.promise_id ?? undefined,
                     cotizacionId: first.cotizacion_id ?? undefined,
@@ -1653,6 +1708,7 @@ export async function obtenerMovimientos(
                     eventoId: first.evento_id ?? null,
                     details,
                     metodoPago: first.metodo_pago ?? undefined,
+                    paymentIds: group.map((p) => p.id),
                 });
             }
         }
@@ -2081,6 +2137,76 @@ export async function obtenerPorPagar(
         };
     } catch (error) {
         console.error('Error obteniendo por pagar:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+/**
+ * Obtener devoluciones pendientes agrupadas por promise_id (studio_pagos status pending_refund)
+ */
+export async function obtenerDevolucionesPendientes(
+    studioSlug: string
+): Promise<{ success: boolean; data?: DevolucionPendienteGrupo[]; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const pagos = await prisma.studio_pagos.findMany({
+            where: {
+                status: 'pending_refund',
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                    { eventos: { studio_id: studioId } },
+                ],
+            },
+            select: {
+                id: true,
+                amount: true,
+                concept: true,
+                promise_id: true,
+                contact: { select: { name: true } },
+                promise: { select: { name: true } },
+                eventos: { select: { promise: { select: { name: true } } } },
+            },
+            orderBy: { created_at: 'asc' },
+        });
+
+        const byPromise = new Map<string | null, DevolucionPendienteGrupo>();
+        for (const p of pagos) {
+            const key = p.promise_id ?? p.id;
+            const contactName = p.contact?.name ?? null;
+            const eventName = p.promise?.name ?? p.eventos?.promise?.name ?? null;
+            const amount = Number(p.amount);
+            if (!byPromise.has(key)) {
+                byPromise.set(key, {
+                    promiseId: p.promise_id,
+                    contactName,
+                    eventName,
+                    totalAmount: 0,
+                    payments: [],
+                });
+            }
+            const g = byPromise.get(key)!;
+            g.totalAmount += amount;
+            g.payments.push({ id: p.id, concept: p.concept || 'Pago', amount });
+        }
+
+        const data = Array.from(byPromise.values()).map((g) => ({
+            ...g,
+            totalAmount: Number(g.totalAmount),
+            payments: g.payments.map((p) => ({ ...p, amount: Number(p.amount) })),
+        }));
+
+        return { success: true, data };
+    } catch (error) {
+        console.error('Error obteniendo devoluciones pendientes:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error desconocido',
@@ -4393,7 +4519,7 @@ export async function eliminarGastoRecurrente(
 }
 
 /**
- * Confirmar devolución: actualizar pago de pending_refund a refunded (dinero ya regresado al cliente)
+ * Confirmar devolución: actualizar pago a refunded, asignar payment_date y restar del flujo de caja
  */
 export async function confirmarDevolucion(
     studioSlug: string,
@@ -4413,18 +4539,28 @@ export async function confirmarDevolucion(
                     { studio_users: { studio_id: studioId } },
                     { promise: { studio_id: studioId } },
                     { cotizaciones: { studio_id: studioId } },
+                    { eventos: { studio_id: studioId } },
                 ],
             },
-            select: { id: true },
+            select: { id: true, amount: true, metodo_pago: true, metodo_pago_id: true },
         });
 
         if (!pago) {
             return { success: false, error: 'Pago pendiente de devolución no encontrado' };
         }
 
-        await prisma.studio_pagos.update({
-            where: { id: pagoId },
-            data: { status: 'refunded' },
+        const amount = Number(pago.amount);
+        const paymentMethod = pago.metodo_pago || 'efectivo';
+
+        await prisma.$transaction(async (tx) => {
+            await tx.studio_pagos.update({
+                where: { id: pagoId },
+                data: { status: 'refunded', payment_date: new Date() },
+            });
+            await decrementBalanceForEgreso(tx, studioId, amount, {
+                payment_method: paymentMethod,
+                metodo_pago_id: pago.metodo_pago_id,
+            });
         });
 
         revalidatePath(`/${studioSlug}/studio/business/finanzas`);
@@ -4434,6 +4570,79 @@ export async function confirmarDevolucion(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al confirmar devolución',
+        };
+    }
+}
+
+/**
+ * Confirmar devolución de varios pagos en una transacción (misma payment_date y metodo_pago para agrupar en Movimientos)
+ * metodoPago: 'efectivo' | 'transferencia'; metodo_pago_id obligatorio cuando metodoPago === 'transferencia'
+ */
+export async function confirmarDevolucionMultiple(
+    studioSlug: string,
+    pagoIds: string[],
+    opts: { metodoPago: string; metodo_pago_id?: string | null }
+): Promise<{ success: boolean; error?: string }> {
+    if (pagoIds.length === 0) {
+        return { success: false, error: 'No hay pagos que confirmar' };
+    }
+    const { metodoPago, metodo_pago_id } = opts;
+    if (metodoPago === 'transferencia' && !metodo_pago_id) {
+        return { success: false, error: 'Selecciona una cuenta bancaria para la devolución' };
+    }
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const pagos = await prisma.studio_pagos.findMany({
+            where: {
+                id: { in: pagoIds },
+                status: 'pending_refund',
+                OR: [
+                    { studio_users: { studio_id: studioId } },
+                    { promise: { studio_id: studioId } },
+                    { cotizaciones: { studio_id: studioId } },
+                    { eventos: { studio_id: studioId } },
+                ],
+            },
+            select: { id: true, amount: true },
+        });
+
+        if (pagos.length !== pagoIds.length) {
+            return { success: false, error: 'Uno o más pagos no encontrados o no están pendientes de devolución' };
+        }
+
+        const paymentDate = new Date();
+        const totalAmount = pagos.reduce((sum, p) => sum + Number(p.amount), 0);
+        const paymentMethod = metodoPago === 'transferencia' ? 'transferencia' : 'efectivo';
+
+        await prisma.$transaction(async (tx) => {
+            for (const pago of pagos) {
+                await tx.studio_pagos.update({
+                    where: { id: pago.id },
+                    data: {
+                        status: 'refunded',
+                        payment_date: paymentDate,
+                        metodo_pago: paymentMethod,
+                        ...(metodo_pago_id ? { metodo_pago_id } : {}),
+                    },
+                });
+            }
+            await decrementBalanceForEgreso(tx, studioId, totalAmount, {
+                payment_method: paymentMethod,
+                metodo_pago_id: metodo_pago_id ?? null,
+            });
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error confirmando devoluciones:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al confirmar devoluciones',
         };
     }
 }

@@ -26,6 +26,8 @@ interface Transaction {
     monto: number;
     nominaId?: string;
     isGastoOperativo?: boolean;
+    paymentStatus?: string;
+    paymentIds?: string[];
 }
 
 interface MovimientosCardProps {
@@ -39,6 +41,8 @@ interface MovimientosCardProps {
     onNominaCancelada?: () => void;
     onGastoEditado?: () => void;
     onDevolucionConfirmada?: () => void;
+    /** Al hacer clic en un movimiento, abrir el sheet de detalles en el padre (compartido con Por pagar) */
+    onOpenDetails?: (transaction: Transaction) => void;
 }
 
 export function MovimientosCard({
@@ -52,6 +56,7 @@ export function MovimientosCard({
     onNominaCancelada,
     onGastoEditado,
     onDevolucionConfirmada,
+    onOpenDetails,
 }: MovimientosCardProps) {
     const [showIngresoModal, setShowIngresoModal] = useState(false);
     const [showGastoModal, setShowGastoModal] = useState(false);
@@ -141,6 +146,7 @@ export function MovimientosCard({
                                     onNominaCancelada={onNominaCancelada}
                                     onGastoEditado={onGastoEditado}
                                     onDevolucionConfirmada={onDevolucionConfirmada}
+                                    onOpenDetails={onOpenDetails}
                                 />
                             ))}
                         </div>

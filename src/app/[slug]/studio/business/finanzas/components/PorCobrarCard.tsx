@@ -96,7 +96,7 @@ export function PorCobrarCard({
                         <p>No hay cuentas por cobrar</p>
                     </div>
                 ) : (
-                    <Accordion type="multiple" defaultValue={defaultOpen} className="space-y-2">
+                    <Accordion type="multiple" defaultValue={defaultOpen} className="space-y-0">
                         {byMonth.keys.map((monthKey) => {
                             const items = byMonth.map.get(monthKey) ?? [];
                             const total = items.reduce((s, i) => s + i.monto, 0);
@@ -104,7 +104,7 @@ export function PorCobrarCard({
                             const value = monthKey;
                             return (
                                 <div key={monthKey} className="overflow-hidden">
-                                    <AccordionItem value={value} className="border-0">
+                                    <AccordionItem value={value} className="border-0 mb-0">
                                         <AccordionHeader className="flex">
                                             <AccordionTrigger className="w-full flex items-center justify-between py-4 pl-2.5 pr-4 hover:bg-zinc-800/50 hover:no-underline transition-colors bg-zinc-800/30 group">
                                                 <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export function PorCobrarCard({
                                                     <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400 group-data-[state=open]:inline group-data-[state=closed]:hidden" />
                                                     <h4 className="font-semibold text-white capitalize">{label}</h4>
                                                 </div>
-                                                <span className="text-sm font-semibold text-emerald-400 shrink-0">
+                                                <span className="text-xs font-semibold text-emerald-400 shrink-0">
                                                     {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(total)}
                                                 </span>
                                             </AccordionTrigger>

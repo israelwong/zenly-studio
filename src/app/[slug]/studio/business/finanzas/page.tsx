@@ -14,11 +14,11 @@ import { FinanceKPIs } from './components/FinanceKPIs';
 import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
-import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
 import { RegistrarGastoRecurrenteModal } from './components/RegistrarGastoRecurrenteModal';
 import { PagarTarjetaModal } from './components/PagarTarjetaModal';
 import { SaldoInicialModal } from './components/SaldoInicialModal';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
+import { MovimientoDetailsSheet, type DetailsSheetData } from './components/MovimientoDetailsSheet';
 import { ToolbarFinanzas } from './components/ToolbarFinanzas';
 import { useHistorialSheet } from '@/app/[slug]/studio/components/context/HistorialSheetContext';
 import { toast } from 'sonner';
@@ -27,12 +27,14 @@ import {
     obtenerMovimientos,
     obtenerPorCobrar,
     obtenerPorPagar,
+    obtenerDevolucionesPendientes,
     obtenerGastosRecurrentes,
     obtenerRentabilidadPorEvento,
     obtenerRentabilidadHistoricaMeses,
     obtenerRentabilidadPorTipoEvento,
     verificarRolOwnerOAdmin,
     type PorPagarPersonal,
+    type DevolucionPendienteGrupo,
     type RentabilidadPorEvento,
     type RentabilidadHistoricaMes,
     type RentabilidadPorTipoEventoItem,
@@ -98,6 +100,7 @@ export default function FinanzasPage() {
         promiseContactPhone?: string | null;
     }>>([]);
     const [porPagar, setPorPagar] = useState<PorPagarPersonal[]>([]);
+    const [devolucionesPendientes, setDevolucionesPendientes] = useState<DevolucionPendienteGrupo[]>([]);
     const [recurringExpenses, setRecurringExpenses] = useState<Array<{
         id: string;
         name: string;
@@ -114,10 +117,10 @@ export default function FinanzasPage() {
     const [rentabilidadPorTipo, setRentabilidadPorTipo] = useState<RentabilidadPorTipoEventoItem[]>([]);
     const [rentabilidadLoading, setRentabilidadLoading] = useState(false);
     const { openHistorial } = useHistorialSheet();
-    const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
     const [showNuevoRecurrenteModal, setShowNuevoRecurrenteModal] = useState(false);
     const [showPagarTarjetaModal, setShowPagarTarjetaModal] = useState(false);
     const [showSaldoInicialModal, setShowSaldoInicialModal] = useState(false);
+    const [detailsSheetData, setDetailsSheetData] = useState<DetailsSheetData>(null);
 
     useEffect(() => {
         document.title = 'Zenly Studio - Finanzas';
@@ -158,12 +161,13 @@ export default function FinanzasPage() {
                 const roleResult = await verificarRolOwnerOAdmin(studioSlug);
                 setIsOwner(roleResult.success && roleResult.isOwner);
 
-                const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
+                const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, devolucionesResult, expensesResult] =
                     await Promise.all([
                         obtenerKPIsFinancieros(studioSlug, month, options),
                         obtenerMovimientos(studioSlug, month, options),
                         obtenerPorCobrar(studioSlug),
                         obtenerPorPagar(studioSlug),
+                        obtenerDevolucionesPendientes(studioSlug),
                         obtenerGastosRecurrentes(studioSlug, currentMonth, options),
                     ]);
 
@@ -191,6 +195,9 @@ export default function FinanzasPage() {
                 if (porPagarResult.success && porPagarResult.data) {
                     setPorPagar(porPagarResult.data);
                 }
+                if (devolucionesResult.success && devolucionesResult.data) {
+                    setDevolucionesPendientes(devolucionesResult.data);
+                }
                 if (expensesResult.success && expensesResult.data) {
                     setRecurringExpenses(expensesResult.data);
                 }
@@ -208,18 +215,20 @@ export default function FinanzasPage() {
         const month = customRange ? customRange.from : (currentMonth ?? new Date());
         const options = customRange ? { fromDate: customRange.from, toDate: customRange.to } : undefined;
         try {
-            const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
+            const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, devolucionesResult, expensesResult] =
                 await Promise.all([
                     obtenerKPIsFinancieros(studioSlug, month, options),
                     obtenerMovimientos(studioSlug, month, options),
                     obtenerPorCobrar(studioSlug),
                     obtenerPorPagar(studioSlug),
+                    obtenerDevolucionesPendientes(studioSlug),
                     obtenerGastosRecurrentes(studioSlug, currentMonth, options),
                 ]);
             if (kpisResult.success) setKpis(kpisResult.data);
             if (transactionsResult.success && transactionsResult.data) setTransactions(transactionsResult.data);
             if (porCobrarResult.success && porCobrarResult.data) setPorCobrar(porCobrarResult.data);
             if (porPagarResult.success && porPagarResult.data) setPorPagar(porPagarResult.data);
+            if (devolucionesResult.success && devolucionesResult.data) setDevolucionesPendientes(devolucionesResult.data);
             if (expensesResult.success && expensesResult.data) setRecurringExpenses(expensesResult.data);
             if (isOwner) {
                 const rentabilidadResult = await obtenerRentabilidadPorEvento(studioSlug, month, options);
@@ -715,6 +724,7 @@ export default function FinanzasPage() {
                                         onNominaCancelada={refetchData}
                                         onGastoEditado={refetchData}
                                         onDevolucionConfirmada={refetchData}
+                                        onOpenDetails={(t) => setDetailsSheetData({ type: 'transaction', data: t })}
                                         onCancelarPago={async (id) => {
                                             try {
                                                 const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
@@ -747,22 +757,11 @@ export default function FinanzasPage() {
                                         recurringExpenses={recurringExpenses}
                                         onOpenRecurrentes={() => window.dispatchEvent(new CustomEvent('open-gastos-recurrentes-modal'))}
                                         onOpenNuevoRecurrente={() => setShowNuevoRecurrenteModal(true)}
-                                        onOpenRecurrenteDetalle={(exp) => setRecurrenteDetalle(exp)}
+                                        onOpenRecurrenteDetalle={(exp) => setDetailsSheetData({ type: 'gasto_recurrente', data: exp })}
+                                        devolucionesPendientes={devolucionesPendientes}
+                                        onDevolucionConfirmada={refetchData}
+                                        onOpenDevolucionDetails={(grupo) => setDetailsSheetData({ type: 'devolucion', data: grupo })}
                                     />
-                                    {recurrenteDetalle && (
-                                        <RecurrentePagoDetalleSheet
-                                            isOpen={!!recurrenteDetalle}
-                                            onClose={() => setRecurrenteDetalle(null)}
-                                            expenseId={recurrenteDetalle.id}
-                                            expenseName={recurrenteDetalle.name}
-                                            expenseAmount={recurrenteDetalle.amount}
-                                            studioSlug={studioSlug}
-                                            onPagoConfirmado={async () => {
-                                                setRecurrenteDetalle(null);
-                                                await refetchData();
-                                            }}
-                                        />
-                                    )}
                                     <RegistrarGastoRecurrenteModal
                                         isOpen={showNuevoRecurrenteModal}
                                         onClose={() => setShowNuevoRecurrenteModal(false)}
@@ -796,6 +795,13 @@ export default function FinanzasPage() {
                                     />
                                 </div>
                             </div>
+                            <MovimientoDetailsSheet
+                                open={!!detailsSheetData}
+                                onOpenChange={(open) => !open && setDetailsSheetData(null)}
+                                data={detailsSheetData}
+                                studioSlug={studioSlug}
+                                onDevolucionConfirmada={refetchData}
+                            />
                         </div>
                     ) }
                 </ZenCardContent>
