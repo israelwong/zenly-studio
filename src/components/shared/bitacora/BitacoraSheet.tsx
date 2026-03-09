@@ -53,7 +53,17 @@ export function BitacoraSheet({
   const { logs, loading, addLog, removeLog, refetch } = usePromiseLogs({
     promiseId: open && promiseId ? promiseId : null,
     enabled: open,
+    context,
   });
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ promiseId?: string }>).detail;
+      if (open && detail?.promiseId === promiseId) refetch();
+    };
+    window.addEventListener('promise-logs-invalidate', handler);
+    return () => window.removeEventListener('promise-logs-invalidate', handler);
+  }, [open, promiseId, refetch]);
 
   // ✅ OPTIMIZACIÓN: Realtime para actualizaciones colaborativas
   usePromiseLogsRealtime({

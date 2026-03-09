@@ -79,8 +79,12 @@ const LOG_ACTIONS: Record<
     return `Perfil compartido: ${contactName}`;
   },
   archived: (meta) => {
+    const promiseName = (meta?.promiseName as string)?.trim() || 'promesa';
+    const contactName = (meta?.contactName as string)?.trim() || 'contacto';
     const r = (meta?.reason as string)?.trim();
-    return r ? `Promesa archivada: ${r}` : 'Promesa archivada';
+    let out = `Se archivó la promesa '${promiseName}' del contacto ${contactName}.`;
+    if (r) out += ` Motivo: ${r}`;
+    return out;
   },
   unarchived: () => 'Promesa desarchivada',
   email_sent: (meta) => {
@@ -193,8 +197,12 @@ const LOG_ACTIONS: Record<
   },
   restored_from_canceled: () => 'Promesa restaurada y movida a etapa Nuevo.',
   promise_canceled: (meta) => {
+    const promiseName = (meta?.promiseName as string)?.trim() || 'promesa';
+    const contactName = (meta?.contactName as string)?.trim() || 'contacto';
     const reason = (meta?.reason as string)?.trim();
-    return reason ? `Promesa cancelada. Motivo: ${reason}` : 'Promesa cancelada. Motivo: Sin motivo indicado.';
+    let out = `Se canceló la promesa '${promiseName}' del contacto ${contactName}.`;
+    out += reason ? ` Motivo: ${reason}` : ' Motivo: Sin motivo indicado.';
+    return out;
   },
 };
 
@@ -609,6 +617,11 @@ export async function createPromiseLog(
     const finalLogType = validatedData.log_type === 'note' ? 'user_note' : validatedData.log_type;
 
     const originContext = (validatedData.origin_context === 'EVENT' ? 'EVENT' : 'PROMISE') as 'PROMISE' | 'EVENT';
+    const metadataWithUser: Record<string, unknown> | null = validatedData.metadata
+      ? { ...validatedData.metadata, ...(userId ? { user_id: userId } : {}) }
+      : userId
+        ? { user_id: userId }
+        : null;
     const log = await prisma.studio_promise_logs.create({
       data: {
         promise_id: validatedData.promise_id,
@@ -616,7 +629,7 @@ export async function createPromiseLog(
         template_id: validatedData.template_id ?? null,
         content: validatedData.content,
         log_type: finalLogType,
-        metadata: validatedData.metadata || null,
+        metadata: metadataWithUser,
         origin_context: originContext,
       },
       include: {

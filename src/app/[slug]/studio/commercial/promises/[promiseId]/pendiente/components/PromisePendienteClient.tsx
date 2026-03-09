@@ -18,7 +18,7 @@ import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promis
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 
 export interface PromisePendienteClientProps {
   initialCondicionesComerciales: Array<{
@@ -88,6 +88,7 @@ export function PromisePendienteClient({
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [showRestoreConfirmModal, setShowRestoreConfirmModal] = useState(false);
   const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     name: string;
@@ -196,7 +197,9 @@ export function PromisePendienteClient({
       const { restoreCanceledPromise } = await import('@/lib/actions/studio/commercial/promises');
       const result = await restoreCanceledPromise(studioSlug, promiseId);
       if (result.success) {
-        toast.success('Promesa habilitada correctamente.');
+        setShowRestoreConfirmModal(false);
+        toast.success('Promesa restaurada con éxito');
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         startTransition(() => router.refresh());
       } else {
         toast.error(result.error || 'Error al restaurar promesa');
@@ -231,14 +234,26 @@ export function PromisePendienteClient({
             <ZenButton
               variant="outline"
               size="sm"
-              onClick={handleRestoreCanceled}
+              onClick={() => setShowRestoreConfirmModal(true)}
               disabled={isRestoring}
               className="shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/20 hover:text-red-300"
             >
-              {isRestoring ? 'Restaurando...' : 'Restaurar promesa'}
+              Restaurar promesa
             </ZenButton>
           </div>
         )}
+        <ZenConfirmModal
+          isOpen={showRestoreConfirmModal}
+          onClose={() => !isRestoring && setShowRestoreConfirmModal(false)}
+          onConfirm={() => handleRestoreCanceled()}
+          title="¿Estás seguro de que deseas restaurar esta promesa?"
+          description="Al confirmar, la promesa se habilitará nuevamente y se moverá automáticamente a la etapa Nuevo para permitir ediciones."
+          confirmText="Sí, restaurar"
+          cancelText="Cancelar"
+          variant="default"
+          loading={isRestoring}
+          loadingText="Restaurando..."
+        />
         {/* Layout de 3 columnas: Info+Etiquetas | Cotizaciones+Agenda | Bitácora+Config */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Columna 1: Información del contacto y evento */}

@@ -311,6 +311,7 @@ export function PromiseQuotesPanelCard({
       
       const result = await archiveCotizacion(cotizacion.id, studioSlug);
       if (result.success) {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         toast.success('Cotización archivada exitosamente');
         setShowArchiveModal(false);
       } else {
@@ -338,6 +339,7 @@ export function PromiseQuotesPanelCard({
       
       const result = await unarchiveCotizacion(cotizacion.id, studioSlug);
       if (result.success) {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         toast.success('Cotización desarchivada exitosamente');
         setShowUnarchiveModal(false);
       } else {
@@ -600,6 +602,7 @@ export function PromiseQuotesPanelCard({
       }
       const result = await pasarACierre(studioSlug, cotizacion.id, payload);
       if (result.success) {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         setShowConfirmarCierreModal(false);
         setProgressMessage('Abriendo cierre...');
         toast.success('Cotización pasada a proceso de cierre');

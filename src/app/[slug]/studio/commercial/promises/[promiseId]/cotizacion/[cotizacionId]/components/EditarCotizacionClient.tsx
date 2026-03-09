@@ -156,6 +156,7 @@ export function EditarCotizacionClient({
     try {
       const result = await pasarACierre(studioSlug, cotizacionId, payload);
       if (result.success) {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         setShowConfirmarCierreModal(false);
         toast.success(`${STUDIO_PAGE_NAMES.COTIZACION} pasada a proceso de cierre`);
         window.dispatchEvent(new CustomEvent('close-overlays'));

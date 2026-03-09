@@ -179,7 +179,6 @@ export function CotizacionAutorizadaCard({
   // Siempre mostrar suma real de studio_pagos (nunca cotizacion_cierre.pago_monto)
   const totalPagado = resumen?.totalPagado ?? 0;
   const hayPagoInicial = totalPagado > 0;
-  const primerPago = resumen?.pagos?.[0];
 
   // Loading state - Skeleton
   if (loading) {
@@ -392,25 +391,27 @@ export function CotizacionAutorizadaCard({
               </div>
             ) : null}
 
-            {/* Pago Inicial: solo visible si hay al menos un pago registrado */}
+            {/* Pago Inicial: solo visible si hay al menos un pago registrado + desglose split */}
             {hayPagoInicial && (
-              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex items-center gap-3">
-                <DollarSign className="w-5 h-5 text-zinc-400 shrink-0" />
-                <div className="flex-1 min-w-0 text-sm">
-                  <span className="font-semibold text-zinc-300">Pago Inicial</span>
-                  {primerPago ? (
-                    <>
-                      <span className="text-emerald-400 font-medium"> · ${formatNumber(totalPagado, 2)} MXN</span>
-                      {(primerPago.concept || primerPago.payment_date) && (
-                        <span className="text-zinc-500 text-xs block mt-0.5">
-                          {[primerPago.concept, primerPago.payment_date && formatDisplayDate(toUtcDateOnly(primerPago.payment_date))].filter(Boolean).join(' · ')}
-                        </span>
-                      )}
-                    </>
-                  ) : (
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <DollarSign className="w-5 h-5 text-zinc-400 shrink-0" />
+                  <div className="flex-1 min-w-0 text-sm">
+                    <span className="font-semibold text-zinc-300">Pago Inicial</span>
                     <span className="text-emerald-400 font-medium"> · ${formatNumber(totalPagado, 2)} MXN</span>
-                  )}
+                  </div>
                 </div>
+                {resumen?.pagos && resumen.pagos.length > 0 && (
+                  <ul className="flex flex-col gap-1.5 text-xs text-zinc-500">
+                    {resumen.pagos.map((pago: { id: string; concept: string | null; amount: number }) => (
+                      <li key={pago.id} className="flex items-center gap-1.5">
+                        <span className="text-zinc-600">·</span>
+                        <span>{pago.concept || 'Pago'}</span>
+                        <span className="text-zinc-400">${formatNumber(Number(pago.amount), 2)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 

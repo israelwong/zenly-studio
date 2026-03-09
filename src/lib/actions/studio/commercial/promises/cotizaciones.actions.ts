@@ -1206,11 +1206,24 @@ export async function archiveCotizacion(
 
     await prisma.studio_cotizaciones.update({
       where: { id: cotizacionId },
-      data: { 
+      data: {
         status: 'archivada',
         archived: true, // Mantener compatibilidad con campo legacy
       },
     });
+
+    if (cotizacion.promise_id) {
+      const promise = await prisma.studio_promises.findUnique({
+        where: { id: cotizacion.promise_id },
+        select: { name: true, contact: { select: { name: true } } },
+      });
+      const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+      await dispatchSystemEvent(cotizacion.promise_id, studioSlug, undefined, 'QUOTE_ARCHIVED', {
+        quoteName: cotizacion.name,
+        promiseName: promise?.name?.trim() || undefined,
+        contactName: promise?.contact?.name?.trim() || undefined,
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
@@ -1222,7 +1235,7 @@ export async function archiveCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error archivando cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error archivando cotización:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al archivar cotizaciรณn',
@@ -1264,11 +1277,24 @@ export async function unarchiveCotizacion(
 
     await prisma.studio_cotizaciones.update({
       where: { id: cotizacionId },
-      data: { 
+      data: {
         status: 'pendiente',
         archived: false, // Mantener compatibilidad con campo legacy
       },
     });
+
+    if (cotizacion.promise_id) {
+      const promise = await prisma.studio_promises.findUnique({
+        where: { id: cotizacion.promise_id },
+        select: { name: true, contact: { select: { name: true } } },
+      });
+      const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+      await dispatchSystemEvent(cotizacion.promise_id, studioSlug, undefined, 'QUOTE_RESTORED', {
+        quoteName: cotizacion.name,
+        promiseName: promise?.name?.trim() || undefined,
+        contactName: promise?.contact?.name?.trim() || undefined,
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
@@ -1280,7 +1306,7 @@ export async function unarchiveCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error desarchivando cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error desarchivando cotización:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al desarchivar cotizaciรณn',
@@ -3854,7 +3880,9 @@ export async function pasarACierre(
         },
       },
       include: {
-        promise: true,
+        promise: {
+          include: { contact: { select: { name: true } } },
+        },
       },
     });
 
@@ -3921,13 +3949,14 @@ export async function pasarACierre(
       // 1. Pasar cotizaciรณn a cierre
       const previousStatus = cotizacion.status;
       
+      // Publicación automática: al formalizar cierre, cotización siempre visible para el cliente
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'en_cierre',
           selected_by_prospect: false,
           selected_at: new Date(),
-          visible_to_client: options?.visible_to_client ?? true,
+          visible_to_client: true,
           updated_at: new Date(),
         },
       });
@@ -4128,6 +4157,20 @@ export async function pasarACierre(
       const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
       await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
         console.error('[COTIZACIONES] Error sincronizando pipeline:', error);
+      });
+    }
+
+    // Publicación automática: promesa visible en portal al pasar a cierre
+    if (cotizacion.promise_id) {
+      const { setPromisePublished } = await import('./promises.actions');
+      await setPromisePublished(studioSlug, cotizacion.promise_id, true).catch((err) => {
+        console.warn('[COTIZACIONES] Error publicando promesa al pasar a cierre:', err);
+      });
+      const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+      await dispatchSystemEvent(cotizacion.promise_id, studioSlug, undefined, 'PROMISE_MOVED_TO_CLOSING', {
+        quoteName: cotizacion.name,
+        promiseName: cotizacion.promise?.name?.trim() ?? undefined,
+        contactName: cotizacion.promise?.contact?.name?.trim() ?? undefined,
       });
     }
 
@@ -4400,13 +4443,12 @@ export async function cancelarCierre(
         select: { previous_status: true },
       });
 
-      // 2. Cotización queda como cancelada y no visible al cliente (cierre cancelado)
+      // 2. Cotización queda como cancelada; no revertir visibilidad (permanece visible salvo que el estudio la oculte manualmente)
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'cancelada',
           selected_by_prospect: false,
-          visible_to_client: false,
           selected_at: null,
           ...(datos?.motivo?.trim()
             ? {

@@ -88,10 +88,14 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
     () => [...logsRecentFirst.slice(0, 3)].reverse(),
     [logsRecentFirst]
   );
-  const lastThree = useMemo(
-    () => (logs.length > 0 ? lastThreeFromHook : (initialLastLogs?.length ? [...initialLastLogs].reverse() : [])),
-    [logs.length, lastThreeFromHook, initialLastLogs]
-  );
+  const lastThree = useMemo(() => {
+    if (logs.length > 0) return lastThreeFromHook;
+    if (initialLastLogs?.length) {
+      const sorted = [...initialLastLogs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return sorted.slice(0, 3).reverse();
+    }
+    return [];
+  }, [logs.length, lastThreeFromHook, initialLastLogs]);
 
   const loadTemplates = () => {
     setLoadingTemplates(true);

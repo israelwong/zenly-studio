@@ -507,6 +507,7 @@ export function PromiseQuotesPanel({
         // Revertir cambios optimistas de las que fallaron
         loadCotizaciones();
       } else {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         toast.success(`${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} archivada${idsArray.length > 1 ? 's' : ''} exitosamente`);
       }
 
@@ -549,6 +550,7 @@ export function PromiseQuotesPanel({
         toast.error(`${failed.length} de ${idsArray.length} cotizaciones no se pudieron desarchivar`);
         loadCotizaciones();
       } else {
+        if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         toast.success(`${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} desarchivada${idsArray.length > 1 ? 's' : ''} exitosamente`);
       }
 

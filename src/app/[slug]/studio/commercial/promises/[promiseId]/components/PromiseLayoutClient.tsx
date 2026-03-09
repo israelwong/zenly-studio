@@ -50,6 +50,7 @@ export function PromiseLayoutClient({
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isRestoringCanceled, setIsRestoringCanceled] = useState(false);
+  const [optimisticStageSlug, setOptimisticStageSlug] = useState<string | null>(null);
 
   const isArchived = stateData.promiseData.pipeline_stage_slug === 'archived';
   const isCanceled =
@@ -186,8 +187,12 @@ export function PromiseLayoutClient({
         archiveReason: archiveReason?.trim() || undefined,
       });
       if (result.success) {
-        toast.success('Promesa archivada correctamente');
-        router.push(`/${studioSlug}/studio/commercial/promises`);
+        toast.success(result.message ?? 'Promesa archivada correctamente');
+        window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
+        setOptimisticStageSlug('archived');
+        requestAnimationFrame(() => {
+          startTransition(() => router.push(`/${studioSlug}/studio/commercial/promises`));
+        });
       } else {
         toast.error(result.error || 'Error al archivar promesa');
       }
@@ -205,6 +210,7 @@ export function PromiseLayoutClient({
       const result = await unarchivePromise(studioSlug, promiseId);
       if (result.success) {
         toast.success('Promesa desarchivada correctamente');
+        window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         router.refresh();
       } else {
         toast.error(result.error || 'Error al desarchivar promesa');
@@ -222,6 +228,7 @@ export function PromiseLayoutClient({
       const result = await restoreCanceledPromise(studioSlug, promiseId);
       if (result.success) {
         toast.success('Promesa habilitada correctamente.');
+        window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
         startTransition(() => router.refresh());
       } else {
         toast.error(result.error || 'Error al restaurar promesa');
@@ -351,6 +358,7 @@ export function PromiseLayoutClient({
             onDelete={handleDelete}
             isArchiving={isArchiving}
             isUnarchiving={isRestoringCanceled}
+            optimisticStageSlug={optimisticStageSlug}
             isDeleting={false}
             focusMode={isFocusMode}
             onAutomateClick={

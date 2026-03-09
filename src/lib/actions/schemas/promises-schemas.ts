@@ -255,6 +255,8 @@ export interface PromisesListResponse {
 export interface PromiseResponse {
   success: boolean;
   data?: PromiseWithContact;
+  /** Mensaje enriquecido para mostrar en toast (ej. cancelación/archivamiento) */
+  message?: string;
   error?: string;
 }
 

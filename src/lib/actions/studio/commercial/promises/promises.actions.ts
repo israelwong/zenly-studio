@@ -1772,12 +1772,20 @@ export async function archivePromise(
 
     const promise = await prisma.studio_promises.findUnique({
       where: { id: promiseId },
-      select: { studio_id: true },
+      select: { studio_id: true, pipeline_stage_id: true },
     });
 
     if (!promise || promise.studio_id !== studio.id) {
       return { success: false, error: 'Promesa no encontrada' };
     }
+
+    const archiveStageAnterior = promise.pipeline_stage_id
+      ? await prisma.studio_promise_pipeline_stages.findUnique({
+          where: { id: promise.pipeline_stage_id },
+          select: { slug: true, name: true },
+        })
+      : null;
+    const estadoAnteriorArchive = archiveStageAnterior?.slug ?? archiveStageAnterior?.name ?? 'desconocido';
 
     // Buscar o crear stage "archived"
     let archivedStage = await prisma.studio_promise_pipeline_stages.findFirst({
@@ -1840,20 +1848,18 @@ export async function archivePromise(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
-    // Registrar archivo en el log (con motivo si se proporciona)
-    const { logPromiseAction } = await import('./promise-logs.actions');
-    const metadata = options?.archiveReason?.trim() ? { reason: options.archiveReason!.trim() } : undefined;
-    await logPromiseAction(
-      studioSlug,
-      promiseId,
-      'archived',
-      'user',
-      null,
-      metadata
-    ).catch((error) => {
-      // No fallar si el log falla, solo registrar error
-      console.error('[PROMISES] Error registrando log de archivo:', error);
+    const promiseName = updatedPromise.name?.trim() || 'Sin nombre';
+    const contactName = contact.name?.trim() || 'Sin nombre';
+    const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+    await dispatchSystemEvent(promiseId, studioSlug, undefined, 'PROMISE_ARCHIVED', {
+      promiseName,
+      contactName,
     });
+
+    const archiveReason = options?.archiveReason?.trim();
+    const displayMessage = archiveReason
+      ? `Se archivó la promesa '${promiseName}' del contacto ${contactName}. Motivo: ${archiveReason}`
+      : `Se archivó la promesa '${promiseName}' del contacto ${contactName}.`;
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
@@ -1898,6 +1904,7 @@ export async function archivePromise(
     return {
       success: true,
       data: promiseWithContact,
+      message: displayMessage,
     };
   } catch (error) {
     console.error('[PROMISES] Error archivando promise:', error);
@@ -2037,17 +2044,12 @@ export async function unarchivePromise(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
-    // Registrar desarchivo en el log
-    const { logPromiseAction } = await import('./promise-logs.actions');
-    await logPromiseAction(
-      studioSlug,
-      promiseId,
-      'unarchived',
-      'user', // Asumimos que es acción de usuario
-      null, // TODO: Obtener userId del contexto
-    ).catch((error) => {
-      // No fallar si el log falla, solo registrar error
-      console.error('[PROMISES] Error registrando log de desarchivo:', error);
+    const promiseNameUnarch = updatedPromise.name?.trim() || 'Sin nombre';
+    const contactNameUnarch = contact.name?.trim() || 'Sin nombre';
+    const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+    await dispatchSystemEvent(promiseId, studioSlug, undefined, 'PROMISE_RESTORED', {
+      promiseName: promiseNameUnarch,
+      contactName: contactNameUnarch,
     });
 
     const promiseWithContact: PromiseWithContact = {
@@ -2150,6 +2152,14 @@ export async function cancelarPromise(
       select: { id: true },
     });
 
+    const previousStage = promise.pipeline_stage_id
+      ? await prisma.studio_promise_pipeline_stages.findUnique({
+          where: { id: promise.pipeline_stage_id },
+          select: { slug: true, name: true },
+        })
+      : null;
+    const estadoAnterior = previousStage?.slug ?? previousStage?.name ?? 'desconocido';
+
     await prisma.$transaction(async (tx) => {
       await tx.studio_reminders.deleteMany({ where: { promise_id: promiseId } });
       await tx.studio_agenda.deleteMany({ where: { promise_id: promiseId } });
@@ -2168,16 +2178,6 @@ export async function cancelarPromise(
         }
       }
     });
-
-    const { logPromiseAction } = await import('./promise-logs.actions');
-    await logPromiseAction(
-      studioSlug,
-      promiseId,
-      'promise_canceled',
-      'user',
-      null,
-      { reason: motivo.trim() }
-    ).catch((err) => console.error('[PROMISES] Error registrando log de cancelación:', err));
 
     const updatedPromise = await prisma.studio_promises.findUnique({
       where: { id: promiseId },
@@ -2200,6 +2200,19 @@ export async function cancelarPromise(
     if (!contact) {
       return { success: false, error: 'Contacto no encontrado' };
     }
+
+    const reasonTrimmed = motivo.trim();
+    const promiseName = updatedPromise.name?.trim() || 'Sin nombre';
+    const contactName = contact.name?.trim() || 'Sin nombre';
+    const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+    await dispatchSystemEvent(promiseId, studioSlug, undefined, 'PROMISE_CANCELLED', {
+      promiseName,
+      contactName,
+      reason: reasonTrimmed || 'Sin motivo indicado',
+    });
+    const displayMessage = reasonTrimmed
+      ? `Se canceló la promesa '${promiseName}' del contacto ${contactName}. Motivo: ${reasonTrimmed}`
+      : `Se canceló la promesa '${promiseName}' del contacto ${contactName}. Motivo: Sin motivo indicado.`;
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
@@ -2241,7 +2254,7 @@ export async function cancelarPromise(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    return { success: true, data: promiseWithContact };
+    return { success: true, data: promiseWithContact, message: displayMessage };
   } catch (error) {
     console.error('[PROMISES] Error cancelando promesa:', error);
     return {
@@ -2325,15 +2338,6 @@ export async function restoreCanceledPromise(
       }
     });
 
-    const { logPromiseAction } = await import('./promise-logs.actions');
-    await logPromiseAction(
-      studioSlug,
-      promiseId,
-      'restored_from_canceled',
-      'user',
-      null
-    ).catch((err) => console.error('[PROMISES] Error registrando log de restauración:', err));
-
     const updatedPromise = await prisma.studio_promises.findUnique({
       where: { id: promiseId },
       include: {
@@ -2355,6 +2359,14 @@ export async function restoreCanceledPromise(
     if (!contact) {
       return { success: false, error: 'Contacto no encontrado' };
     }
+
+    const promiseNameRestore = updatedPromise.name?.trim() || 'Sin nombre';
+    const contactNameRestore = contact.name?.trim() || 'Sin nombre';
+    const { dispatchSystemEvent } = await import('@/lib/actions/system-events');
+    await dispatchSystemEvent(promiseId, studioSlug, undefined, 'PROMISE_RESTORED', {
+      promiseName: promiseNameRestore,
+      contactName: contactNameRestore,
+    });
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,

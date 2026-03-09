@@ -3093,6 +3093,17 @@ export async function autorizarYCrearEvento(
       console.error('[CIERRE] Error sincronizando pipeline al autorizar:', error);
     });
 
+    // Bitácora: promesa aprobada y evento generado (contexto EVENT)
+    const promiseNombreEvento = cotizacion.promise.event_name || cotizacion.promise.name || 'Evento';
+    const { createPromiseLog } = await import('./promise-logs.actions');
+    await createPromiseLog(studioSlug, {
+      promise_id: promiseId,
+      content: `Promesa aprobada. Se ha generado el registro de Evento para '${promiseNombreEvento}'.`,
+      log_type: 'system_event',
+      origin_context: 'EVENT',
+      metadata: { estado_anterior: 'en_cierre', estado_nuevo: 'approved', evento_id: result.evento_id },
+    }).catch((err) => console.error('[CIERRE] Error registrando log de aprobación:', err));
+
     // Listado Kanban, detalle y vista autorizada: forzar datos frescos tras cambio de estado crítico (cierre → autorizada)
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);

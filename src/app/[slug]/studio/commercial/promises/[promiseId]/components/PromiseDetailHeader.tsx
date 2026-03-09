@@ -8,6 +8,7 @@ import { PromiseDeleteModal } from '@/components/shared/promises';
 import { CancelPromiseModal } from '../../components/CancelPromiseModal';
 import { cancelarPromise } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
+import { getPromiseStageBadgeConfig } from '@/lib/utils/promise-stage-badge';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseDetailHeaderProps {
@@ -44,6 +45,8 @@ interface PromiseDetailHeaderProps {
     focusMode?: boolean;
     /** Abrir modal de opciones de automatización (se muestra a la izquierda del badge de etapa) */
     onAutomateClick?: () => void;
+    /** Si se setea (ej. 'archived'), el badge usa este estado de forma optimista antes de redirigir/refrescar */
+    optimisticStageSlug?: string | null;
 }
 
 export function PromiseDetailHeader({
@@ -69,6 +72,7 @@ export function PromiseDetailHeader({
     isDeleting,
     focusMode = false,
     onAutomateClick,
+    optimisticStageSlug = null,
 }: PromiseDetailHeaderProps) {
     const router = useRouter();
     const pathname = usePathname();
@@ -130,21 +134,23 @@ export function PromiseDetailHeader({
                 </div>
                 {/* Derecha: badge de etapa, Gestionar Evento, dropdown (Visualización y automatización dentro del menú) */}
                 <div className="flex items-center gap-3 ml-auto">
-                    {/* Badge de Seguimiento (estado) */}
-                    {!loading && pipelineStages.length > 0 && currentPipelineStageId && (() => {
-                        const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                        const isCanceledStage = currentStage?.slug === 'canceled' || currentStage?.slug === 'cancelado';
+                    {/* Badge de Seguimiento (estado) - mapeo homologado aprobada/cancelada/archivada/pendiente */}
+                    {!loading && pipelineStages.length > 0 && (optimisticStageSlug || currentPipelineStageId) && (() => {
+                        const effectiveStage = optimisticStageSlug
+                            ? pipelineStages.find((s) => {
+                                const alt = optimisticStageSlug === 'archived' ? 'archivado' : optimisticStageSlug === 'canceled' ? 'cancelado' : null;
+                                return s.slug === optimisticStageSlug || (alt !== null && s.slug === alt);
+                              })
+                            : pipelineStages.find((s) => s.id === currentPipelineStageId);
+                        const badgeConfig = effectiveStage
+                            ? getPromiseStageBadgeConfig(effectiveStage.slug, effectiveStage.name)
+                            : optimisticStageSlug
+                                ? getPromiseStageBadgeConfig(optimisticStageSlug)
+                                : null;
+                        if (!badgeConfig) return null;
                         return (
-                            <span
-                                title="Etapa actual del pipeline"
-                                className={
-                                    isCanceledStage
-                                        ? 'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium text-red-500 bg-red-500/10 border border-red-500/20'
-                                        : 'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                }
-                            >
-                                {isCanceledStage && <XCircle className="h-3.5 w-3.5 shrink-0" />}
-                                {currentStage?.name ?? '—'}
+                            <span title="Etapa actual del pipeline" className={badgeConfig.className}>
+                                {badgeConfig.label}
                             </span>
                         );
                     })()}
@@ -296,7 +302,8 @@ export function PromiseDetailHeader({
                     try {
                         const result = await cancelarPromise(studioSlug, promiseId, motivo);
                         if (result.success) {
-                            toast.success('Promesa cancelada');
+                            toast.success(result.message ?? 'Promesa cancelada');
+                            if (promiseId) window.dispatchEvent(new CustomEvent('promise-logs-invalidate', { detail: { promiseId } }));
                             onCancelSuccess?.();
                             setShowCancelModal(false);
                         } else {

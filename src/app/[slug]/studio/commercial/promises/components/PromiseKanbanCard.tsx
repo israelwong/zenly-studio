@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, MessageSquarePlus, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock, RotateCcw } from 'lucide-react';
+import { Calendar, MessageSquare, MessageSquarePlus, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
@@ -21,6 +21,7 @@ import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promise
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { createStageNameMap, getCotizacionStatusDisplayName, isTerminalStage, getTerminalColor } from '@/lib/utils/pipeline-stage-names';
+import { getPromiseStageBadgeConfig } from '@/lib/utils/promise-stage-badge';
 import { getPromisePath } from '@/lib/utils/promise-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 
@@ -389,9 +390,21 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                     </div>
                 )}
 
-                {/* Botones de Acciones - Esquina superior derecha */}
+                {/* Botones de Acciones - Esquina superior derecha (badge de estado a la izquierda del menú en compact) */}
                 {promise.promise_id && studioSlug && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20">
+                        {isCompact && (() => {
+                            const stageSlug = promise.promise_pipeline_stage?.slug;
+                            if (stageSlug && isTerminalStage(stageSlug)) {
+                                const badgeConfig = getPromiseStageBadgeConfig(stageSlug, promise.promise_pipeline_stage?.name, 'compact');
+                                return (
+                                    <span className={`shrink-0 ${badgeConfig.className}`}>
+                                        {badgeConfig.label}
+                                    </span>
+                                );
+                            }
+                            return null;
+                        })()}
                         {(isArchived || isCanceled) && (
                             <ZenDropdownMenu>
                                 <ZenDropdownMenuTrigger asChild>
@@ -441,98 +454,83 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             </ZenDropdownMenu>
                         )}
                         {!isArchived && !isClosing && (
-                            <>
-                                {isApprovedStage ? (
+                            <ZenDropdownMenu>
+                                <ZenDropdownMenuTrigger asChild>
                                     <button
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="p-1 rounded-md hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
+                                        title="Más opciones"
+                                        suppressHydrationWarning
+                                    >
+                                        <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                </ZenDropdownMenuTrigger>
+                                <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <ZenDropdownMenuItem
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleArchiveClick(e);
+                                            setShowQuickLogModal(true);
                                         }}
-                                        className="p-1 rounded-md bg-zinc-800/60 hover:bg-red-500/20 transition-colors text-zinc-400 hover:text-red-400 z-20"
-                                        title="Archivar promesa"
                                     >
-                                        <Archive className="h-3.5 w-3.5" />
-                                    </button>
-                                ) : (
-                                    <ZenDropdownMenu>
-                                        <ZenDropdownMenuTrigger asChild>
-                                            <button
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="p-1 rounded-md hover:bg-zinc-700/60 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
-                                                title="Más opciones"
-                                                suppressHydrationWarning
-                                            >
-                                                <MoreVertical className="h-3.5 w-3.5" />
-                                            </button>
-                                        </ZenDropdownMenuTrigger>
-                                        <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                        <MessageSquarePlus className="h-4 w-4 mr-2" />
+                                        Agregar nota
+                                    </ZenDropdownMenuItem>
+                                    {!reminder ? (
+                                        <ZenDropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowReminderModal(true);
+                                            }}
+                                        >
+                                            <Clock className="h-4 w-4 mr-2" />
+                                            Crear recordatorio
+                                        </ZenDropdownMenuItem>
+                                    ) : (
+                                        <>
                                             <ZenDropdownMenuItem
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setShowQuickLogModal(true);
+                                                    setShowReminderModal(true);
                                                 }}
                                             >
-                                                <MessageSquarePlus className="h-4 w-4 mr-2" />
-                                                Agregar nota
+                                                <Clock className="h-4 w-4 mr-2" />
+                                                Actualizar recordatorio
                                             </ZenDropdownMenuItem>
-                                            {!reminder ? (
-                                                <ZenDropdownMenuItem
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setShowReminderModal(true);
-                                                    }}
-                                                >
-                                                    <Clock className="h-4 w-4 mr-2" />
-                                                    Crear recordatorio
-                                                </ZenDropdownMenuItem>
-                                            ) : (
-                                                <>
-                                                    <ZenDropdownMenuItem
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setShowReminderModal(true);
-                                                        }}
-                                                    >
-                                                        <Clock className="h-4 w-4 mr-2" />
-                                                        Actualizar recordatorio
-                                                    </ZenDropdownMenuItem>
-                                                    <ZenDropdownMenuItem
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setShowDeleteReminderConfirm(true);
-                                                        }}
-                                                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
-                                                    >
-                                                        <Trash2 className="h-4 w-4 mr-2" />
-                                                        Eliminar recordatorio
-                                                    </ZenDropdownMenuItem>
-                                                </>
-                                            )}
-                                            <ZenDropdownMenuSeparator />
                                             <ZenDropdownMenuItem
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleArchiveClick(e);
-                                                }}
-                                            >
-                                                <Archive className="h-4 w-4 mr-2" />
-                                                Archivar
-                                            </ZenDropdownMenuItem>
-                                            <ZenDropdownMenuSeparator />
-                                            <ZenDropdownMenuItem
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowDeleteModal(true);
+                                                    setShowDeleteReminderConfirm(true);
                                                 }}
                                                 className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
                                             >
                                                 <Trash2 className="h-4 w-4 mr-2" />
-                                                Eliminar
+                                                Eliminar recordatorio
                                             </ZenDropdownMenuItem>
-                                        </ZenDropdownMenuContent>
-                                    </ZenDropdownMenu>
-                                )}
-                            </>
+                                        </>
+                                    )}
+                                    <ZenDropdownMenuSeparator />
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleArchiveClick(e);
+                                        }}
+                                    >
+                                        <Archive className="h-4 w-4 mr-2" />
+                                        Archivar
+                                    </ZenDropdownMenuItem>
+                                    <ZenDropdownMenuSeparator />
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowDeleteModal(true);
+                                        }}
+                                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Eliminar
+                                    </ZenDropdownMenuItem>
+                                </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
                         )}
                     </div>
                 )}
@@ -567,7 +565,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             </ZenAvatar>
                         )}
 
-                        <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-2.5">
                             <div className="flex items-center gap-2">
                                 <h3 className={`font-medium text-white leading-tight truncate ${isCompact ? 'text-xs' : 'text-sm'}`} title={promise.name}>{getDisplayName(promise.name)}</h3>
                                 {/* Indicador Publicado / No publicado (LED). Propiedad: isPublished = promise.published_at != null */}
@@ -596,13 +594,8 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                     <span className="truncate">{promise.event_type.name}</span>
                                 </div>
                             )}
-                            {isCompact && (promise.event_type || eventDate || isCanceled) && (
+                            {isCompact && (promise.event_type || eventDate) && (
                                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 truncate min-w-0 flex-wrap">
-                                    {isCanceled && (
-                                        <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-red-500 bg-red-500/10 border border-red-500/20 font-medium">
-                                            Cancelada
-                                        </span>
-                                    )}
                                     {promise.event_type && <span className="shrink-0 truncate">{promise.event_type.name}</span>}
                                     {promise.event_type && eventDate && <span className="shrink-0 opacity-60">·</span>}
                                     {eventDate && (
