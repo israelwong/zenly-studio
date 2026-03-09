@@ -49,8 +49,12 @@ export function PromiseLayoutClient({
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isRestoringCanceled, setIsRestoringCanceled] = useState(false);
 
   const isArchived = stateData.promiseData.pipeline_stage_slug === 'archived';
+  const isCanceled =
+    stateData.promiseData.pipeline_stage_slug === 'canceled' ||
+    stateData.promiseData.pipeline_stage_slug === 'cancelado';
 
   // Callback para manejar actualizaciones de contacto
   const handleContactUpdate = useCallback((updatedContact: {
@@ -211,6 +215,25 @@ export function PromiseLayoutClient({
     }
   };
 
+  const handleRestoreCanceled = async () => {
+    try {
+      setIsRestoringCanceled(true);
+      const { restoreCanceledPromise } = await import('@/lib/actions/studio/commercial/promises');
+      const result = await restoreCanceledPromise(studioSlug, promiseId);
+      if (result.success) {
+        toast.success('Promesa habilitada correctamente.');
+        startTransition(() => router.refresh());
+      } else {
+        toast.error(result.error || 'Error al restaurar promesa');
+      }
+    } catch (err) {
+      console.error('Error restaurando promesa cancelada:', err);
+      toast.error('Error al restaurar promesa');
+    } finally {
+      setIsRestoringCanceled(false);
+    }
+  };
+
   const handleDelete = async () => {
     try {
       const { deletePromise } = await import('@/lib/actions/studio/commercial/promises');
@@ -300,6 +323,7 @@ export function PromiseLayoutClient({
       isLoading={false}
       promiseState={stateData.state}
       cotizacionEnCierre={initialCotizacionEnCierre}
+      isCanceled={isCanceled}
     >
       <div
         className={
@@ -317,13 +341,15 @@ export function PromiseLayoutClient({
             promiseData={promiseDataForHeader}
             contactData={contactDataForHeader}
             isArchived={isArchived}
+            isCanceled={isCanceled}
             onPipelineStageChange={handlePipelineStageChange}
             onConfigClick={promisesConfig?.openConfigCatalog}
             onArchive={() => setShowArchiveModal(true)}
             onUnarchive={handleUnarchive}
+            onRestoreCanceled={handleRestoreCanceled}
             onDelete={handleDelete}
             isArchiving={isArchiving}
-            isUnarchiving={false}
+            isUnarchiving={isRestoringCanceled}
             isDeleting={false}
             focusMode={isFocusMode}
             onAutomateClick={
@@ -336,29 +362,29 @@ export function PromiseLayoutClient({
             }
           />
           {!isFocusMode && !isAutorizadaRoute && (
-          <PromiseDetailToolbar
-            studioSlug={studioSlug}
-            promiseId={promiseId}
-            contactData={{
-              contactId: contactDataForHeader.contactId,
-              contactName: promiseDataForHeader.name,
-              phone: promiseDataForHeader.phone,
-            }}
-            isPublished={!!stateData.promiseData.published_at}
-            onRequestPublish={() => {
-              setShareModalMode('publish');
-              setIsShareModalOpen(true);
-            }}
-            onUnpublishSuccess={() => {
-              startTransition(() => router.refresh());
-            }}
-            eventName={stateData.promiseData.event_type_name}
-            eventDate={stateData.promiseData.event_date}
-            onOpenAutomationOptions={() => {
-              setShareModalMode('default');
-              setIsShareModalOpen(true);
-            }}
-          />
+            <PromiseDetailToolbar
+              studioSlug={studioSlug}
+              promiseId={promiseId}
+              contactData={{
+                contactId: contactDataForHeader.contactId,
+                contactName: promiseDataForHeader.name,
+                phone: promiseDataForHeader.phone,
+              }}
+              isPublished={!!stateData.promiseData.published_at}
+              onRequestPublish={() => {
+                setShareModalMode('publish');
+                setIsShareModalOpen(true);
+              }}
+              onUnpublishSuccess={() => {
+                startTransition(() => router.refresh());
+              }}
+              eventName={stateData.promiseData.event_type_name}
+              eventDate={stateData.promiseData.event_date}
+              onOpenAutomationOptions={() => {
+                setShareModalMode('default');
+                setIsShareModalOpen(true);
+              }}
+            />
           )}
           <ZenCardContent
             className={isFocusMode ? 'p-0 min-h-[600px]' : 'p-6 min-h-[600px]'}

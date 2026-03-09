@@ -268,20 +268,33 @@ export async function autorizarCotizacionLegacy(
         }
       }
 
-      // 5. Registrar pago inicial si se solicitó
+      // 5. Registrar pago inicial si se solicitó (atómico con balance)
       if (validated.registrar_pago && validated.pago_data) {
+        const metodo = await tx.studio_metodos_pago.findFirst({
+          where: { id: validated.pago_data.payment_method_id, studio_id: studio.id },
+          select: { payment_method_name: true },
+        });
+        const metodoPagoNombre = metodo?.payment_method_name ?? 'Manual';
         await tx.studio_pagos.create({
           data: {
-            studio_id: studio.id,
             contact_id: contactId,
             evento_id: eventId,
             cotizacion_id: validated.cotizacion_id,
+            promise_id: validated.promise_id,
             amount: validated.pago_data.monto,
-            payment_method_id: validated.pago_data.payment_method_id,
+            metodo_pago_id: validated.pago_data.payment_method_id,
+            metodo_pago: metodoPagoNombre,
+            concept: validated.pago_data.concepto,
             payment_date: normalizePaymentDate(validated.pago_data.fecha),
             status: 'completed',
-            notes: validated.pago_data.concepto,
+            transaction_type: 'ingreso',
+            transaction_category: 'abono',
           },
+        });
+        const { incrementBalanceForIngreso } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+        await incrementBalanceForIngreso(tx, studio.id, validated.pago_data.monto, {
+          metodo_pago_id: validated.pago_data.payment_method_id,
+          metodo_pago: metodoPagoNombre,
         });
       }
 

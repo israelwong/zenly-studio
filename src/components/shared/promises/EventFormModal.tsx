@@ -11,7 +11,7 @@ import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, AlertCircle, X, Plus, Loader2 } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
-import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
+import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events-core.actions';
 import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact, checkPhoneExists } from '@/lib/actions/studio/commercial/contacts';
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';

@@ -124,8 +124,14 @@ export function RegistrarGastoRecurrenteModal({
         setTarjetasLoading(true);
         obtenerTarjetasCredito(studioSlug)
             .then((res) => {
-                if (res.success && res.data) setTarjetas(res.data);
-                else setTarjetas([]);
+                if (res.success && res.data) {
+                    setTarjetas(res.data);
+                    setCreditCardId((prev) => {
+                        if (prev && res.data!.some((c) => c.id === prev)) return prev;
+                        const defaultCard = res.data!.find((c) => c.is_default) ?? res.data![0];
+                        return defaultCard?.id ?? '';
+                    });
+                } else setTarjetas([]);
             })
             .finally(() => setTarjetasLoading(false));
     }, [isOpen, studioSlug, metodoPago]);
@@ -135,9 +141,11 @@ export function RegistrarGastoRecurrenteModal({
             obtenerTarjetasCredito(studioSlug).then((res) => {
                 if (res.success && res.data) {
                     setTarjetas(res.data);
-                    setCreditCardId((current) =>
-                        res.data!.some((c) => c.id === current) ? current : ''
-                    );
+                    setCreditCardId((current) => {
+                        if (current && res.data!.some((c) => c.id === current)) return current;
+                        const defaultCard = res.data!.find((c) => c.is_default) ?? res.data![0];
+                        return defaultCard?.id ?? '';
+                    });
                 }
             });
         };
@@ -390,7 +398,7 @@ export function RegistrarGastoRecurrenteModal({
                                 {metodoPago === 'credit_card' && (
                                     <div className="space-y-1.5 pt-3 w-full">
                                         <div className="flex items-center justify-between gap-2">
-                                            <label className="text-xs text-zinc-400">Tarjeta</label>
+                                            <label className="text-xs text-zinc-400">Tarjeta de Crédito</label>
                                             <ZenButton
                                                 type="button"
                                                 variant="ghost"
@@ -399,7 +407,7 @@ export function RegistrarGastoRecurrenteModal({
                                                 className="text-zinc-400 hover:text-zinc-200 -my-1 h-7 px-2 text-xs gap-1.5"
                                             >
                                                 <Settings className="h-3.5 w-3.5 shrink-0" />
-                                                Gestionar tarjetas
+                                                Gestionar tarjetas de crédito
                                             </ZenButton>
                                         </div>
                                         <Popover open={tarjetaPopoverOpen} onOpenChange={setTarjetaPopoverOpen}>
@@ -414,8 +422,8 @@ export function RegistrarGastoRecurrenteModal({
                                                 >
                                                     <span className="truncate">
                                                         {creditCardId
-                                                            ? tarjetas.find((t) => t.id === creditCardId)?.name ?? 'Seleccionar tarjeta'
-                                                            : 'Seleccionar tarjeta'}
+                                                            ? tarjetas.find((t) => t.id === creditCardId)?.name ?? 'Seleccionar tarjeta de crédito'
+                                                            : 'Seleccionar tarjeta de crédito'}
                                                     </span>
                                                     <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
                                                 </button>
@@ -427,7 +435,7 @@ export function RegistrarGastoRecurrenteModal({
                                                 <div className="max-h-[280px] overflow-y-auto py-1">
                                                     {tarjetas.length === 0 && !tarjetasLoading ? (
                                                         <p className="px-3 py-4 text-sm text-zinc-400 text-center">
-                                                            No hay tarjetas registradas
+                                                            No hay tarjetas de crédito registradas
                                                         </p>
                                                     ) : (
                                                         tarjetas.map((t) => (
@@ -460,7 +468,7 @@ export function RegistrarGastoRecurrenteModal({
                                                             className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                                                         >
                                                             <Plus className="h-4 w-4 shrink-0" />
-                                                            Añadir tarjeta
+                                                            Añadir tarjeta de crédito
                                                         </button>
                                                     </div>
                                                 </div>

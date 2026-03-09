@@ -18,6 +18,7 @@ import { generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent
 import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
 import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
+import { incrementBalanceForIngreso } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
 interface CierreResponse {
   success: boolean;
@@ -1498,128 +1499,133 @@ export async function actualizarPagoCierre(
       },
     });
 
-    // Visibilidad inmediata en Finanzas + split contable: si monto > A_req → anticipo + abono
+    // Visibilidad inmediata en Finanzas + split contable: si monto > A_req → anticipo + abono (atómico con balance)
     if (pagoConfirmadoEstudio && montoNum > 0 && cotizacion.promise_id) {
-      const precioBase = Number(cotizacion.price ?? 0);
-      const aReq = await getAnticipoRequeridoCierre(prisma, cotizacionId, precioBase, registro.condiciones_comerciales_id ?? undefined);
-      const contactId = cotizacion.contact_id ?? cotizacion.promise?.contact_id ?? null;
-      let metodoPagoNombre = 'Manual';
-      if (pagoData.metodo_id) {
-        const metodo = await prisma.studio_metodos_pago.findUnique({
-          where: { id: pagoData.metodo_id },
-          select: { payment_method_name: true },
+      await prisma.$transaction(async (tx) => {
+        const precioBase = Number(cotizacion.price ?? 0);
+        const aReq = await getAnticipoRequeridoCierre(tx, cotizacionId, precioBase, registro.condiciones_comerciales_id ?? undefined);
+        const contactId = cotizacion.contact_id ?? cotizacion.promise?.contact_id ?? null;
+        let metodoPagoNombre = 'Manual';
+        if (pagoData.metodo_id) {
+          const metodo = await tx.studio_metodos_pago.findUnique({
+            where: { id: pagoData.metodo_id },
+            select: { payment_method_name: true },
+          });
+          if (metodo) metodoPagoNombre = metodo.payment_method_name;
+        }
+        const paymentDate = pagoData.fecha ? new Date(pagoData.fecha) : new Date();
+        const eventTypeId = cotizacion.event_type_id ?? null;
+        const baseData = {
+          cotizacion_id: cotizacionId,
+          promise_id: cotizacion.promise_id,
+          contact_id: contactId,
+          payment_date: paymentDate,
+          metodo_pago_id: pagoData.metodo_id,
+          metodo_pago: metodoPagoNombre,
+          status: 'completed' as const,
+          transaction_type: 'ingreso' as const,
+          event_type_id: eventTypeId,
+        };
+
+        const existingAnticipo = await tx.studio_pagos.findFirst({
+          where: {
+            cotizacion_id: cotizacionId,
+            status: 'completed',
+            transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+          },
+          select: { id: true },
         });
-        if (metodo) metodoPagoNombre = metodo.payment_method_name;
-      }
-      const paymentDate = pagoData.fecha ? new Date(pagoData.fecha) : new Date();
-      const eventTypeId = cotizacion.event_type_id ?? null;
-      const baseData = {
-        cotizacion_id: cotizacionId,
-        promise_id: cotizacion.promise_id,
-        contact_id: contactId,
-        payment_date: paymentDate,
-        metodo_pago_id: pagoData.metodo_id,
-        metodo_pago: metodoPagoNombre,
-        status: 'completed' as const,
-        transaction_type: 'ingreso' as const,
-        event_type_id: eventTypeId,
-      };
+        const existingAbono = await tx.studio_pagos.findFirst({
+          where: {
+            cotizacion_id: cotizacionId,
+            status: 'completed',
+            transaction_category: TRANSACTION_CATEGORY.ABONO,
+          },
+          select: { id: true },
+        });
 
-      const existingAnticipo = await prisma.studio_pagos.findFirst({
-        where: {
-          cotizacion_id: cotizacionId,
-          status: 'completed',
-          transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
-        },
-        select: { id: true },
-      });
-      const existingAbono = await prisma.studio_pagos.findFirst({
-        where: {
-          cotizacion_id: cotizacionId,
-          status: 'completed',
-          transaction_category: TRANSACTION_CATEGORY.ABONO,
-        },
-        select: { id: true },
-      });
+        const inc = (amount: number) => incrementBalanceForIngreso(tx, studio.id, amount, { metodo_pago_id: pagoData.metodo_id, metodo_pago: metodoPagoNombre });
 
-      if (aReq > 0 && montoNum > aReq) {
-        // Split: anticipo A_req + abono (M_staff - A_req)
-        if (existingAnticipo) {
-          await prisma.studio_pagos.update({
-            where: { id: existingAnticipo.id },
-            data: {
-              amount: aReq,
-              concept: 'Anticipo',
-              payment_date: paymentDate,
-              metodo_pago_id: pagoData.metodo_id,
-              metodo_pago: metodoPagoNombre,
-              event_type_id: eventTypeId,
-              updated_at: new Date(),
-            },
-          });
+        if (aReq > 0 && montoNum > aReq) {
+          if (existingAnticipo) {
+            await tx.studio_pagos.update({
+              where: { id: existingAnticipo.id },
+              data: {
+                amount: aReq,
+                concept: 'Anticipo',
+                payment_date: paymentDate,
+                metodo_pago_id: pagoData.metodo_id,
+                metodo_pago: metodoPagoNombre,
+                event_type_id: eventTypeId,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: aReq,
+                concept: 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+            await inc(aReq);
+          }
+          const abonoAmount = montoNum - aReq;
+          if (existingAbono) {
+            await tx.studio_pagos.update({
+              where: { id: existingAbono.id },
+              data: {
+                amount: abonoAmount,
+                concept: 'Abono adicional',
+                payment_date: paymentDate,
+                metodo_pago_id: pagoData.metodo_id,
+                metodo_pago: metodoPagoNombre,
+                event_type_id: eventTypeId,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: abonoAmount,
+                concept: 'Abono adicional',
+                transaction_category: TRANSACTION_CATEGORY.ABONO,
+              },
+            });
+            await inc(abonoAmount);
+          }
         } else {
-          await prisma.studio_pagos.create({
-            data: {
-              ...baseData,
-              amount: aReq,
-              concept: 'Anticipo',
-              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
-            },
-          });
+          if (existingAnticipo) {
+            await tx.studio_pagos.update({
+              where: { id: existingAnticipo.id },
+              data: {
+                amount: montoNum,
+                concept: pagoData.concepto?.trim() || 'Anticipo',
+                payment_date: paymentDate,
+                metodo_pago_id: pagoData.metodo_id,
+                metodo_pago: metodoPagoNombre,
+                event_type_id: eventTypeId,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            await tx.studio_pagos.create({
+              data: {
+                ...baseData,
+                amount: montoNum,
+                concept: pagoData.concepto?.trim() || 'Anticipo',
+                transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+              },
+            });
+            await inc(montoNum);
+          }
+          if (existingAbono) {
+            await tx.studio_pagos.delete({ where: { id: existingAbono.id } });
+          }
         }
-        const abonoAmount = montoNum - aReq;
-        if (existingAbono) {
-          await prisma.studio_pagos.update({
-            where: { id: existingAbono.id },
-            data: {
-              amount: abonoAmount,
-              concept: 'Abono adicional',
-              payment_date: paymentDate,
-              metodo_pago_id: pagoData.metodo_id,
-              metodo_pago: metodoPagoNombre,
-              event_type_id: eventTypeId,
-              updated_at: new Date(),
-            },
-          });
-        } else {
-          await prisma.studio_pagos.create({
-            data: {
-              ...baseData,
-              amount: abonoAmount,
-              concept: 'Abono adicional',
-              transaction_category: TRANSACTION_CATEGORY.ABONO,
-            },
-          });
-        }
-      } else {
-        // Todo como anticipo; si había abono previo por split anterior, eliminamos o dejamos (mejor actualizar anticipo y borrar abono para mantener 1 línea)
-        if (existingAnticipo) {
-          await prisma.studio_pagos.update({
-            where: { id: existingAnticipo.id },
-            data: {
-              amount: montoNum,
-              concept: pagoData.concepto?.trim() || 'Anticipo',
-              payment_date: paymentDate,
-              metodo_pago_id: pagoData.metodo_id,
-              metodo_pago: metodoPagoNombre,
-              event_type_id: eventTypeId,
-              updated_at: new Date(),
-            },
-          });
-        } else {
-          await prisma.studio_pagos.create({
-            data: {
-              ...baseData,
-              amount: montoNum,
-              concept: pagoData.concepto?.trim() || 'Anticipo',
-              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
-            },
-          });
-        }
-        if (existingAbono) {
-          await prisma.studio_pagos.delete({ where: { id: existingAbono.id } });
-        }
-      }
+      });
     }
 
     // Sin revalidatePath: actualización local vía setPagoData en el cliente
@@ -1754,60 +1760,66 @@ export async function sincronizarPagosCierre(
     const eventTypeId = cotizacion.event_type_id ?? null;
     const totalMonto = items.reduce((s, i) => s + i.monto, 0);
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const concept = i === 0 ? 'Anticipo' : 'Abono adicional';
-      let metodoPagoNombre = 'Manual';
-      if (item.metodo_id) {
-        const metodo = await prisma.studio_metodos_pago.findUnique({
-          where: { id: item.metodo_id },
-          select: { payment_method_name: true },
-        });
-        if (metodo) metodoPagoNombre = metodo.payment_method_name;
-      }
-      const paymentDate = item.fecha ? new Date(item.fecha) : new Date();
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const concept = i === 0 ? 'Anticipo' : 'Abono adicional';
+        let metodoPagoNombre = 'Manual';
+        if (item.metodo_id) {
+          const metodo = await tx.studio_metodos_pago.findUnique({
+            where: { id: item.metodo_id },
+            select: { payment_method_name: true },
+          });
+          if (metodo) metodoPagoNombre = metodo.payment_method_name;
+        }
+        const paymentDate = item.fecha ? new Date(item.fecha) : new Date();
 
-      if (i < persistedIds.length) {
-        await prisma.studio_pagos.update({
-          where: { id: persistedIds[i] },
-          data: {
-            amount: item.monto,
-            concept: concept,
-            payment_date: paymentDate,
+        if (i < persistedIds.length) {
+          await tx.studio_pagos.update({
+            where: { id: persistedIds[i] },
+            data: {
+              amount: item.monto,
+              concept: concept,
+              payment_date: paymentDate,
+              metodo_pago_id: item.metodo_id,
+              metodo_pago: metodoPagoNombre,
+              event_type_id: eventTypeId,
+              updated_at: new Date(),
+            },
+          });
+        } else {
+          const transactionCategory = i === 0 ? TRANSACTION_CATEGORY.ANTICIPO : TRANSACTION_CATEGORY.ABONO;
+          await tx.studio_pagos.create({
+            data: {
+              cotizacion_id: cotizacionId,
+              promise_id,
+              contact_id,
+              amount: item.monto,
+              concept: concept,
+              payment_date: paymentDate,
+              metodo_pago_id: item.metodo_id,
+              metodo_pago: metodoPagoNombre,
+              status: 'completed',
+              transaction_type: 'ingreso',
+              transaction_category: transactionCategory,
+              event_type_id: eventTypeId,
+            },
+          });
+          await incrementBalanceForIngreso(tx, studio.id, item.monto, {
             metodo_pago_id: item.metodo_id,
             metodo_pago: metodoPagoNombre,
-            event_type_id: eventTypeId,
-            updated_at: new Date(),
-          },
-        });
-      } else {
-        const transactionCategory = i === 0 ? TRANSACTION_CATEGORY.ANTICIPO : TRANSACTION_CATEGORY.ABONO;
-        await prisma.studio_pagos.create({
-          data: {
-            cotizacion_id: cotizacionId,
-            promise_id,
-            contact_id,
-            amount: item.monto,
-            concept: concept,
-            payment_date: paymentDate,
-            metodo_pago_id: item.metodo_id,
-            metodo_pago: metodoPagoNombre,
-            status: 'completed',
-            transaction_type: 'ingreso',
-            transaction_category: transactionCategory,
-            event_type_id: eventTypeId,
-          },
+          });
+        }
+      }
+
+      const toDelete = persistedIds.slice(items.length);
+      if (toDelete.length > 0) {
+        await tx.studio_pagos.updateMany({
+          where: { id: { in: toDelete } },
+          data: { status: 'canceled', updated_at: new Date() },
         });
       }
-    }
-
-    const toDelete = persistedIds.slice(items.length);
-    if (toDelete.length > 0) {
-      await prisma.studio_pagos.updateMany({
-        where: { id: { in: toDelete } },
-        data: { status: 'canceled', updated_at: new Date() },
-      });
-    }
+    });
 
     const primerItem = items[0];
     await actualizarPagoCierre(studioSlug, cotizacionId, {
@@ -1943,8 +1955,15 @@ export async function registrarPagosCierreEnStudioPagos(
       };
     });
 
-    await prisma.studio_pagos.createMany({ data });
-    // Sin revalidatePath: la vista actualiza vía onSuccess + getPagosCierreByCotizacion en el cliente
+    await prisma.$transaction(async (tx) => {
+      await tx.studio_pagos.createMany({ data });
+      for (const item of data) {
+        await incrementBalanceForIngreso(tx, studio.id, item.amount, {
+          metodo_pago_id: item.metodo_pago_id,
+          metodo_pago: item.metodo_pago,
+        });
+      }
+    });
     return { success: true, data: { id: '', cotizacion_id: cotizacionId } };
   } catch (error) {
     console.error('[registrarPagosCierreEnStudioPagos] Error:', error);
@@ -2728,6 +2747,10 @@ export async function autorizarYCrearEvento(
               event_type_id: cotizacion.event_type_id ?? null,
             },
           });
+          await incrementBalanceForIngreso(tx, studio.id, pagoItem.monto, {
+            metodo_pago_id: pagoItem.metodoId ?? null,
+            metodo_pago: metodoPagoNombre,
+          });
         }
 
         pagoRegistrado = true;
@@ -2788,6 +2811,10 @@ export async function autorizarYCrearEvento(
                 transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
               },
             });
+            await incrementBalanceForIngreso(tx, studio.id, aReq, {
+              metodo_pago_id: registroCierre.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
+            });
             await tx.studio_pagos.create({
               data: {
                 ...baseData,
@@ -2795,6 +2822,10 @@ export async function autorizarYCrearEvento(
                 concept: 'Abono adicional',
                 transaction_category: TRANSACTION_CATEGORY.ABONO,
               },
+            });
+            await incrementBalanceForIngreso(tx, studio.id, montoDesdeRegistro - aReq, {
+              metodo_pago_id: registroCierre.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
             });
           } else {
             await tx.studio_pagos.create({
@@ -2804,6 +2835,10 @@ export async function autorizarYCrearEvento(
                 concept: 'Anticipo',
                 transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
               },
+            });
+            await incrementBalanceForIngreso(tx, studio.id, montoDesdeRegistro, {
+              metodo_pago_id: registroCierre.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
             });
           }
           pagoRegistrado = true;

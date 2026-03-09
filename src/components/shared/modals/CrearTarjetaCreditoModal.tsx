@@ -44,14 +44,14 @@ export function CrearTarjetaCreditoModal({
         try {
             const result = await crearTarjetaCredito(studioSlug, { name: trimmed });
             if (result.success && result.data?.id) {
-                toast.success('Tarjeta creada');
+                toast.success('Tarjeta de crédito creada');
                 onSuccess?.(result.data.id);
                 onClose();
             } else {
-                setError(result.error || 'Error al crear tarjeta');
+                setError(result.error || 'Error al crear tarjeta de crédito');
             }
         } catch (err) {
-            setError('Error al crear tarjeta');
+            setError('Error al crear tarjeta de crédito');
         } finally {
             setLoading(false);
         }
@@ -61,23 +61,23 @@ export function CrearTarjetaCreditoModal({
         <ZenDialog
             isOpen={isOpen}
             onClose={onClose}
-            title="Añadir nueva tarjeta"
-            description="Nombre de la tarjeta (ej. Nu, Banamex Platinum)"
+            title="Añadir nueva tarjeta de crédito"
+            description="Nombre de la tarjeta de crédito (ej. Banorte, Banamex, Nu)"
             onSave={handleSubmit}
             saveLabel="Crear"
             saveVariant="primary"
             isLoading={loading}
             onCancel={onClose}
             cancelLabel="Cancelar"
-            maxWidth="sm"
+            maxWidth="md"
             zIndex={zIndex}
         >
             <ZenInput
-                label="Nombre de la tarjeta"
+                label="Nombre de la tarjeta de crédito"
                 hint="Se usará internamente para fines contables"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ej: Nu, Banamex Platinum"
+                placeholder="ej. Banorte, Banamex, Nu"
                 required
                 error={error ?? undefined}
                 autoFocus

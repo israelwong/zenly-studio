@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, Suspense } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useState, useCallback, Suspense, startTransition } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { EventInfoCard } from '@/components/shared/promises';
 import { PromiseQuotesPanel } from './cotizaciones/PromiseQuotesPanel';
 import { PromisePublicConfigCard } from './PromisePublicConfigCard';
@@ -16,7 +18,7 @@ import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promis
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
-import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton } from '@/components/ui/zen';
 
 export interface PromisePendienteClientProps {
   initialCondicionesComerciales: Array<{
@@ -79,11 +81,13 @@ export function PromisePendienteClient({
   initialReminder,
 }: PromisePendienteClientProps) {
   const params = useParams();
+  const router = useRouter();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
-  const { promiseData: contextPromiseData } = usePromiseContext();
+  const { promiseData: contextPromiseData, isCanceled } = usePromiseContext();
 
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     name: string;
@@ -185,6 +189,26 @@ export function PromisePendienteClient({
     }
   }, []);
 
+  const handleRestoreCanceled = useCallback(async () => {
+    if (!studioSlug || !promiseId || isRestoring) return;
+    setIsRestoring(true);
+    try {
+      const { restoreCanceledPromise } = await import('@/lib/actions/studio/commercial/promises');
+      const result = await restoreCanceledPromise(studioSlug, promiseId);
+      if (result.success) {
+        toast.success('Promesa habilitada correctamente.');
+        startTransition(() => router.refresh());
+      } else {
+        toast.error(result.error || 'Error al restaurar promesa');
+      }
+    } catch (err) {
+      console.error('Error restaurando promesa cancelada:', err);
+      toast.error('Error al restaurar promesa');
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [studioSlug, promiseId, isRestoring]);
+
   const contactId = contextPromiseData?.contact_id || null;
   const eventoId = contextPromiseData?.evento_id || null;
 
@@ -195,6 +219,26 @@ export function PromisePendienteClient({
   return (
     <>
       <div className="space-y-6">
+        {/* Banner promesa cancelada */}
+        {isCanceled && (
+          <div className="w-full rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 flex flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <AlertCircle className="h-5 w-5 shrink-0 text-red-500" aria-hidden />
+              <p className="text-sm text-zinc-200">
+                Esta promesa se encuentra cancelada. Para volver a editarla o realizar movimientos, primero debes restaurarla.
+              </p>
+            </div>
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={handleRestoreCanceled}
+              disabled={isRestoring}
+              className="shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+            >
+              {isRestoring ? 'Restaurando...' : 'Restaurar promesa'}
+            </ZenButton>
+          </div>
+        )}
         {/* Layout de 3 columnas: Info+Etiquetas | Cotizaciones+Agenda | Bitácora+Config */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Columna 1: Información del contacto y evento */}
@@ -249,6 +293,7 @@ export function PromisePendienteClient({
               } : null}
               onEdit={() => setShowEditModal(true)}
               context="promise"
+              disableEdit={isCanceled}
             />
           </div>
 
@@ -272,19 +317,21 @@ export function PromisePendienteClient({
               isLoadingPromiseData={false}
               onAuthorizeClick={() => setShowAuthorizeModal(true)}
               initialCotizaciones={initialCotizaciones}
+              readOnly={isCanceled}
             />
           </div>
 
           {/* Columna 3: Recordatorio → Cita → Bitácora → Lo que el prospecto ve (colapsable) */}
           <div className="lg:col-span-1 flex flex-col gap-4">
-            <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} initialReminder={initialReminder} />
+            <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} initialReminder={initialReminder} readOnly={isCanceled} />
             <PromiseAppointmentCard
               studioSlug={studioSlug}
               promiseId={promiseId}
               eventoId={eventoId}
               initialAgendamiento={initialAgendamiento}
+              readOnly={isCanceled}
             />
-            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} context="PROMISE" initialLastLogs={initialLastLogs} />
+            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} context="PROMISE" initialLastLogs={initialLastLogs} readOnly={isCanceled} />
             {/* Oculto temporalmente: card "X ajustes activos" — descomentar para mostrar */}
             {false && (
               <Suspense fallback={<SidebarSkeleton />}>

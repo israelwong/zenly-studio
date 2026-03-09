@@ -56,6 +56,7 @@ import { calcularRentabilidadGlobal } from '@/lib/utils/negociacion-calc';
 import type { CotizacionItem } from '@/lib/utils/negociacion-calc';
 import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
 import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
+import { incrementBalanceForIngreso } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
 export interface CotizacionListItem {
   id: string;
@@ -4071,6 +4072,10 @@ export async function pasarACierre(
                 transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
               },
             });
+            await incrementBalanceForIngreso(tx, studio.id, aReq, {
+              metodo_pago_id: options?.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
+            });
             await tx.studio_pagos.create({
               data: {
                 ...baseData,
@@ -4078,6 +4083,10 @@ export async function pasarACierre(
                 concept: 'Abono adicional',
                 transaction_category: TRANSACTION_CATEGORY.ABONO,
               },
+            });
+            await incrementBalanceForIngreso(tx, studio.id, montoNum - aReq, {
+              metodo_pago_id: options?.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
             });
           } else {
             await tx.studio_pagos.create({
@@ -4087,6 +4096,10 @@ export async function pasarACierre(
                 concept: 'Anticipo',
                 transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
               },
+            });
+            await incrementBalanceForIngreso(tx, studio.id, montoNum, {
+              metodo_pago_id: options?.pago_metodo_id ?? null,
+              metodo_pago: metodoPagoNombre,
             });
           }
         }

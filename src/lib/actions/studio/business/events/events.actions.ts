@@ -1281,7 +1281,7 @@ export async function cancelarEvento(
     fundDestination?: 'retain' | 'refund';
   }
 ): Promise<CancelarEventoResponse> {
-  const targetStageSlug = options?.promiseTargetStageSlug ?? 'pending';
+  const targetStageSlug = options?.promiseTargetStageSlug ?? 'canceled';
   const cancelReason = options?.cancelReason?.trim() || null;
   const cancelRequestedBy = options?.cancelRequestedBy ?? null;
   const fundDestination = options?.fundDestination ?? 'retain';
@@ -1380,8 +1380,8 @@ export async function cancelarEvento(
       };
     }
 
-    // Obtener etapa destino del pipeline de promises (pending o canceled)
-    const etapaDestino = evento.promise_id
+    // Obtener etapa destino del pipeline (canceled → Historial; fallback pending si no existe canceled)
+    let etapaDestino = evento.promise_id
       ? await prisma.studio_promise_pipeline_stages.findFirst({
         where: {
           studio_id: studio.id,
@@ -1390,7 +1390,15 @@ export async function cancelarEvento(
         },
       })
       : null;
-
+    if (evento.promise_id && !etapaDestino && targetStageSlug === 'canceled') {
+      etapaDestino = await prisma.studio_promise_pipeline_stages.findFirst({
+        where: {
+          studio_id: studio.id,
+          slug: 'pending',
+          is_active: true,
+        },
+      });
+    }
     if (evento.promise_id && !etapaDestino) {
       return {
         success: false,

@@ -62,10 +62,12 @@ interface PromiseQuotesPanelCardProps {
   onNameUpdate?: (id: string, newName: string, newDescription?: string | null) => void;
   onPasarACierre?: (id: string) => void;
   onCierreCancelado?: (id: string) => void;
-  hasApprovedQuote?: boolean; // Indica si ya hay una cotización aprobada
-  selectionMode?: boolean; // Modo selección múltiple
-  isSelected?: boolean; // Si está seleccionada
-  onToggleSelect?: () => void; // Callback para toggle de selección
+  hasApprovedQuote?: boolean;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
+  /** Si true, oculta/deshabilita "Pasar a Cierre" (ej. promesa cancelada) */
+  readOnly?: boolean;
 }
 
 export function PromiseQuotesPanelCard({
@@ -90,6 +92,7 @@ export function PromiseQuotesPanelCard({
   selectionMode = false,
   isSelected = false,
   onToggleSelect,
+  readOnly = false,
 }: PromiseQuotesPanelCardProps) {
   const router = useRouter();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -859,7 +862,7 @@ export function PromiseQuotesPanelCard({
                             Archivar
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
-                          {!hasApprovedQuote && (
+                          {!hasApprovedQuote && !readOnly && (
                             <ZenDropdownMenuItem
                               onClick={handlePasarACierreClick}
                               disabled={loading || isDuplicating || !promiseId}
@@ -912,7 +915,7 @@ export function PromiseQuotesPanelCard({
                             Archivar
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
-                          {!hasApprovedQuote && (
+                          {!hasApprovedQuote && !readOnly && (
                             <ZenDropdownMenuItem
                               onClick={handlePasarACierreClick}
                               disabled={loading || isDuplicating || !promiseId}

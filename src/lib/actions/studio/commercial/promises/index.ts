@@ -6,6 +6,7 @@ export {
   movePromise,
   archivePromise,
   unarchivePromise,
+  restoreCanceledPromise,
   deletePromise,
   getPromiseDeletionInfo,
   setPromisePublished,

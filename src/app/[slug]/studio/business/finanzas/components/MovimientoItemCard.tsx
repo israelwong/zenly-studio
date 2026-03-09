@@ -352,11 +352,12 @@ export function MovimientoItemCard({
             <ZenCard
                 variant="default"
                 padding="sm"
-                className="hover:border-zinc-700 transition-colors cursor-pointer"
+                className="cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/40"
                 onClick={() => setShowDesgloseDialog(true)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesgloseDialog(true); } }}
                 role="button"
                 tabIndex={0}
+                aria-label={`Ver detalles de ${transaction.concepto}`}
             >
                 <ZenCardContent className="p-0">
                     <div className="flex items-center justify-between">
@@ -433,7 +434,7 @@ export function MovimientoItemCard({
                 onClose={() => setShowConfirmModal(false)}
                 onConfirm={handleConfirmCancel}
                 title="¿Estás seguro de cancelar el pago?"
-                description={`Esta acción cancelará el pago "${transaction.concepto}" por ${formatCurrency(Math.abs(transaction.monto))}. El pago se mantendrá en el historial con estado cancelado.`}
+                description={`Esta acción revertirá el pago "${transaction.concepto}" por ${formatCurrency(Math.abs(transaction.monto))}. El monto volverá a aparecer en Por cobrar.`}
                 confirmText="Sí, cancelar pago"
                 cancelText="No, mantener"
                 variant="destructive"

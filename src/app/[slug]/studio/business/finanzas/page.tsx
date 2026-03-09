@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { DollarSign, ChevronLeft, ChevronRight, Calendar, XCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { ZenCalendar } from '@/components/ui/zen';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -15,9 +16,12 @@ import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
 import { RecurrentePagoDetalleSheet } from './components/RecurrentePagoDetalleSheet';
 import { RegistrarGastoRecurrenteModal } from './components/RegistrarGastoRecurrenteModal';
+import { PagarTarjetaModal } from './components/PagarTarjetaModal';
+import { SaldoInicialModal } from './components/SaldoInicialModal';
 import { AuditoriaIntegridadSheet } from './components/AuditoriaIntegridadSheet';
 import { ToolbarFinanzas } from './components/ToolbarFinanzas';
 import { useHistorialSheet } from '@/app/[slug]/studio/components/context/HistorialSheetContext';
+import { toast } from 'sonner';
 import {
     obtenerKPIsFinancieros,
     obtenerMovimientos,
@@ -43,6 +47,7 @@ export default function FinanzasPage() {
     const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null);
     const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
     const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
+    const [showComoFuncionaModal, setShowComoFuncionaModal] = useState(false);
     const [tempRange, setTempRange] = useState<DateRange | undefined>(undefined);
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -55,6 +60,10 @@ export default function FinanzasPage() {
         ingresosPorCancelacion: undefined as number | undefined,
         efectivo: 0,
         bancos: 0,
+        flujoCajaTotal: 0,
+        flujoCajaEfectivo: 0,
+        flujoCajaBancos: 0,
+        deudaTarjetas: undefined as number | undefined,
         totalProductionCosts: undefined as number | undefined,
         totalOperatingExpenses: undefined as number | undefined,
         netProfitability: undefined as number | undefined,
@@ -107,6 +116,8 @@ export default function FinanzasPage() {
     const { openHistorial } = useHistorialSheet();
     const [recurrenteDetalle, setRecurrenteDetalle] = useState<{ id: string; name: string; amount: number } | null>(null);
     const [showNuevoRecurrenteModal, setShowNuevoRecurrenteModal] = useState(false);
+    const [showPagarTarjetaModal, setShowPagarTarjetaModal] = useState(false);
+    const [showSaldoInicialModal, setShowSaldoInicialModal] = useState(false);
 
     useEffect(() => {
         document.title = 'Zenly Studio - Finanzas';
@@ -194,8 +205,7 @@ export default function FinanzasPage() {
     }, [mounted, currentMonth, customRange, studioSlug]);
 
     const refetchData = useCallback(async () => {
-        if (!currentMonth) return;
-        const month = customRange ? customRange.from : currentMonth;
+        const month = customRange ? customRange.from : (currentMonth ?? new Date());
         const options = customRange ? { fromDate: customRange.from, toDate: customRange.to } : undefined;
         try {
             const [kpisResult, transactionsResult, porCobrarResult, porPagarResult, expensesResult] =
@@ -446,11 +456,38 @@ export default function FinanzasPage() {
                     </div>
                 </ZenCardHeader>
 
+                <Dialog open={showComoFuncionaModal} onOpenChange={setShowComoFuncionaModal}>
+                    <DialogContent className="sm:max-w-lg bg-zinc-900 border-zinc-700 text-zinc-200">
+                        <DialogHeader>
+                            <DialogTitle className="text-zinc-100">Guía rápida: Finanzas</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 text-sm">
+                            <section>
+                                <h4 className="font-semibold text-zinc-100 mb-1">Ingreso</h4>
+                                <p className="text-zinc-400">Dinero que entra al estudio: pagos de clientes (anticipos, abonos), ingresos manuales. Cada ingreso se asigna a un silo: <strong className="text-zinc-300">Efectivo</strong> (caja) o <strong className="text-zinc-300">cuenta bancaria</strong>, y actualiza el saldo en tiempo real.</p>
+                            </section>
+                            <section>
+                                <h4 className="font-semibold text-zinc-100 mb-1">Egreso</h4>
+                                <p className="text-zinc-400">Dinero que sale: gastos operativos, nóminas, gastos recurrentes (renta, suscripciones). Al confirmar un pago eliges de dónde sale: <strong className="text-zinc-300">Efectivo</strong>, <strong className="text-zinc-300">Transferencia</strong> (cuenta bancaria) o <strong className="text-zinc-300">Tarjeta de crédito</strong>.</p>
+                            </section>
+                            <section>
+                                <h4 className="font-semibold text-zinc-100 mb-1">Utilidad</h4>
+                                <p className="text-zinc-400">Lo que queda después de costos: <strong className="text-zinc-300">Ingresos − Costos − Gastos</strong> de los eventos del periodo. No es lo mismo que el flujo de caja: puedes tener utilidad y poco efectivo (o al revés) según cobros y pagos.</p>
+                            </section>
+                            <section>
+                                <h4 className="font-semibold text-zinc-100 mb-1">Saldos persistidos</h4>
+                                <p className="text-zinc-400">El <strong className="text-zinc-300">Flujo de Caja Total</strong> es la suma del dinero real en caja y en cada cuenta bancaria. Cada movimiento actualiza estos saldos de forma atómica. Puedes configurar un <strong className="text-zinc-300">saldo inicial</strong> si ya tenías dinero antes de usar el sistema.</p>
+                            </section>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
                 <ToolbarFinanzas
                     vistaActiva={finanzasTab}
                     onVistaChange={setFinanzasTab}
                     onHistorial={openHistorial}
                     onAuditoria={() => setAuditoriaOpen(true)}
+                    onComoFunciona={() => setShowComoFuncionaModal(true)}
                 />
 
                 <ZenCardContent className="p-6 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -651,6 +688,12 @@ export default function FinanzasPage() {
                                     ingresosPorCancelacion={kpis.ingresosPorCancelacion}
                                     efectivo={kpis.efectivo}
                                     bancos={kpis.bancos}
+                                    flujoCajaTotal={kpis.flujoCajaTotal}
+                                    flujoCajaEfectivo={kpis.flujoCajaEfectivo}
+                                    flujoCajaBancos={kpis.flujoCajaBancos}
+                                    deudaTarjetas={kpis.deudaTarjetas}
+                                    onPagarTarjeta={() => setShowPagarTarjetaModal(true)}
+                                    onConfigurarSaldoInicial={() => setShowSaldoInicialModal(true)}
                                     totalProductionCosts={kpis.totalProductionCosts}
                                     totalOperatingExpenses={kpis.totalOperatingExpenses}
                                     netProfitability={kpis.netProfitability}
@@ -677,12 +720,14 @@ export default function FinanzasPage() {
                                                 const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
                                                 const result = await cancelarPago(studioSlug, id);
                                                 if (!result.success) {
-                                                    console.error('Error cancelando pago:', result.error);
+                                                    toast.error(result.error ?? 'Error al revertir pago');
                                                     return;
                                                 }
+                                                toast.success('Pago revertido. El monto volvió a Por cobrar.');
                                                 await refetchData();
                                             } catch (error) {
                                                 console.error('Error cancelando pago:', error);
+                                                toast.error('Error al revertir pago');
                                             }
                                         }}
                                     />
@@ -726,6 +771,18 @@ export default function FinanzasPage() {
                                             setShowNuevoRecurrenteModal(false);
                                             await refetchData();
                                         }}
+                                    />
+                                    <PagarTarjetaModal
+                                        isOpen={showPagarTarjetaModal}
+                                        onClose={() => setShowPagarTarjetaModal(false)}
+                                        studioSlug={studioSlug}
+                                        onSuccess={refetchData}
+                                    />
+                                    <SaldoInicialModal
+                                        isOpen={showSaldoInicialModal}
+                                        onClose={() => setShowSaldoInicialModal(false)}
+                                        studioSlug={studioSlug}
+                                        onSuccess={refetchData}
                                     />
                                 </div>
 

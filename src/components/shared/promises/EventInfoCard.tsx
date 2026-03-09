@@ -97,6 +97,8 @@ interface EventInfoCardProps {
   onEdit?: () => void;
   onUpdated?: () => void;
   context?: 'promise' | 'event'; // Contexto para determinar qué mostrar
+  /** Si true, el botón Editar se deshabilita (ej. promesa cancelada) */
+  disableEdit?: boolean;
 }
 
 function PhoneActionsPopover({
@@ -411,6 +413,7 @@ export function EventInfoCard({
   onEdit,
   onUpdated,
   context = 'promise',
+  disableEdit = false,
 }: EventInfoCardProps) {
   const [showPromiseModal, setShowPromiseModal] = useState(false);
   const [contactData, setContactData] = useState(initialContactData);
@@ -641,7 +644,7 @@ export function EventInfoCard({
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
               Información
             </ZenCardTitle>
-            {(onEdit || (promiseId && promiseData)) && (
+            {(onEdit || (promiseId && promiseData)) && !disableEdit && (
               <ZenButton
                 variant="ghost"
                 size="sm"

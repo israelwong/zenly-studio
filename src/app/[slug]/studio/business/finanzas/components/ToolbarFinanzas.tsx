@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { History, ShieldAlert } from 'lucide-react';
+import { History, ShieldAlert, HelpCircle } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 
 export type VistaFinanzas = 'resumen' | 'rentabilidad';
@@ -11,6 +11,7 @@ interface ToolbarFinanzasProps {
   onVistaChange: (vista: VistaFinanzas) => void;
   onHistorial: () => void;
   onAuditoria: () => void;
+  onComoFunciona?: () => void;
 }
 
 export function ToolbarFinanzas({
@@ -18,6 +19,7 @@ export function ToolbarFinanzas({
   onVistaChange,
   onHistorial,
   onAuditoria,
+  onComoFunciona,
 }: ToolbarFinanzasProps) {
   return (
     <div className="flex items-center justify-between gap-2 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
@@ -47,8 +49,19 @@ export function ToolbarFinanzas({
         </button>
       </div>
 
-      {/* Historial y Auditoría a la derecha, ghost para no competir con las Tabs */}
+      {/* ¿Cómo funciona?, Historial y Auditoría a la derecha */}
       <div className="flex items-center gap-1.5">
+        {onComoFunciona && (
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={onComoFunciona}
+            icon={HelpCircle}
+            iconPosition="left"
+          >
+            ¿Cómo funciona?
+          </ZenButton>
+        )}
         <ZenButton
           variant="ghost"
           size="sm"

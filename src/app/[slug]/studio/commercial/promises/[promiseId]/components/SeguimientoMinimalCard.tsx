@@ -31,11 +31,12 @@ interface SeguimientoMinimalCardProps {
   studioSlug: string;
   promiseId: string;
   onSuccess?: () => void;
-  /** Datos iniciales del servidor. Si está definido (null o item), no se hace fetch en mount ni skeleton. */
   initialReminder?: Reminder | null;
+  /** Si true, deshabilita "Programar recordatorio" (ej. promesa cancelada) */
+  readOnly?: boolean;
 }
 
-export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initialReminder: initialReminderProp }: SeguimientoMinimalCardProps) {
+export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initialReminder: initialReminderProp, readOnly = false }: SeguimientoMinimalCardProps) {
   const hasInitial = initialReminderProp !== undefined;
   const [reminder, setReminder] = useState<Reminder | null>(hasInitial ? (initialReminderProp ?? null) : null);
   const [loading, setLoading] = useState(!hasInitial);
@@ -326,15 +327,15 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
 
   // Estado vacío compacto: sin recordatorio y formulario colapsado (y no en modo edición)
   if (!isFormVisible && !isEditing) {
-    const openForm = () => setIsFormVisible(true);
+    const openForm = () => !readOnly && setIsFormVisible(true);
     return (
-      <ZenCard variant="outlined" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 hover:border-zinc-600/60">
+      <ZenCard variant="outlined" className={cn("border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200", !readOnly && "hover:border-zinc-600/60")}>
         <ZenCardContent
-          className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0 cursor-pointer hover:bg-zinc-800/40"
-          role="button"
-          tabIndex={0}
+          className={cn("px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0", !readOnly && "cursor-pointer hover:bg-zinc-800/40")}
+          role={readOnly ? undefined : "button"}
+          tabIndex={readOnly ? undefined : 0}
           onClick={openForm}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openForm(); } }}
+          onKeyDown={readOnly ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openForm(); } }}
           aria-label="Programar recordatorio"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -343,17 +344,19 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess, initi
             </div>
             <p className="text-xs text-zinc-400 truncate">Programar recordatorio</p>
           </div>
-          <ZenButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
-            onClick={(e) => { e.stopPropagation(); openForm(); }}
-            title="Programar seguimiento"
-            aria-label="Programar seguimiento"
-          >
-            <span className="text-lg font-light leading-none">+</span>
-          </ZenButton>
+          {!readOnly && (
+            <ZenButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+              onClick={(e) => { e.stopPropagation(); openForm(); }}
+              title="Programar seguimiento"
+              aria-label="Programar seguimiento"
+            >
+              <span className="text-lg font-light leading-none">+</span>
+            </ZenButton>
+          )}
         </ZenCardContent>
       </ZenCard>
     );

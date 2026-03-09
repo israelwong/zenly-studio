@@ -31,6 +31,8 @@ interface ZenConfirmModalProps {
     zIndex?: number;
     /** Clase adicional para el contenido (ej. sm:max-w-xl para modal más ancho) */
     contentClassName?: string;
+    /** Si true, no muestra el banner del header (icono + título con borde); solo el description como contenido */
+    hideHeaderBanner?: boolean;
 }
 
 export function ZenConfirmModal({
@@ -49,6 +51,7 @@ export function ZenConfirmModal({
     hideConfirmButton = false,
     zIndex = 10300,
     contentClassName,
+    hideHeaderBanner = false,
 }: ZenConfirmModalProps) {
     const handleConfirm = () => {
         onConfirm();
@@ -73,6 +76,10 @@ export function ZenConfirmModal({
                 overlayZIndex={zIndex - 1}
             >
                 <DialogHeader className="space-y-0">
+                    {hideHeaderBanner && (
+                        <DialogTitle className="sr-only">{title}</DialogTitle>
+                    )}
+                    {!hideHeaderBanner && (
                     <div className={`flex items-start gap-4 p-4 border-l-4 ${variant === 'destructive' ? 'border-red-500/60 bg-red-950/20' : 'border-blue-500/60 bg-blue-950/20'}`}>
                         <div className={`shrink-0 p-2.5 border ${iconBg}`}>
                             <AlertTriangle className="h-5 w-5" strokeWidth={2} />
@@ -94,7 +101,8 @@ export function ZenConfirmModal({
                             )}
                         </div>
                     </div>
-                    <div className="px-4 pb-4 pt-3">
+                    )}
+                    <div className={hideHeaderBanner ? 'px-4 pb-4 pt-4' : 'px-4 pb-4 pt-3'}>
                         {headerDescription == null ? (
                             typeof description === 'string' ? (
                                 <DialogDescription className="text-zinc-300 text-sm leading-relaxed">

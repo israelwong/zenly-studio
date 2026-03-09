@@ -29,7 +29,7 @@ import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
 import { updatePipelineStage } from '@/lib/actions/studio/commercial/promises/promise-pipeline-stages.actions';
-import { movePromise } from '@/lib/actions/studio/commercial/promises';
+import { movePromise, restoreCanceledPromise } from '@/lib/actions/studio/commercial/promises';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
@@ -803,6 +803,52 @@ function PromisesKanban({
     }
   };
 
+  const handleRestoreCanceled = async (promiseId: string) => {
+    if (!studioSlug) return;
+    isDraggingRef.current = true;
+    const firstActiveStage = visibleStages.find((s) => s.id !== 'historial-virtual');
+    if (!firstActiveStage) {
+      toast.error('No hay etapa activa para restaurar');
+      isDraggingRef.current = false;
+      return;
+    }
+    const promise = localPromises.find((p) => p.promise_id === promiseId);
+    if (!promise?.promise_id) {
+      isDraggingRef.current = false;
+      return;
+    }
+    const previousStageId = promise.promise_pipeline_stage_id;
+    setLocalPromises((prev) =>
+      prev.map((p) =>
+        p.promise_id === promiseId
+          ? { ...p, promise_pipeline_stage_id: firstActiveStage.id, promise_pipeline_stage: firstActiveStage }
+          : p
+      )
+    );
+    try {
+      const result = await restoreCanceledPromise(studioSlug, promiseId);
+      if (!result.success) {
+        toast.error(result.error || 'Error al restaurar promesa');
+        setLocalPromises((prev) =>
+          prev.map((p) => (p.promise_id === promiseId ? { ...p, promise_pipeline_stage_id: previousStageId } : p))
+        );
+      } else {
+        toast.success('Promesa habilitada correctamente.');
+        onPromiseStageChanged?.(promiseId, firstActiveStage.id, firstActiveStage);
+      }
+    } catch (err) {
+      console.error('Error restaurando promesa cancelada:', err);
+      toast.error('Error al restaurar promesa');
+      setLocalPromises((prev) =>
+        prev.map((p) => (p.promise_id === promiseId ? { ...p, promise_pipeline_stage_id: previousStageId } : p))
+      );
+    } finally {
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 100);
+    }
+  };
+
   // ✅ FIX: Buscar promesa activa por promise_id (no contact_id)
   const activePromise = activeId
     ? localPromises.find((p: PromiseWithContact) => p.promise_id === activeId)
@@ -879,6 +925,7 @@ function PromisesKanban({
                 onPromiseArchived={handlePromiseArchived}
                 onPromiseDeleted={handlePromiseDeleted}
                 onPromiseRestored={handlePromiseRestored}
+                onRestoreCanceled={handleRestoreCanceled}
                 onPromiseUpdated={onPromiseUpdated}
                 pipelineStages={localPipelineStages}
                 onPipelineStagesUpdated={onPipelineStagesUpdated}
@@ -900,6 +947,7 @@ function PromisesKanban({
                   onPromiseArchived={handlePromiseArchived}
                   onPromiseDeleted={handlePromiseDeleted}
                   onPromiseRestored={handlePromiseRestored}
+                  onRestoreCanceled={handleRestoreCanceled}
                   onPromiseUpdated={onPromiseUpdated}
                   pipelineStages={localPipelineStages}
                   onPipelineStagesUpdated={onPipelineStagesUpdated}
@@ -963,6 +1011,7 @@ function KanbanColumn({
   onPromiseArchived,
   onPromiseDeleted,
   onPromiseRestored,
+  onRestoreCanceled,
   onPromiseUpdated,
   pipelineStages = [],
   onPipelineStagesUpdated,
@@ -977,6 +1026,7 @@ function KanbanColumn({
   onPromiseArchived?: (promiseId: string, archiveReason?: string) => void;
   onPromiseDeleted?: (promiseId: string) => void;
   onPromiseRestored?: (promiseId: string) => void;
+  onRestoreCanceled?: (promiseId: string) => void;
   onPromiseUpdated?: () => void;
   pipelineStages?: PipelineStage[];
   onPipelineStagesUpdated?: () => void;
@@ -1373,6 +1423,7 @@ function KanbanColumn({
                 onArchived={(reason) => promise.promise_id && onPromiseArchived?.(promise.promise_id, reason)}
                 onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
                 onRestore={() => promise.promise_id && onPromiseRestored?.(promise.promise_id)}
+                onRestoreCanceled={() => promise.promise_id && onRestoreCanceled?.(promise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
                 onReminderUpdated={onPromiseUpdated}
                 onUpdateLocalPromise={onUpdateLocalPromise}

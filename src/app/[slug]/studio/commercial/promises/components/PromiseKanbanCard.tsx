@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, MessageSquarePlus, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock } from 'lucide-react';
+import { Calendar, MessageSquare, MessageSquarePlus, Video, MapPin, FileText, Archive, ArchiveRestore, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Trash2, Clock, RotateCcw } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
@@ -31,6 +31,7 @@ interface PromiseKanbanCardProps {
     onArchived?: (archiveReason?: string) => void;
     onDeleted?: () => void;
     onRestore?: () => void;
+    onRestoreCanceled?: () => void;
     onTagsUpdated?: () => void;
     onReminderUpdated?: () => void;
     /** Actualización local de la promesa (ej. last_log tras agregar nota) para UI inmediata. */
@@ -39,7 +40,7 @@ interface PromiseKanbanCardProps {
     variant?: 'default' | 'compact';
 }
 
-export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onRestore, onTagsUpdated, onReminderUpdated, onUpdateLocalPromise, pipelineStages = [], variant = 'default' }: PromiseKanbanCardProps) {
+export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onDeleted, onRestore, onRestoreCanceled, onTagsUpdated, onReminderUpdated, onUpdateLocalPromise, pipelineStages = [], variant = 'default' }: PromiseKanbanCardProps) {
     // Crear mapa de nombres de stages para obtener nombres personalizados
     const stageNameMap = pipelineStages.length > 0 ? createStageNameMap(pipelineStages) : null;
     const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -201,6 +202,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
 
     // Verificar si la promesa está archivada (o en columna Historial)
     const isArchived = promise.promise_pipeline_stage?.slug === 'archived';
+    const isCanceled =
+      promise.promise_pipeline_stage?.slug === 'canceled' ||
+      promise.promise_pipeline_stage?.slug === 'cancelado';
     const isCompact = variant === 'compact' || isArchived;
 
     // Verificar si la etapa es aprobado
@@ -326,7 +330,10 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         ? "rounded-lg p-2.5 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit"
         : "rounded-lg p-4 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit";
 
-    if (tagColor) {
+    if (isCanceled && isCompact) {
+        cardStyles.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+        cardStyles.borderColor = 'rgba(239, 68, 68, 0.2)';
+    } else if (tagColor) {
         cardStyles.backgroundColor = `${tagColor}14`;
         cardStyles.borderColor = `${tagColor}33`;
     } else {
@@ -345,18 +352,25 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 onMouseDown={handleMouseDown}
                 onAuxClick={handleAuxClick}
                 data-id={promiseId}
-                className={tagColor
-                    ? baseClassName
-                    : `${baseClassName} bg-zinc-900 border-zinc-700 hover:border-zinc-600`
+                className={
+                    isCanceled && isCompact
+                        ? `${baseClassName} text-red-500 bg-red-500/10 border-red-500/20 hover:border-red-500/30`
+                        : tagColor
+                            ? baseClassName
+                            : `${baseClassName} bg-zinc-900 border-zinc-700 hover:border-zinc-600`
                 }
                 onMouseEnter={(e) => {
-                    if (tagColor) {
-                        e.currentTarget.style.borderColor = `${tagColor}4D`; // 30% en hover
+                    if (isCanceled && isCompact) {
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    } else if (tagColor) {
+                        e.currentTarget.style.borderColor = `${tagColor}4D`;
                     }
                 }}
                 onMouseLeave={(e) => {
-                    if (tagColor) {
-                        e.currentTarget.style.borderColor = `${tagColor}33`; // 20% normal
+                    if (isCanceled && isCompact) {
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                    } else if (tagColor) {
+                        e.currentTarget.style.borderColor = `${tagColor}33`;
                     }
                 }}
                 suppressHydrationWarning
@@ -378,7 +392,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 {/* Botones de Acciones - Esquina superior derecha */}
                 {promise.promise_id && studioSlug && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
-                        {isArchived && (
+                        {(isArchived || isCanceled) && (
                             <ZenDropdownMenu>
                                 <ZenDropdownMenuTrigger asChild>
                                     <button
@@ -391,15 +405,27 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                     </button>
                                 </ZenDropdownMenuTrigger>
                                 <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                    <ZenDropdownMenuItem
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onRestore?.();
-                                        }}
-                                    >
-                                        <ArchiveRestore className="h-4 w-4 mr-2" />
-                                        Desarchivar
-                                    </ZenDropdownMenuItem>
+                                    {isArchived ? (
+                                        <ZenDropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRestore?.();
+                                            }}
+                                        >
+                                            <ArchiveRestore className="h-4 w-4 mr-2" />
+                                            Desarchivar
+                                        </ZenDropdownMenuItem>
+                                    ) : isCanceled ? (
+                                        <ZenDropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRestoreCanceled?.();
+                                            }}
+                                        >
+                                            <RotateCcw className="h-4 w-4 mr-2" />
+                                            Restaurar promesa
+                                        </ZenDropdownMenuItem>
+                                    ) : null}
                                     <ZenDropdownMenuSeparator />
                                     <ZenDropdownMenuItem
                                         onClick={(e) => {
@@ -570,8 +596,13 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                     <span className="truncate">{promise.event_type.name}</span>
                                 </div>
                             )}
-                            {isCompact && (promise.event_type || eventDate) && (
-                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 truncate min-w-0">
+                            {isCompact && (promise.event_type || eventDate || isCanceled) && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 truncate min-w-0 flex-wrap">
+                                    {isCanceled && (
+                                        <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-red-500 bg-red-500/10 border border-red-500/20 font-medium">
+                                            Cancelada
+                                        </span>
+                                    )}
                                     {promise.event_type && <span className="shrink-0 truncate">{promise.event_type.name}</span>}
                                     {promise.event_type && eventDate && <span className="shrink-0 opacity-60">·</span>}
                                     {eventDate && (

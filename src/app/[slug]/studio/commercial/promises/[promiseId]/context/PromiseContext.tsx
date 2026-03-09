@@ -41,6 +41,8 @@ interface PromiseContextValue {
   promiseState: PromiseStateSegment | null;
   /** Cotización en cierre o aprobada sin evento (del layout, evita doble fetch en /cierre) */
   cotizacionEnCierre: CotizacionListItem | null;
+  /** Promesa cancelada: deshabilitar edición y guardado automático */
+  isCanceled: boolean;
 }
 
 const PromiseContext = createContext<PromiseContextValue>({
@@ -48,6 +50,7 @@ const PromiseContext = createContext<PromiseContextValue>({
   isLoading: true,
   promiseState: null,
   cotizacionEnCierre: null,
+  isCanceled: false,
 });
 
 export function PromiseProvider({
@@ -56,15 +59,17 @@ export function PromiseProvider({
   isLoading,
   promiseState = null,
   cotizacionEnCierre = null,
+  isCanceled = false,
 }: {
   children: React.ReactNode;
   promiseData: PromiseContextData | null;
   isLoading: boolean;
   promiseState?: PromiseStateSegment | null;
   cotizacionEnCierre?: CotizacionListItem | null;
+  isCanceled?: boolean;
 }) {
   return (
-    <PromiseContext.Provider value={{ promiseData, isLoading, promiseState, cotizacionEnCierre }}>
+    <PromiseContext.Provider value={{ promiseData, isLoading, promiseState, cotizacionEnCierre, isCanceled }}>
       {children}
     </PromiseContext.Provider>
   );

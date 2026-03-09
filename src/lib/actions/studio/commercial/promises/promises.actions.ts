@@ -2103,6 +2103,161 @@ export async function unarchivePromise(
 }
 
 /**
+ * Restaurar promesa cancelada: mover a etapa "Nuevo" (primera activa), quitar etiqueta Cancelada y registrar en bitácora.
+ */
+export async function restoreCanceledPromise(
+  studioSlug: string,
+  promiseId: string
+): Promise<PromiseResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { studio_id: true, pipeline_stage_id: true, notes: true },
+    });
+
+    if (!promise || promise.studio_id !== studio.id) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    const currentStage = await prisma.studio_promise_pipeline_stages.findUnique({
+      where: { id: promise.pipeline_stage_id || '' },
+      select: { slug: true },
+    });
+
+    const isCanceled =
+      currentStage?.slug === 'canceled' || currentStage?.slug === 'cancelado';
+    if (!isCanceled) {
+      return { success: false, error: 'La promesa no está cancelada' };
+    }
+
+    const firstActiveStage = await prisma.studio_promise_pipeline_stages.findFirst({
+      where: {
+        studio_id: studio.id,
+        is_active: true,
+        slug: { notIn: ['archived', 'canceled', 'cancelado'] },
+      },
+      orderBy: { order: 'asc' },
+    });
+
+    if (!firstActiveStage) {
+      return { success: false, error: 'No hay etapa activa disponible para restaurar' };
+    }
+
+    const canceladaTag = await prisma.studio_promise_tags.findFirst({
+      where: {
+        studio_id: studio.id,
+        OR: [{ slug: 'cancelada' }, { name: 'Cancelada' }],
+        is_active: true,
+      },
+      select: { id: true },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.studio_promises.update({
+        where: { id: promiseId },
+        data: { pipeline_stage_id: firstActiveStage.id },
+      });
+      if (canceladaTag) {
+        const rel = await tx.studio_promises_tags.findFirst({
+          where: { promise_id: promiseId, tag_id: canceladaTag.id },
+        });
+        if (rel) {
+          await tx.studio_promises_tags.delete({ where: { id: rel.id } });
+        }
+      }
+    });
+
+    const { logPromiseAction } = await import('./promise-logs.actions');
+    await logPromiseAction(
+      studioSlug,
+      promiseId,
+      'restored_from_canceled',
+      'user',
+      null
+    ).catch((err) => console.error('[PROMISES] Error registrando log de restauración:', err));
+
+    const updatedPromise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      include: {
+        event_type: { select: { id: true, name: true } },
+        pipeline_stage: {
+          select: { id: true, name: true, slug: true, color: true, order: true },
+        },
+      },
+    });
+
+    if (!updatedPromise) {
+      return { success: false, error: 'Error al obtener promesa actualizada' };
+    }
+
+    const contact = await prisma.studio_contacts.findUnique({
+      where: { id: updatedPromise.contact_id },
+    });
+
+    if (!contact) {
+      return { success: false, error: 'Contacto no encontrado' };
+    }
+
+    const promiseWithContact: PromiseWithContact = {
+      id: contact.id,
+      promise_id: updatedPromise.id,
+      studio_id: contact.studio_id,
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      address: contact.address || null,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
+      event_type_id: updatedPromise.event_type_id,
+      event_name: updatedPromise.name || null,
+      event_location: updatedPromise.event_location || null,
+      event_location_id: updatedPromise.event_location_id ?? null,
+      duration_hours: updatedPromise.duration_hours || null,
+      interested_dates: updatedPromise.tentative_dates
+        ? (updatedPromise.tentative_dates as string[])
+        : null,
+      event_date: updatedPromise.event_date
+        ? dateToDateOnlyString(updatedPromise.event_date)
+        : null,
+      defined_date: updatedPromise.defined_date
+        ? dateToDateOnlyString(updatedPromise.defined_date)
+        : null,
+      promise_pipeline_stage_id: updatedPromise.pipeline_stage_id,
+      is_test: updatedPromise.is_test || false,
+      acquisition_channel_id: contact.acquisition_channel_id,
+      social_network_id: contact.social_network_id,
+      referrer_contact_id: contact.referrer_contact_id,
+      referrer_name: contact.referrer_name,
+      notes: promise.notes,
+      created_at: contact.created_at,
+      updated_at: updatedPromise.updated_at,
+      event_type: updatedPromise.event_type || null,
+      promise_pipeline_stage: updatedPromise.pipeline_stage || null,
+      last_log: null,
+    };
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    return { success: true, data: promiseWithContact };
+  } catch (error) {
+    console.error('[PROMISES] Error restaurando promesa cancelada:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al restaurar promesa',
+    };
+  }
+}
+
+/**
  * Obtener información sobre qué se eliminará al borrar una promesa
  */
 export async function getPromiseDeletionInfo(

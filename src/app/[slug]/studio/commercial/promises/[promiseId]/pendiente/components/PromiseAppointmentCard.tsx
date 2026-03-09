@@ -29,8 +29,9 @@ interface PromiseAppointmentCardProps {
   studioSlug: string;
   promiseId: string;
   eventoId?: string | null;
-  /** Datos iniciales del servidor. Si está definido (null o item), no se hace fetch en mount ni skeleton. */
   initialAgendamiento?: AgendaItem | null;
+  /** Si true, deshabilita "Agendar cita" (ej. promesa cancelada) */
+  readOnly?: boolean;
 }
 
 export function PromiseAppointmentCard({
@@ -38,6 +39,7 @@ export function PromiseAppointmentCard({
   promiseId,
   eventoId,
   initialAgendamiento: initialAgendamientoProp,
+  readOnly = false,
 }: PromiseAppointmentCardProps) {
   const router = useRouter();
   const hasInitial = initialAgendamientoProp !== undefined;
@@ -201,15 +203,15 @@ export function PromiseAppointmentCard({
 
   // Estado vacío compacto (mismo diseño que recordatorio)
   if (!hasAgenda && !editMode && !isFormVisible) {
-    const openForm = () => setIsFormVisible(true);
+    const openForm = () => !readOnly && setIsFormVisible(true);
     return (
-      <ZenCard variant="outlined" className="border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200 hover:border-zinc-600/60">
+      <ZenCard variant="outlined" className={cn("border border-dashed border-zinc-700/80 bg-zinc-900/30 transition-all duration-200", !readOnly && "hover:border-zinc-600/60")}>
         <ZenCardContent
-          className="px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0 cursor-pointer hover:bg-zinc-800/40"
-          role="button"
-          tabIndex={0}
+          className={cn("px-4 py-3 flex flex-row items-center justify-between gap-3 min-h-0", !readOnly && "cursor-pointer hover:bg-zinc-800/40")}
+          role={readOnly ? undefined : "button"}
+          tabIndex={readOnly ? undefined : 0}
           onClick={openForm}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openForm(); } }}
+          onKeyDown={readOnly ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openForm(); } }}
           aria-label="Agendar cita"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -218,17 +220,19 @@ export function PromiseAppointmentCard({
             </div>
             <p className="text-xs text-zinc-400 truncate">Agendar cita</p>
           </div>
-          <ZenButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
-            onClick={(e) => { e.stopPropagation(); openForm(); }}
-            title="Crear agendamiento"
-            aria-label="Crear agendamiento"
-          >
-            <span className="text-lg font-light leading-none">+</span>
-          </ZenButton>
+          {!readOnly && (
+            <ZenButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 shrink-0 p-0 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+              onClick={(e) => { e.stopPropagation(); openForm(); }}
+              title="Crear agendamiento"
+              aria-label="Crear agendamiento"
+            >
+              <span className="text-lg font-light leading-none">+</span>
+            </ZenButton>
+          )}
         </ZenCardContent>
       </ZenCard>
     );
@@ -241,7 +245,7 @@ export function PromiseAppointmentCard({
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between gap-2">
             <ZenCardTitle className="text-sm font-medium">Cita comercial</ZenCardTitle>
-            {!isDisabled && (
+            {!isDisabled && !readOnly && (
               <div className="flex items-center gap-1 shrink-0">
                 <ZenButton
                   variant="ghost"

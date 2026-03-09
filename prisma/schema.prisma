@@ -805,6 +805,7 @@ model studios {
   cotizaciones                                    studio_cotizaciones[]
   credit_cards                                    studio_credit_cards[]
   credit_card_payments                            studio_credit_card_payments[]
+  cash_box                                        studio_cash_box?
   crew_members                                    studio_crew_members[]
   crew_skills                                     studio_crew_skills[]
   event_contracts                                 studio_event_contracts[]
@@ -2650,10 +2651,23 @@ model studio_metodos_pago {
   cuenta_clabe                        String?
   is_manual                           Boolean                                      @default(true)
   available_for_quotes                Boolean                                      @default(false)
+  current_balance                     Decimal                                      @default(0) @db.Decimal(12, 2)
   condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
   condiciones_comerciales_negociacion studio_condiciones_comerciales_negociacion[]
   studio                              studios                                      @relation(fields: [studio_id], references: [id])
   pagos                               studio_pagos[]
+  gastos                              studio_gastos[]
+
+  @@index([studio_id])
+}
+
+model studio_cash_box {
+  id        String   @id @default(cuid())
+  studio_id String   @unique
+  balance   Decimal  @default(0) @db.Decimal(12, 2)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  studio    studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@index([studio_id])
 }
@@ -2776,19 +2790,22 @@ model studio_nomina_pagos_parciales {
 }
 
 model studio_credit_cards {
-  id        String    @id @default(cuid())
-  studio_id String
-  name      String
-  balance   Decimal   @default(0) @db.Decimal(12, 2)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  studio    studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  payments  studio_credit_card_payments[]
-  gastos    studio_gastos[]
+  id         String    @id @default(cuid())
+  studio_id  String
+  name       String
+  balance    Decimal   @default(0) @db.Decimal(12, 2)
+  is_default Boolean   @default(false)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+  studio     studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  payments   studio_credit_card_payments[]
+  gastos     studio_gastos[]
   recurring_expenses studio_recurring_expenses[]
   crew_members_salary_card studio_crew_members[]
 
   @@index([studio_id])
+  @@index([studio_id, deleted_at])
 }
 
 model studio_credit_card_payments {
@@ -2820,24 +2837,28 @@ model studio_gastos {
   description    String?
   invoice_date   DateTime?
   invoice_number String?
-  payment_method String?
-  receipt_url    String?
-  subcategory    String?
-  supplier       String?
-  user_id        String
-  personal_id    String?
-  credit_card_id String?
-  eventos        studio_events?       @relation(fields: [evento_id], references: [id])
+  payment_method       String?
+  payment_source_name  String?
+  receipt_url          String?
+  subcategory          String?
+  supplier             String?
+  user_id              String
+  personal_id          String?
+  credit_card_id       String?
+  metodo_pago_id       String?
+  eventos              studio_events?       @relation(fields: [evento_id], references: [id])
   personal       studio_crew_members? @relation(fields: [personal_id], references: [id])
   studio         studios              @relation(fields: [studio_id], references: [id])
   user           studio_users         @relation(fields: [user_id], references: [id])
   credit_card    studio_credit_cards? @relation(fields: [credit_card_id], references: [id], onDelete: SetNull)
+  metodos_pago   studio_metodos_pago? @relation(fields: [metodo_pago_id], references: [id], onDelete: SetNull)
 
   @@index([evento_id])
   @@index([date, category])
   @@index([studio_id])
   @@index([personal_id])
   @@index([credit_card_id])
+  @@index([metodo_pago_id])
 }
 
 model studio_recurring_expenses {

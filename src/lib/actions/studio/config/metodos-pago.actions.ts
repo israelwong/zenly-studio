@@ -25,7 +25,10 @@ export async function obtenerMetodosPago(studioSlug: string) {
 
         return {
             success: true,
-            data: metodos,
+            data: metodos.map((m) => ({
+                ...m,
+                current_balance: Number(m.current_balance ?? 0),
+            })),
         };
     } catch (error) {
         console.error("Error al obtener métodos de pago:", error);
@@ -61,7 +64,10 @@ export async function obtenerMetodoPago(studioSlug: string, metodoId: string) {
 
         return {
             success: true,
-            data: metodo,
+            data: {
+                ...metodo,
+                current_balance: Number(metodo.current_balance ?? 0),
+            },
         };
     } catch (error) {
         console.error("Error al obtener método de pago:", error);
@@ -296,7 +302,10 @@ export async function obtenerMetodosPagoManuales(studioSlug: string) {
 
         return {
             success: true,
-            data: metodosDisponibles,
+            data: metodosDisponibles.map((m) => ({
+                ...m,
+                current_balance: Number(m.current_balance ?? 0),
+            })),
         };
     } catch (error) {
         console.error("Error al obtener métodos de pago manuales:", error);
@@ -339,7 +348,10 @@ export async function obtenerMetodosPagoParaCotizaciones(studioSlug: string) {
 
         return {
             success: true,
-            data: metodosDisponibles,
+            data: metodosDisponibles.map((m) => ({
+                ...m,
+                current_balance: Number(m.current_balance ?? 0),
+            })),
         };
     } catch (error) {
         console.error("Error al obtener métodos de pago para cotizaciones:", error);

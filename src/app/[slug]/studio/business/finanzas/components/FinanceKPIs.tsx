@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import { ArrowUp, ArrowDown, Building2, Banknote, DollarSign, BarChart3, Info } from 'lucide-react';
+import { ArrowUp, ArrowDown, Building2, Banknote, DollarSign, BarChart3, Info, CreditCard } from 'lucide-react';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { cn } from '@/lib/utils';
 import type { RentabilidadPorEvento } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
@@ -17,9 +18,21 @@ interface FinanceKPIsProps {
     porPagar: number;
     /** Ingresos por cancelación (retained_by_cancellation) — desglose visual dentro del total */
     ingresosPorCancelacion?: number;
-    /** Disponibilidad: efectivo (caja) y bancos (SPEI/transferencia) del mes */
+    /** Disponibilidad del mes: efectivo (caja) y bancos por método de pago (desglose) */
     efectivo?: number;
     bancos?: number;
+    /** Flujo de caja total: saldos persistidos en caja + cuentas bancarias (dinero real en cuenta) */
+    flujoCajaTotal?: number;
+    /** Saldo en caja (efectivo) para badges. */
+    flujoCajaEfectivo?: number;
+    /** Saldo en bancos para badges. */
+    flujoCajaBancos?: number;
+    /** Deuda total en tarjetas de crédito (suma de saldos negativos) */
+    deudaTarjetas?: number;
+    /** Callback para abrir modal Pagar Tarjeta */
+    onPagarTarjeta?: () => void;
+    /** Callback para abrir modal Configurar saldo inicial */
+    onConfigurarSaldoInicial?: () => void;
     totalProductionCosts?: number;
     totalOperatingExpenses?: number;
     netProfitability?: number;
@@ -37,6 +50,12 @@ export function FinanceKPIs({
     ingresosPorCancelacion,
     efectivo = 0,
     bancos = 0,
+    flujoCajaTotal,
+    flujoCajaEfectivo,
+    flujoCajaBancos,
+    deudaTarjetas,
+    onPagarTarjeta,
+    onConfigurarSaldoInicial,
     totalProductionCosts,
     totalOperatingExpenses,
     netProfitability,
@@ -52,21 +71,34 @@ export function FinanceKPIs({
 
     const costoOperacion = (totalProductionCosts ?? 0) + (totalOperatingExpenses ?? 0);
 
-    const totalDisponible = efectivo + bancos;
-    const netoProyectado = porCobrar - porPagar;
+    const totalDisponible = flujoCajaTotal ?? (efectivo + bancos);
     const defaultBalanceLabel = `Balance de ${new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
     const labelBalance = balanceLabel ?? defaultBalanceLabel;
 
     return (
         <div className="space-y-6">
-            {/* Fila superior: 3 tarjetas de alta densidad */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Fila superior: Balance del Mes + Flujo de Caja Total (equilibrado) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Balance del mes (ingresos - egresos con desglose) */}
                 <ZenCard variant="default" padding="md">
                     <ZenCardContent className="p-0">
                         <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm text-zinc-400 mb-1">{labelBalance}</p>
+                                <div className="flex items-center gap-1 mb-1">
+                                    <p className="text-sm text-zinc-400">{labelBalance}</p>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 cursor-help p-0.5 rounded" aria-label="Ayuda">
+                                                <Info className="h-3.5 w-3.5 shrink-0" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-700 text-zinc-200 text-xs" align="start">
+                                            <p className="font-medium text-zinc-100 mb-1">Balance del periodo</p>
+                                            <p className="mb-2">Es el resultado de <strong>Ingresos − Egresos</strong> en el mes o rango seleccionado. Te dice si el estudio ganó o perdió dinero en ese lapso.</p>
+                                            <p className="text-zinc-400">Incluye pagos de clientes (ingresos) y gastos, nóminas y recurrentes (egresos) con fecha en el periodo.</p>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
                                 <p
                                     className={cn(
                                         'text-2xl font-bold',
@@ -109,32 +141,49 @@ export function FinanceKPIs({
                     </ZenCardContent>
                 </ZenCard>
 
-                {/* 2. Disponibilidad (Total = Efectivo + Bancos, desglose en footer) */}
+                {/* 2. Flujo de Caja Total (saldos persistidos: dinero en cuenta) */}
                 <ZenCard variant="default" padding="md">
                     <ZenCardContent className="p-0">
                         <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm text-zinc-400 mb-1">Disponibilidad Actual</p>
+                                <div className="flex items-center gap-1 mb-1">
+                                    <p className="text-sm text-zinc-400">Flujo de Caja Total</p>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 cursor-help p-0.5 rounded" aria-label="Ayuda">
+                                                <Info className="h-3.5 w-3.5 shrink-0" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72 p-3 bg-zinc-900 border-zinc-700 text-zinc-200 text-xs" align="start">
+                                            <p className="font-medium text-zinc-100 mb-1">Flujo de Caja Total</p>
+                                            <p className="mb-2">Es el <strong>dinero real</strong> que tienes disponible: suma del saldo en <strong>caja (efectivo)</strong> y de cada <strong>cuenta bancaria</strong> activa.</p>
+                                            <p className="text-zinc-400">No incluye por cobrar ni por pagar; solo el dinero físico en caja y bancos. Cada ingreso o egreso actualiza estos saldos al momento.</p>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
                                 <p className="text-2xl font-bold text-zinc-200">
                                     {formatCurrency(totalDisponible)}
+                                </p>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    Dinero en caja y cuentas bancarias
                                 </p>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-amber-400">
                                                 <Banknote className="h-3.5 w-3.5 shrink-0" />
-                                                {formatCurrency(efectivo)}
+                                                {formatCurrency(flujoCajaEfectivo ?? 0)}
                                             </span>
                                         </TooltipTrigger>
                                         <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                                            Efectivo (caja)
+                                            Efectivo
                                         </TooltipContent>
                                     </Tooltip>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-blue-400">
                                                 <Building2 className="h-3.5 w-3.5 shrink-0" />
-                                                {formatCurrency(bancos)}
+                                                {formatCurrency(flujoCajaBancos ?? 0)}
                                             </span>
                                         </TooltipTrigger>
                                         <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
@@ -142,65 +191,50 @@ export function FinanceKPIs({
                                         </TooltipContent>
                                     </Tooltip>
                                 </div>
+                                {onConfigurarSaldoInicial && (
+                                    <button
+                                        type="button"
+                                        onClick={onConfigurarSaldoInicial}
+                                        className="mt-2 text-xs font-medium text-emerald-400 hover:text-emerald-300"
+                                    >
+                                        Configurar saldo inicial
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </ZenCardContent>
                 </ZenCard>
 
-                {/* 3. Estado de Salud Global (Neto = Por Cobrar - Por Pagar) */}
-                <ZenCard variant="default" padding="md">
-                    <ZenCardContent className="p-0">
-                        <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm text-zinc-400 mb-1 flex items-center gap-1">
-                                    Estado de Salud Global
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex text-zinc-500 hover:text-zinc-400 cursor-help">
-                                                <Info className="h-3.5 w-3.5" />
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="max-w-[240px] bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                                            Total por cobrar vs. Total por pagar histórico
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </p>
-                                <p
-                                    className={cn(
-                                        'text-2xl font-bold',
-                                        netoProyectado >= 0 ? 'text-emerald-500' : 'text-red-500'
+                {/* Deuda en tarjetas (solo si hay deuda): segunda fila */}
+                {(deudaTarjetas != null && deudaTarjetas < 0) && (
+                    <ZenCard variant="default" padding="md">
+                        <ZenCardContent className="p-0">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-zinc-400 mb-1">Deuda en tarjetas de crédito</p>
+                                    <p className="text-2xl font-bold text-rose-400">
+                                        {formatCurrency(Math.abs(deudaTarjetas))}
+                                    </p>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-rose-400">
+                                            <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                                            Tarjetas de crédito
+                                        </span>
+                                    </div>
+                                    {onPagarTarjeta && (
+                                        <button
+                                            type="button"
+                                            onClick={onPagarTarjeta}
+                                            className="mt-3 text-xs font-medium text-emerald-400 hover:text-emerald-300"
+                                        >
+                                            Pagar tarjeta de crédito
+                                        </button>
                                     )}
-                                >
-                                    {formatCurrency(netoProyectado)}
-                                </p>
-                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-emerald-400">
-                                                <ArrowUp className="h-3.5 w-3.5 shrink-0" />
-                                                {formatCurrency(porCobrar)}
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                                            Por Cobrar
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800/50 rounded text-sm text-red-400">
-                                                <ArrowDown className="h-3.5 w-3.5 shrink-0" />
-                                                {formatCurrency(porPagar)}
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                                            Por Pagar
-                                        </TooltipContent>
-                                    </Tooltip>
                                 </div>
                             </div>
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
+                        </ZenCardContent>
+                    </ZenCard>
+                )}
             </div>
 
             {/* Segunda fila: tarjetas solo para owners */}
@@ -226,12 +260,12 @@ export function FinanceKPIs({
                         </ZenCardContent>
                     </ZenCard>
 
-                    {/* Utilidad Real Estimada */}
+                    {/* Utilidad Neta (precio servicio vs costos de eventos) */}
                     <ZenCard variant="default" padding="md">
                         <ZenCardContent className="p-0">
                             <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                    <p className="text-sm text-zinc-400 mb-1">Utilidad Real Estimada</p>
+                                    <p className="text-sm text-zinc-400 mb-1">Utilidad Neta</p>
                                     <p className={cn(
                                         'text-2xl font-bold',
                                         (netProfitability ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -239,7 +273,7 @@ export function FinanceKPIs({
                                         {formatCurrency(netProfitability ?? 0)}
                                     </p>
                                     <p className="text-xs text-zinc-500 mt-1">
-                                        Ingresos - Costos - Gastos
+                                        Ingresos − Costos − Gastos (eventos del periodo)
                                     </p>
                                 </div>
                                 <div className={cn(

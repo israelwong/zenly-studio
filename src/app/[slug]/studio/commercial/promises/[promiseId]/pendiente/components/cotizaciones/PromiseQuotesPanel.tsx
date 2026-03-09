@@ -64,6 +64,8 @@ interface PromiseQuotesPanelProps {
   isLoadingPromiseData?: boolean;
   onAuthorizeClick?: () => void;
   initialCotizaciones?: CotizacionListItem[]; // ✅ OPTIMIZACIÓN: Datos iniciales del servidor
+  /** Si true, deshabilita Seleccionar y botón + (ej. promesa cancelada) */
+  readOnly?: boolean;
 }
 
 export function PromiseQuotesPanel({
@@ -75,7 +77,8 @@ export function PromiseQuotesPanel({
   promiseData,
   isLoadingPromiseData = false,
   onAuthorizeClick,
-  initialCotizaciones = [], // ✅ OPTIMIZACIÓN: Usar datos iniciales del servidor
+  initialCotizaciones = [],
+  readOnly = false,
 }: PromiseQuotesPanelProps) {
   const router = useRouter();
   const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null; visibility?: string }>>([]);
@@ -747,6 +750,7 @@ export function PromiseQuotesPanel({
       onCierreCancelado={(cotizacionId) => {
         // Realtime sincronizará automáticamente ambos componentes
       }}
+      readOnly={readOnly}
     />
   );
 
@@ -767,7 +771,7 @@ export function PromiseQuotesPanel({
             <div className="flex items-center gap-1">
               {!selectionMode ? (
                 <>
-                  {cotizacionesParaListado.length > 1 && (
+                  {cotizacionesParaListado.length > 1 && !readOnly && (
                     <ZenButton
                       variant="ghost"
                       size="sm"
@@ -778,7 +782,7 @@ export function PromiseQuotesPanel({
                       Seleccionar
                     </ZenButton>
                   )}
-                  {!hasApprovedQuote && (
+                  {!hasApprovedQuote && !readOnly && (
                     <ZenDropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                       <ZenDropdownMenuTrigger asChild>
                         <ZenButton

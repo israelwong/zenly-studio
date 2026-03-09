@@ -355,7 +355,9 @@ export function ConfirmarCierreModal({
     }
   };
 
-  const canConfirm = selectedId !== '' && (selectedId === NEGOCIACION_ID ? !!cotizacion?.condicion_comercial_negociacion : condiciones.some((c) => c.id === selectedId));
+  const canConfirm = selectedId !== '' &&
+    (selectedId === NEGOCIACION_ID ? !!cotizacion?.condicion_comercial_negociacion : condiciones.some((c) => c.id === selectedId)) &&
+    (!pagoConfirmado || metodosPago.length === 0 || !!pagoMetodoId);
 
   const visibleIds = new Set(cotizacion?.condiciones_visibles ?? []);
   /** Solo condiciones definidas como visibles para esta cotización (públicas y privadas); si no hay visibles guardados, mostrar todas. */

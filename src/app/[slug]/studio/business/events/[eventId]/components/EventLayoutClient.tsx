@@ -73,7 +73,7 @@ export function EventLayoutClient({
   const handleCancelClick = () => setShowCancelModal(true);
 
   const handleCancelConfirm = async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
-    const targetSlug = eventData?.promise_id ? 'pending' : undefined;
+    const targetSlug = eventData?.promise_id ? 'canceled' : undefined;
     setIsCancelling(true);
     try {
       const { cancelarEvento } = await import('@/lib/actions/studio/business/events/events.actions');

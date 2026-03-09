@@ -131,7 +131,17 @@ export function CrewMemberForm({
     if (!studioSlug || formData.salary_payment_method !== 'credit_card') return;
     setTarjetasLoading(true);
     obtenerTarjetasCredito(studioSlug)
-      .then((res) => { if (res.success && res.data) setTarjetas(res.data); else setTarjetas([]); })
+      .then((res) => {
+        if (res.success && res.data) {
+          setTarjetas(res.data);
+          setFormData((prev) => {
+            if (prev.salary_payment_method !== 'credit_card') return prev;
+            if (prev.salary_default_credit_card_id && res.data!.some((c) => c.id === prev.salary_default_credit_card_id)) return prev;
+            const defaultCard = res.data!.find((c) => c.is_default) ?? res.data![0];
+            return { ...prev, salary_default_credit_card_id: defaultCard?.id ?? '' };
+          });
+        } else setTarjetas([]);
+      })
       .finally(() => setTarjetasLoading(false));
   }, [studioSlug, formData.salary_payment_method]);
 
@@ -668,14 +678,14 @@ export function CrewMemberForm({
             </div>
             {formData.salary_payment_method === 'credit_card' && (
               <div className="mt-2">
-                <label className="text-xs text-zinc-400 block mb-1">Tarjeta</label>
+                <label className="text-xs text-zinc-400 block mb-1">Tarjeta de Crédito</label>
                 <select
                   value={formData.salary_default_credit_card_id}
                   onChange={(e) => setFormData((prev) => ({ ...prev, salary_default_credit_card_id: e.target.value }))}
                   className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   disabled={tarjetasLoading}
                 >
-                  <option value="">Seleccionar tarjeta</option>
+                  <option value="">Seleccionar tarjeta de crédito</option>
                   {tarjetas.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}

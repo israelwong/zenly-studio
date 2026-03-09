@@ -16,14 +16,14 @@ export type QuickNoteCardContext = 'EVENT' | 'PROMISE';
 interface QuickNoteCardProps {
   studioSlug: string;
   promiseId: string;
-  /** Contexto de la bitácora: EVENT (vista evento) o PROMISE (vista promesa) */
   context: QuickNoteCardContext;
-  /** Últimos 3 logs desde servidor para mostrar en inicialización */
   initialLastLogs?: PromiseLog[];
   onLogAdded?: () => void;
+  /** Si true, deshabilita el input de nueva nota (ej. promesa cancelada) */
+  readOnly?: boolean;
 }
 
-export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs = [], onLogAdded }: QuickNoteCardProps) {
+export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs = [], onLogAdded, readOnly = false }: QuickNoteCardProps) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [templates, setTemplates] = useState<PromiseLogTemplate[]>([]);
@@ -318,12 +318,12 @@ export function QuickNoteCard({ studioSlug, promiseId, context, initialLastLogs 
             <ZenInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => setShowSuggestions(true)}
+              onFocus={() => !readOnly && setShowSuggestions(true)}
               onBlur={() => {
                 setTimeout(() => setShowSuggestions(false), 200);
               }}
               placeholder="Crea una nota rápida de seguimiento"
-              disabled={sending}
+              disabled={sending || readOnly}
             />
             {showSuggestions && (
               <div

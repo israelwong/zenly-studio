@@ -12,6 +12,8 @@ const createPaymentSchema = z.object({
     promise_id: z.string().optional(),
     amount: z.number().positive('El monto debe ser positivo'),
     metodo_pago: z.string().min(1, 'Método de pago requerido'),
+    /** ID de cuenta bancaria (studio_metodos_pago) cuando el pago es por transferencia/SPEI */
+    metodo_pago_id: z.string().optional(),
     concept: z.string().min(1, 'Concepto requerido'),
     description: z.string().optional(),
     payment_date: z.date().optional(),
@@ -198,7 +200,7 @@ export async function crearPago(
             return { success: false, error: 'Studio no encontrado' };
         }
 
-        // Verificar que la cotización existe y pertenece al studio
+        // Verificar que la cotización existe y pertenece al studio (contact_id para homologar con cierre en movimientos)
         const cotizacion = await prisma.studio_cotizaciones.findFirst({
             where: {
                 id: validatedData.cotizacion_id,
@@ -252,29 +254,40 @@ export async function crearPago(
             };
         }
 
-        // Crear el pago
-        const pago = await prisma.studio_pagos.create({
-            data: {
-                cotizacion_id: validatedData.cotizacion_id,
-                promise_id: validatedData.promise_id || cotizacion.promise_id || null,
-                amount: validatedData.amount,
+        const contactId = cotizacion.promise?.contact_id ?? null;
+        // Crear el pago y actualizar saldo persistido (atómico). contact_id homologa con cierre para "Pago de [nombre]" en movimientos.
+        const pago = await prisma.$transaction(async (tx) => {
+            const created = await tx.studio_pagos.create({
+                data: {
+                    cotizacion_id: validatedData.cotizacion_id,
+                    promise_id: validatedData.promise_id || cotizacion.promise_id || null,
+                    contact_id: contactId,
+                    amount: validatedData.amount,
+                    metodo_pago: validatedData.metodo_pago,
+                    metodo_pago_id: validatedData.metodo_pago_id ?? null,
+                    concept: validatedData.concept,
+                    description: validatedData.description || null,
+                    payment_date: normalizePaymentDate(validatedData.payment_date),
+                    status: 'completed',
+                    transaction_type: 'ingreso',
+                    transaction_category: 'abono',
+                },
+                select: {
+                    id: true,
+                    amount: true,
+                    metodo_pago: true,
+                    payment_date: true,
+                    concept: true,
+                    description: true,
+                    created_at: true,
+                },
+            });
+            const { incrementBalanceForIngreso } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+            await incrementBalanceForIngreso(tx, studio.id, validatedData.amount, {
+                metodo_pago_id: validatedData.metodo_pago_id ?? null,
                 metodo_pago: validatedData.metodo_pago,
-                concept: validatedData.concept,
-                description: validatedData.description || null,
-                payment_date: normalizePaymentDate(validatedData.payment_date),
-                status: 'completed',
-                transaction_type: 'ingreso',
-                transaction_category: 'abono',
-            },
-            select: {
-                id: true,
-                amount: true,
-                metodo_pago: true,
-                payment_date: true,
-                concept: true,
-                description: true,
-                created_at: true,
-            },
+            });
+            return created;
         });
 
         // Notificar al cliente
@@ -492,7 +505,8 @@ export async function actualizarPago(
 }
 
 /**
- * Cancelar pago (mantiene historial cambiando status a 'cancelled')
+ * Cancelar pago desde movimientos: revierte el ingreso (resta del saldo) y elimina el registro.
+ * El monto vuelve a aparecer en Por cobrar. No archiva.
  */
 export async function cancelarPago(
     studioSlug: string,
@@ -508,26 +522,13 @@ export async function cancelarPago(
             return { success: false, error: 'Studio no encontrado' };
         }
 
-        // Verificar que el pago existe y pertenece al studio
         const pago = await prisma.studio_pagos.findFirst({
             where: {
                 id: pagoId,
                 OR: [
-                    {
-                        cotizaciones: {
-                            studio_id: studio.id,
-                        },
-                    },
-                    {
-                        promise: {
-                            studio_id: studio.id,
-                        },
-                    },
-                    {
-                        studio_users: {
-                            studio_id: studio.id,
-                        },
-                    },
+                    { cotizaciones: { studio_id: studio.id } },
+                    { promise: { studio_id: studio.id } },
+                    { studio_users: { studio_id: studio.id } },
                 ],
             },
         });
@@ -536,38 +537,27 @@ export async function cancelarPago(
             return { success: false, error: 'Pago no encontrado' };
         }
 
-        // Verificar que el pago no esté ya cancelado
         if (pago.status === 'cancelled' || pago.status === 'cancelado') {
             return { success: false, error: 'El pago ya está cancelado' };
         }
 
-        // Cambiar status a 'cancelled' para mantener historial
-        await prisma.studio_pagos.update({
-            where: { id: pagoId },
-            data: {
-                status: 'cancelled',
-            },
-        });
+        const amount = Number(pago.amount);
 
-        // Notificar al cliente
-        try {
-          const { notifyPaymentCancelled } = await import('@/lib/notifications/client');
-          await notifyPaymentCancelled(
-            pago.id,
-            Number(pago.amount),
-            pago.metodo_pago
-          );
-        } catch (error) {
-          console.error('Error enviando notificación de pago cancelado:', error);
-          // No fallar la operación si la notificación falla
-        }
+        await prisma.$transaction(async (tx) => {
+            const { decrementBalanceForIngreso } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+            await decrementBalanceForIngreso(tx, studio.id, amount, {
+                metodo_pago_id: pago.metodo_pago_id ?? null,
+                metodo_pago: pago.metodo_pago,
+            });
+            await tx.studio_pagos.delete({
+                where: { id: pagoId },
+            });
+        });
 
         revalidatePath(`/${studioSlug}/studio/business/events`);
         revalidatePath(`/${studioSlug}/studio/business/finanzas`);
 
-        return {
-            success: true,
-        };
+        return { success: true };
     } catch (error) {
         console.error('[PAYMENTS] Error cancelando pago:', error);
         return {
@@ -706,6 +696,7 @@ const createManualIncomeSchema = z.object({
     studio_slug: z.string().min(1),
     amount: z.number().positive('El monto debe ser positivo'),
     metodo_pago: z.string().min(1, 'Método de pago requerido'),
+    metodo_pago_id: z.string().optional(),
     concept: z.string().min(1, 'Concepto requerido'),
     description: z.string().optional(),
     payment_date: z.date().optional(),
@@ -779,30 +770,38 @@ export async function crearIngresoManual(
             });
         }
 
-        // Crear el pago sin cotización ni promesa, pero asociado a studio_users
-        const pago = await prisma.studio_pagos.create({
-            data: {
-                cotizacion_id: null,
-                promise_id: null,
-                user_id: studioUser.id,
-                amount: validatedData.amount,
+        const { incrementBalanceForIngreso } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+        const pago = await prisma.$transaction(async (tx) => {
+            const created = await tx.studio_pagos.create({
+                data: {
+                    cotizacion_id: null,
+                    promise_id: null,
+                    user_id: studioUser.id,
+                    amount: validatedData.amount,
+                    metodo_pago: validatedData.metodo_pago,
+                    metodo_pago_id: validatedData.metodo_pago_id ?? null,
+                    concept: validatedData.concept,
+                    description: validatedData.description || null,
+                    payment_date: normalizePaymentDate(validatedData.payment_date),
+                    status: 'completed',
+                    transaction_type: 'ingreso',
+                    transaction_category: 'manual',
+                },
+                select: {
+                    id: true,
+                    amount: true,
+                    metodo_pago: true,
+                    payment_date: true,
+                    concept: true,
+                    description: true,
+                    created_at: true,
+                },
+            });
+            await incrementBalanceForIngreso(tx, studio.id, validatedData.amount, {
+                metodo_pago_id: validatedData.metodo_pago_id ?? null,
                 metodo_pago: validatedData.metodo_pago,
-                concept: validatedData.concept,
-                description: validatedData.description || null,
-                payment_date: normalizePaymentDate(validatedData.payment_date),
-                status: 'completed',
-                transaction_type: 'ingreso',
-                transaction_category: 'manual',
-            },
-            select: {
-                id: true,
-                amount: true,
-                metodo_pago: true,
-                payment_date: true,
-                concept: true,
-                description: true,
-                created_at: true,
-            },
+            });
+            return created;
         });
 
         revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);

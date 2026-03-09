@@ -502,6 +502,7 @@ export function CotizacionAutorizadaCard({
                 setIsCancellingEvent(true);
                 try {
                   const result = await cancelarEvento(studioSlug, eventoId, {
+                    promiseTargetStageSlug: 'canceled',
                     cancelReason: data.reason,
                     cancelRequestedBy: data.requestedBy,
                     fundDestination: data.fundDestination,
@@ -523,7 +524,7 @@ export function CotizacionAutorizadaCard({
               title="Cancelar evento"
               description={
                 <p className="text-sm text-zinc-400">
-                  El evento pasará a estado cancelado. La cotización se desvinculará y la promesa volverá a etapa pendiente.
+                  El evento pasará a estado cancelado. La cotización se desvinculará y la promesa pasará a Cancelada (Historial).
                   Indica el motivo, quién solicita la cancelación y el destino de los pagos confirmados.
                 </p>
               }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, XCircle, RotateCcw } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -26,10 +26,12 @@ interface PromiseDetailHeaderProps {
         name?: string | null;
     } | null;
     isArchived: boolean;
+    isCanceled?: boolean;
     onPipelineStageChange: (stageId: string, stageName?: string) => void;
     onConfigClick?: () => void;
     onArchive: () => void;
     onUnarchive: () => void;
+    onRestoreCanceled?: () => void;
     onDelete: () => void;
     isArchiving: boolean;
     isUnarchiving: boolean;
@@ -50,10 +52,12 @@ export function PromiseDetailHeader({
     promiseData,
     contactData,
     isArchived,
+    isCanceled = false,
     onPipelineStageChange,
     onConfigClick,
     onArchive,
     onUnarchive,
+    onRestoreCanceled,
     onDelete,
     isArchiving,
     isUnarchiving,
@@ -122,11 +126,17 @@ export function PromiseDetailHeader({
                     {/* Badge de Seguimiento (estado) */}
                     {!loading && pipelineStages.length > 0 && currentPipelineStageId && (() => {
                         const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+                        const isCanceledStage = currentStage?.slug === 'canceled' || currentStage?.slug === 'cancelado';
                         return (
                             <span
                                 title="Etapa actual del pipeline"
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                className={
+                                    isCanceledStage
+                                        ? 'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium text-red-500 bg-red-500/10 border border-red-500/20'
+                                        : 'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                }
                             >
+                                {isCanceledStage && <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                 {currentStage?.name ?? '—'}
                             </span>
                         );
@@ -212,6 +222,14 @@ export function PromiseDetailHeader({
                                         >
                                             <ArchiveRestore className="h-4 w-4 mr-2" />
                                             {isUnarchiving ? 'Desarchivando...' : 'Desarchivar'}
+                                        </ZenDropdownMenuItem>
+                                    ) : isCanceled ? (
+                                        <ZenDropdownMenuItem
+                                            onClick={onRestoreCanceled}
+                                            disabled={isUnarchiving}
+                                        >
+                                            <RotateCcw className="h-4 w-4 mr-2" />
+                                            Restaurar a etapa Nuevo
                                         </ZenDropdownMenuItem>
                                     ) : (
                                         <ZenDropdownMenuItem

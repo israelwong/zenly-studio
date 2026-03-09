@@ -84,5 +84,47 @@ Espacio abierto para ideas futuras que se validan y priorizan con el tiempo:
 
 ---
 
+## 8. Módulo de Auditoría y Transparencia Financiera
+
+**Objetivo:** Garantizar integridad contable histórica, trazabilidad de pagos por personal y recordatorios de cierre para una gestión financiera transparente y auditable.
+
+1. **Estados de Cuenta Mensuales (Snapshots Inmutables):**
+   - Implementar la generación de *Estados de Cuenta* al cierre de cada mes.
+   - El registro debe ser estático y capturar: saldo inicial, todos los movimientos (ingresos, egresos, cancelaciones, devoluciones) con su snapshot de origen de pago, y el balance final del periodo.
+   - Una vez generado, el registro es **inmutable** para garantizar la integridad contable histórica.
+
+2. **Historial de Pagos por Personal (Staff Reporting):**
+   - Vista de auditoría para el estudio con filtro de historial de pagos por miembro del staff.
+   - Consultas por meses específicos o rangos de fecha (ej.: *¿Cuánto se le ha pagado a [Nombre] en lo que va del año?*).
+   - *Futuro:* Panel individual para que cada miembro del staff consulte su propio histórico de ingresos percibidos.
+
+3. **Notificaciones de Cierre:**
+   - Sistema de alertas a fin de mes para sugerir al administrador la generación del estado de cuenta y la revisión de saldos finales.
+
+*Resultado esperado:* Historial financiero confiable, respaldo para auditorías y claridad en pagos al personal; menos riesgo de discrepancias y mayor confianza en los datos.
+
+---
+
+## 9. Estrategia de Crecimiento y UX (Micro-onboarding)
+
+**Objetivo:** Reducir fricción de entrada, aumentar retención y asegurar que el valor percibido sea inmediato en cada paso del producto.
+
+1. **Onboarding Contextual (Progressive Disclosure):**
+   - Implementar un sistema de *goteo* de información. En lugar de un setup inicial masivo, pedir datos específicos conforme el usuario descubre nuevas secciones (Finanzas, Catálogo, Eventos, etc.).
+   - Objetivo: reducir la fricción inicial y aumentar la retención al dar beneficios inmediatos por cada dato entregado.
+
+2. **Asistente de Configuración Financiera:**
+   - Al ingresar por primera vez a Finanzas, detectar el plan de suscripción del estudio y sugerir (vía banner o modal amigable) la creación automática del gasto recurrente de *Suscripción El Tanque* para garantizar que los KPIs de utilidad neta sean 100% reales desde el inicio.
+
+3. **Tooltips y Guías "Just-in-Time":**
+   - Añadir micro-guías interactivas que se activen solo cuando el usuario interactúa con elementos clave por primera vez (ej. al expandir por primera vez el acordeón de pago o al marcar una tarjeta como default).
+
+4. **Validación Proactiva:**
+   - El sistema debe anticiparse a errores (como el saldo insuficiente en bancos/caja) y ofrecer soluciones rápidas en lugar de solo mensajes de error.
+
+*Resultado esperado:* Usuarios que ven valor desde el primer uso, menos abandono en setup y KPIs financieros coherentes desde día uno.
+
+---
+
 *Documento vivo. Actualizar según hitos, aprendizajes y decisiones de producto.*  
 **ZEN** — *Economía creativa, bien gestionada.*
