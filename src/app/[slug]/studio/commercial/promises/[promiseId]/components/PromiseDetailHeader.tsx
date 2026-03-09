@@ -5,6 +5,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, XCircle, RotateCcw } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
+import { CancelPromiseModal } from '../../components/CancelPromiseModal';
+import { cancelarPromise } from '@/lib/actions/studio/commercial/promises';
+import { toast } from 'sonner';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseDetailHeaderProps {
@@ -32,6 +35,7 @@ interface PromiseDetailHeaderProps {
     onArchive: () => void;
     onUnarchive: () => void;
     onRestoreCanceled?: () => void;
+    onCancelSuccess?: () => void;
     onDelete: () => void;
     isArchiving: boolean;
     isUnarchiving: boolean;
@@ -58,6 +62,7 @@ export function PromiseDetailHeader({
     onArchive,
     onUnarchive,
     onRestoreCanceled,
+    onCancelSuccess,
     onDelete,
     isArchiving,
     isUnarchiving,
@@ -70,6 +75,8 @@ export function PromiseDetailHeader({
     const isCierreRoute = pathname?.includes('/cierre') ?? false;
     const [mounted, setMounted] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [isCanceling, setIsCanceling] = useState(false);
 
     useEffect(() => {
         setMounted(true);
@@ -209,7 +216,7 @@ export function PromiseDetailHeader({
                                         variant="ghost"
                                         size="sm"
                                         className="h-8 w-8 p-0"
-                                        disabled={isArchiving || isUnarchiving || isDeleting}
+                                        disabled={isArchiving || isUnarchiving || isDeleting || isCanceling}
                                     >
                                         <MoreVertical className="h-4 w-4" />
                                     </ZenButton>
@@ -232,13 +239,23 @@ export function PromiseDetailHeader({
                                             Restaurar a etapa Nuevo
                                         </ZenDropdownMenuItem>
                                     ) : (
-                                        <ZenDropdownMenuItem
-                                            onClick={onArchive}
-                                            disabled={isArchiving}
-                                        >
-                                            <Archive className="h-4 w-4 mr-2" />
-                                            {isArchiving ? 'Archivando...' : 'Archivar'}
-                                        </ZenDropdownMenuItem>
+                                        <>
+                                            <ZenDropdownMenuItem
+                                                onClick={onArchive}
+                                                disabled={isArchiving}
+                                            >
+                                                <Archive className="h-4 w-4 mr-2" />
+                                                {isArchiving ? 'Archivando...' : 'Archivar'}
+                                            </ZenDropdownMenuItem>
+                                            <ZenDropdownMenuItem
+                                                onClick={() => setShowCancelModal(true)}
+                                                disabled={isCanceling}
+                                                className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                                            >
+                                                <XCircle className="h-4 w-4 mr-2" />
+                                                {isCanceling ? 'Cancelando...' : 'Cancelar'}
+                                            </ZenDropdownMenuItem>
+                                        </>
                                     )}
                                     <ZenDropdownMenuSeparator />
                                     <ZenDropdownMenuItem
@@ -266,6 +283,32 @@ export function PromiseDetailHeader({
                 studioSlug={studioSlug}
                 promiseId={promiseId}
                 isDeleting={isDeleting}
+            />
+        )}
+
+        {/* Modal de cancelación con motivo */}
+        {promiseId && (
+            <CancelPromiseModal
+                isOpen={showCancelModal}
+                onClose={() => setShowCancelModal(false)}
+                onConfirm={async (motivo) => {
+                    setIsCanceling(true);
+                    try {
+                        const result = await cancelarPromise(studioSlug, promiseId, motivo);
+                        if (result.success) {
+                            toast.success('Promesa cancelada');
+                            onCancelSuccess?.();
+                            setShowCancelModal(false);
+                        } else {
+                            toast.error(result.error ?? 'Error al cancelar');
+                        }
+                    } catch (err) {
+                        console.error('Error cancelando promesa:', err);
+                        toast.error('Error al cancelar promesa');
+                    } finally {
+                        setIsCanceling(false);
+                    }
+                }}
             />
         )}
         </>

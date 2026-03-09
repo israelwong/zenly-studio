@@ -347,6 +347,7 @@ export function PromiseLayoutClient({
             onArchive={() => setShowArchiveModal(true)}
             onUnarchive={handleUnarchive}
             onRestoreCanceled={handleRestoreCanceled}
+            onCancelSuccess={() => startTransition(() => router.refresh())}
             onDelete={handleDelete}
             isArchiving={isArchiving}
             isUnarchiving={isRestoringCanceled}

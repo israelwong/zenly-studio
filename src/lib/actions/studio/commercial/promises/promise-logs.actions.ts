@@ -44,7 +44,8 @@ export type PromiseLogAction =
   | 'reminder_updated'
   | 'reminder_completed'
   | 'reminder_deleted'
-  | 'restored_from_canceled';
+  | 'restored_from_canceled'
+  | 'promise_canceled';
 
 /**
  * Diccionario de acciones con sus descripciones
@@ -191,6 +192,10 @@ const LOG_ACTIONS: Record<
     return `Seguimiento eliminado: ${subjectText}`;
   },
   restored_from_canceled: () => 'Promesa restaurada y movida a etapa Nuevo.',
+  promise_canceled: (meta) => {
+    const reason = (meta?.reason as string)?.trim();
+    return reason ? `Promesa cancelada. Motivo: ${reason}` : 'Promesa cancelada. Motivo: Sin motivo indicado.';
+  },
 };
 
 export interface PromiseLog {
