@@ -37,6 +37,7 @@ import {
   type CotizacionListItem,
   type PasarACierreOptions,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { setNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
 import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { getReminderByPromise, deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
@@ -120,6 +121,8 @@ export function PromiseQuotesPanelCard({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewCotizacion, setPreviewCotizacion] = useState<PublicCotizacion | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+
+  useEffect(() => () => setNavigatingAfterSave(false), []);
 
   // Sincronizar editingName y editingDescription cuando cambie cotizacion (solo si el modal no está abierto)
   useEffect(() => {
@@ -615,7 +618,8 @@ export function PromiseQuotesPanelCard({
         setReminder(null);
         cierrePayloadRef.current = undefined;
         window.dispatchEvent(new CustomEvent('close-overlays'));
-        // Navegación después de que el servidor haya persistido (revalidatePath ya ejecutado)
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
         });

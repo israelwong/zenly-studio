@@ -18,6 +18,8 @@ import {
 } from '@/lib/actions/studio/commercial/promises/negociacion.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { setNavigatingAfterSave } from '@/lib/utils/navigation-guard';
+import { useEffect } from 'react';
 import type {
   CalculoNegociacionResult,
   ValidacionMargen,
@@ -74,6 +76,8 @@ export function FinalizarNegociacion({
   const tieneCondicionComercial =
     negociacionState.condicionComercialId !== null ||
     negociacionState.condicionComercialTemporal !== null;
+
+  useEffect(() => () => setNavigatingAfterSave(false), []);
 
   const handleFinalizar = async () => {
     if (!tieneCondicionComercial) {
@@ -155,6 +159,8 @@ export function FinalizarNegociacion({
             ? 'Cotización en negociación actualizada exitosamente'
             : 'Cotización en negociación creada exitosamente'
         );
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
           router.refresh();

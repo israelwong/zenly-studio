@@ -3946,10 +3946,10 @@ export async function pasarACierre(
         });
       }
 
-      // 1. Pasar cotizaciรณn a cierre
+      // 1. Pasar cotización a cierre
       const previousStatus = cotizacion.status;
-      
-      // Publicación automática: al formalizar cierre, cotización siempre visible para el cliente
+
+      // Publicación automática (COTIZACIONES_MASTER §3): cotización visible + promesa con published_at
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
@@ -3960,6 +3960,12 @@ export async function pasarACierre(
           updated_at: new Date(),
         },
       });
+      if (cotizacion.promise_id) {
+        await tx.studio_promises.update({
+          where: { id: cotizacion.promise_id },
+          data: { published_at: new Date(), updated_at: new Date() },
+        });
+      }
 
       // 2. Crear/actualizar registro de cierre con condición si se proporcionó (y no es ajuste negociación)
       const registroCondicionId = ajuste ? null : condicionId;

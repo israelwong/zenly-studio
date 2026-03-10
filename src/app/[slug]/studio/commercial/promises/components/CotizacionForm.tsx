@@ -944,8 +944,8 @@ export function CotizacionForm({
     let totalCosto = 0;
     let totalGasto = 0;
 
-    // Alineado con paquetes: cálculo = ítems × cantidad únicamente. Las horas son solo para presentación.
-    const durationHoursForCalc: number | null = null;
+    // Cotizaciones: horas SÍ son multiplicador real para ítems HOUR (cantidad × horas para precio/costo/gasto).
+    const durationHoursForCalc = durationHours != null && durationHours > 0 ? durationHours : null;
 
     const toBillingType = (v: string | null | undefined): 'HOUR' | 'SERVICE' | 'UNIT' =>
       (String(v || 'SERVICE').toUpperCase() as 'HOUR' | 'SERVICE' | 'UNIT');

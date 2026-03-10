@@ -10,7 +10,7 @@ import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promis
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
+import { getIsNavigatingAfterSave, setNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 
 /** Forma de datos devueltos por obtenerRegistroCierre (data) */
 interface RegistroCierreLoadData {
@@ -350,6 +350,8 @@ export function usePromiseCierreLogic({
     },
   });
 
+  useEffect(() => () => setNavigatingAfterSave(false), []);
+
   const handleDefinirCondiciones = useCallback(() => {
     setShowCondicionesModal(true);
   }, []);
@@ -598,8 +600,9 @@ export function usePromiseCierreLogic({
         toast.success('Proceso de cierre cancelado. Cotizaciones desarchivadas.');
         setShowCancelModal(false);
         onCierreCancelado?.(cotizacion.id);
-        // Navegar a pendiente usando metodología ZEN
         window.dispatchEvent(new CustomEvent('close-overlays'));
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         router.refresh();
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
@@ -647,6 +650,8 @@ export function usePromiseCierreLogic({
         setShowCancelFondosModal(false);
         onCierreCancelado?.(cotizacion.id);
         window.dispatchEvent(new CustomEvent('close-overlays'));
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         router.refresh();
         startTransition(() => {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);

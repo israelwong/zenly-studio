@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/
 import { Accordion, AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
 import { Separator } from '@/components/ui/shadcn/separator';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import { ItemEditorModal, type ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
@@ -24,7 +25,6 @@ import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condi
 import { crearPaquete, actualizarPaquete } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
-import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 import type { SeccionData, ServicioData } from '@/lib/actions/schemas/catalogo-schemas';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
@@ -533,9 +533,6 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             return;
         }
 
-        // Obtener base_hours para cálculo dinámico
-        const durationHours = baseHours !== '' && baseHours !== null ? Number(baseHours) : null;
-
         // Solo considerar servicios seleccionados
         const serviciosSeleccionados = Array.from(selectedServices)
             .map(id => {
@@ -592,20 +589,17 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         let totalCosto = 0;
         let totalGasto = 0;
 
+        // Ítems HOUR: cantidad × baseHours; resto: cantidad. El subtotal base debe coincidir con el desglose.
+        const baseHoursForCalc = baseHours !== '' && baseHours !== null && !Number.isNaN(Number(baseHours)) && Number(baseHours) > 0
+            ? Number(baseHours)
+            : null;
         let montoCortesias = 0;
         serviciosSeleccionados.forEach(s => {
-            let itemSubtotal = 0;
-            if (s.billingType === 'HOUR' && durationHours !== null && durationHours > 0) {
-                itemSubtotal = (s.precioUnitario || 0) * durationHours;
-                subtotal += itemSubtotal;
-                totalCosto += (s.costo || 0) * durationHours;
-                totalGasto += (s.gasto || 0) * durationHours;
-            } else {
-                itemSubtotal = (s.precioUnitario || 0) * s.cantidad;
-                subtotal += itemSubtotal;
-                totalCosto += (s.costo || 0) * s.cantidad;
-                totalGasto += (s.gasto || 0) * s.cantidad;
-            }
+            const cantidadEfectiva = calcularCantidadEfectiva(s.billingType, s.cantidad, baseHoursForCalc);
+            const itemSubtotal = (s.precioUnitario || 0) * cantidadEfectiva;
+            subtotal += itemSubtotal;
+            totalCosto += (s.costo || 0) * cantidadEfectiva;
+            totalGasto += (s.gasto || 0) * cantidadEfectiva;
             if (itemsCortesia.has(s.id)) montoCortesias += itemSubtotal;
         });
 
@@ -648,20 +642,20 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
 
         setCalculoPrecio(resultado);
 
-        // Preparar items para el desglose del paquete
+        // Preparar items para el desglose con cantidadEfectiva (HOUR × baseHours) para que coincida con el subtotal
         const itemsDesglose = serviciosSeleccionados
             .filter((s): s is NonNullable<typeof s> => s !== null)
             .map(s => {
                 const tipoUtilidad: 'service' | 'product' = s.tipo_utilidad === 'service' ? 'service' : 'product';
-                // Para el desglose, usar cantidad base (no efectiva)
-                // El componente PrecioDesglosePaquete calculará correctamente según billing_type
+                const cantidadEfectiva = calcularCantidadEfectiva(s.billingType, s.cantidad, baseHoursForCalc);
                 return {
                     id: s.id,
                     nombre: s.nombre,
                     costo: s.costo || 0,
                     gasto: s.gasto || 0,
                     tipo_utilidad: tipoUtilidad,
-                    cantidad: s.cantidad, // Cantidad base
+                    cantidad: s.cantidad,
+                    cantidadEfectiva,
                     billing_type: s.billingType,
                 };
             });
@@ -673,6 +667,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             gasto: number;
             tipo_utilidad: 'service' | 'product';
             cantidad: number;
+            cantidadEfectiva?: number;
             billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
         }>);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1349,7 +1344,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                     placeholder="Ej: 8"
                                     min="0"
                                     step="0.5"
-                                    hint="Duración base del paquete en horas. Los servicios tipo 'Por Hora' se multiplicarán por este valor."
+                                    hint="Duración base del paquete (solo para presentación en ítems). El precio se calcula con ítems × cantidad."
                                 />
                                 {/* Carátula integrada (diseño compacto) */}
                                 <div className="mt-4 pt-4 border-t border-zinc-700/50">

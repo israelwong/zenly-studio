@@ -105,12 +105,14 @@ export function PrecioDesglosePaquete({
     // Porcentajes de comisión y sobreprecio (usar el primero como referencia, todos deberían ser iguales)
     const porcentajeComision = itemsCalculados.length > 0 ? itemsCalculados[0].resultado.porcentaje_comision : 0;
     const porcentajeSobreprecio = itemsCalculados.length > 0 ? itemsCalculados[0].resultado.porcentaje_sobreprecio : 0;
+    const comisionRatio = porcentajeComision / 100;
 
     // Usar precio personalizado si existe, sino usar el calculado (base + sobreprecio)
     const precioFinal = precioPersonalizado && precioPersonalizado > 0 ? precioPersonalizado : precioCalculado;
-    
-    // Si hay precio personalizado, recalcular la utilidad basada en ese precio
-    const utilidadFinal = precioFinal - subtotalCostos;
+
+    // SSOT: Utilidad = Precio − (Costos + Gastos + Comisión). Siempre restar comisión.
+    const montoComisionSobreFinal = precioFinal * comisionRatio;
+    const utilidadFinal = precioFinal - subtotalCostos - montoComisionSobreFinal;
 
     // Porcentajes
     const porcentajeUtilidadServicios = totalServicios.costo + totalServicios.gasto > 0
@@ -121,10 +123,8 @@ export function PrecioDesglosePaquete({
         ? ((totalProductos.utilidad / (totalProductos.costo + totalProductos.gasto)) * 100)
         : 0;
 
-    // Porcentaje de utilidad: si hay precio personalizado, usar utilidad final, sino usar utilidad calculada
-    const porcentajeUtilidadTotal = subtotalCostos > 0
-        ? ((precioPersonalizado && precioPersonalizado > 0 ? utilidadFinal : totalUtilidad) / subtotalCostos) * 100
-        : 0;
+    // Porcentaje utilidad total: utilidad neta (post-comisión) sobre costos
+    const porcentajeUtilidadTotal = subtotalCostos > 0 ? (utilidadFinal / subtotalCostos) * 100 : 0;
 
     // --- Salud financiera híbrida (mix-based) ---
     const metaServicio = configuracion.utilidad_servicio > 1 ? configuracion.utilidad_servicio / 100 : configuracion.utilidad_servicio;
@@ -135,9 +135,7 @@ export function PrecioDesglosePaquete({
     const margenObjetivoPct = precioParaMix > 0
         ? ((totalVentaServicios * metaServicio) + (totalVentaProductos * metaProducto)) / precioParaMix * 100
         : 0;
-    const comisionRatio = porcentajeComision / 100;
-    const montoComisionSobreFinal = precioFinal * comisionRatio;
-    const utilidadNeta = precioFinal - subtotalCostos - montoComisionSobreFinal;
+    const utilidadNeta = utilidadFinal;
     const margenRealPct = precioFinal > 0 ? (utilidadNeta / precioFinal) * 100 : 0;
     const ratioAlObjetivo = margenObjetivoPct > 0 ? margenRealPct / margenObjetivoPct : 1;
     const saludColor =
@@ -194,7 +192,7 @@ export function PrecioDesglosePaquete({
                     <div className={rowClass}>
                         <span className="text-sm font-medium text-zinc-300">Utilidad Total ({porcentajeUtilidadTotal.toFixed(1)}%)</span>
                         <span className="text-sm font-semibold text-emerald-400 tabular-nums">
-                            {formatearMoneda(precioPersonalizado && precioPersonalizado > 0 ? utilidadFinal : totalUtilidad)}
+                            {formatearMoneda(utilidadFinal)}
                         </span>
                     </div>
                     <p className="text-[11px] text-zinc-500 mt-2 leading-snug">

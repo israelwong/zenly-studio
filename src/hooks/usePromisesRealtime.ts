@@ -15,21 +15,28 @@ interface UsePromisesRealtimeProps {
   onPromiseInserted?: (promiseId: string) => void;
   onPromiseUpdated?: (promiseId: string) => void;
   onPromiseDeleted?: (promiseId: string) => void;
+  /** Zero-Rebound: si devuelve true, no se ejecutan callbacks. */
+  getIsNavigating?: () => boolean;
 }
 
 export function usePromisesRealtime({
   studioSlug,
-  userId, // ✅ OPTIMIZACIÓN: userId pre-obtenido en servidor
+  userId,
   onPromiseInserted,
   onPromiseUpdated,
   onPromiseDeleted,
+  getIsNavigating,
 }: UsePromisesRealtimeProps) {
-  // ✅ PASO 4: Crear supabase una sola vez (fuera del useEffect para evitar recreaciones)
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isMountedRef = useRef(true);
-  const setupInProgressRef = useRef(false); // ✅ PASO 4: Prevenir múltiples setups simultáneos
+  const setupInProgressRef = useRef(false);
+  const getIsNavigatingRef = useRef(getIsNavigating);
+
+  useEffect(() => {
+    getIsNavigatingRef.current = getIsNavigating;
+  }, [getIsNavigating]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -41,6 +48,7 @@ export function usePromisesRealtime({
   const handleInsert = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.record?.id
@@ -62,6 +70,7 @@ export function usePromisesRealtime({
   const handleUpdate = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.record?.id
@@ -79,6 +88,7 @@ export function usePromisesRealtime({
   const handleDelete = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.old_record?.id

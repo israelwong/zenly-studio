@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PromisesKanban } from './PromisesKanban';
 // ✅ OPTIMIZACIÓN: Eliminado getPromiseByIdAsPromiseWithContact - no hacer POSTs en callbacks de realtime
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
+import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 
@@ -72,7 +73,8 @@ export function PromisesKanbanClient({
   // userId viene del servidor, no se hace POST adicional
   usePromisesRealtime({
     studioSlug,
-    userId: initialUserId, // ✅ OPTIMIZACIÓN: Pasar userId del servidor
+    userId: initialUserId,
+    getIsNavigating: getIsNavigatingAfterSave,
     onPromiseInserted: handlePromiseInserted,
     onPromiseUpdated: handlePromiseUpdatedRealtime,
     onPromiseDeleted: handlePromiseDeleted,

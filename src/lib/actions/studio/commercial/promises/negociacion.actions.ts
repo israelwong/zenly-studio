@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   crearVersionNegociadaSchema,
   aplicarCambiosNegociacionSchema,
@@ -374,10 +374,12 @@ export async function crearVersionNegociada(
       });
     }
 
-    // Revalidar paths
     revalidatePath(
       `/${validatedData.studio_slug}/studio/commercial/promises/${cotizacionOriginal.promise_id}`
     );
+    if (cotizacionOriginal.promise_id) {
+      revalidateTag(`promise-state-${cotizacionOriginal.promise_id}`);
+    }
     if (cotizacionOriginal.evento_id) {
       revalidatePath(
         `/${validatedData.studio_slug}/studio/business/events/${cotizacionOriginal.evento_id}`
@@ -588,10 +590,12 @@ export async function aplicarCambiosNegociacion(
       );
     });
 
-    // Revalidar paths
     revalidatePath(
       `/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}`
     );
+    if (cotizacion.promise_id) {
+      revalidateTag(`promise-state-${cotizacion.promise_id}`);
+    }
     if (cotizacion.evento_id) {
       revalidatePath(
         `/${validatedData.studio_slug}/studio/business/events/${cotizacion.evento_id}`
