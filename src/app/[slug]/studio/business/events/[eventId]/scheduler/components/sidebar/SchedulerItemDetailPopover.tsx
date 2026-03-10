@@ -10,6 +10,7 @@ import { X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
+import { getNatureBadge, getBillingTypeBadge } from './SchedulerItemPopover';
 
 interface CrewMember {
     id: string;
@@ -56,7 +57,11 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
 
     // Usar localItem (sincronizado con servidor)
     const selectedMemberId = localItem.assigned_to_crew_member_id;
-    const isService = localItem.profit_type === 'servicio' || localItem.profit_type === 'service';
+    const st = localItem.scheduler_task as { billing_type_snapshot?: string | null; profit_type_snapshot?: string | null } | undefined;
+    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? null;
+    const profitType = st?.profit_type_snapshot ?? (localItem as { profit_type?: string | null }).profit_type ?? null;
+    const natureBadge = getNatureBadge(profitType);
+    const billingBadge = getBillingTypeBadge(billingType);
     const itemName = localItem.name || 'Sin nombre';
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
     const costoTotal = costoUnitario * localItem.quantity;
@@ -154,11 +159,19 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
                         <div className="text-xs text-zinc-400 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className={cn(
-                                    "px-1.5 py-0.5 rounded-xs text-[10px] font-light",
-                                    isService ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'
+                                    "px-1.5 py-0.5 rounded-full text-[10px] font-light shrink-0",
+                                    natureBadge.className
                                 )}>
-                                    {isService ? 'Servicio' : 'Producto'}
+                                    {natureBadge.label}
                                 </span>
+                                <span className={cn(
+                                    "px-1.5 py-0.5 rounded-full text-[10px] font-light shrink-0",
+                                    billingBadge.className
+                                )}>
+                                    {billingBadge.label}
+                                </span>
+                            </div>
+                            <div>
                                 <span className="text-zinc-300 font-medium">{itemName}</span>
                             </div>
                             <div className="text-zinc-400 text-xs flex items-center gap-2">

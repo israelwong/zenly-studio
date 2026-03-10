@@ -71,6 +71,32 @@ function getSalaryType(member: CrewMember | undefined): 'fixed' | 'variable' | n
     return null;
 }
 
+/** Badge Naturaleza: Servicio vs Producto (profit_type). Tema oscuro ZEN. */
+export function getNatureBadge(profitType: string | null | undefined): { label: string; className: string } {
+    const pt = (profitType ?? '').toLowerCase();
+    if (pt === 'servicio' || pt === 'service') {
+        return { label: 'Servicio', className: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' };
+    }
+    return { label: 'Producto', className: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' };
+}
+
+/** Badge Multiplicador: Presupuesto por hora / Presupuesto fijo / Presupuesto por unidad (billing_type). Tema oscuro ZEN. Exportado para SchedulerItemDetailPopover. */
+export function getBillingTypeBadge(
+    billingType: string | null | undefined
+): { label: string; className: string } {
+    const bt = (billingType ?? '').toUpperCase();
+    switch (bt) {
+        case 'HOUR':
+            return { label: 'Presupuesto por hora', className: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' };
+        case 'SERVICE':
+            return { label: 'Presupuesto fijo', className: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' };
+        case 'UNIT':
+            return { label: 'Presupuesto por unidad', className: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' };
+        default:
+            return { label: '—', className: 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30' };
+    }
+}
+
 export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete, open: openProp, onOpenChange }: SchedulerItemPopoverProps) {
     const router = useRouter();
     // Hook de sincronización (optimista + servidor)
@@ -93,7 +119,12 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const selectedMemberId = localItem.assigned_to_crew_member_id;
     const isTaskCompleted = !!localItem.scheduler_task?.completed_at;
 
-    const isService = localItem.profit_type === 'servicio' || localItem.profit_type === 'service';
+    // Cronograma autosuficiente: leer de la tarea (snapshots al sincronizar). Fallback al ítem para datos previos a la migración.
+    const st = localItem.scheduler_task as { billing_type_snapshot?: string | null; profit_type_snapshot?: string | null } | undefined;
+    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? null;
+    const profitType = st?.profit_type_snapshot ?? (localItem as { profit_type?: string | null }).profit_type ?? null;
+    const natureBadge = getNatureBadge(profitType);
+    const billingBadge = getBillingTypeBadge(billingType);
     const itemName = localItem.name || 'Sin nombre';
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
     const costoTotal = costoUnitario * localItem.quantity;
@@ -460,11 +491,19 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                         <div className="text-xs text-zinc-400 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className={cn(
-                                    "px-1.5 py-0.5 rounded-xs text-[10px] font-light",
-                                    isService ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'
+                                    "px-1.5 py-0.5 rounded-full text-[10px] font-light shrink-0",
+                                    natureBadge.className
                                 )}>
-                                    {isService ? 'Servicio' : 'Producto'}
+                                    {natureBadge.label}
                                 </span>
+                                <span className={cn(
+                                    "px-1.5 py-0.5 rounded-full text-[10px] font-light shrink-0",
+                                    billingBadge.className
+                                )}>
+                                    {billingBadge.label}
+                                </span>
+                            </div>
+                            <div>
                                 <span className="text-zinc-300 font-medium">{itemName}</span>
                             </div>
                             <div className="text-zinc-400 text-xs flex items-center gap-2">

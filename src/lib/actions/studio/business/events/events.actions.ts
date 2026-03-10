@@ -716,6 +716,8 @@ const COTIZACIONES_ITEMS_SELECT = {
       catalog_category_id: true,
       order: true,
       catalog_category: { select: { id: true, name: true } },
+      billing_type_snapshot: true,
+      profit_type_snapshot: true,
     },
   },
 } as const;
@@ -911,6 +913,8 @@ export async function obtenerEventoDetalle(
               catalog_category_name_snapshot: true,
               catalog_section_id_snapshot: true,
               catalog_section_name_snapshot: true,
+              billing_type_snapshot: true,
+              profit_type_snapshot: true,
               parent_id: true,
               catalog_category: { select: { id: true, name: true } },
               order: true,

@@ -400,6 +400,7 @@ export async function sincronizarTareasEvento(
             id: true,
             cost: true,
             quantity: true,
+            profit_type: true,
             scheduler_task_id: true,
             service_category_id: true,
             internal_delivery_days: true,
@@ -539,6 +540,9 @@ export async function sincronizarTareasEvento(
 
         // Honorarios: costo proveedor; si billing_type === 'HOUR' aplicar multiplicador de horas
         const billingType = (item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+        const profitTypeRaw = (item as { profit_type?: string | null }).profit_type ?? (item as { profit_type_snapshot?: string | null }).profit_type_snapshot ?? null;
+        const profitTypeSnapshot = profitTypeRaw != null ? String(profitTypeRaw).toLowerCase() : null;
+        const billingTypeSnapshot = billingType; // HOUR | SERVICE | UNIT
         const durationHours = itemToDurationHours.get(item.id) ?? null;
         const quantity = Number(item.quantity ?? 1);
         const cantidadEfectiva = calcularCantidadEfectiva(billingType, quantity, durationHours);
@@ -597,8 +601,9 @@ export async function sincronizarTareasEvento(
         }
 
         const order = orderIndex++;
+        // Días inclusivos: 1 día = mismo start y end; end = start + (durationDays - 1)
         const endDate = new Date(eventDate);
-        endDate.setDate(endDate.getDate() + Math.max(1, durationDays));
+        endDate.setDate(endDate.getDate() + Math.max(0, durationDays - 1));
 
         const hadTask = Boolean(item.scheduler_task_id ?? item.scheduler_task?.id);
 
@@ -621,6 +626,8 @@ export async function sincronizarTareasEvento(
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
+            billing_type_snapshot: billingTypeSnapshot,
+            profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           },
           update: {
@@ -632,6 +639,8 @@ export async function sincronizarTareasEvento(
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
+            billing_type_snapshot: billingTypeSnapshot,
+            profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           },
         });

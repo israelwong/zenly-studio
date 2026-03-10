@@ -285,6 +285,8 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         start_date: true,
         end_date: true,
         cotizacion_item_id: true,
+        billing_type_snapshot: true,
+        profit_type_snapshot: true,
         cotizacion_item: {
           select: {
             internal_delivery_days: true,
@@ -327,6 +329,8 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         start_date: t.start_date,
         end_date: t.end_date,
         cotizacion_item_id: t.cotizacion_item_id,
+        billing_type_snapshot: t.billing_type_snapshot,
+        profit_type_snapshot: t.profit_type_snapshot,
         cotizacion_item,
         notes_count: t._count.activity_log,
       };
@@ -2973,6 +2977,8 @@ export async function obtenerTareasScheduler(
               catalog_category_name_snapshot: true,
               catalog_section_id_snapshot: true,
               catalog_section_name_snapshot: true,
+              billing_type_snapshot: true,
+              profit_type_snapshot: true,
               parent_id: true,
               catalog_category: {
                 select: { id: true, name: true },
@@ -3059,6 +3065,8 @@ export async function obtenerTareasScheduler(
                   catalog_category_name_snapshot: true,
                   catalog_section_id_snapshot: true,
                   catalog_section_name_snapshot: true,
+                  billing_type_snapshot: true,
+                  profit_type_snapshot: true,
                   parent_id: true,
                   catalog_category: {
                     select: { id: true, name: true },

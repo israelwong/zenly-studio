@@ -1946,6 +1946,10 @@ model studio_scheduler_event_tasks {
   catalog_section_id_snapshot    String?
   catalog_section_name_snapshot String?
   scheduler_custom_category_id String?
+  /// Snapshot al sincronizar: HOUR | SERVICE | UNIT. Cronograma autosuficiente (no depende de cotizacion_item).
+  billing_type_snapshot       String?
+  /// Snapshot al sincronizar: servicio | product. Para badge Naturaleza (Servicio/Producto).
+  profit_type_snapshot        String?
   parent_id                  String?
   parent_task                studio_scheduler_event_tasks?     @relation("TaskParentChild", fields: [parent_id], references: [id], onDelete: SetNull)
   child_tasks                studio_scheduler_event_tasks[]   @relation("TaskParentChild")
