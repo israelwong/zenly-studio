@@ -23,6 +23,8 @@ export function revertContractVariables(
     { value: eventData.total_contrato, variable: "@total_contrato" },
     { value: eventData.condiciones_pago, variable: "@condiciones_pago" },
     { value: eventData.nombre_studio, variable: "@nombre_studio" },
+    { value: eventData.dias_entrega ?? "", variable: "@dias_entrega" },
+    { value: eventData.fecha_limite ?? "", variable: "@fecha_limite" },
   ];
 
   // También soportar sintaxis {variable}
@@ -34,6 +36,8 @@ export function revertContractVariables(
     { value: eventData.total_contrato, variable: "{total_contrato}" },
     { value: eventData.condiciones_pago, variable: "{condiciones_pago}" },
     { value: eventData.nombre_studio, variable: "{nombre_studio}" },
+    { value: eventData.dias_entrega ?? "", variable: "{dias_entrega}" },
+    { value: eventData.fecha_limite ?? "", variable: "{fecha_limite}" },
   ];
 
   // Revertir variables @variable

@@ -120,14 +120,30 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const isTaskCompleted = !!localItem.scheduler_task?.completed_at;
 
     // Cronograma autosuficiente: leer de la tarea (snapshots al sincronizar). Fallback al ítem para datos previos a la migración.
-    const st = localItem.scheduler_task as { billing_type_snapshot?: string | null; profit_type_snapshot?: string | null } | undefined;
+    const st = localItem.scheduler_task as {
+      billing_type_snapshot?: string | null;
+      profit_type_snapshot?: string | null;
+      duration_hours_snapshot?: number | null;
+      budget_amount?: number | null;
+    } | undefined;
     const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? null;
     const profitType = st?.profit_type_snapshot ?? (localItem as { profit_type?: string | null }).profit_type ?? null;
     const natureBadge = getNatureBadge(profitType);
     const billingBadge = getBillingTypeBadge(billingType);
     const itemName = localItem.name || 'Sin nombre';
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
-    const costoTotal = costoUnitario * localItem.quantity;
+    const durationHours = st?.duration_hours_snapshot ?? null;
+    const isHourBilling = (billingType ?? '').toUpperCase() === 'HOUR';
+    const multiplierLabel = isHourBilling && durationHours != null
+      ? `x${durationHours}h`
+      : `x${localItem.quantity ?? 1}`;
+    // Prioridad 1: total pre-calculado de la tarea (sync). Prioridad 2: cálculo manual como último recurso.
+    const budgetAmountFromTask = st?.budget_amount != null ? Number(st.budget_amount) : null;
+    const costoTotal =
+      budgetAmountFromTask ??
+      (isHourBilling && durationHours != null
+        ? costoUnitario * durationHours
+        : costoUnitario * (localItem.quantity ?? 1));
 
     const loadMembers = useCallback(async () => {
         try {
@@ -503,8 +519,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                     {billingBadge.label}
                                 </span>
                             </div>
-                            <div>
-                                <span className="text-zinc-300 font-medium">{itemName}</span>
+                            <div className="pt-1">
+                                <span className="text-base text-zinc-300 font-medium">{itemName}</span>
                             </div>
                             <div className="text-zinc-400 text-xs flex items-center gap-2">
                                 <span>Costo </span>
@@ -512,7 +528,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                     {costoUnitario > 0 ? formatCurrency(costoUnitario) : '—'}
                                 </span>
                                 <ZenBadge size="sm" className="text-[10px] bg-zinc-800 text-zinc-500">
-                                    x{item.quantity}
+                                    {multiplierLabel}
                                 </ZenBadge>
                                 <span className="text-emerald-400 font-medium">
                                     {costoTotal > 0 ? formatCurrency(costoTotal) : '—'}

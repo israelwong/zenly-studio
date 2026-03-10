@@ -213,6 +213,7 @@ export async function createCotizacion(
         bono_especial: validatedData.bono_especial ?? 0,
         condiciones_comerciales_id: validatedData.condiciones_comerciales_id ?? null,
         condiciones_visibles: validatedData.condiciones_visibles?.length ? validatedData.condiciones_visibles : null,
+        dias_entrega_override: validatedData.dias_entrega_override ?? null,
       },
     });
 
@@ -782,6 +783,7 @@ export async function getCotizacionById(
     negociacion_precio_personalizado?: number | null;
     event_duration?: number | null;
     precio_calculado?: number | null;
+    dias_entrega_override?: number | null;
     promise_route_state?: PromiseRouteState | null;
     contact_name?: string | null;
     items_cortesia?: string[];
@@ -857,6 +859,7 @@ export async function getCotizacionById(
         negociacion_precio_personalizado: true,
         event_duration: true,
         precio_calculado: true,
+        dias_entrega_override: true,
         items_cortesia: true,
         bono_especial: true,
         condiciones_visibles: true,
@@ -1005,6 +1008,7 @@ export async function getCotizacionById(
           : null,
         event_duration: cotizacion.event_duration ?? null,
         precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
+        dias_entrega_override: cotizacion.dias_entrega_override ?? null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
         contact_name: cotizacion.promise?.contact?.name ?? null,
@@ -2742,6 +2746,7 @@ export async function updateCotizacion(
         bono_especial: number;
         condiciones_comerciales_id?: string | null;
         condiciones_visibles?: string[] | null;
+        dias_entrega_override?: number | null;
       } = {
         name: validatedData.nombre,
         description: validatedData.descripcion || null,
@@ -2777,6 +2782,10 @@ export async function updateCotizacion(
       // Solo actualizar horas de cobertura si se proporciona explícitamente
       if (validatedData.event_duration !== undefined) {
         updateData.event_duration = validatedData.event_duration;
+      }
+
+      if (validatedData.dias_entrega_override !== undefined) {
+        updateData.dias_entrega_override = validatedData.dias_entrega_override ?? null;
       }
 
       await tx.studio_cotizaciones.update({

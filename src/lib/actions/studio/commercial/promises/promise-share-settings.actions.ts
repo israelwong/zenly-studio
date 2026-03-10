@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from '@/lib/constants/delivery-policy';
 
 export interface PromiseShareSettings {
   show_packages: boolean;
@@ -20,6 +21,10 @@ export interface PromiseShareSettings {
 /** Defaults del estudio + capacidad (para modal global desde Kanban). */
 export interface StudioGlobalSettings extends PromiseShareSettings {
   max_events_per_day: number;
+  /** Políticas de Entrega: días de entrega estándar tras el evento. */
+  dias_entrega_default: number | null;
+  /** Políticas de Entrega: días de margen de seguridad. */
+  dias_seguridad_default: number | null;
 }
 
 /**
@@ -284,6 +289,8 @@ export async function getStudioShareDefaults(studioSlug: string): Promise<{
         promise_share_default_allow_recalc: true,
         promise_share_default_rounding_mode: true,
         max_events_per_day: true,
+        dias_entrega_default: true,
+        dias_seguridad_default: true,
       },
     });
 
@@ -304,6 +311,8 @@ export async function getStudioShareDefaults(studioSlug: string): Promise<{
       allow_recalc: studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: studio.promise_share_default_rounding_mode === "exact" ? "exact" : "charm",
       max_events_per_day: studio.max_events_per_day ?? 1,
+      dias_entrega_default: studio.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA,
+      dias_seguridad_default: studio.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD,
     };
 
     return { success: true, data };
@@ -354,6 +363,8 @@ export async function updateStudioGlobalSettings(
         promise_share_default_allow_recalc: settings.allow_recalc,
         promise_share_default_rounding_mode: settings.rounding_mode,
         max_events_per_day: maxEvents,
+        dias_entrega_default: settings.dias_entrega_default !== undefined ? settings.dias_entrega_default : undefined,
+        dias_seguridad_default: settings.dias_seguridad_default !== undefined ? settings.dias_seguridad_default : undefined,
       },
     });
 

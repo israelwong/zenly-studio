@@ -19,9 +19,10 @@ import { HistorialSheetProvider } from '../context/HistorialSheetContext';
 import { ConfigurationCatalogModal, type ConfigurationSection } from '@/components/shared/configuracion';
 import { GestionarTarjetasModal, useGestionarTarjetasModal } from '@/components/shared/modals';
 import { CapacidadOperativaModal } from '@/components/shared/configuracion/CapacidadOperativaModal';
+import { DeliveryPoliciesModal } from '@/components/shared/configuracion/DeliveryPoliciesModal';
 import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ZenDialog } from '@/components/ui/zen';
-import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent, CalendarDays, Repeat } from 'lucide-react';
+import { FileText, Shield, Receipt, CreditCard, FileCheck, Building2, Package, Zap, MapPin, Percent, CalendarDays, Repeat, Truck } from 'lucide-react';
 import { LocationManagerModal } from '@/components/shared/agenda/LocationManagerModal';
 import { PromiseShareOptionsModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseShareOptionsModal';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -104,6 +105,7 @@ function StudioLayoutContent({
   const [showLocationsManagerModal, setShowLocationsManagerModal] = useState(false);
   const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
   const [showCapacidadModal, setShowCapacidadModal] = useState(false);
+  const [showDeliveryPoliciesModal, setShowDeliveryPoliciesModal] = useState(false);
   const [showGastosRecurrentesModal, setShowGastosRecurrentesModal] = useState(false);
   const gestionarTarjetas = useGestionarTarjetasModal();
 
@@ -134,6 +136,7 @@ function StudioLayoutContent({
     const handleOpenStudioData = () => setShowStudioDataModal(true);
     const handleOpenEventTypes = () => setShowEventTypesModal(true);
     const handleOpenCapacidad = () => setShowCapacidadModal(true);
+    const handleOpenDeliveryPolicies = () => setShowDeliveryPoliciesModal(true);
     const handleOpenGestionarTiposEventos = () => setShowEventTypesModal(true);
     const handleOpenGastosRecurrentes = () => setShowGastosRecurrentesModal(true);
     const handleOpenTarjetasCredito = () => gestionarTarjetas.open();
@@ -147,6 +150,7 @@ function StudioLayoutContent({
     window.addEventListener('open-studio-data-modal', handleOpenStudioData);
     window.addEventListener('open-event-types-modal', handleOpenEventTypes);
     window.addEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
+    window.addEventListener('open-delivery-policies-modal', handleOpenDeliveryPolicies);
     window.addEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
     window.addEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
     window.addEventListener('open-tarjetas-credito-modal', handleOpenTarjetasCredito);
@@ -161,6 +165,7 @@ function StudioLayoutContent({
       window.removeEventListener('open-studio-data-modal', handleOpenStudioData);
       window.removeEventListener('open-event-types-modal', handleOpenEventTypes);
       window.removeEventListener('open-capacidad-operativa-modal', handleOpenCapacidad);
+      window.removeEventListener('open-delivery-policies-modal', handleOpenDeliveryPolicies);
       window.removeEventListener('open-gestionar-tipo-eventos-modal', handleOpenGestionarTiposEventos);
       window.removeEventListener('open-gastos-recurrentes-modal', handleOpenGastosRecurrentes);
       window.removeEventListener('open-tarjetas-credito-modal', handleOpenTarjetasCredito);
@@ -267,6 +272,19 @@ function StudioLayoutContent({
           keywords: ['capacidad', 'cupo', 'límite', 'agenda', 'máximo', 'eventos por día'],
         },
         {
+          id: 'politicas-entrega',
+          title: 'Políticas de Entrega',
+          description: 'Configura los tiempos estándar de entrega para tus clientes',
+          icon: Truck,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-delivery-policies-modal'));
+            }, 100);
+          },
+          category: 'comercial',
+          keywords: ['entrega', 'días', 'plazo', 'postproducción', 'cliente'],
+        },
+        {
           id: 'condiciones',
           title: 'Condiciones Comerciales',
           description: 'Gestiona las condiciones comerciales y métodos de pago disponibles',
@@ -306,45 +324,6 @@ function StudioLayoutContent({
           keywords: ['pagos', 'transferencia', 'clabe', 'tarjeta', 'efectivo'],
         },
         {
-          id: 'tarjetas-credito',
-          title: 'Tarjetas de Crédito',
-          description: 'Gestiona las tarjetas de crédito para gastos recurrentes y control de saldos',
-          icon: CreditCard,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-tarjetas-credito-modal'));
-            }, 100);
-          },
-          category: 'comercial',
-          keywords: ['tarjetas', 'crédito', 'credito', 'gastos recurrentes', 'saldos', 'finanzas'],
-        },
-        {
-          id: 'gastos-recurrentes',
-          title: 'Gastos Recurrentes',
-          description: 'Renta, suscripciones y gastos fijos. Configura tu operación mensual.',
-          icon: Repeat,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-gastos-recurrentes-modal'));
-            }, 100);
-          },
-          category: 'comercial',
-          keywords: ['gastos', 'recurrentes', 'renta', 'suscripción', 'nómina', 'cuentas por pagar', 'finanzas'],
-        },
-        {
-          id: 'contratos',
-          title: 'Plantilla de Contratos',
-          description: 'Gestiona las plantillas de contratos reutilizables para tus eventos',
-          icon: FileCheck,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-contracts-modal'));
-            }, 100);
-          },
-          category: 'comercial',
-          keywords: ['contratos', 'plantilla', 'documentos'],
-        },
-        {
           id: 'tipos-evento',
           title: 'Tipos de Evento',
           description: 'Gestiona los tipos de eventos disponibles para tus promesas',
@@ -371,9 +350,54 @@ function StudioLayoutContent({
       ],
     },
     {
+      id: 'negocio',
+      title: 'Negocio',
+      items: [
+        {
+          id: 'tarjetas-credito',
+          title: 'Tarjetas de Crédito',
+          description: 'Gestiona las tarjetas de crédito para gastos recurrentes y control de saldos',
+          icon: CreditCard,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-tarjetas-credito-modal'));
+            }, 100);
+          },
+          category: 'negocio',
+          keywords: ['tarjetas', 'crédito', 'credito', 'gastos recurrentes', 'saldos', 'finanzas'],
+        },
+        {
+          id: 'gastos-recurrentes',
+          title: 'Gastos Recurrentes',
+          description: 'Renta, suscripciones y gastos fijos. Configura tu operación mensual.',
+          icon: Repeat,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-gastos-recurrentes-modal'));
+            }, 100);
+          },
+          category: 'negocio',
+          keywords: ['gastos', 'recurrentes', 'renta', 'suscripción', 'nómina', 'cuentas por pagar', 'finanzas'],
+        },
+      ],
+    },
+    {
       id: 'legal',
       title: 'Documentos Legales',
       items: [
+        {
+          id: 'contratos',
+          title: 'Plantilla de Contratos',
+          description: 'Gestiona las plantillas de contratos reutilizables para tus eventos',
+          icon: FileCheck,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-contracts-modal'));
+            }, 100);
+          },
+          category: 'legal',
+          keywords: ['contratos', 'plantilla', 'documentos'],
+        },
         {
           id: 'terminos',
           title: 'Términos y Condiciones',
@@ -601,6 +625,12 @@ function StudioLayoutContent({
       <CapacidadOperativaModal
         isOpen={showCapacidadModal}
         onClose={() => setShowCapacidadModal(false)}
+        studioSlug={studioSlug}
+      />
+
+      <DeliveryPoliciesModal
+        isOpen={showDeliveryPoliciesModal}
+        onClose={() => setShowDeliveryPoliciesModal(false)}
         studioSlug={studioSlug}
       />
 

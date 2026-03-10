@@ -19,6 +19,7 @@ import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/
 import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
 import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
 import { incrementBalanceForIngreso } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
+import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from '@/lib/constants/delivery-policy';
 
 interface CierreResponse {
   success: boolean;
@@ -2197,10 +2198,14 @@ export async function autorizarYCrearEvento(
   conflictingPromises?: Array<{ id: string; event_date: Date | null; pipeline_stage_slug: string | null }>;
 }> {
   try {
-    // 1. Validar studio
+    // 1. Validar studio (incluir defaults de Políticas de Entrega para snapshot)
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { id: true },
+      select: {
+        id: true,
+        dias_entrega_default: true,
+        dias_seguridad_default: true,
+      },
     });
 
     if (!studio) {
@@ -2688,6 +2693,18 @@ export async function autorizarYCrearEvento(
           contract_signed_at_snapshot: contratoSnapshot?.signed_at || null,
           contract_signed_ip_snapshot: contratoSnapshot?.signed_ip || null,
           firma_requerida_snapshot: contratoSnapshot != null ? (registroCierre.firma_requerida ?? null) : null,
+          // Políticas de Entrega: snapshot de fecha límite (event_date + días efectivos)
+          fecha_limite_entrega_snapshot: (() => {
+            const eventDate = cotizacion.promise?.event_date;
+            if (!eventDate) return null;
+            const effectiveDays =
+              cotizacion.dias_entrega_override ??
+              ((studio.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA) + (studio.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD));
+            if (effectiveDays < 0) return null;
+            const d = new Date(eventDate);
+            d.setDate(d.getDate() + effectiveDays);
+            return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+          })(),
           updated_at: new Date(),
         },
       });

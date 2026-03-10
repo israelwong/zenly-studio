@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Package, AlertTriangle } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
+import { DeliveryPoliciesForm } from '@/components/shared/settings/DeliveryPoliciesForm';
 import {
   HoverCard,
   HoverCardContent,
@@ -80,6 +81,8 @@ export function PromiseShareOptionsModal({
   const [pendingSaveScope, setPendingSaveScope] = useState<'all' | 'single' | null>(null);
   const [saveScope, setSaveScope] = useState<'single' | 'all'>('single');
   const [maxEventsPerDay, setMaxEventsPerDay] = useState(1);
+  const [diasEntregaDefault, setDiasEntregaDefault] = useState<number | ''>('');
+  const [diasSeguridadDefault, setDiasSeguridadDefault] = useState<number | ''>('');
 
   const isGlobal = scope === 'global';
   const loadingForPromiseIdRef = useRef<string | null>(null);
@@ -98,6 +101,8 @@ export function PromiseShareOptionsModal({
     rounding_mode: 'exact' | 'charm';
     saveScope?: 'single' | 'all';
     max_events_per_day?: number;
+    dias_entrega_default?: number | null;
+    dias_seguridad_default?: number | null;
   } | null>(null);
 
   // Reset estado y recarga cuando cambia la promesa: aislamiento total (no mostrar datos de otra promesa).
@@ -148,6 +153,8 @@ export function PromiseShareOptionsModal({
         setAllowRecalc(d.allow_recalc ?? true);
         setRoundingMode(d.rounding_mode === 'exact' ? 'exact' : 'charm');
         setMaxEventsPerDay(Math.max(1, d.max_events_per_day ?? 1));
+        setDiasEntregaDefault(d.dias_entrega_default ?? '');
+        setDiasSeguridadDefault(d.dias_seguridad_default ?? '');
         lastLoadedSnapshotRef.current = {
           show_packages: d.show_packages,
           show_categories_subtotals: d.show_categories_subtotals,
@@ -161,6 +168,8 @@ export function PromiseShareOptionsModal({
           allow_recalc: d.allow_recalc ?? true,
           rounding_mode: d.rounding_mode === 'exact' ? 'exact' : 'charm',
           max_events_per_day: Math.max(1, d.max_events_per_day ?? 1),
+          dias_entrega_default: d.dias_entrega_default ?? null,
+          dias_seguridad_default: d.dias_seguridad_default ?? null,
         };
       } else {
         toast.error(result.error || 'Error al cargar configuración');
@@ -274,6 +283,8 @@ export function PromiseShareOptionsModal({
     try {
       if (isGlobal) {
         const maxEvents = Math.max(1, maxEventsPerDay);
+        const diasEntrega = typeof diasEntregaDefault === 'number' ? diasEntregaDefault : null;
+        const diasSeguridad = typeof diasSeguridadDefault === 'number' ? diasSeguridadDefault : null;
         const result = await updateStudioGlobalSettings(studioSlug, {
           show_packages: showPackages,
           show_categories_subtotals: showCategoriesSubtotals,
@@ -287,6 +298,8 @@ export function PromiseShareOptionsModal({
           allow_recalc: allowRecalc,
           rounding_mode: roundingMode,
           max_events_per_day: maxEvents,
+          dias_entrega_default: diasEntrega,
+          dias_seguridad_default: diasSeguridad,
         });
         if (result.success) {
           toast.success('Preferencias actualizadas globalmente para el Studio');
@@ -414,6 +427,10 @@ export function PromiseShareOptionsModal({
             disabled={
               (() => {
                 const snap = lastLoadedSnapshotRef.current;
+                const snapDiasEntrega = snap?.dias_entrega_default ?? null;
+                const snapDiasSeguridad = snap?.dias_seguridad_default ?? null;
+                const currentDiasEntrega = typeof diasEntregaDefault === 'number' ? diasEntregaDefault : null;
+                const currentDiasSeguridad = typeof diasSeguridadDefault === 'number' ? diasSeguridadDefault : null;
                 const isDirty = !snap
                   ? false
                   : isGlobal
@@ -428,7 +445,9 @@ export function PromiseShareOptionsModal({
                         autoGenerateContract !== snap.auto_generate_contract ||
                         allowRecalc !== snap.allow_recalc ||
                         roundingMode !== snap.rounding_mode ||
-                        maxEventsPerDay !== (snap.max_events_per_day ?? 1))
+                        maxEventsPerDay !== (snap.max_events_per_day ?? 1) ||
+                        currentDiasEntrega !== snapDiasEntrega ||
+                        currentDiasSeguridad !== snapDiasSeguridad)
                     : (showPackages !== snap.show_packages ||
                         showCategoriesSubtotals !== snap.show_categories_subtotals ||
                         showItemsPrices !== snap.show_items_prices ||
@@ -561,6 +580,21 @@ export function PromiseShareOptionsModal({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Políticas de Entrega (solo scope global) */}
+            {isGlobal && (
+              <DeliveryPoliciesForm
+                showTitle
+                value={{
+                  dias_entrega_default: diasEntregaDefault,
+                  dias_seguridad_default: diasSeguridadDefault,
+                }}
+                onChange={({ dias_entrega_default, dias_seguridad_default }) => {
+                  setDiasEntregaDefault(dias_entrega_default);
+                  setDiasSeguridadDefault(dias_seguridad_default);
+                }}
+              />
             )}
 
             {/* Badge / label según ajustes (solo single) */}

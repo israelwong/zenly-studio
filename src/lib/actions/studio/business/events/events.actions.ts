@@ -317,27 +317,37 @@ export async function sincronizarTareasEvento(
  * @param item - Item de cotización de Prisma
  */
 function serializeCotizacionItemBasic(item: Record<string, unknown>) {
+  const st = item.scheduler_task as { budget_amount?: unknown; _count?: unknown; [key: string]: unknown } | null | undefined;
+  const schedulerTaskPlain = st
+    ? (() => {
+        const { _count: _c, budget_amount: raw, ...rest } = st;
+        return { ...rest, budget_amount: raw != null ? Number(raw) : null };
+      })()
+    : null;
   return {
     ...(item as Record<string, unknown>),
     name: (item.name as string) || '',
     unit_price: item.unit_price ? Number(item.unit_price) : 0,
     subtotal: item.subtotal ? Number(item.subtotal) : 0,
+    scheduler_task: schedulerTaskPlain,
   };
 }
 
 /**
- * Serializa item de cotización (completo) - Incluye cost y delivery_days
+ * Serializa item de cotización (completo) - Incluye cost, delivery_days y scheduler_task sin Decimal.
  * @param item - Item de cotización de Prisma con campos adicionales
  */
 function serializeCotizacionItemComplete(item: Record<string, unknown>) {
-  const schedulerTask = item.scheduler_task as { 
+  const schedulerTask = item.scheduler_task as {
     _count?: { activity_log: number };
     status?: string;
     progress_percent?: number;
     completed_at?: Date | string | null;
+    budget_amount?: unknown;
+    [key: string]: unknown;
   } | null | undefined;
   const notesCount = schedulerTask?._count?.activity_log ?? 0;
-  
+
   return {
     ...(item as Record<string, unknown>),
     unit_price: item.unit_price ? Number(item.unit_price) : 0,
@@ -346,13 +356,17 @@ function serializeCotizacionItemComplete(item: Record<string, unknown>) {
     cost_snapshot: item.cost_snapshot ? Number(item.cost_snapshot) : 0,
     internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
     client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
-    scheduler_task: schedulerTask ? {
-      ...schedulerTask,
-      notes_count: notesCount,
-      status: schedulerTask.status,
-      progress_percent: schedulerTask.progress_percent,
-      completed_at: schedulerTask.completed_at,
-    } : null,
+    scheduler_task: schedulerTask ? (() => {
+      const { _count, budget_amount: rawBudget, ...rest } = schedulerTask;
+      return {
+        ...rest,
+        notes_count: notesCount,
+        status: schedulerTask.status,
+        progress_percent: schedulerTask.progress_percent,
+        completed_at: schedulerTask.completed_at,
+        budget_amount: rawBudget != null ? Number(rawBudget) : null,
+      };
+    })() : null,
   };
 }
 
@@ -533,6 +547,10 @@ export interface EventoDetalle extends EventoBasico {
         notes_count?: number;
         assigned_to_crew_member: { id: string; name: string; email: string | null; tipo: string } | null;
         catalog_category: { id: string; name: string } | null;
+        billing_type_snapshot?: string | null;
+        duration_hours_snapshot?: number | null;
+        profit_type_snapshot?: string | null;
+        budget_amount?: number | null;
       } | null;
     }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
@@ -717,7 +735,9 @@ const COTIZACIONES_ITEMS_SELECT = {
       order: true,
       catalog_category: { select: { id: true, name: true } },
       billing_type_snapshot: true,
+      duration_hours_snapshot: true,
       profit_type_snapshot: true,
+      budget_amount: true,
     },
   },
 } as const;
@@ -914,7 +934,9 @@ export async function obtenerEventoDetalle(
               catalog_section_id_snapshot: true,
               catalog_section_name_snapshot: true,
               billing_type_snapshot: true,
+              duration_hours_snapshot: true,
               profit_type_snapshot: true,
+              budget_amount: true,
               parent_id: true,
               catalog_category: { select: { id: true, name: true } },
               order: true,

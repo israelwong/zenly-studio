@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { revalidatePath, revalidateTag } from "next/cache";
 import type { OperationalCategory } from "@prisma/client";
+import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from '@/lib/constants/delivery-policy';
 
 // Types
 export interface ItemData {
@@ -31,6 +32,17 @@ export interface ActionResponse<T = null> {
     success: boolean;
     data?: T;
     error?: string;
+    /** Advertencia no bloqueante (ej. Políticas de Entrega: duración supera política global). */
+    warning?: string;
+}
+
+const DELIVERY_RELATED_CATEGORIES: OperationalCategory[] = ['POST_PRODUCTION', 'DELIVERY', 'DIGITAL_DELIVERY', 'PHYSICAL_DELIVERY'];
+
+function buildDeliveryPolicyWarning(
+    itemDays: number,
+    policySum: number
+): string {
+    return `Los ${itemDays} días de duración de este ítem superan la política global de entrega del estudio (${policySum} días).`;
 }
 
 // Schemas
@@ -166,10 +178,14 @@ export async function crearItem(
         // Validar datos
         const validated = CreateItemSchema.parse(data);
 
-        // 1. Obtener studio_id desde slug
+        // 1. Obtener studio_id y políticas de entrega desde slug
         const studio = await prisma.studios.findUnique({
             where: { slug: validated.studioSlug },
-            select: { id: true },
+            select: {
+                id: true,
+                dias_entrega_default: true,
+                dias_seguridad_default: true,
+            },
         });
 
         if (!studio) {
@@ -266,10 +282,18 @@ export async function crearItem(
 
         console.log(`[ITEMS] Item creado: ${item.id} - ${item.name} - Gastos: ${JSON.stringify(item.item_expenses)}`);
 
-        return {
-            success: true,
-            data: itemData,
-        };
+        const response: ActionResponse<ItemData> = { success: true, data: itemData };
+        const oc = validated.operational_category ?? item.operational_category;
+        const itemDays = item.default_duration_days;
+        if (oc && DELIVERY_RELATED_CATEGORIES.includes(oc)) {
+            const de = studio.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA;
+            const ds = studio.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD;
+            const policySum = de + ds;
+            if (itemDays > policySum) {
+                response.warning = buildDeliveryPolicyWarning(itemDays, policySum);
+            }
+        }
+        return response;
     } catch (error) {
         console.error("[ITEMS] Error creando item:", error);
 
@@ -311,6 +335,7 @@ export async function actualizarItem(
                 studio: { select: { slug: true } },
             },
         });
+        const studioSlugForPolicy = existente?.studio?.slug;
 
         if (!existente) {
             console.log("[ITEMS] Item no encontrado:", validated.id);
@@ -413,10 +438,24 @@ export async function actualizarItem(
         revalidatePath(`/${existente.studio.slug}/studio/commercial/catalogo`, 'page');
         revalidateTag(`catalog-shell-${existente.studio.slug}`, 'max');
 
-        return {
-            success: true,
-            data: itemData,
-        };
+        const response: ActionResponse<ItemData> = { success: true, data: itemData };
+        const oc = item.operational_category;
+        const itemDays = item.default_duration_days;
+        if (oc && DELIVERY_RELATED_CATEGORIES.includes(oc) && studioSlugForPolicy) {
+            const studioPolicy = await prisma.studios.findUnique({
+                where: { slug: studioSlugForPolicy },
+                select: { dias_entrega_default: true, dias_seguridad_default: true },
+            });
+            if (studioPolicy) {
+                const de = studioPolicy.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA;
+                const ds = studioPolicy.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD;
+                const policySum = de + ds;
+                if (itemDays > policySum) {
+                    response.warning = buildDeliveryPolicyWarning(itemDays, policySum);
+                }
+            }
+        }
+        return response;
     } catch (error) {
         console.error("[ITEMS] Error actualizando item:", error);
 

@@ -53,6 +53,8 @@ export const createCotizacionSchema = z.object({
   bono_especial: z.number().min(0).optional().default(0),
   condiciones_comerciales_id: z.string().cuid().optional().nullable(),
   condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
+  /** Políticas de Entrega: días de entrega para esta cotización; null = usar default del estudio. */
+  dias_entrega_override: z.number().int().min(0).optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
@@ -89,6 +91,8 @@ export const updateCotizacionSchema = z.object({
   bono_especial: z.number().min(0).optional().default(0),
   condiciones_comerciales_id: z.string().cuid().optional().nullable(),
   condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
+  /** Políticas de Entrega: días de entrega para esta cotización; null = usar default del estudio. */
+  dias_entrega_override: z.number().int().min(0).optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);

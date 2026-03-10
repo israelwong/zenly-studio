@@ -296,6 +296,8 @@ export function PublicContractView({
     telefono_studio: studio.phone || undefined,
     correo_studio: studio.email || undefined,
     direccion_studio: studio.address || undefined,
+    dias_entrega: 'No especificado',
+    fecha_limite: 'No especificado',
     servicios_incluidos: [], // Se renderiza desde el contenido del contrato
   };
 

@@ -1383,6 +1383,7 @@ export default function Catalogo() {
             const response = await crearItem(duplicatedItemData);
 
             if (response.success && response.data) {
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
                 // Actualizar el estado local
                 const newItem: Item = {
                     id: response.data.id,
@@ -1474,6 +1475,7 @@ export default function Catalogo() {
             if (data.id) {
                 const response = await actualizarItem(data);
                 if (!response.success) throw new Error(response.error);
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
 
                 // Actualizar en el estado local (incluir operational_category y defaultDurationDays)
                 setItemsData(prev => {
@@ -1517,6 +1519,7 @@ export default function Catalogo() {
                     studioSlug: studioSlug,
                 });
                 if (!response.success) throw new Error(response.error);
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
 
                 if (response.data) {
                     const newItem: Item = {

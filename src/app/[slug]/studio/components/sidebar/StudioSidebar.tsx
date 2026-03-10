@@ -3,10 +3,9 @@
 import React from 'react';
 import {
     ZenSidebar, ZenSidebarContent, ZenSidebarFooter, ZenSidebarMenu,
-    ZenSidebarMenuItem, useZenSidebar, ZenDialog
+    ZenSidebarMenuItem, useZenSidebar
 } from '@/components/ui/zen';
 import { ZenButton } from '@/components/ui/zen';
-import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import { cn } from '@/lib/utils';
@@ -29,7 +28,6 @@ import {
     Package,
     Tags,
     MessageCircle,
-    TrendingUp,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -77,8 +75,6 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
     const { isOpen, toggleSidebar, isCollapsed, toggleCollapse, isMobile } = useZenSidebar();
     const [isHovered, setIsHovered] = React.useState(false);
     const [isMac, setIsMac] = React.useState(false);
-    const [isRentabilidadOpen, setIsRentabilidadOpen] = React.useState(false);
-
     // En desktop, si está colapsado y se hace hover, expandir temporalmente
     const isExpandedOnHover = !isMobile && isCollapsed && isHovered;
 
@@ -140,7 +136,6 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                 { id: 'cuenta', name: 'Cuenta', href: `/config/account`, icon: UserCog },
                 { id: 'subscriptions', name: 'Suscripción', href: `/config/suscripcion`, icon: CreditCard },
                 { id: 'perfil-negocio', name: 'Perfil de Negocio', href: `/config/perfil-negocio`, icon: Globe },
-                { id: 'rentabilidad', name: 'Rentabilidad', href: '#', icon: TrendingUp, onClick: () => setIsRentabilidadOpen(true) },
                 { id: 'plantillas-whatsapp', name: 'Plantillas WhatsApp', href: `/config/plantillas-whatsapp`, icon: MessageCircle },
                 { id: 'integraciones', name: 'Integraciones', href: `/config/integraciones`, icon: Plug },
                 // { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
@@ -332,19 +327,6 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                     </ZenSidebarMenuItem>
                 </ZenSidebarMenu>
             </ZenSidebarFooter>
-            
-            {/* Modal de Rentabilidad */}
-            <ZenDialog
-                isOpen={isRentabilidadOpen}
-                onClose={() => setIsRentabilidadOpen(false)}
-                title="Configuración de Rentabilidad"
-                maxWidth="2xl"
-            >
-                <RentabilidadForm
-                    studioSlug={studioSlug}
-                    onClose={() => setIsRentabilidadOpen(false)}
-                />
-            </ZenDialog>
         </ZenSidebar>
     );
 }

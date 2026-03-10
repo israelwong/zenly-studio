@@ -12,6 +12,7 @@ import { roundPrice } from "@/lib/utils/price-rounding";
 import { formatItemQuantity } from "@/lib/utils/contract-item-formatter";
 import { formatDisplayDateLong } from "@/lib/utils/date-formatter";
 import { toUtcDateOnly, getDateOnlyInTimezone } from "@/lib/utils/date-only";
+import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from "@/lib/constants/delivery-policy";
 
 // Tipo extendido que incluye condiciones comerciales y datos adicionales
 export interface EventContractDataWithConditions extends EventContractData {
@@ -104,14 +105,16 @@ export async function getPromiseContractData(
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { 
-        id: true, 
+      select: {
+        id: true,
         studio_name: true,
         representative_name: true,
         phone: true,
         email: true,
         address: true,
         timezone: true,
+        dias_entrega_default: true,
+        dias_seguridad_default: true,
       },
     });
 
@@ -164,6 +167,8 @@ export async function getPromiseContractData(
         negociacion_precio_original: true,
         event_duration: true,
         paquete_id: true, // ✅ Para identificar si viene de paquete y aplicar precio charm
+        dias_entrega_override: true,
+        fecha_limite_entrega_snapshot: true,
         precio_calculado: true,
         bono_especial: true,
         items_cortesia: true,
@@ -576,6 +581,24 @@ export async function getPromiseContractData(
       // Continuar sin informaci?n bancaria si hay error
     }
 
+    // Políticas de Entrega (mismo criterio que getEventContractData)
+    const studioDeliveryPromise = studio as typeof studio & { dias_entrega_default?: number | null; dias_seguridad_default?: number | null };
+    const cotDeliveryPromise = cotizacion as typeof cotizacion & { dias_entrega_override?: number | null; fecha_limite_entrega_snapshot?: Date | null };
+    const effectiveDaysPromise =
+      cotDeliveryPromise.dias_entrega_override ??
+      ((studioDeliveryPromise.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA) + (studioDeliveryPromise.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD));
+    const diasEntregaStrPromise = effectiveDaysPromise > 0 ? String(effectiveDaysPromise) : "No especificado";
+    let fechaLimiteStrPromise: string;
+    if (cotDeliveryPromise.fecha_limite_entrega_snapshot) {
+      fechaLimiteStrPromise = formatDisplayDateLong(toUtcDateOnly(cotDeliveryPromise.fecha_limite_entrega_snapshot));
+    } else if (eventDate && effectiveDaysPromise > 0) {
+      const d = new Date(eventDate);
+      d.setDate(d.getDate() + effectiveDaysPromise);
+      fechaLimiteStrPromise = formatDisplayDateLong(toUtcDateOnly(d));
+    } else {
+      fechaLimiteStrPromise = "No especificado";
+    }
+
     const eventData: EventContractDataWithConditions = {
       nombre_studio: studio.studio_name,
       nombre_representante: studio.representative_name || undefined,
@@ -590,6 +613,8 @@ export async function getPromiseContractData(
       tipo_evento: promise.event_type?.name || "Evento",
       fecha_evento: fechaEvento,
       fecha_firma_cliente: fechaFirmaCliente,
+      dias_entrega: diasEntregaStrPromise,
+      fecha_limite: fechaLimiteStrPromise,
       servicios_incluidos: serviciosLegacy, // Formato legacy para [SERVICIOS_INCLUIDOS]
       total_contrato: `$${totalFinalParaContrato.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
       condiciones_pago: condiciones?.description || "Por definir",
@@ -710,14 +735,16 @@ export async function getEventContractData(
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { 
-        id: true, 
+      select: {
+        id: true,
         studio_name: true,
         representative_name: true,
         phone: true,
         email: true,
         address: true,
         timezone: true,
+        dias_entrega_default: true,
+        dias_seguridad_default: true,
       },
     });
 
@@ -791,6 +818,8 @@ export async function getEventContractData(
             condiciones_comerciales_id: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
+            dias_entrega_override: true,
+            fecha_limite_entrega_snapshot: true,
             // Snapshots inmutables (prioridad cuando existen)
             condiciones_comerciales_name_snapshot: true,
             condiciones_comerciales_description_snapshot: true,
@@ -1218,6 +1247,30 @@ export async function getEventContractData(
       fechaFirmaCliente = formatDisplayDateLong(todayUtcBuild);
     }
 
+    // Políticas de Entrega: dias_entrega (efectivos) y fecha_limite para @dias_entrega y @fecha_limite
+    const cotSnapDelivery = cotizacionAprobada as typeof cotizacionAprobada & {
+      dias_entrega_override?: number | null;
+      fecha_limite_entrega_snapshot?: Date | null;
+    };
+    const studioDelivery = studio as typeof studio & {
+      dias_entrega_default?: number | null;
+      dias_seguridad_default?: number | null;
+    };
+    const effectiveDays =
+      cotSnapDelivery.dias_entrega_override ??
+      ((studioDelivery.dias_entrega_default ?? DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA) + (studioDelivery.dias_seguridad_default ?? DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD));
+    const diasEntregaStr = effectiveDays > 0 ? String(effectiveDays) : "No especificado";
+    let fechaLimiteStr: string;
+    if (cotSnapDelivery.fecha_limite_entrega_snapshot) {
+      fechaLimiteStr = formatDisplayDateLong(toUtcDateOnly(cotSnapDelivery.fecha_limite_entrega_snapshot));
+    } else if (eventDate && effectiveDays > 0) {
+      const d = new Date(eventDate);
+      d.setDate(d.getDate() + effectiveDays);
+      fechaLimiteStr = formatDisplayDateLong(toUtcDateOnly(d));
+    } else {
+      fechaLimiteStr = "No especificado";
+    }
+
     // Obtener informaci?n bancaria del estudio
     let banco: string | undefined;
     let titular: string | undefined;
@@ -1254,6 +1307,8 @@ export async function getEventContractData(
       correo_studio: studio.email,
       direccion_studio: studio.address || undefined,
       fecha_firma_cliente: fechaFirmaCliente,
+      dias_entrega: diasEntregaStr,
+      fecha_limite: fechaLimiteStr,
       servicios_incluidos: serviciosIncluidos,
       banco,
       titular,
@@ -1311,6 +1366,8 @@ export async function renderContractContent(
       "@tipo_evento": eventData.tipo_evento,
       "@nombre_evento": eventData.nombre_evento,
       "@fecha_firma_cliente": eventData.fecha_firma_cliente || "",
+      "@dias_entrega": eventData.dias_entrega ?? "",
+      "@fecha_limite": eventData.fecha_limite ?? "",
     };
 
     // Combinar todas las variables
@@ -1338,6 +1395,8 @@ export async function renderContractContent(
       "{correo_studio}": (eventData.correo_studio || "").toUpperCase(),
       "{direccion_studio}": (eventData.direccion_studio || "").toUpperCase(),
       "{fecha_firma_cliente}": eventData.fecha_firma_cliente || "",
+      "{dias_entrega}": eventData.dias_entrega ?? "",
+      "{fecha_limite}": eventData.fecha_limite ?? "",
       "{banco}": (eventData.banco || "").toUpperCase(),
       "{titular}": (eventData.titular || "").toUpperCase(),
       "{clabe}": eventData.clabe || "",

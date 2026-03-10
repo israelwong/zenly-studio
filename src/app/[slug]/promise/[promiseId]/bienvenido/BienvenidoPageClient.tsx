@@ -157,6 +157,8 @@ export function BienvenidoPageClient({
       fecha_firma_cliente: contract.signed_at
         ? new Date(contract.signed_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
         : '',
+      dias_entrega: '',
+      fecha_limite: '',
       servicios_incluidos: [],
     };
   }, [

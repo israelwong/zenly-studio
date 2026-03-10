@@ -15,6 +15,7 @@ import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condi
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours, updatePromiseDurationHours, upsertCondicionNegociacionCotizacion, deleteCondicionNegociacionCotizacion, promocionarItemAlCatalogo, guardarCotizacionComoPaquete, actualizarItemYSnapshotCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getStudioShareDefaults } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { logAuditoriaCotizacion } from '@/lib/utils/audit-precios-logger';
@@ -279,6 +280,10 @@ export function CotizacionForm({
   const [conflictSuggestedName, setConflictSuggestedName] = useState('');
   const [conflictPublish, setConflictPublish] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
+  /** Políticas de Entrega: días mostrados al cliente (override por cotización; vacío = usar global). */
+  const [diasEntregaOverride, setDiasEntregaOverride] = useState<number | ''>('');
+  /** Defaults globales del estudio para mostrar valor heredado (días entrega + seguridad). */
+  const [studioDeliveryDefaults, setStudioDeliveryDefaults] = useState<{ dias_entrega_default: number | null; dias_seguridad_default: number | null } | null>(null);
   const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
   
   // Estados para modal de paquete (Fase 8.2)
@@ -307,17 +312,24 @@ export function CotizacionForm({
 
         // Si está en modo edición, cargar y validar la cotización en paralelo con catálogo
         // Si está creando revisión, también cargar datos de la original para pre-poblar
-        const [catalogoResult, configResult, linksResult, cotizacionResult, originalResult, condicionesResult] = await Promise.all([
+        const [catalogoResult, configResult, linksResult, cotizacionResult, originalResult, condicionesResult, studioDefaultsResult] = await Promise.all([
           obtenerCatalogo(studioSlug),
           obtenerConfiguracionPrecios(studioSlug),
           getServiceLinks(studioSlug),
           cotizacionId ? getCotizacionById(cotizacionId, studioSlug) : Promise.resolve({ success: true as const, data: null }),
           revisionOriginalId && !cotizacionId ? getCotizacionById(revisionOriginalId, studioSlug) : Promise.resolve({ success: true as const, data: null }),
           obtenerCondicionesComerciales(studioSlug),
+          getStudioShareDefaults(studioSlug),
         ]);
 
         if (linksResult.success && linksResult.data) {
           setServiceLinksMap(linksResult.data);
+        }
+        if (studioDefaultsResult.success && studioDefaultsResult.data) {
+          setStudioDeliveryDefaults({
+            dias_entrega_default: studioDefaultsResult.data.dias_entrega_default ?? null,
+            dias_seguridad_default: studioDefaultsResult.data.dias_seguridad_default ?? null,
+          });
         }
         if (condicionesResult.success && condicionesResult.data) {
           setCondicionesComerciales(condicionesResult.data.map((c: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown; type?: string | null; is_public?: boolean }) => ({
@@ -453,6 +465,7 @@ export function CotizacionForm({
             setCondicionIdsVisibles(new Set([cotizacionData.condiciones_comerciales_id ?? neg!.id].filter(Boolean)));
           }
 
+          setDiasEntregaOverride((cotizacionData as { dias_entrega_override?: number | null }).dias_entrega_override ?? '');
           // Cargar horas de cobertura de la cotización si existe
           const cotizacionEventDuration = (cotizacionData as { event_duration?: number | null }).event_duration;
           if (cotizacionEventDuration) {
@@ -2052,6 +2065,7 @@ export function CotizacionForm({
           bono_especial: Number(bonoEspecial) || 0,
           condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
           condiciones_visibles: Array.from(condicionIdsVisibles),
+          dias_entrega_override: typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? diasEntregaOverride : null,
         });
 
         if (result.success && options?.scope === 'global' && promiseId) {
@@ -2221,6 +2235,7 @@ export function CotizacionForm({
         bono_especial: Number(bonoEspecial) || 0,
         condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
         condiciones_visibles: Array.from(condicionIdsVisibles),
+        dias_entrega_override: typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? diasEntregaOverride : null,
       });
 
       if (!result.success) {
@@ -2748,6 +2763,38 @@ export function CotizacionForm({
                       placeholder="Ej: 8"
                       hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
                     />
+                    <div className="space-y-2">
+                      <ZenLabel className="text-zinc-200">Tiempo de entrega prometido</ZenLabel>
+                      <p className="text-xs text-zinc-500">
+                        Por defecto se usan los días globales del estudio
+                        {studioDeliveryDefaults && (studioDeliveryDefaults.dias_entrega_default != null || studioDeliveryDefaults.dias_seguridad_default != null) && (
+                          <span className="text-zinc-400">
+                            {' '}({(studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0)} días)
+                          </span>
+                        )}
+                        . Opcionalmente personaliza para este cliente.
+                      </p>
+                      <ZenInput
+                        type="number"
+                        min={0}
+                        value={diasEntregaOverride === '' ? '' : diasEntregaOverride}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') setDiasEntregaOverride('');
+                          else {
+                            const n = parseInt(v, 10);
+                            if (!Number.isNaN(n) && n >= 0) setDiasEntregaOverride(n);
+                          }
+                        }}
+                        placeholder="Vacío = usar global"
+                        hint={
+                          (() => {
+                            const n = typeof diasEntregaOverride === 'number' ? diasEntregaOverride : (studioDeliveryDefaults ? (studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0) : null);
+                            return n != null && n > 0 ? `Se entregará ${n} días después del evento.` : 'Configura días globales en Opciones de configuración si no ves un valor por defecto.';
+                          })()
+                        }
+                      />
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -39,20 +39,50 @@ export async function obtenerOCrearSchedulerInstance(
       select: { id: true },
     });
 
-    // Si no existe, crear una nueva
+    // Si no existe, crear una nueva (lienzo: Hoy → Fecha Límite de Entrega)
     if (!instance) {
       const event = await prisma.studio_events.findUnique({
         where: { id: eventId },
-        select: { event_date: true },
+        select: {
+          event_date: true,
+          cotizacion_id: true,
+          cotizacion: {
+            select: { fecha_limite_entrega_snapshot: true },
+          },
+        },
       });
 
       if (!event) {
         return { success: false, error: 'Evento no encontrado' };
       }
 
-      const startDate = dateRange?.from || new Date(event.event_date);
-      const endDate = dateRange?.to || new Date(event.event_date);
-      endDate.setDate(endDate.getDate() + 30); // Default: 30 días después
+      const eventDate = new Date(event.event_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let startDate: Date;
+      let endDate: Date;
+
+      if (dateRange?.from && dateRange?.to) {
+        startDate = dateRange.from;
+        endDate = dateRange.to;
+      } else {
+        // start_date: min(Hoy, event_date) para que el evento quede dentro del lienzo
+        const todayOnly = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0));
+        const eventDateOnly = new Date(Date.UTC(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 12, 0, 0));
+        startDate = todayOnly.getTime() <= eventDateOnly.getTime() ? todayOnly : eventDateOnly;
+
+        // end_date: fecha_limite_entrega_snapshot de la cotización autorizada, o event_date + 30
+        const fechaLimite = event.cotizacion?.fecha_limite_entrega_snapshot
+          ? new Date(event.cotizacion.fecha_limite_entrega_snapshot)
+          : null;
+        if (fechaLimite) {
+          endDate = new Date(Date.UTC(fechaLimite.getFullYear(), fechaLimite.getMonth(), fechaLimite.getDate(), 23, 59, 59));
+        } else {
+          endDate = new Date(eventDate);
+          endDate.setDate(endDate.getDate() + 30);
+        }
+      }
 
       instance = await prisma.studio_scheduler_event_instances.create({
         data: {

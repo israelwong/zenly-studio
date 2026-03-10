@@ -778,6 +778,8 @@ model studios {
   promise_share_default_allow_recalc               Boolean                          @default(true)
   promise_share_default_rounding_mode              String                           @default("charm")
   max_events_per_day                               Int                              @default(1)
+  dias_entrega_default                            Int?                             // Días de entrega estándar tras el evento (Políticas de Entrega)
+  dias_seguridad_default                          Int?                             // Días de margen de seguridad (Políticas de Entrega)
   google_oauth_refresh_token                      String?
   google_oauth_email                              String?
   google_oauth_scopes                             String?
@@ -1948,6 +1950,8 @@ model studio_scheduler_event_tasks {
   scheduler_custom_category_id String?
   /// Snapshot al sincronizar: HOUR | SERVICE | UNIT. Cronograma autosuficiente (no depende de cotizacion_item).
   billing_type_snapshot       String?
+  /// Snapshot al sincronizar: horas de cobertura (event_duration o promise.duration_hours) para multiplicador cuando billing_type_snapshot = HOUR.
+  duration_hours_snapshot     Int?
   /// Snapshot al sincronizar: servicio | product. Para badge Naturaleza (Servicio/Producto).
   profit_type_snapshot        String?
   parent_id                  String?
@@ -2427,6 +2431,12 @@ model studio_cotizaciones {
   contract_signed_ip_snapshot       String?
   /** Snapshot al autorizar: si el contrato exigía firma (true) o solo lectura confirmada (false). Para bienvenido/post-autorización cuando cierre ya fue eliminado. */
   firma_requerida_snapshot          Boolean?
+
+  // Políticas de Entrega (Touchpoint 3)
+  /** Días de entrega acordados para esta cotización; null = usar default del estudio. */
+  dias_entrega_override            Int?
+  /** Fecha límite de entrega inmutable al autorizar (event_date + días efectivos). */
+  fecha_limite_entrega_snapshot    DateTime?                       @db.Date
 
   // Cancelación (al cancelar cierre con fondos: motivo, solicitante, fecha)
   cancel_reason                    String?  @db.Text

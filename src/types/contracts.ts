@@ -99,6 +99,10 @@ export interface EventContractData {
   direccion_studio?: string;
   /** Fecha en que el cliente firmó el contrato digital. Origen: studio_cotizaciones_cierre.contract_signed_at; formateo: formatDisplayDateLong(toUtcDateOnly(...)). */
   fecha_firma_cliente?: string;
+  /** Políticas de Entrega: días efectivos (override o default estudio). Para @dias_entrega. */
+  dias_entrega: string;
+  /** Políticas de Entrega: fecha límite formateada (ej. 15 de Octubre de 2026). Para @fecha_limite. */
+  fecha_limite: string;
   servicios_incluidos: ServiceCategory[];
   banco?: string;
   titular?: string;

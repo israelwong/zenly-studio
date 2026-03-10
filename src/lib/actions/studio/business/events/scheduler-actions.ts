@@ -286,7 +286,9 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         end_date: true,
         cotizacion_item_id: true,
         billing_type_snapshot: true,
+        duration_hours_snapshot: true,
         profit_type_snapshot: true,
+        budget_amount: true,
         cotizacion_item: {
           select: {
             internal_delivery_days: true,
@@ -330,7 +332,9 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
         end_date: t.end_date,
         cotizacion_item_id: t.cotizacion_item_id,
         billing_type_snapshot: t.billing_type_snapshot,
+        duration_hours_snapshot: t.duration_hours_snapshot,
         profit_type_snapshot: t.profit_type_snapshot,
+        budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
         cotizacion_item,
         notes_count: t._count.activity_log,
       };
@@ -2860,6 +2864,10 @@ export interface SchedulerCotizacionItem {
     sync_status?: string;
     invitation_status?: string | null;
     notes_count?: number;
+    billing_type_snapshot?: string | null;
+    duration_hours_snapshot?: number | null;
+    profit_type_snapshot?: string | null;
+    budget_amount?: number | null;
   } | null;
 }
 
@@ -2978,6 +2986,7 @@ export async function obtenerTareasScheduler(
               catalog_section_id_snapshot: true,
               catalog_section_name_snapshot: true,
               billing_type_snapshot: true,
+              duration_hours_snapshot: true,
               profit_type_snapshot: true,
               parent_id: true,
               catalog_category: {
@@ -3066,12 +3075,14 @@ export async function obtenerTareasScheduler(
                   catalog_section_id_snapshot: true,
                   catalog_section_name_snapshot: true,
                   billing_type_snapshot: true,
+                  duration_hours_snapshot: true,
                   profit_type_snapshot: true,
                   parent_id: true,
                   catalog_category: {
                     select: { id: true, name: true },
                   },
                   order: true,
+                  budget_amount: true,
                   assigned_to_crew_member_id: true,
                   assigned_to_crew_member: {
                     select: { id: true, name: true, email: true, tipo: true },
@@ -3150,6 +3161,7 @@ export async function obtenerTareasScheduler(
             scheduler_task: item.scheduler_task
               ? (() => {
                   const { activity_log, ...stRest } = item.scheduler_task as typeof item.scheduler_task & { activity_log?: { id: string }[] };
+                  const st = item.scheduler_task as { budget_amount?: unknown };
                   return {
                     ...stRest,
                     catalog_category_id: effectiveCatalogCategoryId,
@@ -3161,6 +3173,7 @@ export async function obtenerTareasScheduler(
                     invitation_status: item.scheduler_task.invitation_status,
                     parent_id: item.scheduler_task.parent_id,
                     notes_count: activity_log?.length ?? 0,
+                    budget_amount: st.budget_amount != null ? Number(st.budget_amount) : null,
                   };
                 })()
               : null,

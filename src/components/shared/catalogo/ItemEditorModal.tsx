@@ -464,6 +464,9 @@ export function ItemEditorModal({
                     }
 
                     toast.success("Item actualizado");
+                    if (result.warning) {
+                        toast.warning(result.warning, { description: "Ítem guardado correctamente." });
+                    }
                 } else {
                     const result = await crearItem({
                         categoriaeId: categoriaId,
@@ -485,6 +488,9 @@ export function ItemEditorModal({
 
                     setFormData(prev => ({ ...prev, id: result.data?.id }));
                     toast.success("Item creado");
+                    if (result.warning) {
+                        toast.warning(result.warning, { description: "Ítem guardado correctamente." });
+                    }
                 }
             }
 

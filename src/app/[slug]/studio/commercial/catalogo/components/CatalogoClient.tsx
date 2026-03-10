@@ -704,6 +704,7 @@ export function CatalogoClient({
                 studioSlug: studioSlug,
             });
             if (response.success && response.data) {
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
                 const newItem: Item = {
                     id: response.data.id,
                     name: response.data.name,
@@ -753,6 +754,7 @@ export function CatalogoClient({
             if (data.id) {
                 const response = await actualizarItem(data);
                 if (!response.success) throw new Error(response.error);
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
 
                 setItemsData(prev => {
                     const newData = { ...prev };
@@ -793,6 +795,7 @@ export function CatalogoClient({
                     studioSlug: studioSlug,
                 });
                 if (!response.success) throw new Error(response.error);
+                if (response.warning) toast.warning(response.warning, { description: 'Ítem guardado correctamente.' });
 
                 if (response.data) {
                     const newItem: Item = {

@@ -107,6 +107,8 @@ export function useContractRenderer({
       "@tipo_evento": eventData.tipo_evento,
       "@nombre_evento": eventData.nombre_evento,
       "@fecha_firma_cliente": eventData.fecha_firma_cliente || "",
+      "@dias_entrega": eventData.dias_entrega ?? "",
+      "@fecha_limite": eventData.fecha_limite ?? "",
     };
 
     const variables: Record<string, string> = {
@@ -131,6 +133,8 @@ export function useContractRenderer({
       "{correo_studio}": (eventData.correo_studio || "").toUpperCase(),
       "{direccion_studio}": (eventData.direccion_studio || "").toUpperCase(),
       "{fecha_firma_cliente}": eventData.fecha_firma_cliente || "",
+      "{dias_entrega}": eventData.dias_entrega ?? "",
+      "{fecha_limite}": eventData.fecha_limite ?? "",
       "{banco}": (eventData.banco || "").toUpperCase(),
       "{titular}": (eventData.titular || "").toUpperCase(),
       "{clabe}": eventData.clabe || "",

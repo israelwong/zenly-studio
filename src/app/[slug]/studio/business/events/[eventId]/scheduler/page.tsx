@@ -190,25 +190,35 @@ export default function EventSchedulerPage() {
             id: cot.id,
             name: cot.name,
             status: cot.status,
-            cotizacion_items: (cot.cotizacion_items ?? []).map(item => ({
-              id: item.id,
-              item_id: item.item_id,
-              name: item.name,
-              name_snapshot: item.name_snapshot,
-              quantity: item.quantity,
-              order: item.order,
-              cost: item.cost,
-              cost_snapshot: item.cost_snapshot,
-              profit_type: item.profit_type,
-              profit_type_snapshot: item.profit_type_snapshot,
-              seccion_name: item.seccion_name,
-              category_name: item.category_name,
-              seccion_name_snapshot: item.seccion_name_snapshot,
-              category_name_snapshot: item.category_name_snapshot,
-              assigned_to_crew_member_id: item.assigned_to_crew_member_id,
-              assigned_to_crew_member: item.assigned_to_crew_member,
-              scheduler_task: item.scheduler_task,
-            }))
+            cotizacion_items: (cot.cotizacion_items ?? []).map(item => {
+              const st = item.scheduler_task as { budget_amount?: unknown; duration_hours_snapshot?: number } | null | undefined;
+              const schedulerTask = item.scheduler_task
+                ? {
+                    ...item.scheduler_task,
+                    budget_amount: st?.budget_amount != null ? Number(st.budget_amount) : null,
+                    duration_hours_snapshot: st?.duration_hours_snapshot ?? null,
+                  }
+                : null;
+              return {
+                id: item.id,
+                item_id: item.item_id,
+                name: item.name,
+                name_snapshot: item.name_snapshot,
+                quantity: item.quantity,
+                order: item.order,
+                cost: item.cost,
+                cost_snapshot: item.cost_snapshot,
+                profit_type: item.profit_type,
+                profit_type_snapshot: item.profit_type_snapshot,
+                seccion_name: item.seccion_name,
+                category_name: item.category_name,
+                seccion_name_snapshot: item.seccion_name_snapshot,
+                category_name_snapshot: item.category_name_snapshot,
+                assigned_to_crew_member_id: item.assigned_to_crew_member_id,
+                assigned_to_crew_member: item.assigned_to_crew_member,
+                scheduler_task: schedulerTask,
+              };
+            })
           })),
           scheduler: data.scheduler ? {
             id: data.scheduler.id,

@@ -497,12 +497,19 @@ export async function sincronizarTareasEvento(
       eventId,
       cotizaciones: cotizacionesRows.length,
       itemsEnCotizacion: orderedItems.length,
-      migrando: orderedItems.slice(0, 10).map((it, idx) => ({
-        orden: idx,
-        nombre: it.name ?? it.name_snapshot ?? '?',
-        seccion: (it.service_categories?.section_categories ?? it.items?.service_categories?.section_categories)?.service_sections?.name ?? '?',
-        categoria: it.category_name_snapshot ?? it.category_name ?? it.service_categories?.name ?? '?',
-      })),
+      migrando: orderedItems.slice(0, 10).map((it, idx) => {
+        const durationDaysRaw =
+          it.items?.default_duration_days ?? it.internal_delivery_days ?? it.client_delivery_days ?? 1;
+        return {
+          orden: idx,
+          nombre: it.name ?? it.name_snapshot ?? '?',
+          seccion: (it.service_categories?.section_categories ?? it.items?.service_categories?.section_categories)?.service_sections?.name ?? '?',
+          categoria: it.category_name_snapshot ?? it.category_name ?? it.service_categories?.name ?? '?',
+          billing_type: (it as { billing_type?: string | null }).billing_type ?? null,
+          duration_hours: itemToDurationHours.get(it.id) ?? null,
+          duration_days: Math.max(1, Number(durationDaysRaw)),
+        };
+      }),
     });
 
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
@@ -544,47 +551,11 @@ export async function sincronizarTareasEvento(
         const profitTypeSnapshot = profitTypeRaw != null ? String(profitTypeRaw).toLowerCase() : null;
         const billingTypeSnapshot = billingType; // HOUR | SERVICE | UNIT
         const durationHours = itemToDurationHours.get(item.id) ?? null;
+        const durationHoursSnapshot = durationHours != null ? durationHours : undefined;
         const quantity = Number(item.quantity ?? 1);
         const cantidadEfectiva = calcularCantidadEfectiva(billingType, quantity, durationHours);
         const costUnit = Number((item as { cost?: number | null }).cost ?? 0);
         const budgetAmount = costUnit * cantidadEfectiva;
-
-        // AUDITORÍA: datos crudos vs mapeados (días, categoría, honorarios)
-        const itemDisplayName = item.name ?? item.name_snapshot ?? item.items?.name ?? `item-${item.id}`;
-        console.log(`\n=== AUDITORÍA DE ÍTEM: ${itemDisplayName} ===`);
-        console.dir(
-          {
-            rawData: {
-              billing_type: item.billing_type,
-              quantity: item.quantity,
-              durationHours: itemToDurationHours.get(item.id) ?? null,
-              cost: (item as { cost?: number | null }).cost,
-              operational_category: item.items?.operational_category,
-              default_duration_days: item.items?.default_duration_days,
-              internal_delivery_days: item.internal_delivery_days,
-              client_delivery_days: item.client_delivery_days,
-              item_id: item.item_id,
-              items_relation: item.items
-                ? {
-                    name: item.items.name,
-                    operational_category: item.items.operational_category,
-                    default_duration_days: item.items.default_duration_days,
-                  }
-                : null,
-              category_name_snapshot: item.category_name_snapshot,
-              category_name: item.category_name,
-              service_categories_name: item.service_categories?.name,
-            },
-            mappedData: {
-              calculoHonorario: budgetAmount,
-              diasCalculados: durationDays,
-              categoriaMapeada: category,
-              categoryNameFallback: categoryName,
-            },
-          },
-          { depth: null }
-        );
-        console.log('=====================================\n');
 
         // Snapshots solo desde el ítem procesado (no catálogo global)
         const sectionRef = item.service_categories?.section_categories ?? item.items?.service_categories?.section_categories;
@@ -607,9 +578,7 @@ export async function sincronizarTareasEvento(
 
         const hadTask = Boolean(item.scheduler_task_id ?? item.scheduler_task?.id);
 
-        const task = await tx.studio_scheduler_event_tasks.upsert({
-          where: { cotizacion_item_id: item.id },
-          create: {
+        const createData = {
             scheduler_instance_id: schedulerInstanceId,
             cotizacion_item_id: item.id,
             name,
@@ -617,20 +586,21 @@ export async function sincronizarTareasEvento(
             end_date: endDate,
             duration_days: durationDays,
             category,
-            priority: 'MEDIUM',
-            status: 'PENDING',
+            priority: 'MEDIUM' as const,
+            status: 'PENDING' as const,
             progress_percent: 0,
-            sync_status: 'DRAFT',
+            sync_status: 'DRAFT' as const,
             order,
             ...(catalogCategoryId != null ? { catalog_category_id: catalogCategoryId } : {}),
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
             billing_type_snapshot: billingTypeSnapshot,
+            duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
-          },
-          update: {
+          };
+        const updateData = {
             order,
             category,
             duration_days: durationDays,
@@ -640,9 +610,15 @@ export async function sincronizarTareasEvento(
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
             billing_type_snapshot: billingTypeSnapshot,
+            duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
-          },
+          };
+
+        const task = await tx.studio_scheduler_event_tasks.upsert({
+          where: { cotizacion_item_id: item.id },
+          create: createData,
+          update: updateData,
         });
 
         if (!hadTask) {
