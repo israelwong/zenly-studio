@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Loader2, Check, Calendar } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { toast } from 'sonner';
@@ -34,6 +35,8 @@ export const EventDetailHeader = function EventDetailHeader({
   onCancelClick,
 }: EventDetailHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
@@ -145,19 +148,25 @@ export const EventDetailHeader = function EventDetailHeader({
     }
   };
 
+  const eventDateLabel = eventData.event_date
+    ? formatDisplayDateLong(eventData.event_date)
+    : 'Detalle del evento';
+
   return (
     <>
     <ZenCardHeader className="border-b border-zinc-800">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/${studioSlug}/studio/business/events`)}
-            className="p-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </ZenButton>
+          {!isSchedulerRoute && (
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/${studioSlug}/studio/business/events`)}
+              className="p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </ZenButton>
+          )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               {isEditingName ? (
@@ -198,7 +207,7 @@ export const EventDetailHeader = function EventDetailHeader({
               )}
             </div>
             <ZenCardDescription>
-              Detalle del evento
+              {eventDateLabel}
             </ZenCardDescription>
           </div>
         </div>
