@@ -42,6 +42,7 @@ import {
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { PromiseQuotesPanelCard } from './PromiseQuotesPanelCard';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
@@ -194,6 +195,7 @@ export function PromiseQuotesPanel({
     studioSlug,
     promiseId: promiseId || null,
     ignoreCierreEvents: true, // Ignorar eventos de proceso de cierre (contratos, pagos, etc.)
+    getIsNavigating: getIsNavigatingAfterSave, // Zero-Rebound: no reaccionar si hay salida manual en curso
     onCotizacionInserted: () => {
       loadCotizaciones();
     },

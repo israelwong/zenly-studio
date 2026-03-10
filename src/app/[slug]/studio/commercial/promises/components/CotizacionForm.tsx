@@ -31,6 +31,7 @@ import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas'
 import type { PublicCotizacion, PublicSeccionData } from '@/types/public-promise';
 import { cn } from '@/lib/utils';
 import { getPromisePathFromState, type PromiseRouteState } from '@/lib/utils/promise-navigation';
+import { setNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import { usePromiseFocusMode } from '../[promiseId]/context/PromiseFocusModeContext';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import type { FormSectionId } from './FormSection';
@@ -148,10 +149,11 @@ export function CotizacionForm({
     onLoadingChangeRef.current = onLoadingChange;
   }, [onLoadingChange]);
 
-  // Resetear estado de submit si el componente se desmonta (navegación exitosa)
+  // Resetear estado de submit y guard de navegación al desmontar (Zero-Rebound)
   useEffect(() => {
     return () => {
       isSubmittingRef.current = false;
+      setNavigatingAfterSave(false);
     };
   }, []);
 
@@ -295,9 +297,11 @@ export function CotizacionForm({
   const [itemToEdit, setItemToEdit] = useState<ItemFormData | null>(null);
   const [selectedCategoriaForItem, setSelectedCategoriaForItem] = useState<string | null>(null);
 
-  // Cargar catálogo, configuración, vínculos y datos iniciales
+  // Cargar catálogo, configuración, vínculos y datos iniciales (no re-ejecutar si ya estamos navegando tras guardar)
   useEffect(() => {
+    if (redirectingRef.current) return;
     const cargarDatos = async () => {
+      if (redirectingRef.current) return;
       try {
         setCargandoCatalogo(true);
 
@@ -362,6 +366,11 @@ export function CotizacionForm({
 
         if (!catalogoResult.success || !catalogoResult.data) {
           toast.error('Error al cargar el catálogo');
+          setCargandoCatalogo(false);
+          return;
+        }
+
+        if (redirectingRef.current) {
           setCargandoCatalogo(false);
           return;
         }
@@ -469,6 +478,7 @@ export function CotizacionForm({
             ? catalogoResult.data[0].categorias[0].id
             : null;
           
+          const overridesFromCotizacion = new Map<string, { name?: string; description?: string | null; cost?: number; expense?: number; gastos?: Array<{ nombre: string; costo: number }> }>();
           if (cotizacionData.items && Array.isArray(cotizacionData.items)) {
             cotizacionData.items.forEach((item: { 
               id: string;
@@ -492,6 +502,12 @@ export function CotizacionForm({
                 // Solo agregar al estado si NO tiene reemplazo
                 if (!hasReplacement) {
                   cotizacionItems[item.item_id] = item.quantity;
+                  if (item.cost != null || item.expense != null) {
+                    overridesFromCotizacion.set(item.item_id, {
+                      ...(item.cost != null && { cost: Number(item.cost) }),
+                      ...(item.expense != null && { expense: Number(item.expense) }),
+                    });
+                  }
                 }
               } else if (!item.item_id && item.name && item.unit_price !== undefined) {
                 // Item personalizado - usar categoriaId del item o fallback a primera categoría
@@ -518,6 +534,9 @@ export function CotizacionForm({
           }
           
           setCustomItems(customItemsFromDB);
+          if (overridesFromCotizacion.size > 0) {
+            setItemOverrides(overridesFromCotizacion);
+          }
 
           // Combinar con initialItems para asegurar que todos los servicios estén inicializados
           const combinedItems = { ...initialItems, ...cotizacionItems };
@@ -871,23 +890,30 @@ export function CotizacionForm({
         const servicio = servicioMap.get(id);
         if (!servicio) return null;
 
+        const override = itemOverrides.get(id);
+        const costoEff = override?.cost ?? servicio.costo ?? 0;
+        const gastoEff = override?.expense ?? servicio.gasto ?? 0;
         const tipoUtilidad = servicio.tipo_utilidad === 'service' ? 'servicio' : 'producto';
         const precios = calcularPrecio(
-          servicio.costo || 0,
-          servicio.gasto || 0,
+          costoEff,
+          gastoEff,
           tipoUtilidad,
           configuracionPrecios
         );
 
         return {
           ...servicio,
+          costo: costoEff,
+          gasto: gastoEff,
           precioUnitario: precios.precio_final,
           cantidad,
-          resultadoPrecio: precios, // Guardar el resultado completo para el desglose
+          resultadoPrecio: precios,
           tipoUtilidad
         };
       })
       .filter(Boolean) as Array<NonNullable<ReturnType<typeof servicioMap.get>> & {
+        costo: number;
+        gasto: number;
         precioUnitario: number;
         cantidad: number;
         resultadoPrecio: ReturnType<typeof calcularPrecio>;
@@ -918,19 +944,26 @@ export function CotizacionForm({
     let totalCosto = 0;
     let totalGasto = 0;
 
-    const safeDurationHours = durationHours && durationHours > 0 ? durationHours : 1;
+    // Alineado con paquetes: cálculo = ítems × cantidad únicamente. Las horas son solo para presentación.
+    const durationHoursForCalc: number | null = null;
+
+    const toBillingType = (v: string | null | undefined): 'HOUR' | 'SERVICE' | 'UNIT' =>
+      (String(v || 'SERVICE').toUpperCase() as 'HOUR' | 'SERVICE' | 'UNIT');
 
     serviciosSeleccionados.forEach(s => {
-      const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+      const billingType = toBillingType(s.billing_type);
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, durationHoursForCalc);
       subtotal += (s.precioUnitario || 0) * cantidadEfectiva;
       totalCosto += (s.costo || 0) * cantidadEfectiva;
       totalGasto += (s.gasto || 0) * cantidadEfectiva;
     });
 
     customItems.forEach(customItem => {
-      const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
-      subtotal += customItem.unit_price * cantidadEfectiva;
+      const billingType = toBillingType(customItem.billing_type);
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, customItem.quantity, durationHoursForCalc);
+      const tipoUtilidadCustom = customItem.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+      const precioUnitarioCustom = calcularPrecio(customItem.cost || 0, customItem.expense || 0, tipoUtilidadCustom, configuracionPrecios).precio_final;
+      subtotal += precioUnitarioCustom * cantidadEfectiva;
       totalCosto += (customItem.cost || 0) * cantidadEfectiva;
       totalGasto += (customItem.expense || 0) * cantidadEfectiva;
     });
@@ -938,14 +971,17 @@ export function CotizacionForm({
     let montoCortesias = 0;
     serviciosSeleccionados.forEach(s => {
       if (!itemsCortesia.has(s.id)) return;
-      const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+      const billingType = toBillingType(s.billing_type);
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, durationHoursForCalc);
       montoCortesias += (s.precioUnitario || 0) * cantidadEfectiva;
     });
     customItems.forEach((customItem, idx) => {
       if (!itemsCortesia.has(`custom-${idx}`)) return;
-      const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
-      montoCortesias += customItem.unit_price * cantidadEfectiva;
+      const billingType = toBillingType(customItem.billing_type);
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, customItem.quantity, durationHoursForCalc);
+      const tipoUtilidadCustom = customItem.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+      const precioUnitarioCustom = calcularPrecio(customItem.cost || 0, customItem.expense || 0, tipoUtilidadCustom, configuracionPrecios).precio_final;
+      montoCortesias += precioUnitarioCustom * cantidadEfectiva;
     });
     const bonoNum = Number(bonoEspecial) || 0;
     const subtotalProyectado = Math.max(0, subtotal - montoCortesias - bonoNum);
@@ -976,8 +1012,7 @@ export function CotizacionForm({
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development' && window.sessionStorage?.getItem('zen_audit_precios') === '1') {
       const auditItems = [
         ...serviciosSeleccionados.map(s => {
-          const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-          const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+          const cantidadEfectiva = calcularCantidadEfectiva(toBillingType(s.billing_type), s.cantidad, durationHoursForCalc);
           return {
             id: s.id,
             nombre: s.nombre,
@@ -989,14 +1024,16 @@ export function CotizacionForm({
           };
         }),
         ...customItems.map((customItem, idx) => {
-          const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+          const tipoUtilidadCustom = customItem.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+          const precioUnitarioCustom = calcularPrecio(customItem.cost || 0, customItem.expense || 0, tipoUtilidadCustom, configuracionPrecios).precio_final;
+          const cantidadEfectiva = calcularCantidadEfectiva(toBillingType(customItem.billing_type), customItem.quantity, durationHoursForCalc);
           return {
             id: `custom-${idx}`,
             nombre: customItem.name,
             costo: customItem.cost || 0,
             gasto: customItem.expense || 0,
             cantidadEfectiva,
-            precioUnitario: customItem.unit_price,
+            precioUnitario: precioUnitarioCustom,
             esCortesia: itemsCortesia.has(`custom-${idx}`),
           };
         }),
@@ -1022,6 +1059,7 @@ export function CotizacionForm({
       });
     }
 
+    // SSOT: subtotal = Precio calculado; debe coincidir con el total del Desglose (misma cantidadEfectiva por ítem).
     setCalculoPrecio({
       subtotal: Number(subtotal.toFixed(2)) || 0,
       montoCortesias: Number(montoCortesias.toFixed(2)) || 0,
@@ -1043,8 +1081,7 @@ export function CotizacionForm({
       ...serviciosSeleccionados
         .filter((s): s is NonNullable<typeof s> => s !== null)
         .map(s => {
-          const billingType = (s.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-          const cantidadEfectiva = calcularCantidadEfectiva(billingType, s.cantidad, safeDurationHours);
+          const cantidadEfectiva = calcularCantidadEfectiva(toBillingType(s.billing_type), s.cantidad, durationHoursForCalc);
           const tipoUtilidad: 'service' | 'product' = s.tipo_utilidad === 'service' ? 'service' : 'product';
           return {
             id: s.id,
@@ -1057,7 +1094,7 @@ export function CotizacionForm({
           };
         }),
       ...customItems.map(customItem => {
-        const cantidadEfectiva = calcularCantidadEfectiva(customItem.billing_type, customItem.quantity, safeDurationHours);
+        const cantidadEfectiva = calcularCantidadEfectiva(toBillingType(customItem.billing_type), customItem.quantity, durationHoursForCalc);
         return {
           id: `custom-${customItem.name}`,
           nombre: customItem.name,
@@ -1079,12 +1116,12 @@ export function CotizacionForm({
       cantidad: number;
       cantidadEfectiva?: number;
     }>);
-  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales]);
+  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales, itemOverrides]);
 
   // Vista previa lateral: datos en tiempo real para CotizacionDetailSheet (mismo formato que vista pública)
   const getPreviewData = useCallback((): PublicCotizacion | null => {
     if (!catalogo.length || !servicioMap.size) return null;
-    const safeDurationHours = (durationHours && durationHours > 0) ? durationHours : 1;
+    const durationForPreview = durationHours != null && durationHours > 0 ? durationHours : null;
     const secciones: PublicSeccionData[] = catalogo.map((seccion, sIdx) => {
       const categorias = seccion.categorias.map((categoria, cIdx) => {
         const serviciosCatalog = (categoria.servicios ?? [])
@@ -1094,7 +1131,7 @@ export function CotizacionForm({
             const cantidad = items[s.id] ?? 0;
             const precioUnit = data?.precioUnitario ?? 0;
             const billingType = (s.billing_type || data?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-            const cantidadEfectiva = calcularCantidadEfectiva(billingType, cantidad, safeDurationHours);
+            const cantidadEfectiva = calcularCantidadEfectiva(billingType, cantidad, durationForPreview);
             return {
               id: s.id,
               name: s.nombre,
@@ -1930,6 +1967,7 @@ export function CotizacionForm({
     nombreOverride?: string,
     options?: { skipDurationScopeCheck?: boolean; scope?: 'local' | 'global' }
   ) => {
+    if (redirectingRef.current) return;
     if (isSubmittingRef.current || loading) {
       return;
     }
@@ -2041,6 +2079,9 @@ export function CotizacionForm({
           return;
         }
 
+        // Limpieza de dirty state: ya no hay cambios pendientes (evita re-guardados y rebound)
+        userHasChangedServicesOrAjustesRef.current = false;
+
         if (condicionNegociacion && promiseId) {
           const upsertResult = await upsertCondicionNegociacionCotizacion(
             studioSlug,
@@ -2063,11 +2104,26 @@ export function CotizacionForm({
           setVisibleToClient(false);
         }
 
-        // Guardar cambios (sin publicar): permanecer en la página de edición
+        // Guardar cambios (sin publicar): bloquear reentrada y navegar (replace evita rebound con Atrás)
         if (!publish) {
+          redirectingRef.current = true;
+          setNavigatingAfterSave(true);
           isSubmittingRef.current = false;
           setSavingIntent(null);
           setLoading(false);
+          window.dispatchEvent(new CustomEvent('close-overlays'));
+          window.dispatchEvent(new CustomEvent('promise-state-update')); // Plan nuclear: forzar revalidación/consistencia en destino
+          router.refresh();
+          const targetPath = promiseId && studioSlug
+            ? getPromisePathFromState(studioSlug, promiseId, promiseState ?? 'pendiente')
+            : returnPath || null;
+          startTransition(() => {
+            if (targetPath) {
+              router.replace(targetPath);
+            } else {
+              router.back();
+            }
+          });
           return;
         }
 
@@ -2079,25 +2135,28 @@ export function CotizacionForm({
           return;
         }
 
-        window.dispatchEvent(new CustomEvent('close-overlays'));
         redirectingRef.current = true;
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         router.refresh();
         startTransition(() => {
           if (returnPath) {
-            router.push(returnPath);
+            router.replace(returnPath);
           } else if (redirectOnSuccess && !result.data?.promise_id) {
-            router.push(redirectOnSuccess);
+            router.replace(redirectOnSuccess);
           } else if (result.data?.promise_id) {
             const status = result.data.status || 'pendiente';
+            const base = `/${studioSlug}/studio/commercial/promises/${result.data.promise_id}`;
             if (status === 'negociacion' || status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
-              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
+              router.replace(`${base}/cierre`);
             } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
-              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
+              router.replace(`${base}/autorizada`);
             } else {
-              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
+              router.replace(`${base}/pendiente`);
             }
           } else if (promiseId) {
-            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
           } else {
             router.back();
           }
@@ -2129,6 +2188,8 @@ export function CotizacionForm({
 
         window.dispatchEvent(new CustomEvent('close-overlays'));
         redirectingRef.current = true;
+        setNavigatingAfterSave(true);
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
         router.refresh();
         startTransition(() => {
           if (redirectOnSuccess) {
@@ -2193,6 +2254,8 @@ export function CotizacionForm({
 
       window.dispatchEvent(new CustomEvent('close-overlays'));
       redirectingRef.current = true;
+      setNavigatingAfterSave(true);
+      window.dispatchEvent(new CustomEvent('promise-state-update'));
       router.refresh();
       startTransition(() => {
         // Priorizar redirectOnSuccess solo si no hay promise_id en el resultado
@@ -2232,12 +2295,18 @@ export function CotizacionForm({
     }
   };
 
-  // Exponer handlers de guardado para footer del modal de vista previa (después de handleSave)
+  // Exponer handlers de guardado para footer del modal de vista previa; bloquear si ya se está navegando (evita ráfagas POST)
   useEffect(() => {
     if (!getSaveHandlersRef) return;
     getSaveHandlersRef.current = {
-      onSaveDraft: () => handleSave(false),
-      onSavePublish: () => handleSave(true),
+      onSaveDraft: () => {
+        if (redirectingRef.current) return;
+        handleSave(false);
+      },
+      onSavePublish: () => {
+        if (redirectingRef.current) return;
+        handleSave(true);
+      },
     };
     return () => {
       getSaveHandlersRef.current = null;
@@ -2497,7 +2566,7 @@ export function CotizacionForm({
         accordionValue={accordionValue}
         onAccordionChange={handleAccordionChange}
         focusMode={focusMode}
-        onSubmit={(e) => { e.preventDefault(); handleSave(false); }}
+        onSubmit={(e) => { e.preventDefault(); if (redirectingRef.current) return; handleSave(false); }}
         hideActionButtons={hideActionButtons}
         actionButtons={
           customActionButtons ??
@@ -2511,8 +2580,8 @@ export function CotizacionForm({
               isEditMode={isEditMode}
               visibleToClient={visibleToClient}
               condicionIdsVisiblesSize={condicionIdsVisibles.size}
-              onSaveDraft={() => handleSave(false)}
-              onSavePublish={() => handleSave(true)}
+              onSaveDraft={() => { if (redirectingRef.current) return; handleSave(false); }}
+              onSavePublish={() => { if (redirectingRef.current) return; handleSave(true); }}
               onCancel={handleCancelClick}
               savingIntent={savingIntent}
               saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible para el cliente' : undefined}
@@ -2520,7 +2589,7 @@ export function CotizacionForm({
               sidebarOnlyPreviewAndCancel={!!onRequestPreview}
               showPublishSwitch={isEditMode}
               onPublishToggle={async (published) => {
-                if (isTogglingPublish || condicionIdsVisibles.size === 0) return;
+                if (redirectingRef.current || isTogglingPublish || condicionIdsVisibles.size === 0) return;
                 
                 // Actualización optimista del estado local
                 const previousState = visibleToClient;

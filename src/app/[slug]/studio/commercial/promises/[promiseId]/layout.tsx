@@ -38,10 +38,12 @@ async function PromiseLayoutContent({
     ]);
   } catch (error) {
     console.error('[PromiseLayout] determinePromiseState or parallel fetch failed:', error);
+    console.log('>>> REDIRIGIENDO DESDE [layout.tsx] PORQUE [catch: determinePromiseState o fetch falló]');
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 
   if (!stateResult.success || !stateResult.data) {
+    console.log('>>> REDIRIGIENDO DESDE [layout.tsx] PORQUE [stateResult no success o sin data]');
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 

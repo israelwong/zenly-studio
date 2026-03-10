@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { syncPromiseRoute } from '@/lib/utils/public-promise-routing';
+import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import { usePromisePageContext } from './PromisePageContext';
 
 interface PromiseRouteSyncProps {
@@ -68,6 +69,7 @@ export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProp
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
+    getIsNavigating: getIsNavigatingAfterSave, // Zero-Rebound: no redirigir si hay salida manual en curso
     // Cualquier cambio (UPDATE, INSERT, DELETE) dispara sincronización
     // Esto incluye cambios en visible_to_client y status
     onCotizacionUpdated: (cotizacionId, changeInfo) => {

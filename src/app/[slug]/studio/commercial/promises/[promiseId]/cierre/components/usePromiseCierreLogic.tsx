@@ -10,6 +10,7 @@ import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promis
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 
 /** Forma de datos devueltos por obtenerRegistroCierre (data) */
 interface RegistroCierreLoadData {
@@ -337,6 +338,7 @@ export function usePromiseCierreLogic({
     studioSlug,
     promiseId,
     ignoreCierreEvents: false,
+    getIsNavigating: getIsNavigatingAfterSave, // Zero-Rebound: no reaccionar si hay salida manual en curso
     onCotizacionUpdated: (updatedCotizacionId, changeInfo) => {
       if (updatedCotizacionId !== cotizacion.id) return;
       loadRegistroCierre();

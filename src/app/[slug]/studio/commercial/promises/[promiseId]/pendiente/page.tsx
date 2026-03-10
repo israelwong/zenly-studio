@@ -25,15 +25,18 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     stateResult = await determinePromiseState(promiseId);
   } catch (error) {
     console.error('[PromisePendientePage] determinePromiseState failed:', error);
+    console.log('>>> REDIRIGIENDO DESDE [pendiente/page.tsx] PORQUE [catch: determinePromiseState falló]');
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 
   if (stateResult.success && stateResult.data) {
     const state = stateResult.data.state;
     if (state !== 'pendiente') {
+      console.log('>>> REDIRIGIENDO DESDE [pendiente/page.tsx] PORQUE [state !== pendiente, state=', state, ']');
       redirect(getPromisePathFromState(studioSlug, promiseId, state));
     }
   } else if (!stateResult.success) {
+    console.log('>>> REDIRIGIENDO DESDE [pendiente/page.tsx] PORQUE [stateResult no success]');
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 
@@ -71,6 +74,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     ]);
   } catch (error) {
     console.error('[PromisePendientePage] Error cargando datos (cotizaciones/condiciones/etc.):', error);
+    console.log('>>> REDIRIGIENDO DESDE [pendiente/page.tsx] PORQUE [catch: error cargando datos]');
     redirect(`/${studioSlug}/studio/commercial/promises`);
   }
 

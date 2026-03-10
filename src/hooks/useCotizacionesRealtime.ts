@@ -32,6 +32,8 @@ interface UseCotizacionesRealtimeProps {
   onCotizacionDeleted?: (cotizacionId: string) => void;
   ignoreCierreEvents?: boolean; // Si es true, ignora eventos de studio_cotizaciones_cierre
   onUpdateDetected?: () => void; // ⚠️ NUEVO: Callback cuando se detecta un cambio válido (para incrementar contador)
+  /** Zero-Rebound: si devuelve true, no se ejecutan callbacks (evita auto-router que revierte la navegación). */
+  getIsNavigating?: () => boolean;
 }
 
 export function useCotizacionesRealtime({
@@ -41,17 +43,23 @@ export function useCotizacionesRealtime({
   onCotizacionUpdated,
   onCotizacionDeleted,
   ignoreCierreEvents = false,
-  onUpdateDetected, // ⚠️ NUEVO: Para notificar cambios válidos
+  onUpdateDetected,
+  getIsNavigating,
 }: UseCotizacionesRealtimeProps) {
   const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isMountedRef = useRef(true);
+  const getIsNavigatingRef = useRef(getIsNavigating);
 
   // Refs para callbacks estables
   const onInsertedRef = useRef(onCotizacionInserted);
   const onUpdatedRef = useRef(onCotizacionUpdated);
   const onDeletedRef = useRef(onCotizacionDeleted);
   const onUpdateDetectedRef = useRef(onUpdateDetected);
+
+  useEffect(() => {
+    getIsNavigatingRef.current = getIsNavigating;
+  }, [getIsNavigating]);
 
   // Actualizar refs cuando cambian los callbacks
   useEffect(() => {
@@ -125,6 +133,7 @@ export function useCotizacionesRealtime({
   const handleInsert = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
 
       const cotizacion = extractCotizacion(payload, 'INSERT');
       if (!cotizacion) return;
@@ -160,6 +169,7 @@ export function useCotizacionesRealtime({
   const handleUpdate = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
 
       const p = payload as any;
       
@@ -383,6 +393,7 @@ export function useCotizacionesRealtime({
   const handleDelete = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
+      if (getIsNavigatingRef.current?.()) return;
 
       const cotizacion = extractCotizacion(payload, 'DELETE');
       if (!cotizacion) return;

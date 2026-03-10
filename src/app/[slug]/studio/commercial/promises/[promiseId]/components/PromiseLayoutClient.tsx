@@ -17,6 +17,7 @@ import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promise
 import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 import type { PromiseStateData } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
 import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
+import { getIsNavigatingAfterSave } from '@/lib/utils/navigation-guard';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
 
 interface PromiseLayoutClientProps {
@@ -89,8 +90,9 @@ export function PromiseLayoutClient({
     if (!pathname.includes('/cierre')) return;
     const targetPath = getPromisePathFromState(studioSlug, promiseId, 'autorizada');
     if (!pathname.endsWith('/cierre') && !pathname.includes('/cierre/')) return;
-    
+
     const t = setTimeout(() => {
+      if (getIsNavigatingAfterSave()) return; // Zero-Rebound: no auto-redirigir si hay salida manual en curso
       startTransition(() => {
         router.replace(targetPath);
       });
@@ -122,6 +124,13 @@ export function PromiseLayoutClient({
     window.addEventListener('open-bitacora-sheet', handler);
     return () => window.removeEventListener('open-bitacora-sheet', handler);
   }, []);
+
+  // Plan nuclear: revalidar RSC cuando se anuncia actualización de estado (p. ej. tras guardar cotización)
+  useEffect(() => {
+    const handler = () => startTransition(() => router.refresh());
+    window.addEventListener('promise-state-update', handler);
+    return () => window.removeEventListener('promise-state-update', handler);
+  }, [router]);
 
   const handlePipelineStageChange = async (newStageId: string, stageName?: string) => {
     if (!promiseId || newStageId === stateData.promiseData.pipeline_stage_id) return;
