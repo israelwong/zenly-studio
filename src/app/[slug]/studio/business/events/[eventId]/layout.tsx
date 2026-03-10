@@ -4,6 +4,7 @@ import { obtenerEventoDetalle, obtenerCotizacionesAutorizadasCount } from '@/lib
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getAllEventContracts } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
+import { sanitizarCotizacion } from '@/lib/utils/sanitize-cotizacion-for-client';
 import { EventLayoutClient } from './components/EventLayoutClient';
 
 interface EventLayoutProps {
@@ -44,28 +45,14 @@ export default async function EventLayout({
 
   const eventDataRaw = eventResult.data;
 
-  // Serializar cotización(es) para Client Components (Prisma Decimal no es serializable)
-  const toNum = (v: unknown): number | null =>
-    v == null ? null : typeof v === 'object' && 'toNumber' in (v as object) ? (v as { toNumber: () => number }).toNumber() : Number(v);
-  const serializeCotizacion = (c: Record<string, unknown> | null | undefined) => {
-    if (!c) return c;
-    const out = { ...c };
-    const decimalKeys = [
-      'condiciones_comerciales_advance_amount_snapshot',
-      'precio_calculado', 'bono_especial', 'negociacion_precio_original', 'negociacion_precio_personalizado',
-      'cortesias_monto_snapshot', 'snap_precio_lista', 'snap_ajuste_cierre', 'snap_monto_bono', 'snap_total_final',
-    ];
-    decimalKeys.forEach((k) => {
-      if (k in out && out[k] != null) out[k] = toNum(out[k]);
-    });
-    return out;
-  };
-
+  // Sanitizar cotización(es) para Client Components: Decimal → number, Date intactas
   const eventData = {
     ...eventDataRaw,
-    cotizacion: eventDataRaw.cotizacion ? serializeCotizacion(eventDataRaw.cotizacion as Record<string, unknown>) : null,
+    cotizacion: eventDataRaw.cotizacion
+      ? sanitizarCotizacion(eventDataRaw.cotizacion as Record<string, unknown>)
+      : null,
     cotizaciones: Array.isArray(eventDataRaw.cotizaciones)
-      ? (eventDataRaw.cotizaciones as Record<string, unknown>[]).map(serializeCotizacion)
+      ? (eventDataRaw.cotizaciones as Record<string, unknown>[]).map(sanitizarCotizacion)
       : eventDataRaw.cotizaciones,
   };
   const pipelineStages: EventPipelineStage[] = [];
@@ -76,20 +63,16 @@ export default async function EventLayout({
     getAllEventContracts(studioSlug, eventId),
   ]);
 
-  // Serializar initialResumen para evitar errores de Decimal en Client Components
-  const initialResumen = resumenResult.success && resumenResult.data 
-    ? {
-        ...resumenResult.data,
-        cotizacion: {
-          ...resumenResult.data.cotizacion,
-          // Convertir Decimals a numbers
-          condiciones_comerciales_advance_amount_snapshot: 
-            resumenResult.data.cotizacion.condiciones_comerciales_advance_amount_snapshot != null
-              ? Number(resumenResult.data.cotizacion.condiciones_comerciales_advance_amount_snapshot)
-              : null,
-        },
-      }
-    : null;
+  // Sanitizar initialResumen.cotizacion (Decimal → number, Date intactas) antes de pasar al cliente
+  const initialResumen =
+    resumenResult.success && resumenResult.data
+      ? {
+          ...resumenResult.data,
+          cotizacion: sanitizarCotizacion(
+            resumenResult.data.cotizacion as Record<string, unknown>
+          ),
+        }
+      : null;
   
   const initialCotizacionesCount = countResult.success && countResult.count !== undefined ? countResult.count : 0;
   const activeContracts =

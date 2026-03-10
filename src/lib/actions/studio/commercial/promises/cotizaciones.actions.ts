@@ -511,10 +511,21 @@ export async function getCotizacionesByPromiseId(
             return d ? { id, name: d.name, is_public: d.is_public } : null;
           })
           .filter((x): x is { id: string; name: string; is_public: boolean } => x != null);
+        const cc = cot.condiciones_comerciales;
+        const condiciones_comerciales_serialized = cc
+          ? {
+              id: cc.id,
+              name: cc.name,
+              discount_percentage: cc.discount_percentage != null ? Number(cc.discount_percentage) : null,
+              advance_percentage: cc.advance_percentage != null ? Number(cc.advance_percentage) : null,
+              advance_type: cc.advance_type,
+              advance_amount: cc.advance_amount != null ? Number(cc.advance_amount) : null,
+            }
+          : null;
         return {
           id: cot.id,
           name: cot.name,
-          price: cot.price,
+          price: Number(cot.price),
           status: cot.status,
           description: cot.description,
           created_at: cot.created_at,
@@ -527,10 +538,10 @@ export async function getCotizacionesByPromiseId(
           revision_status: cot.revision_status,
           selected_by_prospect: cot.selected_by_prospect,
           selected_at: cot.selected_at,
-          discount: cot.discount,
+          discount: cot.discount != null ? Number(cot.discount) : null,
           evento_id: cot.evento_id,
           condiciones_comerciales_id: cot.condiciones_comerciales_id,
-          condiciones_comerciales: cot.condiciones_comerciales,
+          condiciones_comerciales: condiciones_comerciales_serialized,
           negociacion_precio_personalizado: negocio != null ? Number(negocio) : null,
           total_a_pagar: totalAPagar,
           event_duration: cot.event_duration != null ? Number(cot.event_duration) : null,
@@ -680,6 +691,18 @@ export async function getCotizacionAutorizadaByPromiseId(
       return { success: true, data: null };
     }
 
+    const ccAuth = cotizacion.condiciones_comerciales;
+    const condiciones_comerciales_serialized = ccAuth
+      ? {
+          id: ccAuth.id,
+          name: ccAuth.name,
+          discount_percentage: ccAuth.discount_percentage != null ? Number(ccAuth.discount_percentage) : null,
+          advance_percentage: ccAuth.advance_percentage != null ? Number(ccAuth.advance_percentage) : null,
+          advance_type: ccAuth.advance_type,
+          advance_amount: ccAuth.advance_amount != null ? Number(ccAuth.advance_amount) : null,
+        }
+      : null;
+
     return {
       success: true,
       data: {
@@ -701,7 +724,7 @@ export async function getCotizacionAutorizadaByPromiseId(
         discount: cotizacion.discount ? Number(cotizacion.discount) : null,
         evento_id: cotizacion.evento_id,
         condiciones_comerciales_id: cotizacion.condiciones_comerciales_id,
-        condiciones_comerciales: cotizacion.condiciones_comerciales,
+        condiciones_comerciales: condiciones_comerciales_serialized,
         negociacion_precio_original: cotizacion.negociacion_precio_original !== null && cotizacion.negociacion_precio_original !== undefined
           ? Number(cotizacion.negociacion_precio_original)
           : null,
@@ -1594,7 +1617,13 @@ export async function duplicateCotizacion(
           cortesias_monto_snapshot: cotizacionCompleta.cortesias_monto_snapshot != null ? Number(cotizacionCompleta.cortesias_monto_snapshot) : null,
           condiciones_visibles: condicionesVisiblesOut,
           condiciones_visibles_detalle: condicionesVisiblesDetalle.length > 0 ? condicionesVisiblesDetalle : undefined,
-          condiciones_comerciales_metodo_pago: cotizacionCompleta.condiciones_comerciales_metodo_pago,
+          condiciones_comerciales_metodo_pago: Array.isArray(cotizacionCompleta.condiciones_comerciales_metodo_pago)
+            ? cotizacionCompleta.condiciones_comerciales_metodo_pago.map((mp: { id: string; orden?: number | null; status?: string | null }) => ({
+                id: mp.id,
+                orden: mp.orden != null ? Number(mp.orden) : null,
+                status: mp.status ?? 'active',
+              }))
+            : [],
           precio_calculado: cotizacionCompleta.precio_calculado != null ? Number(cotizacionCompleta.precio_calculado) : null,
           snap_precio_lista: cotizacionCompleta.snap_precio_lista != null ? Number(cotizacionCompleta.snap_precio_lista) : null,
         },
@@ -3609,9 +3638,9 @@ export async function getDatosConfirmarCierre(
                 id: cotizacionRow.condicion_comercial_negociacion.id,
                 name: cotizacionRow.condicion_comercial_negociacion.name,
                 advance_type: cotizacionRow.condicion_comercial_negociacion.advance_type,
-                advance_percentage: cotizacionRow.condicion_comercial_negociacion.advance_percentage,
+                advance_percentage: cotizacionRow.condicion_comercial_negociacion.advance_percentage != null ? Number(cotizacionRow.condicion_comercial_negociacion.advance_percentage) : null,
                 advance_amount: cotizacionRow.condicion_comercial_negociacion.advance_amount != null ? Number(cotizacionRow.condicion_comercial_negociacion.advance_amount) : null,
-                discount_percentage: cotizacionRow.condicion_comercial_negociacion.discount_percentage,
+                discount_percentage: cotizacionRow.condicion_comercial_negociacion.discount_percentage != null ? Number(cotizacionRow.condicion_comercial_negociacion.discount_percentage) : null,
               }
             : null,
           condiciones_comerciales_id: cotizacionRow.condiciones_comerciales_id,
@@ -3620,9 +3649,9 @@ export async function getDatosConfirmarCierre(
                 id: cotizacionRow.condiciones_comerciales.id,
                 name: cotizacionRow.condiciones_comerciales.name,
                 advance_type: cotizacionRow.condiciones_comerciales.advance_type,
-                advance_percentage: cotizacionRow.condiciones_comerciales.advance_percentage,
+                advance_percentage: cotizacionRow.condiciones_comerciales.advance_percentage != null ? Number(cotizacionRow.condiciones_comerciales.advance_percentage) : null,
                 advance_amount: cotizacionRow.condiciones_comerciales.advance_amount != null ? Number(cotizacionRow.condiciones_comerciales.advance_amount) : null,
-                discount_percentage: cotizacionRow.condiciones_comerciales.discount_percentage,
+                discount_percentage: cotizacionRow.condiciones_comerciales.discount_percentage != null ? Number(cotizacionRow.condiciones_comerciales.discount_percentage) : null,
               }
             : null,
         },

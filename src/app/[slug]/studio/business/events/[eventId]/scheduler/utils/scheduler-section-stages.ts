@@ -1,7 +1,8 @@
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 
-export type TaskCategoryStage = 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY';
+/** Valores de etapa reconocidos por la UI. Incluye UNASSIGNED (Prisma) para tareas sin clasificar. */
+export type TaskCategoryStage = 'UNASSIGNED' | 'PLANNING' | 'PRODUCTION' | 'POST_PRODUCTION' | 'DELIVERY';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -25,20 +26,30 @@ export interface CotizacionItemBase {
 }
 
 export const STAGE_ORDER: TaskCategoryStage[] = [
+  'UNASSIGNED',
   'PLANNING',
   'PRODUCTION',
   'POST_PRODUCTION',
   'DELIVERY',
 ];
 
+/** Diccionario de traducción: valor de operational_category / task.category → etiqueta en UI. */
 export const STAGE_LABELS: Record<TaskCategoryStage, string> = {
+  UNASSIGNED: 'Pendiente de clasificación',
   PLANNING: 'Planeación',
   PRODUCTION: 'Producción',
   POST_PRODUCTION: 'Edición',
   DELIVERY: 'Entrega',
 };
 
+/** Obtiene la etiqueta de etapa de forma segura (evita undefined si llega un valor no mapeado). */
+export function getStageLabel(category: string | undefined | null): string {
+  const stage = normalizeCategory(category);
+  return STAGE_LABELS[stage] ?? STAGE_LABELS.UNASSIGNED;
+}
+
 export const STAGE_COLORS: Record<TaskCategoryStage, string> = {
+  UNASSIGNED: 'border-l-zinc-500/60 bg-zinc-800/30',
   PLANNING: 'border-l-blue-500/60 bg-blue-950/20',
   PRODUCTION: 'border-l-purple-500/70 bg-purple-950/25',
   POST_PRODUCTION: 'border-l-amber-500/60 bg-amber-950/20',
@@ -50,6 +61,7 @@ export const POWER_BAR_STAGE_CLASSES: Record<
   TaskCategoryStage,
   { bg: string; border: string; icon: string }
 > = {
+  UNASSIGNED: { bg: 'bg-zinc-500/20', border: 'border-t-zinc-500', icon: 'text-zinc-400' },
   PLANNING: { bg: 'bg-blue-500/20', border: 'border-t-blue-500', icon: 'text-blue-400' },
   PRODUCTION: { bg: 'bg-purple-500/20', border: 'border-t-purple-500', icon: 'text-purple-400' },
   POST_PRODUCTION: { bg: 'bg-amber-500/20', border: 'border-t-amber-500', icon: 'text-amber-400' },
@@ -58,6 +70,7 @@ export const POWER_BAR_STAGE_CLASSES: Record<
 
 /** Clases para badge de duración en sidebar (alineado con powerbar por stage) */
 export const BADGE_STAGE_CLASSES: Record<TaskCategoryStage, string> = {
+  UNASSIGNED: 'bg-zinc-500/20 text-zinc-400 border-zinc-700/50',
   PLANNING: 'bg-blue-500/20 text-blue-400 border-blue-700/50',
   PRODUCTION: 'bg-purple-500/20 text-purple-400 border-purple-700/50',
   POST_PRODUCTION: 'bg-amber-500/20 text-amber-400 border-amber-700/50',
@@ -66,6 +79,7 @@ export const BADGE_STAGE_CLASSES: Record<TaskCategoryStage, string> = {
 
 /** Solo color de texto para duración en sidebar (sin envoltura) */
 export const DURATION_TEXT_CLASSES: Record<TaskCategoryStage, string> = {
+  UNASSIGNED: 'text-zinc-400',
   PLANNING: 'text-blue-400',
   PRODUCTION: 'text-purple-400',
   POST_PRODUCTION: 'text-amber-400',
@@ -113,17 +127,29 @@ export const TASK_ROW_HEIGHT = ROW_HEIGHTS.TASK_ROW;
 export const PHANTOM_ROW_HEIGHT = ROW_HEIGHTS.PHANTOM;
 export const ADD_BUTTON_ROW_HEIGHT = ROW_HEIGHTS.PHANTOM;
 
-function normalizeCategory(category: string | undefined): TaskCategoryStage {
-  if (!category) return 'PLANNING';
-  switch (category) {
+/**
+ * Normaliza el valor de task.category (Prisma TaskCategory) al tipo de la UI (TaskCategoryStage).
+ * Case-insensitive para tolerar serialización. Paridad con operational_category del sync.
+ */
+export function normalizeCategory(category: string | undefined): TaskCategoryStage {
+  if (category == null || category === '') return 'PLANNING';
+  const v = String(category).toUpperCase();
+  switch (v) {
     case 'PLANNING':
+      return 'PLANNING';
     case 'PRODUCTION':
+      return 'PRODUCTION';
     case 'POST_PRODUCTION':
+      return 'POST_PRODUCTION';
     case 'DELIVERY':
-      return category;
+    case 'DIGITAL_DELIVERY':
+    case 'PHYSICAL_DELIVERY':
+      return 'DELIVERY';
     case 'REVIEW':
     case 'WARRANTY':
       return 'POST_PRODUCTION';
+    case 'UNASSIGNED':
+      return 'UNASSIGNED';
     default:
       return 'PLANNING';
   }

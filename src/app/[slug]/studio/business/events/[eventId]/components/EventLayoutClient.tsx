@@ -8,6 +8,7 @@ import { CancelationWithFundsModal } from '@/components/shared/cancelation/Cance
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import type { EventoResumenData } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
+import { sanitizeEventDataForClient } from '@/lib/utils/sanitize-cotizacion-for-client';
 import { EventPanel } from '../../components/EventPanel';
 import { EventDetailHeader } from './EventDetailHeader';
 import { EventDetailToolbar } from './EventDetailToolbar';
@@ -115,7 +116,7 @@ export function EventLayoutClient({
           currentPipelineStageId={eventData?.stage_id || null}
           loading={false}
           onEventUpdated={(updatedData) => {
-            setEventData(updatedData);
+            setEventData(sanitizeEventDataForClient(updatedData));
           }}
           onCancelClick={handleCancelClick}
         />
@@ -151,7 +152,7 @@ export function EventLayoutClient({
                 const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
                 const result = await obtenerEventoDetalle(studioSlug, eventId);
                 if (result.success && result.data) {
-                  setEventData(result.data);
+                  setEventData(sanitizeEventDataForClient(result.data));
                 }
               }}
             />

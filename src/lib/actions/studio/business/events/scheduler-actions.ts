@@ -7,6 +7,7 @@ import { obtenerCatalogo, actualizarOrdenCategorias } from '@/lib/actions/studio
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+import { sanitizarCotizacion } from '@/lib/utils/sanitize-cotizacion-for-client';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
 interface UpdateSchedulerTaskInput {
@@ -305,11 +306,29 @@ export async function obtenerSchedulerTareas(studioSlug: string, eventId: string
     const data = tareas.map((t) => {
       const fromItem = t.cotizacion_item?.service_category_id ?? t.cotizacion_item?.items?.service_category_id ?? null;
       const catalog_category_id = t.catalog_category_id ?? fromItem ?? 'uncategorized';
-      const { _count, ...rest } = t;
+      const cotizacion_item =
+        t.cotizacion_item != null
+          ? {
+              internal_delivery_days: t.cotizacion_item.internal_delivery_days,
+              service_category_id: t.cotizacion_item.service_category_id,
+              items: t.cotizacion_item.items,
+            }
+          : null;
       return {
-        ...rest,
+        id: t.id,
+        name: t.name,
+        duration_days: t.duration_days,
+        category: t.category,
         catalog_category_id,
-        notes_count: _count.activity_log,
+        scheduler_custom_category_id: t.scheduler_custom_category_id,
+        catalog_category: t.catalog_category,
+        status: t.status,
+        progress_percent: t.progress_percent != null ? Number(t.progress_percent) : 0,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        cotizacion_item_id: t.cotizacion_item_id,
+        cotizacion_item,
+        notes_count: t._count.activity_log,
       };
     });
 
@@ -2951,6 +2970,9 @@ export async function obtenerTareasScheduler(
               cotizacion_item_id: true,
               category: true,
               catalog_category_id: true,
+              catalog_category_name_snapshot: true,
+              catalog_section_id_snapshot: true,
+              catalog_section_name_snapshot: true,
               parent_id: true,
               catalog_category: {
                 select: { id: true, name: true },
@@ -3034,6 +3056,9 @@ export async function obtenerTareasScheduler(
                   completed_at: true,
                   category: true,
                   catalog_category_id: true,
+                  catalog_category_name_snapshot: true,
+                  catalog_section_id_snapshot: true,
+                  catalog_section_name_snapshot: true,
                   parent_id: true,
                   catalog_category: {
                     select: { id: true, name: true },
@@ -3101,8 +3126,8 @@ export async function obtenerTareasScheduler(
             name_snapshot: item.name_snapshot,
             quantity: item.quantity,
             order: item.order,
-            cost: item.cost,
-            cost_snapshot: item.cost_snapshot,
+            cost: item.cost != null ? Number(item.cost) : null,
+            cost_snapshot: item.cost_snapshot != null ? Number(item.cost_snapshot) : null,
             profit_type: item.profit_type,
             profit_type_snapshot: item.profit_type_snapshot,
             service_category_id: item.service_category_id,
@@ -3139,6 +3164,7 @@ export async function obtenerTareasScheduler(
     if (cotizacionId) {
       cotizaciones = cotizaciones.filter((c) => c.id === cotizacionId);
     }
+    cotizaciones = cotizaciones.map((c) => sanitizarCotizacion(c as Record<string, unknown>) as (typeof cotizaciones)[0]);
 
     const schedulerInstance = schedulerInstanceRaw;
     const tasks = schedulerInstance?.tasks ?? [];

@@ -43,12 +43,13 @@ import {
   obtenerSchedulerTareas,
   clasificarTareaScheduler,
 } from '@/lib/actions/studio/business/events';
+import { getStageLabel, STAGE_COLORS as SCHEDULER_STAGE_COLORS } from '@/app/[slug]/studio/business/events/[eventId]/scheduler/utils/scheduler-section-stages';
 
 const PHASE_ORDER = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'] as const;
 type PhaseKey = (typeof PHASE_ORDER)[number];
 
-/** Oculto por ahora; activar cuando se necesite de nuevo el botón "Limpiar estructura". */
-const SHOW_LIMPIAR_ESTRUCTURA = false;
+/** Muestra el botón "Limpiar estructura" (borrar todas las tareas y categorías custom del cronograma). */
+const SHOW_LIMPIAR_ESTRUCTURA = true;
 
 const PHASE_OPTIONS = [
   { value: 'PLANNING', label: 'Planeación' },
@@ -846,7 +847,7 @@ export function EventSchedulerControlCard({
                             );
                             const phaseKey = `${sectionKey}-${phaseNode.phase}`;
                             const phaseOpen = openPhases[phaseKey] ?? true;
-                            const phaseColors = STAGE_COLORS[phaseNode.phase];
+                            const phaseColors = STAGE_COLORS[phaseNode.phase as PhaseKey] ?? SCHEDULER_STAGE_COLORS.UNASSIGNED;
 
                             return (
                               <Collapsible
@@ -869,7 +870,7 @@ export function EventSchedulerControlCard({
                                       <ChevronRight className="h-2.5 w-2.5 shrink-0" />
                                     )}
                                     <span className="text-[10px] font-medium">
-                                      {STAGE_LABELS[phaseNode.phase]}
+                                      {getStageLabel(phaseNode.phase)}
                                       {totalInPhase === 0 && ' (Sin ítems asociados)'}
                                     </span>
                                     <span className="text-[10px] opacity-80 ml-auto">{totalInPhase}</span>
@@ -957,7 +958,7 @@ export function EventSchedulerControlCard({
                 )}
               </ZenButton>
             </div>
-            {process.env.NODE_ENV === 'development' && SHOW_LIMPIAR_ESTRUCTURA && (
+            {SHOW_LIMPIAR_ESTRUCTURA && (
               <div>
                 <ZenButton
                   variant="ghost"
@@ -971,7 +972,7 @@ export function EventSchedulerControlCard({
                   ) : (
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   )}
-                  Limpiar estructura
+                  Borrar cronograma
                 </ZenButton>
               </div>
             )}

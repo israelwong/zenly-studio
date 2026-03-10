@@ -36,7 +36,7 @@ import {
   isManualTaskRow,
   rowHeight,
   ROW_HEIGHTS,
-  STAGE_LABELS,
+  getStageLabel,
   DURATION_TEXT_CLASSES,
   POWER_BAR_STAGE_CLASSES,
   INDENT,
@@ -2757,7 +2757,7 @@ export const SchedulerSidebar = ({
                             sectionId={row.sectionId}
                             catalogCategoryId={manualCatalogCategoryId}
                             segmentCatalogCategoryId={catalogCategoryIdForKey}
-                            sectionLabel={catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label)}
+                            sectionLabel={catRow ? `${getStageLabel(stageRow.category)} · ${formatCategoryLabel(catRow.label)}` : getStageLabel(stageRow.category)}
                             onAddManualTaskSubmit={onAddManualTaskSubmit}
                             onManualTaskUpdate={onManualTaskUpdate}
                             onNoteAdded={onNoteAdded ?? (onManualTaskUpdate ? (_taskId: string, delta: number) => delta === 1 && onManualTaskUpdate() : undefined)}
@@ -2865,7 +2865,7 @@ export const SchedulerSidebar = ({
                                   sectionId: row.sectionId,
                                   stage: stageRow.category,
                                   catalogCategoryId: catalogCategoryIdForKey ?? itemEffectiveCatalogCategoryId,
-                                  sectionLabel: catRow ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${formatCategoryLabel(catRow.label)}` : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label),
+                                  sectionLabel: catRow ? `${getStageLabel(stageRow.category)} · ${formatCategoryLabel(catRow.label)}` : getStageLabel(stageRow.category),
                                   parentId: taskId,
                                   onAddManualTaskSubmit: onAddManualTaskSubmit!,
                                 }
@@ -2951,8 +2951,8 @@ export const SchedulerSidebar = ({
                     }
                     if (isAddPhantomRow(row)) {
                       const sectionLabel = row.categoryLabel
-                        ? `${STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label} · ${row.categoryLabel}`
-                        : (STAGE_LABELS[stageRow.category as TaskCategoryStage] ?? stageRow.label);
+                        ? `${getStageLabel(stageRow.category)} · ${row.categoryLabel}`
+                        : getStageLabel(stageRow.category);
                       const isThisPopoverOpen =
                         addPopoverContext?.type === 'add_task' &&
                         addPopoverContext.sectionId === row.sectionId &&

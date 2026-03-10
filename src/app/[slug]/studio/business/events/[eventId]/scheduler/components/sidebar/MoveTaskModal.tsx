@@ -13,7 +13,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/shadcn/collapsible';
-import { STAGE_ORDER, STAGE_LABELS, STAGE_COLORS, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
+import { STAGE_ORDER, getStageLabel, STAGE_COLORS, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronRight, Plus, Check, X } from 'lucide-react';
@@ -292,7 +292,7 @@ export function MoveTaskModal({
                                 ) : (
                                   <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                                 )}
-                                <span className="font-medium text-zinc-200">{STAGE_LABELS[stage]}</span>
+                                <span className="font-medium text-zinc-200">{getStageLabel(stage)}</span>
                                 {allCategories.length === 0 && (
                                   <span className="text-[10px] text-zinc-500 ml-auto">(vacío)</span>
                                 )}

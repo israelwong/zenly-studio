@@ -4,6 +4,16 @@ import type { TaskCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { validateStudio } from './helpers/studio-validator';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
+
+/**
+ * Serializa el resultado a un Plain Object para que Next.js pueda pasarlo al cliente.
+ * Elimina instancias de Decimal (y Date se convierten a string ISO).
+ * Usar en cualquier return de Server Action que envíe datos al cliente.
+ */
+function toPlainObject<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data)) as T;
+}
 
 /** Tipo mínimo para ordenar ítems por jerarquía catálogo (Sección → Categoría → Ítem). */
 type ItemConJerarquia = {
@@ -264,6 +274,14 @@ function normalizarNombreCategoria(name: string | null | undefined): string {
  * Mapeo por categoría operativa (v5.0): item.items.operational_category es la fuente de verdad primaria.
  * Única clasificación: PLANNING, PRODUCTION, POST_PRODUCTION, DELIVERY (operativa del Scheduler).
  * Devuelve null si debe usarse el fallback (mapearCategoriaDesdeNombre).
+ *
+ * DICCIONARIO DE MAPEO (entrada → TaskCategory):
+ * - Entrada esperada: string del catálogo (Prisma enum OperationalCategory o literal).
+ * - 'PRODUCTION'        → 'PRODUCTION'
+ * - 'PLANNING'          → 'PLANNING'  (no existe en enum OperationalCategory; puede venir de otro origen)
+ * - 'POST_PRODUCTION'   → 'POST_PRODUCTION'
+ * - 'DELIVERY' | 'DIGITAL_DELIVERY' | 'PHYSICAL_DELIVERY' → 'DELIVERY'
+ * - Cualquier otro valor o null/undefined → null (se usa mapearCategoriaDesdeNombre → UNASSIGNED si nombre vacío)
  */
 function mapearOperationalCategoryATaskCategory(
   operationalCategory: string | null | undefined
@@ -335,7 +353,10 @@ async function obtenerOCrearInstancia(
  * - Upsert solo por cotizacion_item_id: las tareas manuales (sin cotizacion_item_id) no se tocan; coexisten con las importadas sin ser eliminadas ni remapeadas.
  * - Limpieza de huérfanos: se eliminan tareas con catalog_category_id que no están vinculadas a un cotizacion_item_id real de este evento (residuos de plantilla o ítems sacados de la cotización).
  * - No se modifican studio_scheduler_custom_categories ni las tareas que referencian scheduler_custom_category_id (sincronización no destructiva).
- * - Update: solo order, category, duration_days, name, catalog_category_id. No notes, status ni progress_percent.
+ * - Update: solo order, category, duration_days, name, catalog_category_id, budget_amount. No notes, status ni progress_percent.
+ * - budget_amount: costo proveedor; si billing_type === 'HOUR' se aplica multiplicador por horas de cobertura (event_duration ?? promise.duration_hours).
+ * - duration_days: SSoT catálogo (items.default_duration_days / dias_ejecucion); fallback internal_delivery_days, client_delivery_days, 1.
+ * - category: SSoT operational_category del catálogo (Producción/Post/Planeación); fallback mapearCategoriaDesdeNombre.
  */
 export async function sincronizarTareasEvento(
   studioSlug: string,
@@ -370,11 +391,15 @@ export async function sincronizarTareasEvento(
       },
       select: {
         id: true,
+        event_duration: true,
+        promise: { select: { duration_hours: true } },
         cotizacion_items: {
           orderBy: [{ order: 'asc' }],
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
             id: true,
+            cost: true,
+            quantity: true,
             scheduler_task_id: true,
             service_category_id: true,
             internal_delivery_days: true,
@@ -401,6 +426,7 @@ export async function sincronizarTareasEvento(
                 },
               },
             },
+            // Relación con catálogo (studio_items): necesaria para operational_category y default_duration_days
             items: {
               select: {
                 name: true,
@@ -430,6 +456,20 @@ export async function sincronizarTareasEvento(
     // Item-First: solo ítems de cotizaciones autorizadas
     const allItems = cotizacionesRows.flatMap((c) => c.cotizacion_items ?? []);
     const orderedItems = aplanarOrdenCanonico(allItems);
+
+    // Horas de cobertura por cotización (prioridad: event_duration > promise.duration_hours) para multiplicador HOUR
+    const itemToDurationHours = new Map<string, number | null>();
+    for (const c of cotizacionesRows) {
+      const hours =
+        c.event_duration != null
+          ? Number(c.event_duration)
+          : c.promise?.duration_hours != null
+            ? Number(c.promise.duration_hours)
+            : null;
+      for (const it of c.cotizacion_items ?? []) {
+        itemToDurationHours.set(it.id, hours);
+      }
+    }
 
     // Huérfanas DRAFT (soft-delete operativo): tareas con cotizacion_item_id = null que "ocupan" un slot de servicio
     const orphanDrafts = await prisma.studio_scheduler_event_tasks.findMany({
@@ -484,15 +524,63 @@ export async function sincronizarTareasEvento(
           item.service_categories?.name ??
           item.items?.service_categories?.name ??
           null;
+        // Etapa (Producción/Post/Planeación): operational_category del catálogo es SSoT; fallback por nombre
         const category =
           mapearOperationalCategoryATaskCategory(item.items?.operational_category) ??
           mapearCategoriaDesdeNombre(categoryName);
-        const durationDays =
+        // Días de ejecución: catálogo (dias_ejecucion/default_duration_days) es SSoT; luego snapshot en cotización
+        const durationDaysRaw =
+          item.items?.default_duration_days ??
           item.internal_delivery_days ??
           item.client_delivery_days ??
-          item.items?.default_duration_days ??
           1;
+        const durationDays = Math.max(1, Number(durationDaysRaw));
         const name = item.name ?? item.name_snapshot ?? 'Tarea';
+
+        // Honorarios: costo proveedor; si billing_type === 'HOUR' aplicar multiplicador de horas
+        const billingType = (item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+        const durationHours = itemToDurationHours.get(item.id) ?? null;
+        const quantity = Number(item.quantity ?? 1);
+        const cantidadEfectiva = calcularCantidadEfectiva(billingType, quantity, durationHours);
+        const costUnit = Number((item as { cost?: number | null }).cost ?? 0);
+        const budgetAmount = costUnit * cantidadEfectiva;
+
+        // AUDITORÍA: datos crudos vs mapeados (días, categoría, honorarios)
+        const itemDisplayName = item.name ?? item.name_snapshot ?? item.items?.name ?? `item-${item.id}`;
+        console.log(`\n=== AUDITORÍA DE ÍTEM: ${itemDisplayName} ===`);
+        console.dir(
+          {
+            rawData: {
+              billing_type: item.billing_type,
+              quantity: item.quantity,
+              durationHours: itemToDurationHours.get(item.id) ?? null,
+              cost: (item as { cost?: number | null }).cost,
+              operational_category: item.items?.operational_category,
+              default_duration_days: item.items?.default_duration_days,
+              internal_delivery_days: item.internal_delivery_days,
+              client_delivery_days: item.client_delivery_days,
+              item_id: item.item_id,
+              items_relation: item.items
+                ? {
+                    name: item.items.name,
+                    operational_category: item.items.operational_category,
+                    default_duration_days: item.items.default_duration_days,
+                  }
+                : null,
+              category_name_snapshot: item.category_name_snapshot,
+              category_name: item.category_name,
+              service_categories_name: item.service_categories?.name,
+            },
+            mappedData: {
+              calculoHonorario: budgetAmount,
+              diasCalculados: durationDays,
+              categoriaMapeada: category,
+              categoryNameFallback: categoryName,
+            },
+          },
+          { depth: null }
+        );
+        console.log('=====================================\n');
 
         // Snapshots solo desde el ítem procesado (no catálogo global)
         const sectionRef = item.service_categories?.section_categories ?? item.items?.service_categories?.section_categories;
@@ -533,6 +621,7 @@ export async function sincronizarTareasEvento(
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
+            ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           },
           update: {
             order,
@@ -543,6 +632,7 @@ export async function sincronizarTareasEvento(
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
+            ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           },
         });
 
@@ -622,12 +712,12 @@ export async function sincronizarTareasEvento(
 
     console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length });
 
-    return { success: true, created, updated, skipped: 0 };
+    return toPlainObject({ success: true, created, updated, skipped: 0 });
   } catch (error) {
     console.error('[sincronizarTareasEvento] Error:', error);
-    return {
+    return toPlainObject({
       success: false,
       error: error instanceof Error ? error.message : 'Error al sincronizar tareas',
-    };
+    });
   }
 }

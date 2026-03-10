@@ -22,6 +22,7 @@ import {
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
+import { sanitizarCotizacion } from '@/lib/utils/sanitize-cotizacion-for-client';
 
 /** Filtra secciones/categorías al catálogo que realmente existe en la cotización migrada al scheduler (no traer estructura que no usa el evento). */
 function filterSeccionesBySchedulerStructure(
@@ -1146,11 +1147,11 @@ export async function obtenerEventoDetalle(
       pending_amount: financials.pendingAmount,
       cotizacion: evento.cotizacion ? (() => {
         const cot = evento.cotizacion!;
-        return {
+        return sanitizarCotizacion({
           ...(cot as any),
           price: cot.price ? Number(cot.price) : 0,
           cotizacion_items: (cot.cotizacion_items ?? []).map(serializeCotizacionItemBasic),
-        };
+        });
       })() : null,
       cotizaciones: todasLasCotizaciones.map((cotizacion) => {
         const cot = cotizacion as any;
@@ -1180,26 +1181,13 @@ export async function obtenerEventoDetalle(
           return (a.order ?? 0) - (b.order ?? 0);
         }).map(serializeCotizacionItemComplete);
 
-        return {
+        const sanitized = sanitizarCotizacion({
           ...cot,
           price: Number(cot.price),
           discount: cot.discount ? Number(cot.discount) : null,
-          // Incluir snapshots de condiciones comerciales (inmutables)
-          // Convertir Decimal a number para serialización JSON
-          condiciones_comerciales_name_snapshot: cot.condiciones_comerciales_name_snapshot,
-          condiciones_comerciales_description_snapshot: cot.condiciones_comerciales_description_snapshot,
-          condiciones_comerciales_advance_percentage_snapshot: cot.condiciones_comerciales_advance_percentage_snapshot != null
-            ? Number(cot.condiciones_comerciales_advance_percentage_snapshot)
-            : null,
-          condiciones_comerciales_advance_type_snapshot: cot.condiciones_comerciales_advance_type_snapshot,
-          condiciones_comerciales_advance_amount_snapshot: cot.condiciones_comerciales_advance_amount_snapshot != null
-            ? Number(cot.condiciones_comerciales_advance_amount_snapshot)
-            : null,
-          condiciones_comerciales_discount_percentage_snapshot: cot.condiciones_comerciales_discount_percentage_snapshot != null
-            ? Number(cot.condiciones_comerciales_discount_percentage_snapshot)
-            : null,
           cotizacion_items: itemsOrdenados,
-        };
+        });
+        return sanitized;
       }),
       payments: pagos.map(pago => ({
         id: pago.id,

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Settings2 } from 'lucide-react';
-import { STAGE_ORDER, STAGE_LABELS, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
+import { STAGE_ORDER, getStageLabel, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 
 interface SchedulerSectionStagesConfigPopoverProps {
   sectionId: string;
@@ -94,7 +94,7 @@ export function SchedulerSectionStagesConfigPopover({
                   }
                 }}
               >
-                <span className="text-sm text-zinc-200 truncate">{STAGE_LABELS[stage]}</span>
+                <span className="text-sm text-zinc-200 truncate">{getStageLabel(stage)}</span>
                 <div onClick={(e) => e.stopPropagation()}>
                   <Switch
                     checked={isChecked}

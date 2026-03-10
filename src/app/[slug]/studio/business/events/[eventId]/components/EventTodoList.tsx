@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { cn } from '@/lib/utils';
+import { sanitizeEventDataForClient } from '@/lib/utils/sanitize-cotizacion-for-client';
 import { toast } from 'sonner';
 import { normalizeDateToUtcDateOnly } from '@/lib/utils/date-only';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -43,6 +44,7 @@ import {
   isAddCategoryPhantomRow,
   STAGE_ORDER,
   SIN_CATEGORIA_SECTION_ID,
+  getStageLabel,
   type ManualTaskPayload,
   type StageBlock,
 } from '@/app/[slug]/studio/business/events/[eventId]/scheduler/utils/scheduler-section-stages';
@@ -195,7 +197,7 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
     const result = await obtenerEventoDetalle(studioSlug, eventId);
     setLoading(false);
     if (result.success && result.data) {
-      setEventData(result.data);
+      setEventData(sanitizeEventDataForClient(result.data));
       setSecciones(result.data.secciones ?? []);
     } else {
       setEventData(null);
@@ -622,7 +624,7 @@ export function EventTodoList({ studioSlug, eventId, onSynced }: EventTodoListPr
                                   <ChevronRight className="h-2.5 w-2.5 shrink-0" />
                                 )}
                                 <span className="text-[10px] font-medium">
-                                  {STAGE_LABELS[stagePhase]}
+                                  {getStageLabel(stagePhase)}
                                 </span>
                                 <span className="text-[10px] opacity-80 ml-auto">{totalInPhase}</span>
                               </button>

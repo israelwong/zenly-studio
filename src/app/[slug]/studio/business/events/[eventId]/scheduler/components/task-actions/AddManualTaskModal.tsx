@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ZenDialog, ZenInput } from '@/components/ui/zen';
 import { crearTareaManualScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
-import { STAGE_LABELS, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
+import { getStageLabel, type TaskCategoryStage } from '../../utils/scheduler-section-stages';
 
 export interface AddManualTaskModalProps {
   isOpen: boolean;
@@ -62,7 +62,7 @@ export function AddManualTaskModal({
     }
   };
 
-  const stageLabel = typeof stage === 'string' && stage in STAGE_LABELS ? STAGE_LABELS[stage as TaskCategoryStage] : stage;
+  const stageLabel = getStageLabel(stage);
 
   return (
     <ZenDialog
