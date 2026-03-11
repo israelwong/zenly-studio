@@ -18,6 +18,8 @@ interface EventPanelProps {
   eventData: EventoDetalle;
   initialResumen?: EventoResumenData | null;
   onEventUpdated?: () => void;
+  /** Si hay contrato(s) para el evento (muestra sección Documentos). */
+  hasContract?: boolean;
 }
 
 export function EventPanel({
@@ -26,6 +28,7 @@ export function EventPanel({
   eventData,
   initialResumen,
   onEventUpdated,
+  hasContract = false,
 }: EventPanelProps) {
   return (
     <div className="space-y-6">
@@ -58,6 +61,9 @@ export function EventPanel({
             contractValueFallback={eventData.contract_value}
             paidAmountFallback={eventData.paid_amount}
             pendingAmountFallback={eventData.pending_amount}
+            mainCotizacionId={eventData.cotizacion?.id ?? null}
+            eventId={eventId}
+            hasContract={hasContract}
           />
           {eventData.promise_id && (
             <QuickNoteCard

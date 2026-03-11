@@ -6,7 +6,10 @@ import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
 import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
+import { ConfirmarCierreModal } from '../../../components/ConfirmarCierreModal';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { autorizarAnexoDirecto } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import type { PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
 
@@ -19,6 +22,8 @@ interface NuevaCotizacionClientProps {
   isAnnex?: boolean;
   /** ID de la cotización principal cuando isAnnex es true. */
   parentCotizacionId?: string | null;
+  /** URL a la que redirigir tras guardar (ej. ficha del evento). */
+  returnUrl?: string | null;
 }
 
 export function NuevaCotizacionClient({
@@ -28,6 +33,7 @@ export function NuevaCotizacionClient({
   contactId,
   isAnnex = false,
   parentCotizacionId = null,
+  returnUrl = null,
 }: NuevaCotizacionClientProps) {
   const router = useRouter();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -35,6 +41,8 @@ export function NuevaCotizacionClient({
   const previewDataRef = useRef<(() => PublicCotizacion | null) | null>(null);
   const guardarComoPaqueteRef = useRef<(() => void) | null>(null);
   const saveHandlersRef = useRef<{ onSaveDraft: () => void; onSavePublish: () => void } | null>(null);
+  const skipRedirectAnnexAndOpenCierreModalRef = useRef(false);
+  const [cierreModalAnnexId, setCierreModalAnnexId] = useState<string | null>(null);
   const [previewFooterState, setPreviewFooterState] = useState<{
     loading: boolean;
     savingIntent: 'draft' | 'publish' | null;
@@ -81,7 +89,9 @@ export function NuevaCotizacionClient({
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (isAnnex && promiseId && studioSlug) {
+                if (returnUrl) {
+                  router.push(returnUrl);
+                } else if (isAnnex && promiseId && studioSlug) {
                   router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
                 } else {
                   router.back();
@@ -118,8 +128,8 @@ export function NuevaCotizacionClient({
             promiseId={promiseId}
             packageId={packageId}
             contactId={contactId}
-            redirectOnSuccess={isAnnex ? undefined : `/${studioSlug}/studio/commercial/promises/${promiseId}`}
-            returnPathOverride={isAnnex ? `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada` : undefined}
+            redirectOnSuccess={returnUrl ?? (isAnnex ? undefined : `/${studioSlug}/studio/commercial/promises/${promiseId}`)}
+            returnPathOverride={returnUrl ?? (isAnnex ? `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada` : undefined)}
             getPreviewDataRef={previewDataRef}
             onRequestPreview={handleOpenPreview}
             hideGuardarComoPaqueteInSidebar={true}
@@ -129,6 +139,8 @@ export function NuevaCotizacionClient({
             promiseState={isAnnex ? 'autorizada' : 'pendiente'}
             isAnnex={isAnnex}
             parentCotizacionId={parentCotizacionId ?? undefined}
+            skipRedirectAnnexAndOpenCierreModalRef={isAnnex ? skipRedirectAnnexAndOpenCierreModalRef : undefined}
+            onAnnexSaveSuccessOpenCierreModal={isAnnex ? (id) => setCierreModalAnnexId(id) : undefined}
           />
         </ZenCardContent>
       </ZenCard>
@@ -164,6 +176,33 @@ export function NuevaCotizacionClient({
                 }
               : null
           }
+        />
+      )}
+
+      {isAnnex && cierreModalAnnexId && promiseId && (
+        <ConfirmarCierreModal
+          isOpen={!!cierreModalAnnexId}
+          onClose={() => {
+            setCierreModalAnnexId(null);
+            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+          }}
+          onConfirm={async (payload: PasarACierreOptions) => {
+            const result = await autorizarAnexoDirecto(studioSlug, promiseId, cierreModalAnnexId, payload);
+            if (!result.success) throw new Error(result.error);
+            setCierreModalAnnexId(null);
+            // Redirigir siempre a la ficha del evento: returnUrl (prioridad) o evento_id de la respuesta
+            if (returnUrl) {
+              router.replace(returnUrl);
+            } else if (result.data?.evento_id) {
+              router.replace(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
+            } else {
+              router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+            }
+          }}
+          studioSlug={studioSlug}
+          cotizacionId={cierreModalAnnexId}
+          promiseId={promiseId}
+          isAnnexContext
         />
       )}
     </div>

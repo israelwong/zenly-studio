@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { ZenDialog, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -151,6 +152,12 @@ export function ConfirmarCierreModal({
   const [contractTemplates, setContractTemplates] = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
   const [templateId, setTemplateId] = useState<string>('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  /** Solo relevante cuando isAnnexContext: true = evento principal tiene contrato → mostrar Formalización y forzar anexo */
+  const [hasMasterContract, setHasMasterContract] = useState<boolean | undefined>(undefined);
+  /** Anexos: si true, al confirmar se llama onConfirm (autorizar); si false, solo se redirige a autorizada y el anexo queda pendiente. */
+  const [autorizacionManualEstudio, setAutorizacionManualEstudio] = useState(true);
+
+  const router = useRouter();
 
   useEffect(() => {
     if (isOpen) {
@@ -162,6 +169,8 @@ export function ConfirmarCierreModal({
       setSolicitarFirma(true);
       setContractTemplates([]);
       setTemplateId('');
+      setHasMasterContract(undefined);
+      setAutorizacionManualEstudio(true);
       isManualEditRef.current = false;
       
       // Cargar métodos de pago
@@ -180,6 +189,11 @@ export function ConfirmarCierreModal({
           if (res.success && res.data) {
             setCotizacion(res.data.cotizacion);
             setCondiciones(res.data.condiciones);
+            if (isAnnexContext) {
+              const hasContract = res.data.hasMasterContract ?? false;
+              setHasMasterContract(hasContract);
+              if (hasContract) setGenerarContrato(true);
+            }
             getAuditoriaRentabilidadCierre(studioSlug, cotizacionId).then((r) => {
               if (r.success && r.data) setAuditoria(r.data);
               else setAuditoria(null);
@@ -225,7 +239,7 @@ export function ConfirmarCierreModal({
         })
         .finally(() => setLoading(false));
     }
-  }, [isOpen, studioSlug, cotizacionId]);
+  }, [isOpen, studioSlug, cotizacionId, isAnnexContext]);
 
   const condicionActiva = selectedId === NEGOCIACION_ID
     ? cotizacion?.condicion_comercial_negociacion ?? null
@@ -347,6 +361,12 @@ export function ConfirmarCierreModal({
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
+    if (isAnnexContext && !autorizacionManualEstudio) {
+      confirmadoRef.current = true;
+      onClose();
+      router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+      return;
+    }
     setIsSubmitting(true);
     try {
       await Promise.resolve(onConfirm(buildPayload()));
@@ -436,12 +456,20 @@ export function ConfirmarCierreModal({
     <ZenDialog
       isOpen={isOpen}
       onClose={isSubmitting ? () => {} : handleClose}
-      title="Confirmación de Cierre"
+      title={isAnnexContext ? 'Confirmar Autorización de Anexo' : 'Confirmación de Cierre'}
       description={cotizacionName ? `Cotización: ${cotizacionName}` : undefined}
       maxWidth="lg"
       onSave={() => void handleConfirm()}
       onCancel={isSubmitting ? () => {} : handleClose}
-      saveLabel={(isLoading || isSubmitting) && progressMessage ? progressMessage : (isSubmitting ? 'Confirmando cierre...' : (isLoading ? 'Procesando...' : 'Pasar a Cierre'))}
+      saveLabel={
+        (isLoading || isSubmitting) && progressMessage
+          ? progressMessage
+          : isSubmitting
+            ? 'Confirmando...'
+            : isAnnexContext
+              ? (autorizacionManualEstudio ? 'Autorizar ahora y ver evento' : 'Enviar para aprobación')
+              : (isLoading ? 'Procesando...' : 'Pasar a Cierre')
+      }
       cancelLabel="Cancelar"
       closeOnClickOutside={false}
       isLoading={isLoading || isSubmitting}
@@ -449,9 +477,28 @@ export function ConfirmarCierreModal({
     >
       <div className="space-y-6">
         {isAnnexContext && (
-          <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-            Propuesta adicional (anexo). El pago se registrará en la cuenta del evento actual; no se crea un nuevo evento.
-          </p>
+          <>
+            <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              Propuesta adicional (anexo). El pago se registrará en la cuenta del evento actual; no se crea un nuevo evento.
+            </p>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">
+                  {autorizacionManualEstudio ? 'Autorización manual (Aprobar ahora)' : 'En espera de aprobación del cliente'}
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  {autorizacionManualEstudio
+                    ? 'Al confirmar se autoriza el anexo y se redirige a la ficha del evento.'
+                    : 'El anexo quedará pendiente; el cliente podrá aprobarlo desde su portal.'}
+                </p>
+              </div>
+              <Switch
+                checked={autorizacionManualEstudio}
+                onCheckedChange={setAutorizacionManualEstudio}
+                className="data-[state=checked]:bg-emerald-500 shrink-0"
+              />
+            </div>
+          </>
         )}
         {loading ? (
           <ConfirmarCierreModalSkeleton />
@@ -715,7 +762,8 @@ export function ConfirmarCierreModal({
               )}
             </div>
 
-            {/* Configuración de Formalización: contrato y firma al pasar a cierre */}
+            {/* Configuración de Formalización: contrato/anexo y firma. En anexos sin contrato maestro se oculta (cierre solo financiero). */}
+            {(!isAnnexContext || hasMasterContract === true) && (
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
               <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-3">
                 Configuración de Formalización
@@ -723,12 +771,19 @@ export function ConfirmarCierreModal({
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">Generar Contrato Digital</p>
-                    <p className="text-xs text-zinc-500">Al pasar a cierre se generará el contrato con la plantilla elegida.</p>
+                    <p className="text-sm font-medium text-zinc-200">
+                      {isAnnexContext ? 'Generar Anexo' : 'Generar Contrato Digital'}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {isAnnexContext
+                        ? 'Al pasar a cierre se generará el anexo con la plantilla elegida, vinculado al contrato principal.'
+                        : 'Al pasar a cierre se generará el contrato con la plantilla elegida.'}
+                    </p>
                   </div>
                   <Switch
                     checked={generarContrato}
-                    onCheckedChange={setGenerarContrato}
+                    onCheckedChange={isAnnexContext && hasMasterContract === true ? () => {} : setGenerarContrato}
+                    disabled={isAnnexContext && hasMasterContract === true}
                     className="data-[state=checked]:bg-emerald-500"
                   />
                 </div>
@@ -758,8 +813,14 @@ export function ConfirmarCierreModal({
                     )}
                     <div className="flex items-start justify-between gap-3 pt-2 border-t border-zinc-700/50">
                       <div>
-                        <p className="text-sm font-medium text-zinc-200">Solicitar Firma Digital</p>
-                        <p className="text-xs text-zinc-500">El cliente firmará el contrato desde el enlace de cierre.</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {isAnnexContext ? 'Solicitar firma del anexo' : 'Solicitar Firma Digital'}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {isAnnexContext
+                            ? 'El cliente firmará el anexo desde el enlace de cierre.'
+                            : 'El cliente firmará el contrato desde el enlace de cierre.'}
+                        </p>
                       </div>
                       <Switch
                         checked={solicitarFirma}
@@ -771,6 +832,7 @@ export function ConfirmarCierreModal({
                 )}
               </div>
             </div>
+            )}
 
             {auditoria != null && (
               <AuditoriaRentabilidadCard

@@ -15,11 +15,13 @@ import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { checkDateConflict } from '@/lib/utils/booking-conflict';
 import { getPrecioListaStudio, getAjusteCierre } from '@/lib/utils/promise-public-financials';
 import { generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent } from '@/lib/utils/contract-financial-snapshot';
-import { getAuditoriaRentabilidadCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getAuditoriaRentabilidadCierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { TRANSACTION_CATEGORY } from '@/lib/constants/transaction-category';
 import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
 import { incrementBalanceForIngreso } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from '@/lib/constants/delivery-policy';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import type { CotizacionRenderData, CondicionesComercialesData } from '@/components/shared/contracts/types';
 
 interface CierreResponse {
   success: boolean;
@@ -274,6 +276,126 @@ status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener registro de cierre',
     };
+  }
+}
+
+/** Datos para vista previa del anexo (AnnexDocumentView). */
+export interface AnnexPreviewData {
+  masterContractId: string | null;
+  masterContractDate: string | null;
+  cotizacionData: CotizacionRenderData | null;
+  condicionesData: CondicionesComercialesData | null;
+  deliveryPolicy: {
+    independent: boolean;
+    dias?: number | null;
+    timing?: 'before' | 'after' | string | null;
+  } | null;
+}
+
+/**
+ * Obtiene los datos para previsualizar el documento anexo (cabecera contrato maestro, ítems, desglose, políticas de entrega).
+ * Usado en Cierre y Eventos cuando la cotización es un anexo.
+ */
+export async function getAnnexPreviewData(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<{ success: boolean; data?: AnnexPreviewData; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: { id: cotizacionId, studio_id: studio.id },
+      select: {
+        promise_id: true,
+        parent_cotizacion_id: true,
+        is_annex: true,
+        anexo_entrega_independent: true,
+        anexo_entrega_dias: true,
+        anexo_entrega_timing: true,
+      },
+    });
+    if (!cotizacion || !cotizacion.promise_id) {
+      return { success: false, error: 'Cotización no encontrada o sin promesa' };
+    }
+
+    let masterContractId: string | null = null;
+    let masterContractDate: string | null = null;
+    const parentId = cotizacion.parent_cotizacion_id ?? null;
+    if (parentId) {
+      const parent = await prisma.studio_cotizaciones.findUnique({
+        where: { id: parentId },
+        select: { evento_id: true },
+      });
+      if (parent?.evento_id) {
+        const event = await prisma.studio_events.findUnique({
+          where: { id: parent.evento_id },
+          select: { contract_id: true },
+        });
+        if (event?.contract_id) {
+          const contract = await prisma.studio_event_contracts.findUnique({
+            where: { id: event.contract_id },
+            select: { id: true, signed_at: true, created_at: true },
+          });
+          if (contract) {
+            masterContractId = contract.id;
+            const date = contract.signed_at ?? contract.created_at;
+            masterContractDate = date ? formatDisplayDateLong(date) : null;
+          }
+        }
+      }
+    }
+
+    const registroCierre = await prisma.studio_cotizaciones_cierre.findUnique({
+      where: { cotizacion_id: cotizacionId },
+      include: { condiciones_comerciales: true },
+    });
+    const condicionInfo = registroCierre?.condiciones_comerciales
+      ? {
+          id: registroCierre.condiciones_comerciales.id,
+          name: registroCierre.condiciones_comerciales.name,
+          description: registroCierre.condiciones_comerciales.description ?? null,
+          discount_percentage: registroCierre.condiciones_comerciales.discount_percentage ?? null,
+          advance_percentage: registroCierre.condiciones_comerciales.advance_percentage ?? null,
+          advance_type: registroCierre.condiciones_comerciales.advance_type ?? null,
+          advance_amount: registroCierre.condiciones_comerciales.advance_amount ?? null,
+        }
+      : undefined;
+
+    const contractDataResult = await getPromiseContractData(
+      studioSlug,
+      cotizacion.promise_id,
+      cotizacionId,
+      condicionInfo
+    );
+    if (!contractDataResult.success || !contractDataResult.data) {
+      return { success: true, data: { masterContractId, masterContractDate, cotizacionData: null, condicionesData: null, deliveryPolicy: null } };
+    }
+
+    const deliveryPolicy = (cotizacion.is_annex || parentId)
+      ? {
+          independent: cotizacion.anexo_entrega_independent ?? false,
+          dias: cotizacion.anexo_entrega_dias ?? null,
+          timing: cotizacion.anexo_entrega_timing ?? null,
+        }
+      : null;
+
+    return {
+      success: true,
+      data: {
+        masterContractId,
+        masterContractDate,
+        cotizacionData: contractDataResult.data.cotizacionData ?? null,
+        condicionesData: contractDataResult.data.condicionesData ?? null,
+        deliveryPolicy,
+      },
+    };
+  } catch (error) {
+    console.error('[getAnnexPreviewData] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al cargar datos del anexo' };
   }
 }
 
@@ -2980,10 +3102,28 @@ export async function autorizarYCrearEvento(
         });
       }
 
-      // 8.10. Eliminar registro temporal de cierre
-      await tx.studio_cotizaciones_cierre.delete({
-        where: { cotizacion_id: cotizacionId },
-      });
+      // 8.10. Anexos: vincular al contrato maestro y conservar registro (cadena de custodia). Principal: eliminar registro temporal.
+      const parentCotizacionId = (cotizacion as { parent_cotizacion_id?: string | null }).parent_cotizacion_id ?? null;
+      if (parentCotizacionId) {
+        const parent = await tx.studio_cotizaciones.findUnique({
+          where: { id: parentCotizacionId },
+          select: { evento_id: true },
+        });
+        const masterContractId = parent?.evento_id
+          ? (await tx.studio_events.findUnique({
+              where: { id: parent.evento_id },
+              select: { contract_id: true },
+            }))?.contract_id ?? null
+          : null;
+        await tx.studio_cotizaciones_cierre.update({
+          where: { cotizacion_id: cotizacionId },
+          data: { master_contract_id: masterContractId, updated_at: new Date() },
+        });
+      } else {
+        await tx.studio_cotizaciones_cierre.delete({
+          where: { cotizacion_id: cotizacionId },
+        });
+      }
 
       // 8.11. Crear log de autorizaci?n y creaci?n de evento
       const eventoNombre = cotizacion.promise.event_name || cotizacion.promise.name || 'Evento';
@@ -3148,6 +3288,376 @@ export async function autorizarYCrearEvento(
         error instanceof Error
           ? error.message
           : 'Error al autorizar cotizaci?n y crear evento',
+    };
+  }
+}
+
+/**
+ * Autoriza un anexo (propuesta adicional) directamente desde /autorizada, sin pasar por /cierre.
+ * - Cambia status de la cotización anexo a 'autorizada'.
+ * - Registra pago inicial en el balance del evento (evento del padre).
+ * - Vincula legalmente el anexo al contrato maestro (master_contract_id).
+ * - No modifica el status de la promesa ni archiva otros anexos.
+ */
+export async function autorizarAnexoDirecto(
+  studioSlug: string,
+  promiseId: string,
+  cotizacionId: string,
+  options?: PasarACierreOptions
+): Promise<{ success: boolean; data?: { cotizacion_id: string; pago_registrado: boolean; evento_id: string }; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const anexo = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+      },
+      include: {
+        promise: { select: { contact_id: true, event_type_id: true } },
+        cotizacion_items: true,
+        condicion_comercial_negociacion: true,
+        condiciones_comerciales: true,
+      },
+    });
+
+    if (!anexo) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    const isAnnex = (anexo as { is_annex?: boolean }).is_annex === true;
+    const parentId = (anexo as { parent_cotizacion_id?: string | null }).parent_cotizacion_id ?? null;
+
+    if (!isAnnex || !parentId) {
+      return { success: false, error: 'Solo se puede autorizar directamente una cotización que sea anexo de una cotización principal' };
+    }
+
+    if (anexo.status !== 'pendiente' && anexo.status !== 'negociacion') {
+      return { success: false, error: 'El anexo debe estar en estado pendiente o negociación' };
+    }
+
+    const parent = await prisma.studio_cotizaciones.findUnique({
+      where: { id: parentId, studio_id: studio.id },
+      select: { evento_id: true },
+    });
+    if (!parent?.evento_id) {
+      return { success: false, error: 'La cotización principal no tiene evento asociado' };
+    }
+
+    const evento = await prisma.studio_events.findUnique({
+      where: { id: parent.evento_id, studio_id: studio.id },
+      select: { id: true, contract_id: true },
+    });
+    if (!evento) {
+      return { success: false, error: 'Evento no encontrado' };
+    }
+
+    const masterContractId = evento.contract_id ?? null;
+    const condicionId = options?.condiciones_comerciales_id ?? null;
+    const ajuste = options?.condicion_negociacion_ajuste;
+
+    // Cortesías (misma lógica que autorizarYCrearEvento)
+    const itemsCortesiaArr = Array.isArray(anexo.items_cortesia) ? (anexo.items_cortesia as string[]) : [];
+    const itemsCortesiaIds = new Set(itemsCortesiaArr);
+    const allItems = anexo.cotizacion_items ?? [];
+    let cortesias_monto = 0;
+    let cortesias_count = 0;
+    for (const i of allItems) {
+      const esCortesia = (i as { is_courtesy?: boolean }).is_courtesy === true || itemsCortesiaIds.has(i.id) || (i.item_id != null && itemsCortesiaIds.has(i.item_id));
+      if (!esCortesia) continue;
+      cortesias_count += 1;
+      const qty = (i as { quantity?: number }).quantity ?? 1;
+      const precioUnit = Number((i as { unit_price?: unknown }).unit_price ?? 0);
+      const snapshot = Number((i as { unit_price_snapshot?: number }).unit_price_snapshot ?? 0);
+      const publicSnapshot = Number((i as { public_price_snapshot?: number }).public_price_snapshot ?? 0);
+      const valorComercial = precioUnit > 0 ? precioUnit * qty : (snapshot > 0 ? snapshot : publicSnapshot) * qty;
+      cortesias_monto += valorComercial > 0 ? valorComercial : Number((i as { subtotal?: unknown }).subtotal ?? 0);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (ajuste && anexo.promise_id) {
+        await tx.studio_condiciones_comerciales_negociacion.deleteMany({
+          where: { cotizacion_id: cotizacionId },
+        });
+        await tx.studio_condiciones_comerciales_negociacion.create({
+          data: {
+            cotizacion_id: cotizacionId,
+            promise_id: anexo.promise_id,
+            studio_id: studio.id,
+            name: ajuste.name.trim(),
+            description: null,
+            discount_percentage: ajuste.discount_percentage ?? null,
+            advance_type: ajuste.advance_type === 'fixed_amount' ? 'fixed_amount' : 'percentage',
+            advance_percentage: ajuste.advance_type === 'percentage' && ajuste.advance_percentage != null ? ajuste.advance_percentage : null,
+            advance_amount: ajuste.advance_type === 'fixed_amount' && ajuste.advance_amount != null ? new Prisma.Decimal(ajuste.advance_amount) : null,
+            metodo_pago_id: null,
+            is_temporary: true,
+          },
+        });
+        await tx.studio_cotizaciones.update({
+          where: { id: cotizacionId },
+          data: { condiciones_comerciales_id: null, updated_at: new Date() },
+        });
+      }
+
+      const registroCondicionId = ajuste ? null : condicionId;
+      const registroCondicionDefinidas = !!registroCondicionId || !!ajuste;
+      const pagoConfirmado = options?.pago_confirmado_estudio ?? false;
+      let pagoMontoConfirmado: Prisma.Decimal | null = options?.pago_monto_confirmado != null
+        ? new Prisma.Decimal(options.pago_monto_confirmado)
+        : null;
+
+      if (pagoConfirmado && pagoMontoConfirmado == null) {
+        const precioBase = Number(anexo.price ?? 0);
+        if (ajuste) {
+          const ant = ajuste.advance_type === 'fixed_amount' && ajuste.advance_amount != null
+            ? ajuste.advance_amount
+            : Math.round(precioBase * ((ajuste.advance_percentage ?? 0) / 100));
+          pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+        } else if (registroCondicionId) {
+          const cond = await tx.studio_condiciones_comerciales.findUnique({
+            where: { id: registroCondicionId },
+            select: { advance_type: true, advance_percentage: true, advance_amount: true },
+          });
+          if (cond) {
+            const isFixed = cond.advance_type === 'fixed_amount' || cond.advance_type === 'amount';
+            const ant = isFixed && cond.advance_amount != null
+              ? Number(cond.advance_amount)
+              : Math.round(precioBase * ((cond.advance_percentage ?? 0) / 100));
+            pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+          }
+        }
+        if (pagoMontoConfirmado == null) {
+          const neg = await tx.studio_condiciones_comerciales_negociacion.findUnique({
+            where: { cotizacion_id: cotizacionId },
+            select: { advance_type: true, advance_percentage: true, advance_amount: true },
+          });
+          if (neg) {
+            const isFixed = neg.advance_type === 'fixed_amount' || neg.advance_type === 'amount';
+            const ant = isFixed && neg.advance_amount != null
+              ? Number(neg.advance_amount)
+              : Math.round(precioBase * ((neg.advance_percentage ?? 0) / 100));
+            pagoMontoConfirmado = ant > 0 ? new Prisma.Decimal(ant) : null;
+          }
+        }
+      }
+
+      await tx.studio_cotizaciones_cierre.upsert({
+        where: { cotizacion_id: cotizacionId },
+        create: {
+          cotizacion_id: cotizacionId,
+          previous_status: anexo.status,
+          condiciones_comerciales_id: registroCondicionId,
+          condiciones_comerciales_definidas: registroCondicionDefinidas,
+          checkin_completed: true,
+          pago_confirmado_estudio: pagoConfirmado,
+          pago_monto: pagoMontoConfirmado,
+          pago_metodo_id: options?.pago_metodo_id ?? null,
+          master_contract_id: masterContractId,
+        },
+        update: {
+          condiciones_comerciales_id: registroCondicionId,
+          condiciones_comerciales_definidas: registroCondicionDefinidas,
+          checkin_completed: true,
+          pago_confirmado_estudio: pagoConfirmado,
+          pago_monto: pagoMontoConfirmado,
+          pago_metodo_id: options?.pago_metodo_id ?? null,
+          master_contract_id: masterContractId,
+          updated_at: new Date(),
+        },
+      });
+
+      const registroCierre = await tx.studio_cotizaciones_cierre.findUnique({
+        where: { cotizacion_id: cotizacionId },
+        include: { condiciones_comerciales: true },
+      });
+
+      const condicionNegociacion = await tx.studio_condiciones_comerciales_negociacion.findUnique({
+        where: { cotizacion_id: cotizacionId },
+        select: {
+          name: true,
+          description: true,
+          advance_percentage: true,
+          advance_type: true,
+          advance_amount: true,
+          discount_percentage: true,
+        },
+      });
+      const condicionEstandar = registroCierre?.condiciones_comerciales ?? null;
+      const condicionSnapshot = condicionNegociacion
+        ? {
+            name: condicionNegociacion.name,
+            description: condicionNegociacion.description,
+            advance_percentage: condicionNegociacion.advance_percentage != null ? Number(condicionNegociacion.advance_percentage) : null,
+            advance_type: condicionNegociacion.advance_type,
+            advance_amount: condicionNegociacion.advance_amount != null ? Number(condicionNegociacion.advance_amount) : null,
+            discount_percentage: condicionNegociacion.discount_percentage != null ? Number(condicionNegociacion.discount_percentage) : null,
+          }
+        : registroCierre?.condiciones_comerciales_definidas && condicionEstandar
+          ? {
+              name: condicionEstandar.name,
+              description: condicionEstandar.description,
+              advance_percentage: condicionEstandar.advance_percentage != null ? Number(condicionEstandar.advance_percentage) : null,
+              advance_type: condicionEstandar.advance_type,
+              advance_amount: condicionEstandar.advance_amount != null ? Number(condicionEstandar.advance_amount) : null,
+              discount_percentage: condicionEstandar.discount_percentage != null ? Number(condicionEstandar.discount_percentage) : null,
+            }
+          : null;
+
+      const precioBase = Number(anexo.price ?? 0);
+      const discountPct = condicionSnapshot?.discount_percentage ?? 0;
+      const snapDescuentoCondicionMonto = discountPct > 0 ? Math.round(precioBase * discountPct / 100) : 0;
+      const totalFinalCierre = Math.round(precioBase - snapDescuentoCondicionMonto);
+      const montoBonoSnap = anexo.bono_especial != null ? Number(anexo.bono_especial) : 0;
+      const precioListaSnap = getPrecioListaStudio({
+        price: anexo.price,
+        precio_calculado: anexo.precio_calculado,
+      });
+      const ajusteCierreSnap = getAjusteCierre(precioBase, precioListaSnap, cortesias_monto, montoBonoSnap);
+
+      const snapshotPrecioCalculado = anexo.precio_calculado != null ? new Prisma.Decimal(Number(anexo.precio_calculado)) : null;
+      const snapshotBonoEspecial = anexo.bono_especial != null ? new Prisma.Decimal(Number(anexo.bono_especial)) : null;
+
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'autorizada',
+          eventos: { connect: { id: parent.evento_id } },
+          condiciones_comerciales: { disconnect: true },
+          precio_calculado: snapshotPrecioCalculado,
+          bono_especial: snapshotBonoEspecial,
+          items_cortesia: anexo.items_cortesia ?? null,
+          cortesias_monto_snapshot: cortesias_monto > 0 ? new Prisma.Decimal(cortesias_monto) : null,
+          cortesias_count_snapshot: cortesias_count > 0 ? cortesias_count : null,
+          snap_precio_lista: new Prisma.Decimal(precioListaSnap),
+          snap_ajuste_cierre: new Prisma.Decimal(ajusteCierreSnap),
+          snap_monto_bono: new Prisma.Decimal(montoBonoSnap),
+          snap_total_final: new Prisma.Decimal(totalFinalCierre),
+          snap_descuento_condicion_monto: snapDescuentoCondicionMonto > 0 ? new Prisma.Decimal(snapDescuentoCondicionMonto) : null,
+          condiciones_comerciales_name_snapshot: condicionSnapshot?.name ?? null,
+          condiciones_comerciales_description_snapshot: condicionSnapshot?.description ?? null,
+          condiciones_comerciales_advance_percentage_snapshot: condicionSnapshot?.advance_percentage ?? null,
+          condiciones_comerciales_advance_type_snapshot: condicionSnapshot?.advance_type ?? null,
+          condiciones_comerciales_advance_amount_snapshot: condicionSnapshot?.advance_amount != null ? new Prisma.Decimal(condicionSnapshot.advance_amount) : null,
+          condiciones_comerciales_discount_percentage_snapshot: condicionSnapshot?.discount_percentage ?? null,
+          updated_at: new Date(),
+        },
+      });
+
+      let pagoRegistrado = false;
+      const contactId = anexo.contact_id ?? anexo.promise?.contact_id;
+      const pagosExistentesCount = await tx.studio_pagos.count({
+        where: {
+          cotizacion_id: cotizacionId,
+          status: { in: ['paid', 'completed', 'succeeded', 'CONFIRMED'] },
+        },
+      });
+      const yaTienePagos = pagosExistentesCount > 0;
+      const montoDesdeRegistro = pagoMontoConfirmado != null ? Number(pagoMontoConfirmado) : 0;
+      const debeCrearPago =
+        !yaTienePagos &&
+        pagoConfirmado &&
+        montoDesdeRegistro > 0 &&
+        !!contactId;
+
+      if (debeCrearPago) {
+        let metodoPagoNombre = 'Manual';
+        if (registroCierre?.pago_metodo_id) {
+          const metodoPago = await tx.studio_metodos_pago.findUnique({
+            where: { id: registroCierre.pago_metodo_id },
+            select: { payment_method_name: true },
+          });
+          if (metodoPago) metodoPagoNombre = metodoPago.payment_method_name;
+        }
+        const fechaPago = normalizePaymentDate(registroCierre?.pago_fecha ?? new Date());
+        const aReq = await getAnticipoRequeridoCierre(tx, cotizacionId, precioBase, registroCierre?.condiciones_comerciales_id ?? undefined);
+        const baseData = {
+          cotizacion_id: cotizacionId,
+          promise_id: promiseId,
+          contact_id: contactId!,
+          payment_date: fechaPago,
+          metodo_pago_id: registroCierre?.pago_metodo_id ?? null,
+          metodo_pago: metodoPagoNombre,
+          status: 'completed' as const,
+          transaction_type: 'ingreso' as const,
+          event_type_id: anexo.promise?.event_type_id ?? null,
+          evento_id: parent.evento_id,
+        };
+        if (aReq > 0 && montoDesdeRegistro > aReq) {
+          await tx.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: aReq,
+              concept: 'Anticipo',
+              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+            },
+          });
+          await incrementBalanceForIngreso(tx, studio.id, aReq, {
+            metodo_pago_id: registroCierre?.pago_metodo_id ?? null,
+            metodo_pago: metodoPagoNombre,
+          });
+          await tx.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: montoDesdeRegistro - aReq,
+              concept: 'Abono adicional',
+              transaction_category: TRANSACTION_CATEGORY.ABONO,
+            },
+          });
+          await incrementBalanceForIngreso(tx, studio.id, montoDesdeRegistro - aReq, {
+            metodo_pago_id: registroCierre?.pago_metodo_id ?? null,
+            metodo_pago: metodoPagoNombre,
+          });
+        } else {
+          await tx.studio_pagos.create({
+            data: {
+              ...baseData,
+              amount: montoDesdeRegistro,
+              concept: 'Anticipo',
+              transaction_category: TRANSACTION_CATEGORY.ANTICIPO,
+            },
+          });
+          await incrementBalanceForIngreso(tx, studio.id, montoDesdeRegistro, {
+            metodo_pago_id: registroCierre?.pago_metodo_id ?? null,
+            metodo_pago: metodoPagoNombre,
+          });
+        }
+        pagoRegistrado = true;
+      }
+
+      await tx.studio_pagos.updateMany({
+        where: { cotizacion_id: cotizacionId },
+        data: {
+          evento_id: parent.evento_id,
+          event_type_id: anexo.promise?.event_type_id ?? null,
+          updated_at: new Date(),
+        },
+      });
+
+      return { cotizacion_id: cotizacionId, pago_registrado: pagoRegistrado, evento_id: parent.evento_id };
+    }, { maxWait: 10000, timeout: 30000 });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${parent.evento_id}`);
+    revalidatePath('/', 'layout');
+    revalidateTag(`evento-${parent.evento_id}`);
+    revalidateTag('evento-detalle');
+    revalidateTag(`events-list-${studioSlug}`);
+
+    return { success: true, data: { ...result, evento_id: parent.evento_id } };
+  } catch (error) {
+    console.error('[autorizarAnexoDirecto] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al autorizar anexo',
     };
   }
 }

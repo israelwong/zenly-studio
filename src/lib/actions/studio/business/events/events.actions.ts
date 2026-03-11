@@ -482,6 +482,12 @@ export interface EventoDetalle extends EventoBasico {
     updated_at: Date;
     promise_id: string | null;
     condiciones_comerciales_id: string | null;
+    precio_calculado?: number | null;
+    negociacion_precio_original?: number | null;
+    negociacion_precio_personalizado?: number | null;
+    bono_especial?: number | null;
+    cortesias_monto_snapshot?: number | null;
+    cortesias_count_snapshot?: number | null;
     // Snapshots de condiciones comerciales (inmutables)
     condiciones_comerciales_name_snapshot?: string | null;
     condiciones_comerciales_description_snapshot?: string | null;
@@ -875,6 +881,12 @@ export async function obtenerEventoDetalle(
       discount: true,
       promise_id: true,
       evento_id: true,
+      precio_calculado: true,
+      negociacion_precio_original: true,
+      negociacion_precio_personalizado: true,
+      bono_especial: true,
+      cortesias_monto_snapshot: true,
+      cortesias_count_snapshot: true,
       condiciones_comerciales_name_snapshot: true,
       condiciones_comerciales_description_snapshot: true,
       condiciones_comerciales_advance_percentage_snapshot: true,
@@ -1211,6 +1223,12 @@ export async function obtenerEventoDetalle(
           ...cot,
           price: Number(cot.price),
           discount: cot.discount ? Number(cot.discount) : null,
+          precio_calculado: cot.precio_calculado != null ? Number(cot.precio_calculado) : null,
+          negociacion_precio_original: cot.negociacion_precio_original != null ? Number(cot.negociacion_precio_original) : null,
+          negociacion_precio_personalizado: cot.negociacion_precio_personalizado != null ? Number(cot.negociacion_precio_personalizado) : null,
+          bono_especial: cot.bono_especial != null ? Number(cot.bono_especial) : null,
+          cortesias_monto_snapshot: cot.cortesias_monto_snapshot != null ? Number(cot.cortesias_monto_snapshot) : null,
+          cortesias_count_snapshot: cot.cortesias_count_snapshot != null ? Number(cot.cortesias_count_snapshot) : null,
           cotizacion_items: itemsOrdenados,
         });
         return sanitized;

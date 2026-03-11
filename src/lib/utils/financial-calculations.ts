@@ -16,6 +16,11 @@ export interface QuoteSnapshot {
   status?: string;
   negociacion_precio_original?: number | null;
   negociacion_precio_personalizado?: number | null;
+  /** Precio de lista (suma ítems); para desglose Cortesías / Bono / Ajuste. */
+  precio_calculado?: number | null;
+  bono_especial?: number | null;
+  cortesias_monto_snapshot?: number | null;
+  cortesias_count_snapshot?: number | null;
   condiciones_comerciales_discount_percentage_snapshot?: number | null;
   condiciones_comerciales_advance_percentage_snapshot?: number | null;
   condiciones_comerciales_advance_type_snapshot?: string | null;
@@ -59,6 +64,62 @@ function buildEngineInput(quote: QuoteSnapshot): CotizacionCalculationEngineInpu
 export function computeContractTotalFromQuote(quote: QuoteSnapshot): number {
   const out = calculateCotizacionTotals(buildEngineInput(quote));
   return out.totalAPagar;
+}
+
+/**
+ * Ajuste por cierre: total - (precioLista - montoCortesias - montoBono).
+ * Misma fórmula que getAjusteCierre en promise-public-financials.
+ */
+function getAjusteCierre(
+  total: number,
+  precioLista: number,
+  montoCortesias: number,
+  montoBono: number
+): number {
+  const subtotal = Math.max(0, precioLista - montoCortesias - montoBono);
+  return total - subtotal;
+}
+
+/** Micro-resumen de una cotización para UI: desglose alineado con ResumenPago (precio lista, cortesías, bono, ajuste, total, anticipo, diferido). */
+export function getQuoteMicroSummary(quote: QuoteSnapshot): {
+  precioLista: number;
+  montoCortesias: number;
+  cortesiasCount: number;
+  montoBono: number;
+  ajusteCierre: number;
+  total: number;
+  anticipo: number;
+  diferido: number;
+  advancePct: number | null;
+  advanceType: string | null;
+} {
+  const out = calculateCotizacionTotals(buildEngineInput(quote));
+  const advancePct =
+    quote.condiciones_comerciales_advance_percentage_snapshot != null
+      ? Number(quote.condiciones_comerciales_advance_percentage_snapshot)
+      : null;
+  const advanceType = quote.condiciones_comerciales_advance_type_snapshot ?? null;
+  const precioLista =
+    quote.precio_calculado != null && Number(quote.precio_calculado) > 0
+      ? Number(quote.precio_calculado)
+      : out.precioBaseReal;
+  const montoCortesias = toNum(quote.cortesias_monto_snapshot);
+  const cortesiasCount = quote.cortesias_count_snapshot != null ? Number(quote.cortesias_count_snapshot) : 0;
+  const montoBono = toNum(quote.bono_especial);
+  const total = out.totalAPagar;
+  const ajusteCierre = getAjusteCierre(total, precioLista, montoCortesias, montoBono);
+  return {
+    precioLista,
+    montoCortesias,
+    cortesiasCount,
+    montoBono,
+    ajusteCierre,
+    total,
+    anticipo: out.anticipo,
+    diferido: out.diferido,
+    advancePct: Number.isFinite(advancePct) ? advancePct : null,
+    advanceType,
+  };
 }
 
 /**
