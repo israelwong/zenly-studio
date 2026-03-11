@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe, PackagePlus } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, AlertTriangle, Plus, Pencil, Trash2, ListChecks, Gift, Info, Settings, Eye, BarChart3, MoreHorizontal, RotateCcw, Clock, Globe, PackagePlus, Save, HandCoins } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenSwitch, ZenLabel } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
@@ -179,6 +180,9 @@ export function CotizacionForm({
     }
   }, [loading]);
 
+  const [toolbarMounted, setToolbarMounted] = useState(false);
+  useEffect(() => setToolbarMounted(true), []);
+
   // Estado del formulario
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -300,6 +304,16 @@ export function CotizacionForm({
   const [durationHours, setDurationHours] = useState<number | null>(null);
   /** Políticas de Entrega: días mostrados al cliente (override por cotización; vacío = usar global). */
   const [diasEntregaOverride, setDiasEntregaOverride] = useState<number | ''>('');
+  /** Solo anexos: true = Independiente (días propios + antes/después), false = Incluido en plazo global. */
+  const [anexoEntregaIndependent, setAnexoEntregaIndependent] = useState(false);
+  /** Solo anexos (independiente): días requeridos para este anexo. */
+  const [anexoEntregaDias, setAnexoEntregaDias] = useState<number | ''>('');
+  /** Solo anexos (independiente): 'before' | 'after' respecto a la entrega global. */
+  const [anexoEntregaTiming, setAnexoEntregaTiming] = useState<'before' | 'after'>('after');
+  /** Error de validación: días requeridos cuando entrega independiente. */
+  const [anexoEntregaDiasError, setAnexoEntregaDiasError] = useState<string | null>(null);
+  /** Solo anexos: días de entrega del contrato padre (para la etiqueta informativa). */
+  const [parentDeliveryDays, setParentDeliveryDays] = useState<number | null>(null);
   /** Defaults globales del estudio para mostrar valor heredado (días entrega + seguridad). */
   const [studioDeliveryDefaults, setStudioDeliveryDefaults] = useState<{ dias_entrega_default: number | null; dias_seguridad_default: number | null } | null>(null);
   const [openHorasHelp, setOpenHorasHelp] = useState(false);
@@ -350,6 +364,25 @@ export function CotizacionForm({
             dias_entrega_default: studioDefaultsResult.data.dias_entrega_default ?? null,
             dias_seguridad_default: studioDefaultsResult.data.dias_seguridad_default ?? null,
           });
+        }
+        if (isAnnex && parentCotizacionId && studioSlug) {
+          const def = studioDefaultsResult.success && studioDefaultsResult.data
+            ? (studioDefaultsResult.data.dias_entrega_default ?? 0) + (studioDefaultsResult.data.dias_seguridad_default ?? 0)
+            : 0;
+          try {
+            const parentRes = await getCotizacionById(parentCotizacionId, studioSlug);
+            if (parentRes.success && parentRes.data) {
+              const p = parentRes.data as { dias_entrega_override?: number | null };
+              const parentDias = p.dias_entrega_override != null && Number(p.dias_entrega_override) >= 0 ? Number(p.dias_entrega_override) : null;
+              setParentDeliveryDays(parentDias ?? def);
+            } else {
+              setParentDeliveryDays(def);
+            }
+          } catch {
+            setParentDeliveryDays(def);
+          }
+        } else {
+          setParentDeliveryDays(null);
         }
         if (condicionesResult.success && condicionesResult.data) {
           setCondicionesComerciales(condicionesResult.data.map((c: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_percentage?: number | null; advance_type?: string | null; advance_amount?: unknown; type?: string | null; is_public?: boolean }) => ({
@@ -485,7 +518,19 @@ export function CotizacionForm({
             setCondicionIdsVisibles(new Set([cotizacionData.condiciones_comerciales_id ?? neg!.id].filter(Boolean)));
           }
 
-          setDiasEntregaOverride((cotizacionData as { dias_entrega_override?: number | null }).dias_entrega_override ?? '');
+          const diasOverride = (cotizacionData as { dias_entrega_override?: number | null }).dias_entrega_override;
+          const annexData = cotizacionData as {
+            anexo_entrega_independent?: boolean;
+            anexo_entrega_dias?: number | null;
+            anexo_entrega_timing?: 'before' | 'after' | null;
+          };
+          if (isAnnex) {
+            setAnexoEntregaIndependent(annexData.anexo_entrega_independent ?? false);
+            setAnexoEntregaDias(annexData.anexo_entrega_dias != null && annexData.anexo_entrega_dias >= 0 ? annexData.anexo_entrega_dias : '');
+            setAnexoEntregaTiming(annexData.anexo_entrega_timing === 'before' ? 'before' : 'after');
+          } else {
+            setDiasEntregaOverride(diasOverride != null && Number(diasOverride) >= 0 ? Number(diasOverride) : '');
+          }
           // Cargar horas de cobertura de la cotización si existe
           const cotizacionEventDuration = (cotizacionData as { event_duration?: number | null }).event_duration;
           if (cotizacionEventDuration) {
@@ -634,11 +679,16 @@ export function CotizacionForm({
           const combinedItems = { ...initialItems, ...revisionItems };
           setItems(combinedItems);
         } else {
-          // Nueva cotización personalizada - campos vacíos
+          // Nueva cotización: nombre por defecto según contexto (anexo vs personalizada)
           setItems(initialItems);
-          setNombre('Personalizada');
+          setNombre(isAnnex ? 'Anexo' : 'Personalizada');
           setDescripcion('');
           setPrecioPersonalizado('');
+          if (isAnnex) {
+            setAnexoEntregaIndependent(false);
+            setAnexoEntregaDias('');
+            setAnexoEntregaTiming('after');
+          }
         }
 
         // Visibilidad por defecto: en cotización nueva, marcar como visibles todas las condiciones públicas
@@ -2043,9 +2093,26 @@ export function CotizacionForm({
     }
 
     const intent = publish ? 'publish' : 'draft';
+    if (isAnnex && anexoEntregaIndependent) {
+      const diasInvalid = anexoEntregaDias === '' || (typeof anexoEntregaDias === 'number' && anexoEntregaDias < 0);
+      if (diasInvalid) {
+        setAnexoEntregaDiasError('Indica los días requeridos para la entrega independiente.');
+        toast.error('Indica los días requeridos para la entrega independiente.');
+        return;
+      }
+      setAnexoEntregaDiasError(null);
+    }
     isSubmittingRef.current = true;
     setSavingIntent(intent);
     setLoading(true);
+    const effectiveDiasOverride = isAnnex
+      ? null
+      : (typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? Math.floor(diasEntregaOverride) : null);
+    const anexoEntregaPayload = isAnnex ? {
+      anexo_entrega_independent: anexoEntregaIndependent,
+      anexo_entrega_dias: anexoEntregaIndependent && typeof anexoEntregaDias === 'number' && anexoEntregaDias >= 0 ? Math.floor(anexoEntregaDias) : null,
+      anexo_entrega_timing: anexoEntregaIndependent && (anexoEntregaTiming === 'before' || anexoEntregaTiming === 'after') ? anexoEntregaTiming : null,
+    } : {};
     try {
       const precioFinal = precioPersonalizado === '' || precioPersonalizado === 0
         ? calculoPrecio.total
@@ -2085,7 +2152,8 @@ export function CotizacionForm({
           bono_especial: Number(bonoEspecial) || 0,
           condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
           condiciones_visibles: Array.from(condicionIdsVisibles),
-          dias_entrega_override: typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? diasEntregaOverride : null,
+          dias_entrega_override: effectiveDiasOverride,
+          ...anexoEntregaPayload,
         });
 
         if (result.success && options?.scope === 'global' && promiseId) {
@@ -2227,9 +2295,9 @@ export function CotizacionForm({
         router.refresh();
         startTransition(() => {
           if (redirectOnSuccess) {
-            router.push(redirectOnSuccess);
+            router.replace(redirectOnSuccess);
           } else if (promiseId) {
-            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
           } else {
             router.back();
           }
@@ -2255,9 +2323,12 @@ export function CotizacionForm({
         bono_especial: Number(bonoEspecial) || 0,
         condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
         condiciones_visibles: Array.from(condicionIdsVisibles),
-        dias_entrega_override: typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? diasEntregaOverride : null,
+        dias_entrega_override: effectiveDiasOverride,
         is_annex: isAnnex,
         parent_cotizacion_id: isAnnex && parentCotizacionId ? parentCotizacionId : null,
+        anexo_entrega_independent: isAnnex ? anexoEntregaIndependent : false,
+        anexo_entrega_dias: isAnnex ? anexoEntregaPayload.anexo_entrega_dias : null,
+        anexo_entrega_timing: isAnnex ? anexoEntregaPayload.anexo_entrega_timing : null,
       });
 
       if (!result.success) {
@@ -2295,26 +2366,25 @@ export function CotizacionForm({
       window.dispatchEvent(new CustomEvent('promise-state-update'));
       router.refresh();
       startTransition(() => {
-        // Si hay returnPathOverride (ej. anexo creado desde vista autorizada), ir ahí
+        // replace evita rebote (no añade entrada al historial)
         if (returnPathOverride) {
-          router.push(returnPathOverride);
+          router.replace(returnPathOverride);
           return;
         }
         if (redirectOnSuccess && !result.data?.promise_id) {
-          router.push(redirectOnSuccess);
+          router.replace(redirectOnSuccess);
         } else if (result.data?.promise_id) {
           const status = result.data.status || 'pendiente';
-          if (status === 'negociacion') {
-            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
-          } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
-            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
+          const base = `/${studioSlug}/studio/commercial/promises/${result.data.promise_id}`;
+          if (status === 'negociacion' || status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
+            router.replace(`${base}/cierre`);
           } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
-            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
+            router.replace(`${base}/autorizada`);
           } else {
-            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
+            router.replace(`${base}/pendiente`);
           }
         } else if (promiseId) {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
         } else {
           router.back();
         }
@@ -2823,55 +2893,142 @@ export function CotizacionForm({
                         />
                       </div>
                       <div className="space-y-2">
-                        <div className="flex items-center gap-1.5">
-                          <ZenLabel className="text-zinc-200 mb-0">
-                            {isAnnex ? 'Días para entrega de este anexo' : 'Tiempo de entrega prometido'}
-                          </ZenLabel>
-                          <Popover open={openEntregaHelp} onOpenChange={setOpenEntregaHelp}>
-                            <PopoverTrigger asChild>
-                              <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
-                                <Info className="h-3.5 w-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              side="right"
-                              align="start"
-                              sideOffset={10}
-                              className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
-                            >
-                              <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
-                              <button type="button" onClick={() => setOpenEntregaHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                              <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
-                                {isAnnex
-                                  ? 'Días específicos para la entrega de este anexo. Solo afecta los metadatos de esta propuesta; no modifica la fecha del evento principal.'
-                                  : `Por defecto se usan los días globales del estudio${studioDeliveryDefaults && (studioDeliveryDefaults.dias_entrega_default != null || studioDeliveryDefaults.dias_seguridad_default != null) ? ` (${(studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0)} días).` : ''} Opcionalmente personaliza para este cliente.`}
-                              </p>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <ZenInput
-                          type="number"
-                          min={0}
-                          value={diasEntregaOverride === '' ? '' : diasEntregaOverride}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === '') setDiasEntregaOverride('');
-                            else {
-                              const n = parseInt(v, 10);
-                              if (!Number.isNaN(n) && n >= 0) setDiasEntregaOverride(n);
-                            }
-                          }}
-                          placeholder={
-                            isAnnex
-                              ? (() => {
-                                  const base = studioDeliveryDefaults ? (studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0) : null;
-                                  return base != null && base > 0 ? `Base: ${base} (personalizado)` : 'Días para este anexo';
-                                })()
-                              : 'Vacío = usar global'
-                          }
-                        />
+                        {isAnnex ? (
+                          <div className="flex flex-col gap-3 w-full rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+                            <div className="flex flex-col gap-2">
+                              <ZenLabel className="text-zinc-300 font-light leading-snug block mb-2">
+                                ¿El tiempo de entrega de este anexo se incluye dentro del plazo definido de {parentDeliveryDays != null ? parentDeliveryDays : (studioDeliveryDefaults ? (studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0) : 0)} días según políticas de entrega?
+                              </ZenLabel>
+                              <div className="flex items-center gap-2">
+                                <ZenSwitch
+                                  id="anexo-entrega-independiente"
+                                  size="sm"
+                                  checked={!anexoEntregaIndependent}
+                                  onCheckedChange={(incluido) => {
+                                    setAnexoEntregaIndependent(!incluido);
+                                    if (incluido) {
+                                      setAnexoEntregaDias('');
+                                      setAnexoEntregaDiasError(null);
+                                    }
+                                  }}
+                                />
+                                <ZenLabel htmlFor="anexo-entrega-independiente" className="text-sm text-zinc-300 cursor-pointer font-normal">
+                                  {anexoEntregaIndependent ? 'Tiempo de entrega independiente' : 'Incluido en el plazo'}
+                                </ZenLabel>
+                              </div>
+                            </div>
+                            {anexoEntregaIndependent && (
+                              <>
+                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,8rem)_1fr] gap-3 sm:gap-4 items-start justify-items-stretch">
+                                  <div className="space-y-2 min-w-0 w-full">
+                                    <ZenInput
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      required
+                                      value={anexoEntregaDias === '' ? '' : anexoEntregaDias}
+                                      onChange={(e) => {
+                                        setAnexoEntregaDiasError(null);
+                                        const v = e.target.value;
+                                        if (v === '') setAnexoEntregaDias('');
+                                        else {
+                                          const n = parseInt(v, 10);
+                                          if (!Number.isNaN(n) && n >= 0) setAnexoEntregaDias(n);
+                                        }
+                                      }}
+                                      placeholder="Ej: 5"
+                                      label="Días requeridos"
+                                      error={anexoEntregaDiasError ?? undefined}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0 w-full flex flex-col items-start sm:min-w-0">
+                                    <ZenLabel className="text-zinc-300 text-sm">Se entrega</ZenLabel>
+                                    <div
+                                      role="radiogroup"
+                                      aria-label="Antes o después de la entrega global"
+                                      className="inline-flex h-[42px] items-stretch rounded-lg border border-zinc-600 bg-zinc-800/50 p-0.5"
+                                    >
+                                      <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={anexoEntregaTiming === 'before'}
+                                        onClick={() => setAnexoEntregaTiming('before')}
+                                        className={cn(
+                                          'rounded-md px-3 text-sm font-medium transition-colors flex items-center',
+                                          anexoEntregaTiming === 'before'
+                                            ? 'bg-zinc-600 text-zinc-100 shadow'
+                                            : 'text-zinc-400 hover:text-zinc-200'
+                                        )}
+                                      >
+                                        Antes
+                                      </button>
+                                      <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={anexoEntregaTiming === 'after'}
+                                        onClick={() => setAnexoEntregaTiming('after')}
+                                        className={cn(
+                                          'rounded-md px-3 text-sm font-medium transition-colors flex items-center',
+                                          anexoEntregaTiming === 'after'
+                                            ? 'bg-zinc-600 text-zinc-100 shadow'
+                                            : 'text-zinc-400 hover:text-zinc-200'
+                                        )}
+                                      >
+                                        Después
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                                {typeof anexoEntregaDias === 'number' && anexoEntregaDias >= 0 && (
+                                  <p className="text-sm text-amber-200/90">
+                                    Se entregará {anexoEntregaDias} días {anexoEntregaTiming === 'before' ? 'antes' : 'después'} de la fecha definida según políticas.
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <ZenLabel className="text-zinc-200 mb-0">Tiempo de entrega prometido</ZenLabel>
+                              <Popover open={openEntregaHelp} onOpenChange={setOpenEntregaHelp}>
+                                <PopoverTrigger asChild>
+                                  <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  side="right"
+                                  align="start"
+                                  sideOffset={10}
+                                  className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
+                                >
+                                  <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
+                                  <button type="button" onClick={() => setOpenEntregaHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                  <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
+                                    {`Por defecto se usan los días globales del estudio${studioDeliveryDefaults && (studioDeliveryDefaults.dias_entrega_default != null || studioDeliveryDefaults.dias_seguridad_default != null) ? ` (${(studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0)} días).` : ''} Opcionalmente personaliza para este cliente.`}
+                                  </p>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <ZenInput
+                              type="number"
+                              min={0}
+                              value={diasEntregaOverride === '' ? '' : diasEntregaOverride}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '') setDiasEntregaOverride('');
+                                else {
+                                  const n = parseInt(v, 10);
+                                  if (!Number.isNaN(n) && n >= 0) setDiasEntregaOverride(n);
+                                }
+                              }}
+                              placeholder="Vacío = usar global"
+                            />
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3699,6 +3856,107 @@ export function CotizacionForm({
         />
       )}
     </div>
+    {!hideActionButtons && toolbarMounted && createPortal(
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          const checked = !accordionValue.includes('negociacion');
+          if (checked) {
+            handleAccordionChange([...new Set([...accordionValue, 'negociacion', 'condiciones'])]);
+            setIsCourtesyMode(true);
+          } else {
+            handleAccordionChange(accordionValue.filter((v) => v !== 'negociacion'));
+            setIsCourtesyMode(false);
+          }
+        }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLDivElement).click(); } }}
+        className={cn(
+          'fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999]',
+          'flex items-center gap-5 px-5 py-3 rounded-xl max-w-2xl min-w-0',
+          'backdrop-blur-xl shadow-2xl shadow-black/60',
+          'animate-in fade-in slide-in-from-bottom-2 duration-300',
+          'cursor-pointer select-none',
+          accordionValue.includes('negociacion')
+            ? 'bg-purple-900/50 border border-purple-500/30'
+            : 'bg-purple-950/50 border border-purple-800/40'
+        )}
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <ZenSwitch
+              id="toolbar-cortesia"
+              variant="purple"
+              checked={accordionValue.includes('negociacion')}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  handleAccordionChange([...new Set([...accordionValue, 'negociacion', 'condiciones'])]);
+                  setIsCourtesyMode(true);
+                } else {
+                  handleAccordionChange(accordionValue.filter((v) => v !== 'negociacion'));
+                  setIsCourtesyMode(false);
+                }
+              }}
+            />
+            <ZenLabel htmlFor="toolbar-cortesia" className="text-sm text-zinc-300 cursor-pointer whitespace-nowrap">
+              Modo cortesía
+            </ZenLabel>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 text-sm tabular-nums">
+          <span className="text-zinc-400">Cortesías</span>
+          <span className="font-semibold text-white">
+            -{formatearMoneda(calculoPrecio.montoCortesias)}
+          </span>
+        </div>
+        {/* Botones ocultos por ahora — quitar false && para mostrar */}
+        {false && (
+        <div className="flex items-center gap-2 shrink-0">
+          {onRequestPreview && (
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={onRequestPreview}
+              disabled={loading}
+              className="border-zinc-600 text-zinc-200 hover:bg-zinc-800"
+            >
+              <Eye className="h-4 w-4" />
+              Vista previa
+            </ZenButton>
+          )}
+          <ZenButton
+            variant="primary"
+            size="sm"
+            onClick={() => { if (redirectingRef.current) return; handleSave(false); }}
+            disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+            title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible' : undefined}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {loading && savingIntent === 'draft' ? (
+              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando…</span>
+            ) : (
+              <span className="flex items-center gap-2"><Save className="h-4 w-4" />{isEditMode ? 'Guardar cambios' : 'Crear'}</span>
+            )}
+          </ZenButton>
+          <ZenButton
+            variant="outline"
+            size="sm"
+            onClick={() => { if (redirectingRef.current) return; handleSave(true); }}
+            disabled={loading || isDisabled || condicionIdsVisibles.size === 0}
+            title={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible' : undefined}
+            className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+          >
+            {loading && savingIntent === 'publish' ? (
+              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> Publicando…</span>
+            ) : (
+              <span className="flex items-center gap-2"><HandCoins className="h-4 w-4" /> Publicar</span>
+            )}
+          </ZenButton>
+        </div>
+        )}
+      </div>,
+      document.body
+    )}
     </>
   );
 }

@@ -2451,6 +2451,12 @@ model studio_cotizaciones {
   // Anexos de cotización (upselling): propuestas adicionales a la cotización principal autorizada
   parent_cotizacion_id             String?
   is_annex                        Boolean   @default(false)
+  /** Anexo: false = Incluido en plazo global, true = Independiente con días propios. */
+  anexo_entrega_independent        Boolean   @default(false)
+  /** Anexo: días requeridos cuando entrega independiente. */
+  anexo_entrega_dias               Int?
+  /** Anexo: 'before' | 'after' respecto a la entrega global del contrato principal. */
+  anexo_entrega_timing             String?
   parent_cotizacion               studio_cotizaciones?  @relation("CotizacionAnexos", fields: [parent_cotizacion_id], references: [id], onDelete: SetNull)
   anexos                           studio_cotizaciones[]  @relation("CotizacionAnexos")
 

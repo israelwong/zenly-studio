@@ -21,7 +21,8 @@ export interface ZenSwitchProps {
     /** Clase aplicada al label (ej. text-emerald-500 o text-zinc-400) */
     labelClassName?: string;
     id?: string;
-    variant?: "default" | "amber" | "green" | "emerald"; // Variante de color cuando está activo
+    variant?: "default" | "amber" | "green" | "emerald" | "purple"; // Variante de color cuando está activo
+    size?: "default" | "sm";
 }
 
 /**
@@ -44,17 +45,20 @@ export function ZenSwitch({
     className,
     labelClassName,
     id,
-    variant = "default"
+    variant = "default",
+    size = "default"
 }: ZenSwitchProps) {
     const generatedId = useStableId();
     const switchId = id || generatedId;
 
     const checkedColor = variant === "amber" ? "bg-amber-500" :
         variant === "green" ? "bg-green-600" :
-        variant === "emerald" ? "bg-emerald-500" : "bg-blue-600";
+        variant === "emerald" ? "bg-emerald-500" :
+        variant === "purple" ? "bg-purple-500" : "bg-blue-600";
     const focusRingColor = variant === "amber" ? "focus:ring-amber-500" :
         variant === "green" ? "focus:ring-green-500" :
-        variant === "emerald" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
+        variant === "emerald" ? "focus:ring-emerald-500" :
+        variant === "purple" ? "focus:ring-purple-500" : "focus:ring-blue-500";
 
     return (
         <div className={cn("flex items-center space-x-3", className)}>
@@ -70,7 +74,8 @@ export function ZenSwitch({
                 onClick={() => onCheckedChange(!checked)}
                 suppressHydrationWarning
                 className={cn(
-                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                    "relative inline-flex items-center rounded-full transition-colors",
+                    size === "sm" ? "h-5 w-9" : "h-6 w-11",
                     `focus:outline-none focus:ring-2 ${focusRingColor} focus:ring-offset-2 focus:ring-offset-zinc-900`,
                     "disabled:cursor-not-allowed disabled:opacity-50",
                     checked
@@ -81,8 +86,9 @@ export function ZenSwitch({
             >
                 <span
                     className={cn(
-                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        checked ? "translate-x-6" : "translate-x-1"
+                        "inline-block transform rounded-full bg-white transition-transform",
+                        size === "sm" ? "h-3 w-3" : "h-4 w-4",
+                        size === "sm" ? (checked ? "translate-x-5" : "translate-x-0.5") : (checked ? "translate-x-6" : "translate-x-1")
                     )}
                 />
             </button>

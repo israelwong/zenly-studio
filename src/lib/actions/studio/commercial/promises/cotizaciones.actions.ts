@@ -195,7 +195,7 @@ export async function createCotizacion(
 
     // Crear cotizaciรณn SIN evento (evento_id serรก null)
     // El evento se crearรก cuando se autorice la cotizaciรณn
-    const isAnnex = Boolean(validatedData.is_annex === true || !!validatedData.parent_cotizacion_id);
+    const isAnnex = !!validatedData.parent_cotizacion_id;
     const cotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: studio.id,
@@ -217,6 +217,9 @@ export async function createCotizacion(
         dias_entrega_override: validatedData.dias_entrega_override ?? null,
         is_annex: isAnnex,
         parent_cotizacion_id: isAnnex ? validatedData.parent_cotizacion_id : null,
+        anexo_entrega_independent: isAnnex ? (validatedData.anexo_entrega_independent ?? false) : false,
+        anexo_entrega_dias: isAnnex ? (validatedData.anexo_entrega_dias ?? null) : null,
+        anexo_entrega_timing: isAnnex ? (validatedData.anexo_entrega_timing ?? null) : null,
       },
     });
 
@@ -609,6 +612,10 @@ export async function getAnexosByPromiseId(
         precio_calculado: true,
         event_duration: true,
         condiciones_visibles: true,
+        bono_especial: true,
+        items_cortesia: true,
+        cortesias_count_snapshot: true,
+        snap_precio_lista: true,
       },
       orderBy: [{ created_at: 'desc' }],
     });
@@ -650,6 +657,10 @@ export async function getAnexosByPromiseId(
               advance_amount: cc.advance_amount != null ? Number(cc.advance_amount) : null,
             }
           : null;
+        const itemsCortesia = (cot as { items_cortesia?: unknown }).items_cortesia;
+        const cortesiasCount = (cot as { cortesias_count_snapshot?: number | null }).cortesias_count_snapshot ?? (Array.isArray(itemsCortesia) ? itemsCortesia.length : 0);
+        const bono = (cot as { bono_especial?: number | null }).bono_especial != null ? Number((cot as { bono_especial?: number | null }).bono_especial) : null;
+        const snapPrecioLista = (cot as { snap_precio_lista?: number | null }).snap_precio_lista != null ? Number((cot as { snap_precio_lista?: number | null }).snap_precio_lista) : null;
         return {
           id: cot.id,
           name: cot.name,
@@ -667,6 +678,10 @@ export async function getAnexosByPromiseId(
           precio_calculado: cot.precio_calculado != null ? Number(cot.precio_calculado) : null,
           event_duration: cot.event_duration != null ? Number(cot.event_duration) : null,
           condiciones_visibles_detalle: condiciones_visibles_detalle.length > 0 ? condiciones_visibles_detalle : undefined,
+          bono_especial: bono,
+          items_cortesia: itemsCortesia ?? undefined,
+          cortesias_count_snapshot: cortesiasCount,
+          snap_precio_lista: snapPrecioLista,
         };
       }),
     };
@@ -1115,6 +1130,9 @@ export async function getCotizacionById(
     event_duration?: number | null;
     precio_calculado?: number | null;
     dias_entrega_override?: number | null;
+    anexo_entrega_independent?: boolean;
+    anexo_entrega_dias?: number | null;
+    anexo_entrega_timing?: 'before' | 'after' | null;
     promise_route_state?: PromiseRouteState | null;
     contact_name?: string | null;
     items_cortesia?: string[];
@@ -1192,11 +1210,15 @@ export async function getCotizacionById(
         event_duration: true,
         precio_calculado: true,
         dias_entrega_override: true,
+        anexo_entrega_independent: true,
+        anexo_entrega_dias: true,
+        anexo_entrega_timing: true,
         items_cortesia: true,
         bono_especial: true,
         condiciones_visibles: true,
         event_type_id: true,
         is_annex: true,
+        parent_cotizacion_id: true,
         condicion_comercial_negociacion: {
           select: {
             id: true,
@@ -1342,6 +1364,9 @@ export async function getCotizacionById(
         event_duration: cotizacion.event_duration ?? null,
         precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
         dias_entrega_override: cotizacion.dias_entrega_override ?? null,
+        anexo_entrega_independent: cotizacion.anexo_entrega_independent ?? false,
+        anexo_entrega_dias: cotizacion.anexo_entrega_dias ?? null,
+        anexo_entrega_timing: (cotizacion.anexo_entrega_timing === 'before' || cotizacion.anexo_entrega_timing === 'after') ? cotizacion.anexo_entrega_timing : null,
         items: itemsOrdenados,
         promise_route_state: promiseRouteState,
         contact_name: cotizacion.promise?.contact?.name ?? null,
@@ -1351,6 +1376,7 @@ export async function getCotizacionById(
         event_type_id: cotizacion.event_type_id ?? null,
         event_type_name: cotizacion.event_types?.name ?? null,
         is_annex: cotizacion.is_annex ?? false,
+        parent_cotizacion_id: cotizacion.parent_cotizacion_id ?? null,
         condicion_comercial_negociacion: cotizacion.condicion_comercial_negociacion
           ? {
               id: cotizacion.condicion_comercial_negociacion.id,
@@ -3094,6 +3120,9 @@ export async function updateCotizacion(
         condiciones_comerciales_id?: string | null;
         condiciones_visibles?: string[] | null;
         dias_entrega_override?: number | null;
+        anexo_entrega_independent?: boolean;
+        anexo_entrega_dias?: number | null;
+        anexo_entrega_timing?: string | null;
       } = {
         name: validatedData.nombre,
         description: validatedData.descripcion || null,
@@ -3133,6 +3162,15 @@ export async function updateCotizacion(
 
       if (validatedData.dias_entrega_override !== undefined) {
         updateData.dias_entrega_override = validatedData.dias_entrega_override ?? null;
+      }
+      if (validatedData.anexo_entrega_independent !== undefined) {
+        updateData.anexo_entrega_independent = validatedData.anexo_entrega_independent;
+      }
+      if (validatedData.anexo_entrega_dias !== undefined) {
+        updateData.anexo_entrega_dias = validatedData.anexo_entrega_dias ?? null;
+      }
+      if (validatedData.anexo_entrega_timing !== undefined) {
+        updateData.anexo_entrega_timing = validatedData.anexo_entrega_timing ?? null;
       }
 
       await tx.studio_cotizaciones.update({

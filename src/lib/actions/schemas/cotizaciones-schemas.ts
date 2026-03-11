@@ -59,6 +59,12 @@ export const createCotizacionSchema = z.object({
   is_annex: z.coerce.boolean().optional().default(false),
   /** ID de la cotización principal cuando is_annex es true. */
   parent_cotizacion_id: z.string().cuid().optional().nullable(),
+  /** Anexo: entrega independiente (true) o incluida en plazo global (false). */
+  anexo_entrega_independent: z.boolean().optional().default(false),
+  /** Anexo: días requeridos cuando entrega independiente. */
+  anexo_entrega_dias: z.number().int().min(0).optional().nullable(),
+  /** Anexo: 'before' | 'after' respecto a la entrega global. */
+  anexo_entrega_timing: z.enum(['before', 'after']).optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
@@ -97,6 +103,12 @@ export const updateCotizacionSchema = z.object({
   condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
   /** Políticas de Entrega: días de entrega para esta cotización; null = usar default del estudio. */
   dias_entrega_override: z.number().int().min(0).optional().nullable(),
+  /** Anexo: entrega independiente (true) o incluida en plazo global (false). */
+  anexo_entrega_independent: z.boolean().optional(),
+  /** Anexo: días requeridos cuando entrega independiente. */
+  anexo_entrega_dias: z.number().int().min(0).optional().nullable(),
+  /** Anexo: 'before' | 'after' respecto a la entrega global. */
+  anexo_entrega_timing: z.enum(['before', 'after']).optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
