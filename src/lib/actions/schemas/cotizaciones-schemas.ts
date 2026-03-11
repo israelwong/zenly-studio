@@ -55,6 +55,10 @@ export const createCotizacionSchema = z.object({
   condiciones_visibles: z.array(z.string().cuid()).optional().default([]),
   /** Políticas de Entrega: días de entrega para esta cotización; null = usar default del estudio. */
   dias_entrega_override: z.number().int().min(0).optional().nullable(),
+  /** Si true, crea una propuesta adicional (anexo) vinculada a parent_cotizacion_id. */
+  is_annex: z.coerce.boolean().optional().default(false),
+  /** ID de la cotización principal cuando is_annex es true. */
+  parent_cotizacion_id: z.string().cuid().optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);

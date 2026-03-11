@@ -1,21 +1,25 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { CotizacionAutorizadaCard } from './CotizacionAutorizadaCard';
+import { AnexosSection } from './AnexosSection';
 import { EventFormModal } from '@/components/shared/promises';
 import { usePromiseContext } from '../../context/PromiseContext';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
 interface PromiseAutorizadaClientProps {
   initialCotizacionAutorizada: CotizacionListItem | null;
+  initialAnexos: CotizacionListItem[];
 }
 
 export function PromiseAutorizadaClient({
   initialCotizacionAutorizada,
+  initialAnexos,
 }: PromiseAutorizadaClientProps) {
   const params = useParams();
+  const router = useRouter();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
   const { promiseData: contextPromiseData } = usePromiseContext();
@@ -24,10 +28,12 @@ export function PromiseAutorizadaClient({
   const [cotizacionAutorizada] = React.useState(initialCotizacionAutorizada);
 
   const handleEditSuccess = useCallback(() => {
-    // Los datos se actualizarán automáticamente vía CustomEvent y Realtime
-    // El EventInfoCard ya escucha estos eventos y actualiza su estado local
     setShowEditModal(false);
   }, []);
+
+  const handleRefresh = useCallback(() => {
+    router.refresh();
+  }, [router]);
 
   // Usar datos del contexto directamente
   const contactId = contextPromiseData?.contact_id || null;
@@ -66,10 +72,10 @@ export function PromiseAutorizadaClient({
   return (
     <>
       <div className="space-y-6">
-        {/* Layout de 2 columnas: Info + Cotización Autorizada */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
-          {/* Columna 1: Información */}
-          <div className="lg:col-span-1 flex flex-col h-full">
+        {/* Layout de 3 columnas: Info | Cotización Autorizada | Anexos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+          {/* Columna 1: Información del contacto y evento */}
+          <div className="flex flex-col h-full">
             <EventInfoCard
               studioSlug={studioSlug}
               contactId={contactId}
@@ -120,12 +126,24 @@ export function PromiseAutorizadaClient({
             />
           </div>
 
-          {/* Columna 2: Cotización Autorizada */}
-          <div className="lg:col-span-1 flex flex-col h-full">
+          {/* Columna 2: Cotización principal autorizada */}
+          <div className="flex flex-col h-full">
             <CotizacionAutorizadaCard
               cotizacion={cotizacionAutorizada}
               eventoId={cotizacionAutorizada.evento_id}
               studioSlug={studioSlug}
+            />
+          </div>
+
+          {/* Columna 3: Propuestas adicionales (Anexos) */}
+          <div className="flex flex-col h-full">
+            <AnexosSection
+              anexos={initialAnexos}
+              studioSlug={studioSlug}
+              promiseId={promiseId}
+              parentCotizacionId={cotizacionAutorizada.id}
+              eventoIdPrincipal={cotizacionAutorizada.evento_id ?? null}
+              onRefresh={handleRefresh}
             />
           </div>
         </div>

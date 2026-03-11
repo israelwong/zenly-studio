@@ -3,13 +3,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { startTransition } from 'react';
-import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, Clock, Receipt, CheckCircle } from 'lucide-react';
+import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, Clock, Receipt, CheckCircle, MoreVertical } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
   ZenCardHeader,
   ZenCardTitle,
   ZenButton,
+  ZenBadge,
+  ZenDropdownMenu,
+  ZenDropdownMenuTrigger,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
 } from '@/components/ui/zen';
 import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import { ResumenPago } from '@/components/shared/precio';
@@ -23,7 +28,7 @@ import { ContractPreviewForPromiseModal } from '../../cierre/components/contrato
 import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatNumber } from '@/lib/actions/utils/formatting';
-import { formatDisplayDate, formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface CotizacionAutorizadaCardProps {
@@ -184,7 +189,7 @@ export function CotizacionAutorizadaCard({
   if (loading) {
     return (
       <ZenCard className="h-full flex flex-col">
-        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0">
+        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0 h-[52px] flex flex-col justify-center">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-500/10 rounded-lg">
               <div className="w-5 h-5 bg-zinc-700 rounded animate-pulse" />
@@ -195,7 +200,7 @@ export function CotizacionAutorizadaCard({
             </div>
           </div>
         </ZenCardHeader>
-        <ZenCardContent className="p-6 flex-1 flex flex-col overflow-y-auto">
+        <ZenCardContent className="p-4 flex-1 flex flex-col overflow-y-auto">
           <div className="space-y-6">
             {/* Nombre skeleton */}
             <div>
@@ -314,21 +319,34 @@ export function CotizacionAutorizadaCard({
   return (
     <>
       <ZenCard className="h-full flex flex-col">
-        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0 h-[52px] flex flex-col justify-center overflow-hidden">
+          <div className="flex items-center gap-3 h-full">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div className="flex-1 min-w-0 flex items-center gap-1.5">
+              <ZenCardTitle className="text-sm font-medium mb-0 leading-none">Cotización Autorizada</ZenCardTitle>
+              <ZenBadge variant="success" className="text-[10px] px-1.5 py-0 rounded-full shrink-0">
+                Activo
+              </ZenBadge>
             </div>
-            <div>
-              <ZenCardTitle className="text-sm">Cotización Autorizada</ZenCardTitle>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Evento creado exitosamente
-              </p>
-            </div>
+            <ZenDropdownMenu>
+              <ZenDropdownMenuTrigger asChild>
+                <ZenButton variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" aria-label="Acciones">
+                  <MoreVertical className="h-4 w-4" />
+                </ZenButton>
+              </ZenDropdownMenuTrigger>
+              <ZenDropdownMenuContent align="end">
+                <ZenDropdownMenuItem
+                  onClick={() => setShowCancelEventModal(true)}
+                  className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                >
+                  Cancelar evento
+                </ZenDropdownMenuItem>
+              </ZenDropdownMenuContent>
+            </ZenDropdownMenu>
           </div>
         </ZenCardHeader>
 
-        <ZenCardContent className="p-6 flex-1 flex flex-col overflow-y-auto">
+        <ZenCardContent className="p-4 flex-1 flex flex-col overflow-y-auto">
           <div className="space-y-6">
             {/* Nombre de la cotización */}
             <div>
@@ -471,16 +489,8 @@ export function CotizacionAutorizadaCard({
               </div>
             ) : null}
 
-            {/* Botones: Cancelar evento | Gestionar evento */}
-            <div className="pt-2 flex items-center gap-2">
-              <ZenButton
-                variant="ghost"
-                onClick={() => setShowCancelEventModal(true)}
-                className="shrink-0"
-                aria-label="Cancelar evento"
-              >
-                Cancelar evento
-              </ZenButton>
+            {/* Footer: botón principal + fecha */}
+            <div className="pt-1 space-y-3">
               <ZenButton
                 variant="primary"
                 onClick={() => {
@@ -489,12 +499,11 @@ export function CotizacionAutorizadaCard({
                     router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
                   });
                 }}
-                className="flex-1 min-w-0"
+                className="w-full"
               >
-                <ArrowRight className="w-4 h-4 mr-2" />
+                <ArrowRight className="w-4 h-4 mr-2 shrink-0" />
                 Gestionar Evento
               </ZenButton>
-            </div>
 
             <CancelationWithFundsModal
               isOpen={showCancelEventModal}
@@ -535,29 +544,25 @@ export function CotizacionAutorizadaCard({
             />
 
             {/* Fecha de creación del evento */}
-            {resumen?.evento?.created_at && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500 mt-1.5">
-                <Calendar className="w-3.5 h-3.5 shrink-0" />
-                <span>
-                  Evento creado el {(() => {
-                    const raw = resumen.evento.created_at;
-                    const studioTz = 'America/Mexico_City';
-                    // Normalizar: ISO sin Z se interpreta como UTC para evitar desfase de día
-                    const created = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/Z|[+-]\d{2}:?\d{2}$/.test(raw)
-                      ? new Date(raw + (raw.endsWith('Z') ? '' : 'Z'))
-                      : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)
-                        ? new Date(raw + 'T12:00:00.000Z')
-                        : new Date(raw as string | Date);
-                    if (Number.isNaN(created.getTime())) return '—';
-                    const dayInTz = getDateOnlyInTimezone(created, studioTz);
-                    const d = dayInTz ?? toUtcDateOnly(created);
-                    const dateStr = d ? formatDisplayDateLong(d) : '—';
-                    const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: studioTz, hour: '2-digit', minute: '2-digit' }).format(created);
-                    return `${dateStr}, ${timeStr}`;
-                  })()}
-                </span>
-              </div>
-            )}
+            {resumen?.evento?.created_at && (() => {
+                const raw = resumen.evento.created_at;
+                const studioTz = 'America/Mexico_City';
+                const created = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/Z|[+-]\d{2}:?\d{2}$/.test(raw)
+                  ? new Date(raw + (raw.endsWith('Z') ? '' : 'Z'))
+                  : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)
+                    ? new Date(raw + 'T12:00:00.000Z')
+                    : new Date(raw as string | Date);
+                if (Number.isNaN(created.getTime())) return null;
+                const dateStr = new Intl.DateTimeFormat('es-MX', { timeZone: studioTz, day: '2-digit', month: '2-digit', year: '2-digit' }).format(created);
+                const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: studioTz, hour: '2-digit', minute: '2-digit', hour12: true }).format(created);
+                return (
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 min-w-0">
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Creado: {dateStr}, {timeStr}</span>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </ZenCardContent>
       </ZenCard>

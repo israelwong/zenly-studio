@@ -591,6 +591,72 @@ export async function autorizarCotizacionPublica(
 }
 
 /**
+ * Confirmar propuesta adicional (anexo) desde el portal público.
+ * Marca el anexo como autorizada y suma al evento actual; no crea evento nuevo.
+ */
+export async function confirmarAnexoPublica(
+  studioSlug: string,
+  promiseId: string,
+  annexId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: "Studio no encontrado" };
+
+    const anexo = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: annexId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+        is_annex: true,
+        visible_to_client: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        parent_cotizacion_id: true,
+      },
+    });
+    if (!anexo) return { success: false, error: "Anexo no encontrado o no disponible" };
+    if (anexo.status === "autorizada" || anexo.status === "aprobada" || anexo.status === "approved") {
+      return { success: true };
+    }
+
+    let eventoId: string | null = null;
+    if (anexo.parent_cotizacion_id) {
+      const parent = await prisma.studio_cotizaciones.findUnique({
+        where: { id: anexo.parent_cotizacion_id },
+        select: { evento_id: true },
+      });
+      eventoId = parent?.evento_id ?? null;
+    }
+
+    await prisma.studio_cotizaciones.update({
+      where: { id: annexId },
+      data: { status: "autorizada" },
+    });
+
+    if (eventoId) {
+      const { sincronizarTareasEvento } = await import("@/lib/actions/studio/business/events");
+      await sincronizarTareasEvento(studioSlug, eventoId);
+    }
+
+    revalidatePath(`/${studioSlug}/promise/${promiseId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[confirmarAnexoPublica] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al confirmar la propuesta",
+    };
+  }
+}
+
+/**
  * Regenerar contrato cuando el cliente actualiza sus datos
  * Solo funciona si el contrato ya está generado y no está firmado
  */

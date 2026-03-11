@@ -51,7 +51,7 @@ export function CondicionesComercialesSelector({
   if (condiciones.length === 0) {
     return (
       <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
-        <p className="text-sm text-zinc-400">No hay condiciones comerciales disponibles</p>
+        <p className="text-sm text-zinc-400">No hay condiciones comerciales definidas. Se aplicará pago único.</p>
       </div>
     );
   }

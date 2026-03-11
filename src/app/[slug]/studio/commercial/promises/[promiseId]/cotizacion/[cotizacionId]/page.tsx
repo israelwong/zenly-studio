@@ -78,12 +78,16 @@ export default async function EditarCotizacionPage({ params, searchParams }: Edi
     : null;
 
   const condicionComercial = condicionComercialData ? await condicionComercialData : null;
+  const search = await searchParams;
+  const returnToAutorizada = search?.from === 'autorizada';
 
   return (
     <EditarCotizacionClient
       initialCotizacion={cotizacion as ComponentProps<typeof EditarCotizacionClient>['initialCotizacion']}
       initialCondicionComercial={condicionComercial}
       promiseState={promiseState}
+      isAnnex={cotizacion?.is_annex ?? false}
+      returnToAutorizada={returnToAutorizada}
     />
   );
 }

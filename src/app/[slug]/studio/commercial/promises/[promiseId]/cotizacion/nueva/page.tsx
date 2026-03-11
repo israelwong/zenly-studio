@@ -8,6 +8,8 @@ interface NuevaCotizacionPageProps {
   searchParams: Promise<{
     paqueteId?: string;
     contactId?: string;
+    isAnnex?: string;
+    parentId?: string;
   }>;
 }
 
@@ -16,6 +18,8 @@ export default async function NuevaCotizacionPage({ params, searchParams }: Nuev
   const search = await searchParams;
   const packageId = search.paqueteId || null;
   const contactId = search.contactId || null;
+  const isAnnex = search.isAnnex === 'true';
+  const parentId = search.parentId ?? null;
 
   return (
     <NuevaCotizacionClient
@@ -23,6 +27,8 @@ export default async function NuevaCotizacionPage({ params, searchParams }: Nuev
       promiseId={promiseId}
       packageId={packageId}
       contactId={contactId}
+      isAnnex={isAnnex}
+      parentCotizacionId={parentId}
     />
   );
 }

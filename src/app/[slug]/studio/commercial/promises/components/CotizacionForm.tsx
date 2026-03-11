@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/shadcn/sheet';
 import { Accordion, AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from '@/components/ui/shadcn/accordion';
 import { Separator } from '@/components/ui/shadcn/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
@@ -96,6 +97,12 @@ interface CotizacionFormProps {
   }) => void;
   /** Estado de ruta actual (pendiente | cierre | autorizada). Si se pasa, Cancelar sin returnPath navega a esta ruta. */
   promiseState?: PromiseRouteState | null;
+  /** Si se pasa (ej. desde vista autorizada con from=autorizada), Cancelar y éxito redirigen aquí. */
+  returnPathOverride?: string | null;
+  /** Si true (solo en nueva cotización), crea un anexo vinculado a parentCotizacionId. */
+  isAnnex?: boolean;
+  /** ID de la cotización principal cuando isAnnex es true. */
+  parentCotizacionId?: string | null;
 }
 
 export function CotizacionForm({
@@ -126,6 +133,9 @@ export function CotizacionForm({
   getSaveHandlersRef,
   onPreviewFooterStateChange,
   promiseState = null,
+  returnPathOverride = null,
+  isAnnex = false,
+  parentCotizacionId = null,
 }: CotizacionFormProps & {
   onCreateAsRevision?: (data: {
     nombre: string;
@@ -204,7 +214,15 @@ export function CotizacionForm({
     is_public?: boolean;
   }>>([]);
   const [selectedCondicionComercialId, setSelectedCondicionComercialId] = useState<string | null>(null);
-  const [condicionNegociacion, setCondicionNegociacion] = useState<{ id: string; name: string; discount_percentage: number | null } | null>(null);
+  const [condicionNegociacion, setCondicionNegociacion] = useState<{
+    id: string;
+    name: string;
+    discount_percentage: number | null;
+    description?: string | null;
+    advance_percentage?: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+  } | null>(null);
   const [condicionIdsVisibles, setCondicionIdsVisibles] = useState<Set<string>>(new Set());
   const [condicionSimulacionId, setCondicionSimulacionId] = useState<string | null>(null);
   const [simulacionBlockExpanded, setSimulacionBlockExpanded] = useState(false);
@@ -222,7 +240,7 @@ export function CotizacionForm({
   const userHasChangedServicesOrAjustesRef = useRef(false);
   // Destino de retorno según status de la cotización (evita fallos con router.back() en nueva pestaña)
   const [returnPath, setReturnPath] = useState<string | null>(() =>
-    promiseId && studioSlug ? `/${studioSlug}/studio/commercial/promises/${promiseId}` : null
+    returnPathOverride ?? (promiseId && studioSlug ? `/${studioSlug}/studio/commercial/promises/${promiseId}` : null)
   );
   const triggerShake = useCallback(() => {
     setFlashSugerido(true);
@@ -284,6 +302,8 @@ export function CotizacionForm({
   const [diasEntregaOverride, setDiasEntregaOverride] = useState<number | ''>('');
   /** Defaults globales del estudio para mostrar valor heredado (días entrega + seguridad). */
   const [studioDeliveryDefaults, setStudioDeliveryDefaults] = useState<{ dias_entrega_default: number | null; dias_seguridad_default: number | null } | null>(null);
+  const [openHorasHelp, setOpenHorasHelp] = useState(false);
+  const [openEntregaHelp, setOpenEntregaHelp] = useState(false);
   const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
   
   // Estados para modal de paquete (Fase 8.2)
@@ -2236,6 +2256,8 @@ export function CotizacionForm({
         condiciones_comerciales_id: condicionNegociacion ? null : (selectedCondicionComercialId ?? null),
         condiciones_visibles: Array.from(condicionIdsVisibles),
         dias_entrega_override: typeof diasEntregaOverride === 'number' && diasEntregaOverride >= 0 ? diasEntregaOverride : null,
+        is_annex: isAnnex,
+        parent_cotizacion_id: isAnnex && parentCotizacionId ? parentCotizacionId : null,
       });
 
       if (!result.success) {
@@ -2273,12 +2295,14 @@ export function CotizacionForm({
       window.dispatchEvent(new CustomEvent('promise-state-update'));
       router.refresh();
       startTransition(() => {
-        // Priorizar redirectOnSuccess solo si no hay promise_id en el resultado
-        // Si hay promise_id, usar lógica de estado para redirección
+        // Si hay returnPathOverride (ej. anexo creado desde vista autorizada), ir ahí
+        if (returnPathOverride) {
+          router.push(returnPathOverride);
+          return;
+        }
         if (redirectOnSuccess && !result.data?.promise_id) {
           router.push(redirectOnSuccess);
         } else if (result.data?.promise_id) {
-          // Redirigir según el estado de la cotización
           const status = result.data.status || 'pendiente';
           if (status === 'negociacion') {
             router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
@@ -2287,7 +2311,6 @@ export function CotizacionForm({
           } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
             router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
           } else {
-            // Estado pendiente por defecto
             router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
           }
         } else if (promiseId) {
@@ -2616,7 +2639,15 @@ export function CotizacionForm({
                   const precioFinal = precioPersonalizado === '' || precioPersonalizado === 0
                     ? calculoPrecio.total
                     : Number(precioPersonalizado);
-                  
+                  const overridesObj: Record<string, { name?: string; description?: string | null; cost?: number; expense?: number }> = {};
+                  itemOverrides.forEach((override, itemId) => {
+                    overridesObj[itemId] = {
+                      name: override.name,
+                      description: override.description,
+                      cost: override.cost,
+                      expense: override.expense,
+                    };
+                  });
                   const result = await updateCotizacion({
                     studio_slug: studioSlug,
                     cotizacion_id: cotizacionId!,
@@ -2629,6 +2660,9 @@ export function CotizacionForm({
                       itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
                     ),
                     customItems: customItems,
+                    itemOverrides: Object.keys(overridesObj).length > 0 ? overridesObj : {},
+                    items_cortesia: Array.from(itemsCortesia),
+                    bono_especial: Number(bonoEspecial) || 0,
                     condiciones_visibles: Array.from(condicionIdsVisibles),
                   });
                   
@@ -2731,10 +2765,10 @@ export function CotizacionForm({
                 <AccordionContent>
                   <div className="rounded-b-lg border border-t-0 border-zinc-700/50 overflow-hidden transition-all duration-200 ease-out bg-zinc-900/30 p-3">
                     <ZenInput
-                      label="Nombre de la Cotización"
+                      label={isAnnex ? 'Nombre de la propuesta' : 'Nombre de la Cotización'}
                       value={nombre}
                       onChange={(e) => setNombre(e.target.value)}
-                      placeholder="Ej: Cotización Boda Premium"
+                      placeholder={isAnnex ? 'Ej: Propuesta adicional' : 'Ej: Cotización Boda Premium'}
                       required
                       className="mb-4"
                     />
@@ -2745,55 +2779,100 @@ export function CotizacionForm({
                       placeholder="Describe los servicios incluidos..."
                       className="min-h-[80px]"
                     />
-                    <ZenInput
-                      label="Horas de servicio"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={durationHours !== null ? durationHours.toString() : ''}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === '') {
-                          setDurationHours(null);
-                        } else {
-                          const numValue = Number(value);
-                          setDurationHours(numValue > 0 ? numValue : null);
-                        }
-                      }}
-                      placeholder="Ej: 8"
-                      hint="Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento."
-                    />
-                    <div className="space-y-2">
-                      <ZenLabel className="text-zinc-200">Tiempo de entrega prometido</ZenLabel>
-                      <p className="text-xs text-zinc-500">
-                        Por defecto se usan los días globales del estudio
-                        {studioDeliveryDefaults && (studioDeliveryDefaults.dias_entrega_default != null || studioDeliveryDefaults.dias_seguridad_default != null) && (
-                          <span className="text-zinc-400">
-                            {' '}({(studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0)} días)
-                          </span>
-                        )}
-                        . Opcionalmente personaliza para este cliente.
-                      </p>
-                      <ZenInput
-                        type="number"
-                        min={0}
-                        value={diasEntregaOverride === '' ? '' : diasEntregaOverride}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '') setDiasEntregaOverride('');
-                          else {
-                            const n = parseInt(v, 10);
-                            if (!Number.isNaN(n) && n >= 0) setDiasEntregaOverride(n);
+                    {/* Bloques verticales: Horas de servicio y Días de entrega, cada uno al 100% con espaciado generoso */}
+                    <div className="flex flex-col gap-6 mt-2">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <ZenLabel className="text-zinc-200 mb-0">Horas de servicio</ZenLabel>
+                          <Popover open={openHorasHelp} onOpenChange={setOpenHorasHelp}>
+                            <PopoverTrigger asChild>
+                              <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              side="right"
+                              align="start"
+                              sideOffset={10}
+                              className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
+                            >
+                              <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
+                              <button type="button" onClick={() => setOpenHorasHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                              <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
+                                Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento.
+                              </p>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <ZenInput
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={durationHours !== null ? durationHours.toString() : ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') setDurationHours(null);
+                            else {
+                              const numValue = Number(value);
+                              setDurationHours(numValue > 0 ? numValue : null);
+                            }
+                          }}
+                          placeholder="Ej: 8"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <ZenLabel className="text-zinc-200 mb-0">
+                            {isAnnex ? 'Días para entrega de este anexo' : 'Tiempo de entrega prometido'}
+                          </ZenLabel>
+                          <Popover open={openEntregaHelp} onOpenChange={setOpenEntregaHelp}>
+                            <PopoverTrigger asChild>
+                              <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              side="right"
+                              align="start"
+                              sideOffset={10}
+                              className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
+                            >
+                              <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
+                              <button type="button" onClick={() => setOpenEntregaHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                              <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
+                                {isAnnex
+                                  ? 'Días específicos para la entrega de este anexo. Solo afecta los metadatos de esta propuesta; no modifica la fecha del evento principal.'
+                                  : `Por defecto se usan los días globales del estudio${studioDeliveryDefaults && (studioDeliveryDefaults.dias_entrega_default != null || studioDeliveryDefaults.dias_seguridad_default != null) ? ` (${(studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0)} días).` : ''} Opcionalmente personaliza para este cliente.`}
+                              </p>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <ZenInput
+                          type="number"
+                          min={0}
+                          value={diasEntregaOverride === '' ? '' : diasEntregaOverride}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === '') setDiasEntregaOverride('');
+                            else {
+                              const n = parseInt(v, 10);
+                              if (!Number.isNaN(n) && n >= 0) setDiasEntregaOverride(n);
+                            }
+                          }}
+                          placeholder={
+                            isAnnex
+                              ? (() => {
+                                  const base = studioDeliveryDefaults ? (studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0) : null;
+                                  return base != null && base > 0 ? `Base: ${base} (personalizado)` : 'Días para este anexo';
+                                })()
+                              : 'Vacío = usar global'
                           }
-                        }}
-                        placeholder="Vacío = usar global"
-                        hint={
-                          (() => {
-                            const n = typeof diasEntregaOverride === 'number' ? diasEntregaOverride : (studioDeliveryDefaults ? (studioDeliveryDefaults.dias_entrega_default ?? 0) + (studioDeliveryDefaults.dias_seguridad_default ?? 0) : null);
-                            return n != null && n > 0 ? `Se entregará ${n} días después del evento.` : 'Configura días globales en Opciones de configuración si no ves un valor por defecto.';
-                          })()
-                        }
-                      />
+                        />
+                      </div>
                     </div>
                   </div>
                 </AccordionContent>
@@ -3314,6 +3393,7 @@ export function CotizacionForm({
                   Descripción <span className="text-zinc-500 font-normal">(opcional)</span>
                 </ZenLabel>
                 <ZenTextarea
+                  label="Descripción del paquete"
                   id="paquete-descripcion"
                   value={paqueteDescripcion}
                   onChange={(e) => setPaqueteDescripcion(e.target.value)}

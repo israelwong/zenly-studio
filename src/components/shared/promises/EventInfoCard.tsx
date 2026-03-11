@@ -639,9 +639,9 @@ export function EventInfoCard({
   return (
     <>
       <ZenCard className="h-full flex flex-col">
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-          <div className="flex items-center justify-between">
-            <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0 h-[52px] flex flex-col justify-center overflow-hidden">
+          <div className="flex items-center justify-between h-full">
+            <ZenCardTitle className="text-sm font-medium mb-0 leading-none">
               Información
             </ZenCardTitle>
             {(onEdit || (promiseId && promiseData)) && !disableEdit && (

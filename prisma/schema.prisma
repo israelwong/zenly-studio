@@ -1916,7 +1916,9 @@ model studio_scheduler_custom_categories {
 model studio_scheduler_event_tasks {
   id                         String                           @id @default(cuid())
   scheduler_instance_id      String
-  cotizacion_item_id         String?                          @unique
+  cotizacion_item_id         String?
+  /// Índice de instancia cuando un ítem se desglosa en N tareas (SERVICE/UNIT cantidad > 1). 0 = primera. Clave compuesta para upsert unívoco.
+  sync_instance_index        Int                              @default(0)
   name                       String
   description                String?
   start_date                 DateTime
@@ -1960,7 +1962,9 @@ model studio_scheduler_event_tasks {
   assigned_to                user_studio_roles?                @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
   assigned_to_crew_member    studio_crew_members?             @relation("SchedulerTaskAssignedCrew", fields: [assigned_to_crew_member_id], references: [id], onDelete: SetNull)
   completed_by               user_studio_roles?               @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
-  cotizacion_item            studio_cotizacion_items?         @relation("CotizacionItemSchedulerTask", fields: [cotizacion_item_id], references: [id])
+  cotizacion_item            studio_cotizacion_items?         @relation("CotizacionItemSchedulerTasks", fields: [cotizacion_item_id], references: [id])
+  /** Ítem que tiene esta tarea como "principal" (scheduler_task_id). Solo una tarea por ítem puede ser principal. */
+  primary_for_cotizacion_item studio_cotizacion_items?         @relation("CotizacionItemSchedulerTask")
   catalog_category           studio_service_categories?      @relation("SchedulerTaskCatalogCategory", fields: [catalog_category_id], references: [id], onDelete: SetNull)
   scheduler_custom_category  studio_scheduler_custom_categories? @relation(fields: [scheduler_custom_category_id], references: [id], onDelete: SetNull)
   depends_on                 studio_scheduler_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
@@ -1978,6 +1982,7 @@ model studio_scheduler_event_tasks {
   @@index([assigned_to_crew_member_id])
   @@index([start_date, end_date])
   @@index([status])
+  @@unique([scheduler_instance_id, cotizacion_item_id, sync_instance_index])
   @@index([cotizacion_item_id])
   @@index([google_calendar_id])
   @@index([google_event_id])
@@ -2443,6 +2448,12 @@ model studio_cotizaciones {
   cancel_requested_by              String?  // 'estudio' | 'cliente'
   cancelled_at                     DateTime?
 
+  // Anexos de cotización (upselling): propuestas adicionales a la cotización principal autorizada
+  parent_cotizacion_id             String?
+  is_annex                        Boolean   @default(false)
+  parent_cotizacion               studio_cotizaciones?  @relation("CotizacionAnexos", fields: [parent_cotizacion_id], references: [id], onDelete: SetNull)
+  anexos                           studio_cotizaciones[]  @relation("CotizacionAnexos")
+
   cotizacion_costos                      studio_cotizacion_costos[]
   cotizacion_items                       studio_cotizacion_items[]
   cotizacion_visitas                     studio_cotizacion_visitas[]
@@ -2465,6 +2476,8 @@ model studio_cotizaciones {
   @@index([expires_at])
   @@index([contact_id])
   @@index([promise_id])
+  @@index([parent_cotizacion_id])
+  @@index([promise_id, is_annex])
   @@index([promise_id, status]) // ⚠️ OPTIMIZACIÓN: Para queries por promise_id + status
   @@index([promise_id, selected_by_prospect])
   @@index([selected_at])
@@ -2590,7 +2603,10 @@ model studio_cotizacion_items {
   items                      studio_items?                 @relation(fields: [item_id], references: [id])
   service_categories         studio_service_categories?    @relation(fields: [service_category_id], references: [id])
   nomina_servicios           studio_nomina_servicios[]
-  scheduler_task             studio_scheduler_event_tasks? @relation("CotizacionItemSchedulerTask")
+  /** Tarea "principal" del cronograma (instanceIndex 0). Sigue siendo 1:1. */
+  scheduler_task             studio_scheduler_event_tasks? @relation("CotizacionItemSchedulerTask", fields: [scheduler_task_id], references: [id], onDelete: SetNull)
+  /** Todas las tareas del cronograma que provienen de este ítem (1 a N cuando cantidad > 1). */
+  scheduler_tasks            studio_scheduler_event_tasks[] @relation("CotizacionItemSchedulerTasks")
 
   @@index([cotizacion_id])
   @@index([assigned_to_crew_member_id])

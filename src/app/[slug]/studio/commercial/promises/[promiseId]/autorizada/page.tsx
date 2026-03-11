@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
-import { getCotizacionAutorizadaByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getCotizacionAutorizadaByPromiseId, getAnexosByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { PromiseAutorizadaClient } from './components/PromiseAutorizadaClient';
 
@@ -23,16 +23,20 @@ export default async function PromiseAutorizadaPage({ params }: PromiseAutorizad
     }
   }
 
-  // Cargar cotización autorizada en el servidor
-  const autorizadaResult = await getCotizacionAutorizadaByPromiseId(promiseId);
+  const [autorizadaResult, anexosResult] = await Promise.all([
+    getCotizacionAutorizadaByPromiseId(promiseId),
+    getAnexosByPromiseId(promiseId),
+  ]);
 
   const cotizacionAutorizada = autorizadaResult.success && autorizadaResult.data
     ? autorizadaResult.data
     : null;
+  const anexos = anexosResult.success && anexosResult.data ? anexosResult.data : [];
 
   return (
     <PromiseAutorizadaClient
       initialCotizacionAutorizada={cotizacionAutorizada}
+      initialAnexos={anexos}
     />
   );
 }

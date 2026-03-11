@@ -195,6 +195,7 @@ export async function createCotizacion(
 
     // Crear cotizaciรณn SIN evento (evento_id serรก null)
     // El evento se crearรก cuando se autorice la cotizaciรณn
+    const isAnnex = Boolean(validatedData.is_annex === true || !!validatedData.parent_cotizacion_id);
     const cotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: studio.id,
@@ -214,6 +215,8 @@ export async function createCotizacion(
         condiciones_comerciales_id: validatedData.condiciones_comerciales_id ?? null,
         condiciones_visibles: validatedData.condiciones_visibles?.length ? validatedData.condiciones_visibles : null,
         dias_entrega_override: validatedData.dias_entrega_override ?? null,
+        is_annex: isAnnex,
+        parent_cotizacion_id: isAnnex ? validatedData.parent_cotizacion_id : null,
       },
     });
 
@@ -566,6 +569,334 @@ export async function getCotizacionesByPromiseId(
 }
 
 /**
+ * Obtener cotizaciones anexo (propuestas adicionales) por promise_id.
+ * Solo cotizaciones con is_annex === true, no archivadas.
+ */
+export async function getAnexosByPromiseId(
+  promiseId: string
+): Promise<CotizacionesListResponse> {
+  try {
+    const cotizaciones = await prisma.studio_cotizaciones.findMany({
+      where: {
+        promise_id: promiseId,
+        is_annex: true,
+        archived: false,
+      },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        status: true,
+        description: true,
+        created_at: true,
+        updated_at: true,
+        order: true,
+        archived: true,
+        visible_to_client: true,
+        evento_id: true,
+        condiciones_comerciales_id: true,
+        parent_cotizacion_id: true,
+        condiciones_comerciales: {
+          select: {
+            id: true,
+            name: true,
+            discount_percentage: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+          },
+        },
+        precio_calculado: true,
+        event_duration: true,
+        condiciones_visibles: true,
+      },
+      orderBy: [{ created_at: 'desc' }],
+    });
+
+    const idsVisibles = new Set<string>();
+    cotizaciones.forEach((cot) => {
+      const raw = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
+      const arr = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+      arr.forEach((id) => idsVisibles.add(id));
+    });
+    let condicionesMap = new Map<string, { name: string; is_public: boolean }>();
+    if (idsVisibles.size > 0) {
+      const conds = await prisma.studio_condiciones_comerciales.findMany({
+        where: { id: { in: [...idsVisibles] } },
+        select: { id: true, name: true, is_public: true },
+      });
+      conds.forEach((c) => condicionesMap.set(c.id, { name: c.name, is_public: c.is_public }));
+    }
+
+    return {
+      success: true,
+      data: cotizaciones.map((cot) => {
+        const rawVisibles = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
+        const visibleIds = Array.isArray(rawVisibles) ? rawVisibles.filter((x: unknown): x is string => typeof x === 'string') : [];
+        const condiciones_visibles_detalle = visibleIds
+          .map((id) => {
+            const d = condicionesMap.get(id);
+            return d ? { id, name: d.name, is_public: d.is_public } : null;
+          })
+          .filter((x): x is { id: string; name: string; is_public: boolean } => x != null);
+        const cc = cot.condiciones_comerciales;
+        const condiciones_comerciales_serialized = cc
+          ? {
+              id: cc.id,
+              name: cc.name,
+              discount_percentage: cc.discount_percentage != null ? Number(cc.discount_percentage) : null,
+              advance_percentage: cc.advance_percentage != null ? Number(cc.advance_percentage) : null,
+              advance_type: cc.advance_type,
+              advance_amount: cc.advance_amount != null ? Number(cc.advance_amount) : null,
+            }
+          : null;
+        return {
+          id: cot.id,
+          name: cot.name,
+          price: Number(cot.price),
+          status: cot.status,
+          description: cot.description,
+          created_at: cot.created_at,
+          updated_at: cot.updated_at,
+          order: cot.order,
+          archived: cot.archived,
+          visible_to_client: cot.visible_to_client,
+          evento_id: cot.evento_id,
+          condiciones_comerciales_id: cot.condiciones_comerciales_id,
+          condiciones_comerciales: condiciones_comerciales_serialized,
+          precio_calculado: cot.precio_calculado != null ? Number(cot.precio_calculado) : null,
+          event_duration: cot.event_duration != null ? Number(cot.event_duration) : null,
+          condiciones_visibles_detalle: condiciones_visibles_detalle.length > 0 ? condiciones_visibles_detalle : undefined,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error obteniendo anexos:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener anexos',
+    };
+  }
+}
+
+/**
+ * Crear cotización anexo (propuesta adicional) a la cotización principal autorizada.
+ * No archiva otras cotizaciones; los anexos son aditivos.
+ */
+export async function crearCotizacionAnexo(
+  studioSlug: string,
+  promiseId: string,
+  data: { nombre: string; descripcion?: string | null }
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId, studio_id: studio.id },
+      select: {
+        contact_id: true,
+        event_type_id: true,
+        duration_hours: true,
+      },
+    });
+    if (!promise) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+    if (!promise.event_type_id) {
+      return { success: false, error: 'La promesa no tiene tipo de evento asociado' };
+    }
+
+    // Cotización principal autorizada (parent): la que será parent_cotizacion_id del anexo
+    const principal = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+        status: { in: ['autorizada', 'aprobada', 'approved'] },
+        is_annex: false,
+        archived: false,
+      },
+      select: { id: true },
+    });
+    if (!principal) {
+      return { success: false, error: 'No hay cotización principal autorizada en esta promesa. Crea y autoriza primero la cotización principal.' };
+    }
+
+    const nombreTrim = (data.nombre || 'Propuesta adicional').trim();
+    const nombreExistente = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: promiseId,
+        name: nombreTrim,
+        archived: false,
+        is_annex: true,
+      },
+    });
+    if (nombreExistente) {
+      return { success: false, error: 'Ya existe un anexo con ese nombre en esta promesa' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.create({
+      data: {
+        studio_id: studio.id,
+        promise_id: promiseId,
+        contact_id: promise.contact_id,
+        event_type_id: promise.event_type_id,
+        parent_cotizacion_id: principal.id,
+        is_annex: true,
+        name: nombreTrim,
+        description: data.descripcion?.trim() || null,
+        price: 0,
+        status: 'pendiente',
+        visible_to_client: false,
+        event_duration: promise.duration_hours,
+        condiciones_visibles: [],
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/anexos`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+
+    return {
+      success: true,
+      data: {
+        id: cotizacion.id,
+        name: cotizacion.name,
+        promise_id: cotizacion.promise_id ?? undefined,
+        status: cotizacion.status,
+        cotizacion: {
+          id: cotizacion.id,
+          name: cotizacion.name,
+          price: cotizacion.price,
+          status: cotizacion.status,
+          description: cotizacion.description,
+          created_at: cotizacion.created_at,
+          updated_at: cotizacion.updated_at,
+          order: cotizacion.order,
+          archived: cotizacion.archived,
+        },
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error creando anexo:', error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: 'Error al crear anexo' };
+  }
+}
+
+/**
+ * Autorizar manualmente un anexo (quick-approve): cambia status a autorizada sin flujo de firma del cliente.
+ * Dispara sincronización de tareas en cronograma si la cotización principal tiene evento vinculado.
+ */
+export async function autorizarAnexoManualmente(
+  studioSlug: string,
+  annexCotizacionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const anexo = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: annexCotizacionId,
+        studio_id: studio.id,
+        is_annex: true,
+      },
+      select: {
+        id: true,
+        status: true,
+        parent_cotizacion_id: true,
+        promise_id: true,
+      },
+    });
+    if (!anexo) return { success: false, error: 'Anexo no encontrado' };
+    if (anexo.status === 'autorizada' || anexo.status === 'aprobada' || anexo.status === 'approved') {
+      return { success: true };
+    }
+
+    const eventoId =
+      anexo.parent_cotizacion_id
+        ? (await prisma.studio_cotizaciones.findUnique({
+            where: { id: anexo.parent_cotizacion_id },
+            select: { evento_id: true },
+          }))?.evento_id ?? null
+        : null;
+
+    await prisma.studio_cotizaciones.update({
+      where: { id: annexCotizacionId },
+      data: { status: 'autorizada' },
+    });
+
+    if (eventoId) {
+      const { sincronizarTareasEvento } = await import('@/lib/actions/studio/business/events');
+      await sincronizarTareasEvento(studioSlug, eventoId);
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${anexo.promise_id}/anexos`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${anexo.promise_id}/autorizada`);
+    return { success: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error autorizando anexo:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al autorizar anexo',
+    };
+  }
+}
+
+/**
+ * Marca un anexo como visible al cliente para que la URL pública funcione (evita 404).
+ * Se llama al usar "Copiar URL" para que el enlace sea accesible.
+ */
+export async function setAnexoVisibleToClient(
+  studioSlug: string,
+  promiseId: string,
+  annexId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const anexo = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: annexId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+        is_annex: true,
+      },
+      select: { id: true },
+    });
+    if (!anexo) return { success: false, error: 'Anexo no encontrado' };
+
+    await prisma.studio_cotizaciones.update({
+      where: { id: annexId },
+      data: { visible_to_client: true },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}/anexos`);
+    return { success: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error seteando visible_to_client anexo:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar',
+    };
+  }
+}
+
+/**
  * Obtener horas de cobertura de una promesa
  */
 export async function getPromiseDurationHours(
@@ -790,6 +1121,7 @@ export async function getCotizacionById(
     bono_especial?: number;
     event_type_id?: string | null;
     event_type_name?: string | null;
+    is_annex?: boolean;
     items: Array<{
       item_id: string | null; // null para custom items
       quantity: number;
@@ -864,6 +1196,7 @@ export async function getCotizacionById(
         bono_especial: true,
         condiciones_visibles: true,
         event_type_id: true,
+        is_annex: true,
         condicion_comercial_negociacion: {
           select: {
             id: true,
@@ -1017,6 +1350,7 @@ export async function getCotizacionById(
         condiciones_visibles: Array.isArray(cotizacion.condiciones_visibles) ? (cotizacion.condiciones_visibles as string[]) : null,
         event_type_id: cotizacion.event_type_id ?? null,
         event_type_name: cotizacion.event_types?.name ?? null,
+        is_annex: cotizacion.is_annex ?? false,
         condicion_comercial_negociacion: cotizacion.condicion_comercial_negociacion
           ? {
               id: cotizacion.condicion_comercial_negociacion.id,
@@ -1182,6 +1516,10 @@ export async function deleteCotizacion(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/autorizada`);
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/anexos`);
+    }
 
     return {
       success: true,
@@ -1351,7 +1689,8 @@ export async function unarchiveCotizacion(
  */
 export async function duplicateCotizacion(
   cotizacionId: string,
-  studioSlug: string
+  studioSlug: string,
+  options?: { parentCotizacionId: string }
 ): Promise<CotizacionResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -1379,6 +1718,8 @@ export async function duplicateCotizacion(
     if (!original) {
       return { success: false, error: 'Cotización no encontrada' };
     }
+
+    const asAnnex = Boolean(options?.parentCotizacionId);
 
     // Obtener el order mรกximo para colocar la duplicada al final
     const maxOrder = await prisma.studio_cotizaciones.findFirst({
@@ -1431,7 +1772,7 @@ export async function duplicateCotizacion(
     const nuevaCotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: original.studio_id,
-        evento_id: original.evento_id,
+        evento_id: asAnnex ? null : original.evento_id,
         event_type_id: original.event_type_id,
         promise_id: original.promise_id,
         contact_id: original.contact_id,
@@ -1444,6 +1785,9 @@ export async function duplicateCotizacion(
         condiciones_comerciales_metodo_pago_id: original.condiciones_comerciales_metodo_pago_id,
         archived: false,
         order: newOrder,
+        ...(asAnnex && options?.parentCotizacionId
+          ? { is_annex: true, parent_cotizacion_id: options.parentCotizacionId }
+          : { is_annex: false }),
         condiciones_visibles: condicionesVisiblesLiteral,
         precio_calculado: original.precio_calculado,
         snap_precio_lista: original.snap_precio_lista,
@@ -2587,8 +2931,11 @@ export async function updateCotizacion(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // No permitir actualizar si est? autorizada o aprobada
-    if (cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada') {
+    // Bloqueo: no editar cotización autorizada/aprobada. Anexos se pueden editar solo si su status no es autorizada/aprobada
+    const statusBloqueado = cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada';
+    const isAnnex = (cotizacion as { is_annex?: boolean }).is_annex === true;
+    const esAnexoEditable = isAnnex && !statusBloqueado;
+    if (statusBloqueado && !esAnexoEditable) {
       return { success: false, error: 'No se puede actualizar una cotizaciรณn autorizada o aprobada' };
     }
 

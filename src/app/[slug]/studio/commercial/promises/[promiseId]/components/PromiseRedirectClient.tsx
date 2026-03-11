@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { startTransition } from 'react';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
 
@@ -19,8 +19,10 @@ export function PromiseRedirectClient({
   promiseStatus,
 }: PromiseRedirectClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname?.includes('/anexos') || pathname?.includes('/cotizacion')) return;
     if (!state) {
       // Si no hay estado, redirigir a la lista de promesas
       startTransition(() => {
@@ -52,8 +54,8 @@ export function PromiseRedirectClient({
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [state, studioSlug, promiseId, router]);
+  }, [pathname, state, studioSlug, promiseId, router]);
 
-  // Mostrar skeleton mientras se procesa la redirección
+  if (pathname?.includes('/anexos') || pathname?.includes('/cotizacion')) return null;
   return <PromiseContentSkeleton />;
 }

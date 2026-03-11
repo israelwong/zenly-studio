@@ -268,7 +268,21 @@ export function CommercialConfigActionButtons({
             </ZenDropdownMenuContent>
           </ZenDropdownMenu>
         </div>
-      ) : !sidebarOnlyPreviewAndCancel ? (
+      ) : sidebarOnlyPreviewAndCancel ? (
+        // Modo creación con vista previa: Vista previa ya está arriba; aquí solo Guardar (guardado rápido sin abrir preview)
+        <ZenButton
+          type="button"
+          variant="primary"
+          onClick={onSaveDraft}
+          loading={loading && savingIntent === 'draft'}
+          loadingText="Guardando..."
+          disabled={loading || isDisabled || condicionDisabled}
+          title={saveDisabledTitle}
+          className="w-full"
+        >
+          Guardar
+        </ZenButton>
+      ) : (
         // Modo creación: Button Group con Guardar borrador + dropdown
         <>
           <div className="flex gap-0 w-full">
@@ -318,7 +332,7 @@ export function CommercialConfigActionButtons({
           </div>
           {autorizarNode}
         </>
-      ) : null}
+      )}
       
       <ZenButton
         type="button"

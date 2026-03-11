@@ -86,6 +86,8 @@ interface ConfirmarCierreModalProps {
   cotizacionName?: string;
   isLoading?: boolean;
   progressMessage?: string;
+  /** Contexto anexo: no se crea evento nuevo; el pago se registra en el evento actual. */
+  isAnnexContext?: boolean;
 }
 
 export function ConfirmarCierreModal({
@@ -98,6 +100,7 @@ export function ConfirmarCierreModal({
   cotizacionName,
   isLoading = false,
   progressMessage,
+  isAnnexContext = false,
 }: ConfirmarCierreModalProps) {
   const [loading, setLoading] = useState(true);
   const [cotizacion, setCotizacion] = useState<{
@@ -445,6 +448,11 @@ export function ConfirmarCierreModal({
       saveDisabled={loading || !canConfirm || isSubmitting}
     >
       <div className="space-y-6">
+        {isAnnexContext && (
+          <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            Propuesta adicional (anexo). El pago se registrará en la cuenta del evento actual; no se crea un nuevo evento.
+          </p>
+        )}
         {loading ? (
           <ConfirmarCierreModalSkeleton />
         ) : (

@@ -13,6 +13,8 @@ interface EventDetailToolbarProps {
   contactId: string | null;
   contactPhone: string | null;
   contactName: string | null;
+  /** Si hay contrato generado para el evento; si false, no se muestra el botón "Ver contrato" */
+  hasContract?: boolean;
   /** Contenido a la derecha del toolbar (ej. botón Personal) */
   rightContent?: React.ReactNode;
 }
@@ -24,6 +26,7 @@ export function EventDetailToolbar({
   contactId,
   contactPhone,
   contactName,
+  hasContract = true,
   rightContent,
 }: EventDetailToolbarProps) {
   const [linkCopied, setLinkCopied] = useState(false);
@@ -109,7 +112,7 @@ export function EventDetailToolbar({
               </ZenButton>
             </div>
           )}
-          {promiseId && (
+          {promiseId && hasContract && (
             <>
               {hasContactData && (
                 <div className="h-5 w-px bg-zinc-700 shrink-0" aria-hidden />

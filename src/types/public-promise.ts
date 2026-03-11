@@ -96,6 +96,8 @@ export interface PublicCotizacion {
   } | null;
   /** Horas de cobertura para esta cotización. Prioridad sobre promise.duration_hours en vista pública. */
   event_duration?: number | null;
+  /** Si true, es una propuesta adicional (anexo) que se suma al evento actual. */
+  is_annex?: boolean;
   selected_by_prospect?: boolean;
   selected_at?: Date | null;
   negociacion_precio_original?: number | null;

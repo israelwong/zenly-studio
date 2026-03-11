@@ -75,12 +75,18 @@ interface EditarCotizacionClientProps {
   } | null;
   /** Estado de ruta de la promesa (pendiente | cierre | autorizada) para enlace "Regresar" directo. */
   promiseState?: 'pendiente' | 'cierre' | 'autorizada' | null;
+  /** Si true, Guardar/Cancelar regresan a /anexos en lugar de la ruta por estado. */
+  isAnnex?: boolean;
+  /** Si true, Guardar/Cancelar regresan a /autorizada (vista 3 columnas). */
+  returnToAutorizada?: boolean;
 }
 
 export function EditarCotizacionClient({
   initialCotizacion,
   initialCondicionComercial,
   promiseState,
+  isAnnex,
+  returnToAutorizada,
 }: EditarCotizacionClientProps) {
   const params = useParams();
   const router = useRouter();
@@ -92,13 +98,14 @@ export function EditarCotizacionClient({
   const fromCierre = searchParams.get('from') === 'cierre';
   const focusMode = usePromiseFocusMode();
 
-  // Ruta de regreso al estado de la promesa (pendiente/cierre/autorizada). Usar siempre ruta con segmento para que funcione en nueva pestaña.
+  const autorizadaPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`;
+  const anexosPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/anexos`;
   const isFromCierreFlow = fromCierre || initialCotizacion?.status === 'en_cierre' || initialCotizacion?.status === 'cierre';
-  const backHref = getPromisePathFromState(
-    studioSlug,
-    promiseId,
-    isFromCierreFlow ? 'cierre' : (promiseState ?? 'pendiente')
-  );
+  const backHref = returnToAutorizada
+    ? autorizadaPath
+    : isAnnex
+      ? anexosPath
+      : getPromisePathFromState(studioSlug, promiseId, isFromCierreFlow ? 'cierre' : (promiseState ?? 'pendiente'));
 
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
@@ -307,6 +314,7 @@ export function EditarCotizacionClient({
       getSaveHandlersRef={saveHandlersRef}
       onPreviewFooterStateChange={setPreviewFooterState}
       promiseState={promiseState ?? undefined}
+      returnPathOverride={returnToAutorizada ? autorizadaPath : undefined}
     />
   );
 

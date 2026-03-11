@@ -1,0 +1,367 @@
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { startTransition } from 'react';
+import { Plus, MoreVertical, FileCheck, Trash2, Clock, ChevronRight, Copy } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenSwitch, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
+import { deleteCotizacion, toggleCotizacionVisibility, duplicateCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { ConfirmarCierreModal } from '../../components/ConfirmarCierreModal';
+import { pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { toast } from 'sonner';
+
+const STATUS_LABELS: Record<string, string> = {
+  pendiente: 'Pendiente',
+  en_cierre: 'En cierre',
+  autorizada: 'Autorizada',
+  aprobada: 'Aprobada',
+  cancelada: 'Cancelada',
+};
+
+function getStatusVariant(status: string): 'default' | 'destructive' | 'secondary' | 'success' | 'warning' | 'info' {
+  if (status === 'en_cierre') return 'info';
+  if (status === 'autorizada' || status === 'aprobada' || status === 'approved') return 'success';
+  if (status === 'cancelada') return 'destructive';
+  return 'secondary';
+}
+
+interface AnexosSectionProps {
+  anexos: CotizacionListItem[];
+  studioSlug: string;
+  promiseId: string;
+  /** ID de la cotización principal autorizada; usado para el link "Nueva propuesta" (parentId). */
+  parentCotizacionId: string | null;
+  /** evento_id de la cotización principal (para contexto; no crear evento nuevo en cierre anexo). */
+  eventoIdPrincipal: string | null;
+  onRefresh: () => void;
+}
+
+export function AnexosSection({
+  anexos,
+  studioSlug,
+  promiseId,
+  parentCotizacionId,
+  eventoIdPrincipal,
+  onRefresh,
+}: AnexosSectionProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cierreModalCotizacion, setCierreModalCotizacion] = useState<{ id: string; name: string } | null>(null);
+  const [isPassingToCierre, setIsPassingToCierre] = useState(false);
+  const [confirmDeleteAnnex, setConfirmDeleteAnnex] = useState<{ id: string; name: string } | null>(null);
+  const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  /** Id del anexo cuyo menú está abierto; al abrir el modal de cierre se pone null para cerrar el menú de inmediato. */
+  const [dropdownOpenId, setDropdownOpenId] = useState<string | null>(null);
+
+  const handleEliminarClick = (annexId: string, name: string) => {
+    setDropdownOpenId(null);
+    setConfirmDeleteAnnex({ id: annexId, name });
+  };
+
+  const handleEliminarConfirm = async () => {
+    if (!confirmDeleteAnnex) return;
+    const { id, name: _name } = confirmDeleteAnnex;
+    setConfirmDeleteAnnex(null);
+    setDeletingId(id);
+    try {
+      const result = await deleteCotizacion(id, studioSlug);
+      if (result.success) {
+        toast.success('Propuesta eliminada');
+        startTransition(() => onRefresh());
+      } else {
+        toast.error(result.error ?? 'Error al eliminar');
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDuplicar = async (e: React.MouseEvent, anexo: CotizacionListItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!parentCotizacionId || duplicatingId) return;
+    setDropdownOpenId(null);
+    setDuplicatingId(anexo.id);
+    try {
+      const result = await duplicateCotizacion(anexo.id, studioSlug, { parentCotizacionId });
+      if (result.success) {
+        toast.success('Propuesta duplicada');
+        startTransition(() => onRefresh());
+      } else {
+        toast.error(result.error ?? 'Error al duplicar');
+      }
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const handleCierreConfirm = async (payload: PasarACierreOptions) => {
+    if (!cierreModalCotizacion) return;
+    setIsPassingToCierre(true);
+    try {
+      const result = await pasarACierre(studioSlug, cierreModalCotizacion.id, payload);
+      if (result.success) {
+        toast.success('Propuesta pasada a cierre');
+        setCierreModalCotizacion(null);
+        startTransition(() => onRefresh());
+      } else {
+        toast.error(result.error ?? 'Error al pasar a cierre');
+        throw new Error(result.error);
+      }
+    } finally {
+      setIsPassingToCierre(false);
+    }
+  };
+
+  const handlePasarACierreClick = (anexo: CotizacionListItem) => {
+    setDropdownOpenId(null);
+    setCierreModalCotizacion({ id: anexo.id, name: anexo.name });
+  };
+
+  const basePath = `/${studioSlug}/studio/commercial/promises/${promiseId}`;
+  const nuevaAnexoHref =
+    parentCotizacionId
+      ? `${basePath}/cotizacion/nueva?isAnnex=true&parentId=${encodeURIComponent(parentCotizacionId)}`
+      : null;
+
+  return (
+    <>
+      <ZenCard className="h-full flex flex-col">
+        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0 h-[52px] flex flex-col justify-center overflow-hidden">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <ZenCardTitle className="text-sm font-medium mb-0 leading-none">
+                Propuestas adicionales
+              </ZenCardTitle>
+              <ZenBadge variant="warning" className="text-[10px] px-1.5 py-0 rounded-full shrink-0">
+                Anexos
+              </ZenBadge>
+            </div>
+            <div className="flex items-center shrink-0">
+              {nuevaAnexoHref ? (
+                <Link
+                  href={nuevaAnexoHref}
+                  className="inline-flex items-center justify-center rounded-md hover:bg-zinc-800/80 transition-colors h-6 w-6"
+                  title="Nueva propuesta adicional"
+                  aria-label="Nueva propuesta adicional"
+                >
+                  <Plus className="h-3.5 w-3.5 text-white" />
+                </Link>
+              ) : (
+                <ZenButton variant="ghost" size="sm" className="h-6 w-6 p-0" disabled title="Nueva propuesta adicional">
+                  <Plus className="h-3.5 w-3.5 text-white" />
+                </ZenButton>
+              )}
+            </div>
+          </div>
+        </ZenCardHeader>
+        <ZenCardContent className="p-4 flex flex-col flex-1 overflow-y-auto">
+          {anexos.length === 0 ? (
+            <div className="py-8 px-6 text-center text-zinc-500 border border-dashed border-zinc-700 rounded-lg">
+              <p className="text-sm">No hay propuestas adicionales.</p>
+              <p className="text-xs mt-1">Crea una para ofrecer servicios extra (horas extra, sesiones posteriores, álbumes impresos, etc.).</p>
+              {nuevaAnexoHref ? (
+                <ZenButton variant="ghost" size="sm" className="mt-3 text-zinc-400 hover:text-zinc-300" asChild>
+                  <Link href={nuevaAnexoHref}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Crear propuesta adicional
+                  </Link>
+                </ZenButton>
+              ) : (
+                <ZenButton variant="ghost" size="sm" className="mt-3 text-zinc-500" disabled>
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Crear propuesta adicional
+                </ZenButton>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {anexos.map((anexo) => {
+                const isAutorizada =
+                  anexo.status === 'autorizada' || anexo.status === 'aprobada' || anexo.status === 'approved';
+                const canEliminar = !isAutorizada;
+                const canPasarCierre =
+                  anexo.status !== 'en_cierre' && anexo.status !== 'autorizada' && anexo.status !== 'aprobada' && anexo.status !== 'approved';
+                const href = `${basePath}/cotizacion/${anexo.id}?from=autorizada`;
+                const cardClass = 'p-3 border rounded-lg transition-colors relative no-underline text-inherit block bg-zinc-800/50 border-zinc-700 cursor-pointer hover:bg-zinc-800';
+
+                return (
+                  <Link
+                    key={anexo.id}
+                    href={href}
+                    className={cardClass}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest?.('[data-quote-actions]')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
+                    {/* Fila 1: nombre + switch + badge + menú */}
+                    <div className="flex items-center gap-2">
+                      <h4 className="flex-1 min-w-0 text-sm font-medium truncate text-zinc-200">
+                        {anexo.name}
+                      </h4>
+                      <div className="flex items-center gap-1.5 shrink-0" data-quote-actions onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="flex items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                          title={anexo.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
+                        >
+                          <span className="text-xs text-zinc-400 whitespace-nowrap">
+                            {anexo.visible_to_client ? 'Publicada' : 'No publicada'}
+                          </span>
+                          <ZenSwitch
+                            checked={anexo.visible_to_client}
+                            onCheckedChange={() => {
+                              if (togglingVisibilityId) return;
+                              setTogglingVisibilityId(anexo.id);
+                              toggleCotizacionVisibility(anexo.id, studioSlug).then((result) => {
+                                if (result.success) {
+                                  toast.success(anexo.visible_to_client ? 'Ocultada del prospecto' : 'Visible para el prospecto');
+                                  startTransition(() => onRefresh());
+                                } else {
+                                  toast.error(result.error ?? 'Error al cambiar visibilidad');
+                                }
+                              }).finally(() => setTogglingVisibilityId(null));
+                            }}
+                            disabled={togglingVisibilityId === anexo.id}
+                          />
+                        </div>
+                        <ZenBadge
+                          variant={getStatusVariant(anexo.status)}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full"
+                        >
+                          {STATUS_LABELS[anexo.status] ?? anexo.status}
+                        </ZenBadge>
+                        <ZenDropdownMenu
+                          open={dropdownOpenId === anexo.id}
+                          onOpenChange={(open) => setDropdownOpenId(open ? anexo.id : null)}
+                        >
+                          <ZenDropdownMenuTrigger asChild>
+                            <ZenButton variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <MoreVertical className="h-4 w-4 text-zinc-400" />
+                            </ZenButton>
+                          </ZenDropdownMenuTrigger>
+                          <ZenDropdownMenuContent align="end">
+                            {parentCotizacionId && (
+                              <ZenDropdownMenuItem
+                                onClick={(e) => handleDuplicar(e, anexo)}
+                                disabled={duplicatingId === anexo.id}
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                {duplicatingId === anexo.id ? 'Duplicando...' : 'Duplicar'}
+                              </ZenDropdownMenuItem>
+                            )}
+                            {canPasarCierre && (
+                              <ZenDropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handlePasarACierreClick(anexo);
+                                }}
+                              >
+                                <FileCheck className="h-4 w-4 mr-2" />
+                                Pasar a Cierre
+                              </ZenDropdownMenuItem>
+                            )}
+                            {canEliminar && (
+                              <ZenDropdownMenuItem
+                                onClick={(e) => { e.preventDefault(); handleEliminarClick(anexo.id, anexo.name); }}
+                                disabled={deletingId === anexo.id}
+                                className="text-red-400 focus:text-red-300"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deletingId === anexo.id ? 'Eliminando...' : 'Eliminar'}
+                              </ZenDropdownMenuItem>
+                            )}
+                          </ZenDropdownMenuContent>
+                        </ZenDropdownMenu>
+                      </div>
+                    </div>
+                    {/* Fila 2: descripción, duración, actualizado */}
+                    <div className="mt-3 min-w-0 space-y-2">
+                      {anexo.description && (
+                        <p className="text-xs line-clamp-1 text-zinc-400">{anexo.description}</p>
+                      )}
+                      {(anexo.event_duration != null && anexo.event_duration > 0) && (
+                        <div className="flex items-center gap-1 text-sm text-zinc-400">
+                          <Clock className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                          <span>{anexo.event_duration} hrs</span>
+                        </div>
+                      )}
+                      <p className="text-xs text-zinc-500">
+                        Actualizado: {new Date(anexo.updated_at).toLocaleDateString('es-MX', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    {/* Fila 3: precio + Editar (como footer con borde) */}
+                    <div className="mt-3 pt-3 border-t border-zinc-700 flex items-center justify-between gap-2">
+                      <span className="text-base font-bold tabular-nums text-emerald-400">
+                        ${Number(anexo.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                      </span>
+                      <span className="text-xs text-zinc-400 flex items-center gap-0.5">
+                        Editar
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </ZenCardContent>
+      </ZenCard>
+
+      {cierreModalCotizacion && (
+        <ConfirmarCierreModal
+          isOpen={!!cierreModalCotizacion}
+          onClose={() => setCierreModalCotizacion(null)}
+          onConfirm={handleCierreConfirm}
+          studioSlug={studioSlug}
+          cotizacionId={cierreModalCotizacion.id}
+          promiseId={promiseId}
+          cotizacionName={cierreModalCotizacion.name}
+          isLoading={isPassingToCierre}
+          progressMessage={isPassingToCierre ? 'Pasando a cierre...' : undefined}
+          isAnnexContext
+        />
+      )}
+
+      <AlertDialog open={!!confirmDeleteAnnex} onOpenChange={(open) => !open && setConfirmDeleteAnnex(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar propuesta adicional?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar esta propuesta? Esta acción no se puede deshacer y se borrarán todos los ítems configurados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleEliminarConfirm}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

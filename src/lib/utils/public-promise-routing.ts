@@ -26,6 +26,11 @@ export function getPublicPromisePath(
   return segment ? `${base}/${segment}` : base;
 }
 
+/** Ruta pública para vista cliente de un anexo: /[slug]/promise/[promiseId]/anexos/[annexId] */
+export function getPublicAnnexPath(slug: string, promiseId: string, annexId: string): string {
+  return `/${slug}/promise/${promiseId}/anexos/${annexId}`;
+}
+
 /**
  * Normaliza el status de una cotización para comparación
  * EXPORTADO para uso en validaciones

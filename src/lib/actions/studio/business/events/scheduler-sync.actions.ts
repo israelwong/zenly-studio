@@ -377,16 +377,17 @@ export async function sincronizarTareasEvento(
 
     const event = await prisma.studio_events.findFirst({
       where: { id: eventId, studio_id: studioId },
-      select: { event_date: true, cotizacion_id: true },
+      select: { event_date: true, cotizacion_id: true, promise_id: true },
     });
     if (!event) return { success: false, error: 'Evento no encontrado' };
 
-    const orClause: Array<{ evento_id: string } | { id: string }> = [{ evento_id: eventId }];
-    if (event.cotizacion_id) orClause.push({ id: event.cotizacion_id });
+    // Consolidación multi-cotización: todas las cotizaciones de la promesa en autorizada/aprobada (principal + anexos)
+    const promiseId = event.promise_id;
+    if (!promiseId) return { success: false, error: 'Evento sin promesa vinculada' };
 
     const cotizacionesRows = await prisma.studio_cotizaciones.findMany({
       where: {
-        OR: orClause,
+        promise_id: promiseId,
         status: { in: ['autorizada', 'aprobada', 'approved'] },
       },
       select: {
@@ -454,7 +455,7 @@ export async function sincronizarTareasEvento(
       },
     });
 
-    // Item-First: solo ítems de cotizaciones autorizadas
+    // Item-First: consolidar ítems de todas las cotizaciones autorizadas (principal + anexos)
     const allItems = cotizacionesRows.flatMap((c) => c.cotizacion_items ?? []);
     const orderedItems = aplanarOrdenCanonico(allItems);
 
@@ -469,6 +470,35 @@ export async function sincronizarTareasEvento(
             : null;
       for (const it of c.cotizacion_items ?? []) {
         itemToDurationHours.set(it.id, hours);
+      }
+    }
+
+    /** Entrada expandida: 1 ítem → 1 o N tareas según billing_type y cantidad_efectiva (desglose 1-a-N). */
+    type ExpandedEntry = {
+      item: (typeof orderedItems)[number];
+      instanceIndex: number;
+      taskName: string;
+      budgetAmount: number;
+    };
+    const expandedEntries: ExpandedEntry[] = [];
+    for (const item of orderedItems) {
+      const billingType = (item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+      const quantity = Number(item.quantity ?? 1);
+      const durationHours = itemToDurationHours.get(item.id) ?? null;
+      const cantidadEfectiva = calcularCantidadEfectiva(billingType, quantity, durationHours);
+      const costUnit = Number((item as { cost?: number | null }).cost ?? 0);
+      const totalBudget = costUnit * cantidadEfectiva;
+      const baseName = item.name ?? item.name_snapshot ?? 'Tarea';
+
+      const splitByQuantity =
+        (billingType === 'SERVICE' || billingType === 'UNIT') && cantidadEfectiva > 1;
+      const N = splitByQuantity ? Math.max(1, Math.round(cantidadEfectiva)) : 1;
+
+      for (let instanceIndex = 0; instanceIndex < N; instanceIndex++) {
+        const taskName =
+          N > 1 ? `${baseName} (${instanceIndex + 1}/${N})` : baseName;
+        const budgetAmount = N > 1 ? totalBudget / N : totalBudget;
+        expandedEntries.push({ item, instanceIndex, taskName, budgetAmount });
       }
     }
 
@@ -497,29 +527,23 @@ export async function sincronizarTareasEvento(
       eventId,
       cotizaciones: cotizacionesRows.length,
       itemsEnCotizacion: orderedItems.length,
-      migrando: orderedItems.slice(0, 10).map((it, idx) => {
-        const durationDaysRaw =
-          it.items?.default_duration_days ?? it.internal_delivery_days ?? it.client_delivery_days ?? 1;
-        return {
-          orden: idx,
-          nombre: it.name ?? it.name_snapshot ?? '?',
-          seccion: (it.service_categories?.section_categories ?? it.items?.service_categories?.section_categories)?.service_sections?.name ?? '?',
-          categoria: it.category_name_snapshot ?? it.category_name ?? it.service_categories?.name ?? '?',
-          billing_type: (it as { billing_type?: string | null }).billing_type ?? null,
-          duration_hours: itemToDurationHours.get(it.id) ?? null,
-          duration_days: Math.max(1, Number(durationDaysRaw)),
-        };
-      }),
+      expandedEntries: expandedEntries.length,
+      migrando: expandedEntries.slice(0, 10).map((e, idx) => ({
+        orden: idx,
+        nombre: e.taskName,
+        instanceIndex: e.instanceIndex,
+        budgetAmount: e.budgetAmount,
+      })),
     });
 
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
     let created = 0;
     let updated = 0;
     let orderIndex = 0;
+    const skippedByOrphan = new Set<string>();
 
     await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < orderedItems.length; i++) {
-        const item = orderedItems[i]!;
+      for (const { item, instanceIndex, taskName, budgetAmount } of expandedEntries) {
 
         const catalogCategoryId =
           item.scheduler_task?.catalog_category_id ??
@@ -543,19 +567,12 @@ export async function sincronizarTareasEvento(
           item.client_delivery_days ??
           1;
         const durationDays = Math.max(1, Number(durationDaysRaw));
-        const name = item.name ?? item.name_snapshot ?? 'Tarea';
 
-        // Honorarios: costo proveedor; si billing_type === 'HOUR' aplicar multiplicador de horas
         const billingType = (item.billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
         const profitTypeRaw = (item as { profit_type?: string | null }).profit_type ?? (item as { profit_type_snapshot?: string | null }).profit_type_snapshot ?? null;
         const profitTypeSnapshot = profitTypeRaw != null ? String(profitTypeRaw).toLowerCase() : null;
-        const billingTypeSnapshot = billingType; // HOUR | SERVICE | UNIT
         const durationHours = itemToDurationHours.get(item.id) ?? null;
         const durationHoursSnapshot = durationHours != null ? durationHours : undefined;
-        const quantity = Number(item.quantity ?? 1);
-        const cantidadEfectiva = calcularCantidadEfectiva(billingType, quantity, durationHours);
-        const costUnit = Number((item as { cost?: number | null }).cost ?? 0);
-        const budgetAmount = costUnit * cantidadEfectiva;
 
         // Snapshots solo desde el ítem procesado (no catálogo global)
         const sectionRef = item.service_categories?.section_categories ?? item.items?.service_categories?.section_categories;
@@ -564,24 +581,37 @@ export async function sincronizarTareasEvento(
         const snapshotCategoryName = categoryName ?? 'Sin categoría';
 
         // Exclusión: ítem cuyo “servicio” ya está ocupado por una tarea huérfana DRAFT (soft-delete operativo)
-        const itemServiceKey = serviceKey(catalogCategoryId, snapshotSectionId, category);
-        const budget = orphanBudget.get(itemServiceKey) ?? 0;
-        if (budget > 0) {
-          orphanBudget.set(itemServiceKey, budget - 1);
+        if (!skippedByOrphan.has(item.id)) {
+          const itemServiceKey = serviceKey(catalogCategoryId, snapshotSectionId, category);
+          const budget = orphanBudget.get(itemServiceKey) ?? 0;
+          if (budget > 0) {
+            orphanBudget.set(itemServiceKey, budget - 1);
+            skippedByOrphan.add(item.id);
+            continue;
+          }
+        } else {
           continue;
         }
 
         const order = orderIndex++;
-        // Días inclusivos: 1 día = mismo start y end; end = start + (durationDays - 1)
         const endDate = new Date(eventDate);
         endDate.setDate(endDate.getDate() + Math.max(0, durationDays - 1));
 
-        const hadTask = Boolean(item.scheduler_task_id ?? item.scheduler_task?.id);
+        const compositeKey = {
+          scheduler_instance_id: schedulerInstanceId,
+          cotizacion_item_id: item.id,
+          sync_instance_index: instanceIndex,
+        };
+        const existingTask = await tx.studio_scheduler_event_tasks.findUnique({
+          where: { scheduler_instance_id_cotizacion_item_id_sync_instance_index: compositeKey },
+          select: { id: true },
+        });
+        const hadTask = Boolean(existingTask);
 
         const createData = {
             scheduler_instance_id: schedulerInstanceId,
             cotizacion_item_id: item.id,
-            name,
+            name: taskName,
             start_date: eventDate,
             end_date: endDate,
             duration_days: durationDays,
@@ -595,7 +625,7 @@ export async function sincronizarTareasEvento(
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
-            billing_type_snapshot: billingTypeSnapshot,
+            billing_type_snapshot: billingType,
             duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
@@ -604,32 +634,31 @@ export async function sincronizarTareasEvento(
             order,
             category,
             duration_days: durationDays,
-            name,
+            name: taskName,
             ...(catalogCategoryId != null ? { catalog_category_id: catalogCategoryId } : {}),
             catalog_category_name_snapshot: snapshotCategoryName,
             catalog_section_id_snapshot: snapshotSectionId,
             catalog_section_name_snapshot: snapshotSectionName,
-            billing_type_snapshot: billingTypeSnapshot,
+            billing_type_snapshot: billingType,
             duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           };
 
         const task = await tx.studio_scheduler_event_tasks.upsert({
-          where: { cotizacion_item_id: item.id },
+          where: { scheduler_instance_id_cotizacion_item_id_sync_instance_index: compositeKey },
           create: createData,
           update: updateData,
         });
 
-        if (!hadTask) {
+        if (instanceIndex === 0 && !hadTask) {
           await tx.studio_cotizacion_items.update({
             where: { id: item.id },
             data: { scheduler_task_id: task.id },
           });
-          created++;
-        } else {
-          updated++;
         }
+        if (!hadTask) created++;
+        else updated++;
       }
 
       // Limpieza de huérfanos: tareas con catalog_category_id no vinculadas a un ítem real. No tocar DRAFT con cotizacion_item_id null (soft-delete operativo).
@@ -695,7 +724,7 @@ export async function sincronizarTareasEvento(
       await revalidateSchedulerPaths(studioSlug, eventId);
     }
 
-    console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length });
+    console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length, totalTasks: expandedEntries.length });
 
     return toPlainObject({ success: true, created, updated, skipped: 0 });
   } catch (error) {

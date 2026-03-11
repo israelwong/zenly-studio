@@ -289,6 +289,7 @@ export function CotizacionesSection({
           promiseData={promiseData}
           dateSoldOut={dateSoldOut}
           condicionesVisiblesIds={selectedCotizacion.condiciones_visibles ?? undefined}
+          isAnnex={(selectedCotizacion as { is_annex?: boolean }).is_annex === true}
         />
       )}
     </>

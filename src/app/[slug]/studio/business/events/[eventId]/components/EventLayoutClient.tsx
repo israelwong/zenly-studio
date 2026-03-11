@@ -128,6 +128,7 @@ export function EventLayoutClient({
             contactId={eventData?.promise?.contact?.id || null}
             contactPhone={eventData?.promise?.contact?.phone || null}
             contactName={eventData?.promise?.contact?.name || null}
+            hasContract={contratosCount > 0}
             rightContent={
               <ZenButton
                 variant="ghost"

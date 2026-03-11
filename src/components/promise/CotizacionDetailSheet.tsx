@@ -84,6 +84,8 @@ interface CotizacionDetailSheetProps {
   autoGenerateContract?: boolean;
   /** Si true, se muestra el botón "Autorizar" en el footer (vista pública). Depende de share_settings.allow_online_authorization. */
   mostrarBotonAutorizar?: boolean;
+  /** Si true, es una propuesta adicional (anexo); se muestra botón "Autorizar Anexo" y se suma al evento actual. */
+  isAnnex?: boolean;
   /** ⚡ OPTIMIZACIÓN: Datos de promesa pre-cargados */
   promiseData?: {
     contact_name: string;
@@ -141,6 +143,7 @@ export function CotizacionDetailSheet({
   paquetes = [],
   autoGenerateContract = false,
   mostrarBotonAutorizar = true,
+  isAnnex = false,
   promiseData,
   dateSoldOut = false,
   condicionesVisiblesIds,
@@ -935,10 +938,10 @@ export function CotizacionDetailSheet({
                   onClick={() => setShowAutorizarModal(true)}
                   className="flex-1"
                   size="sm"
-                  disabled={!selectedCondicionId}
+                  disabled={!selectedCondicionId && !isAnnex}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  Autorizar
+                  {isAnnex ? 'Autorizar Anexo' : 'Autorizar'}
                 </ZenButton>
               )}
             </div>

@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../../components/CotizacionForm';
 import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
@@ -15,6 +15,10 @@ interface NuevaCotizacionClientProps {
   promiseId: string;
   packageId: string | null;
   contactId: string | null;
+  /** Si true, se crea una propuesta adicional (anexo) vinculada a parentCotizacionId. */
+  isAnnex?: boolean;
+  /** ID de la cotización principal cuando isAnnex es true. */
+  parentCotizacionId?: string | null;
 }
 
 export function NuevaCotizacionClient({
@@ -22,6 +26,8 @@ export function NuevaCotizacionClient({
   promiseId,
   packageId,
   contactId,
+  isAnnex = false,
+  parentCotizacionId = null,
 }: NuevaCotizacionClientProps) {
   const router = useRouter();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -74,15 +80,34 @@ export function NuevaCotizacionClient({
             <ZenButton
               variant="ghost"
               size="sm"
-              onClick={() => router.back()}
+              onClick={() => {
+                if (isAnnex && promiseId && studioSlug) {
+                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+                } else {
+                  router.back();
+                }
+              }}
               className="p-2"
             >
               <ArrowLeft className="h-4 w-4" />
             </ZenButton>
             <div>
-              <ZenCardTitle>Nueva Cotización</ZenCardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <ZenCardTitle className="mb-0">
+                  {isAnnex ? 'Nueva propuesta adicional' : 'Nueva Cotización'}
+                </ZenCardTitle>
+                {isAnnex && (
+                  <ZenBadge variant="warning" size="sm" className="text-amber-100 bg-amber-500/35 border-amber-400/60 shrink-0 px-2 py-1 text-xs">
+                    Anexo
+                  </ZenBadge>
+                )}
+              </div>
               <ZenCardDescription>
-                {packageId ? 'Crear cotización desde paquete' : 'Crear cotización personalizada'}
+                {isAnnex
+                  ? 'La propuesta se sumará al evento actual. Completa los datos y guarda.'
+                  : packageId
+                    ? 'Crear cotización desde paquete'
+                    : 'Crear cotización personalizada'}
               </ZenCardDescription>
             </div>
           </div>
@@ -93,14 +118,17 @@ export function NuevaCotizacionClient({
             promiseId={promiseId}
             packageId={packageId}
             contactId={contactId}
-            redirectOnSuccess={`/${studioSlug}/studio/commercial/promises/${promiseId}`}
+            redirectOnSuccess={isAnnex ? undefined : `/${studioSlug}/studio/commercial/promises/${promiseId}`}
+            returnPathOverride={isAnnex ? `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada` : undefined}
             getPreviewDataRef={previewDataRef}
             onRequestPreview={handleOpenPreview}
             hideGuardarComoPaqueteInSidebar={true}
             getGuardarComoPaqueteHandlerRef={guardarComoPaqueteRef}
             getSaveHandlersRef={saveHandlersRef}
             onPreviewFooterStateChange={setPreviewFooterState}
-            promiseState="pendiente"
+            promiseState={isAnnex ? 'autorizada' : 'pendiente'}
+            isAnnex={isAnnex}
+            parentCotizacionId={parentCotizacionId ?? undefined}
           />
         </ZenCardContent>
       </ZenCard>

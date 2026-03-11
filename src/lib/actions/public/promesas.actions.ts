@@ -3186,6 +3186,7 @@ export async function getQuoteDetailForPreview(
         order: true,
         evento_id: true,
         event_duration: true,
+        is_annex: true,
         precio_calculado: true,
         bono_especial: true,
         condiciones_visibles: true,
@@ -3464,6 +3465,7 @@ export async function getQuoteDetailForPreview(
       event_duration: cotizacion.event_duration ?? null,
       precio_calculado: cotizacion.precio_calculado != null ? Number(cotizacion.precio_calculado) : null,
       bono_especial: cotizacion.bono_especial != null ? Number(cotizacion.bono_especial) : null,
+      is_annex: (cotizacion as { is_annex?: boolean }).is_annex ?? false,
       totalAPagar: (() => {
         const engineOut = calculateCotizacionTotals({
           price: Number(cotizacion.price),
@@ -3486,6 +3488,62 @@ export async function getQuoteDetailForPreview(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Error al cargar vista previa",
+    };
+  }
+}
+
+/**
+ * Obtener una cotización anexo para vista pública (cliente).
+ * Si visible_to_client es false, retorna success con data mínima y visibleToClient: false (no 404).
+ */
+export async function getPublicAnnexCotizacion(
+  studioSlug: string,
+  promiseId: string,
+  annexId: string
+): Promise<{ success: boolean; data?: PublicCotizacion & { visibleToClient?: boolean }; visibleToClient?: boolean; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Studio no encontrado' };
+
+    const annex = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: annexId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+        is_annex: true,
+      },
+      select: { id: true, name: true, description: true, visible_to_client: true },
+    });
+    if (!annex) return { success: false, error: 'Anexo no encontrado' };
+
+    if (annex.visible_to_client !== true) {
+      const minimal: PublicCotizacion & { visibleToClient: boolean } = {
+        id: annex.id,
+        name: annex.name,
+        description: annex.description,
+        price: 0,
+        discount: null,
+        servicios: [],
+        condiciones_comerciales: null,
+        paquete_origen: null,
+        condiciones_visibles: null,
+        visibleToClient: false,
+      };
+      return { success: true, data: minimal, visibleToClient: false };
+    }
+
+    const result = await getQuoteDetailForPreview(studioSlug, annexId);
+    if (!result.success || !result.data) return result;
+    const data = { ...result.data, visibleToClient: true as const };
+    return { success: true, data, visibleToClient: true };
+  } catch (error) {
+    console.error('[getPublicAnnexCotizacion] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cargar anexo',
     };
   }
 }

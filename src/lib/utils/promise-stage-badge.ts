@@ -28,7 +28,7 @@ function normalizeKind(slug: string | undefined): PromiseStageBadgeKind {
 
 const STYLES: Record<PromiseStageBadgeKind, { className: string; label: string }> = {
   approved: {
-    className: 'bg-green-500/10 text-green-500 border-green-500/20',
+    className: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
     label: 'Aprobada',
   },
   canceled: {

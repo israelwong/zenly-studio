@@ -60,6 +60,19 @@ export function PromiseRouteGuard({
   // Decisionador Único: useLayoutEffect para comparar rutas ANTES del primer render
   useLayoutEffect(() => {
     if (hasRedirectedRef.current) return;
+    // ✅ Estado autorizada: permitir /bienvenido O /anexos (vista pública de anexos) sin redirigir
+    const targetIsBienvenido = serverTargetRoute != null && serverTargetRoute.includes('/bienvenido');
+    if (targetIsBienvenido && pathname != null && (pathname.includes('/bienvenido') || pathname.includes('/anexos'))) {
+      setIsReady(true);
+      serverValidatedRef.current = true;
+      return;
+    }
+    // ✅ Ruta de anexos (cualquier estado): permitir navegación libre en /anexos/[annexId]
+    if (pathname?.includes('/anexos')) {
+      setIsReady(true);
+      serverValidatedRef.current = true;
+      return;
+    }
     // ⚠️ AUTHORIZATION LOCK: Si hay autorización en progreso, no hacer redirecciones
     if (isAuthorizationInProgress) {
       setIsReady(true);
@@ -114,7 +127,9 @@ export function PromiseRouteGuard({
     if (serverValidatedRef.current && serverTargetRoute && !isReady) {
       if (normalize(pathname) === normalize(serverTargetRoute)) {
         setIsReady(true);
-      } else if (!pathname.includes('/cliente') && !pathname.includes('/bienvenido')) {
+      } else if (serverTargetRoute.includes('/bienvenido') && pathname?.includes('/anexos')) {
+        setIsReady(true); // Estado autorizada: permitir /anexos
+      } else if (!pathname.includes('/cliente') && !pathname.includes('/bienvenido') && !pathname?.includes('/anexos')) {
         if (isAuthorizationInProgress) {
           setIsReady(true);
           return;
@@ -140,6 +155,7 @@ export function PromiseRouteGuard({
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current || (initialQuotes && serverTargetRoute)) return;
     if (pathname.includes('/bienvenido')) return; // Nunca sacar al usuario de /bienvenido
+    if (pathname.includes('/anexos')) return; // Nunca sacar al usuario de vista de anexo
     if (isGlobalLockActive()) return;
 
     try {
@@ -158,6 +174,7 @@ export function PromiseRouteGuard({
   useEffect(() => {
     if (initialQuotes && serverTargetRoute) return;
     if (pathname.includes('/bienvenido')) return;
+    if (pathname.includes('/anexos')) return;
     if (serverTargetRoute && normalize(pathname) === normalize(serverTargetRoute)) return;
     hasRedirectedRef.current = false;
     handleSyncRoute();
@@ -219,8 +236,9 @@ export function PromiseRouteGuard({
     promiseId,
     onCotizacionUpdated: (cotizacionId, changeInfo) => {
       if (hasRedirectedRef.current) return;
-      // Nunca redirigir fuera de /bienvenido: si ya está en bienvenida, no empujar a /cierre
+      // Nunca redirigir fuera de /bienvenido ni de /anexos
       if (pathname.includes('/bienvenido')) return;
+      if (pathname.includes('/anexos')) return;
       if (isGlobalLockActive()) return;
 
       // Actualizar cotización en el ref
