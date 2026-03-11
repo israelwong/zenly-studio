@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { startTransition } from 'react';
-import { Plus, MoreVertical, FileCheck, Trash2, Clock, ChevronRight, Copy } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenSwitch, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
+import { Plus, MoreVertical, FileCheck, Trash2, Clock, Copy, Gift, Ticket, Globe, Lock } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,9 @@ import { deleteCotizacion, toggleCotizacionVisibility, duplicateCotizacion } fro
 import { ConfirmarCierreModal } from '../../components/ConfirmarCierreModal';
 import { pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getQuoteDetailForPreview } from '@/lib/actions/public/promesas.actions';
+import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
+import type { PublicCotizacion } from '@/types/public-promise';
 import { toast } from 'sonner';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -60,9 +63,14 @@ export function AnexosSection({
   const [isPassingToCierre, setIsPassingToCierre] = useState(false);
   const [confirmDeleteAnnex, setConfirmDeleteAnnex] = useState<{ id: string; name: string } | null>(null);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
+  /** Optimista: visible_to_client por id mientras se hace toggle (se limpia al terminar). */
+  const [optimisticVisibility, setOptimisticVisibility] = useState<Record<string, boolean>>({});
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   /** Id del anexo cuyo menú está abierto; al abrir el modal de cierre se pone null para cerrar el menú de inmediato. */
   const [dropdownOpenId, setDropdownOpenId] = useState<string | null>(null);
+  const [previewAnexoId, setPreviewAnexoId] = useState<string | null>(null);
+  const [previewCotizacion, setPreviewCotizacion] = useState<PublicCotizacion | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const handleEliminarClick = (annexId: string, name: string) => {
     setDropdownOpenId(null);
@@ -129,6 +137,29 @@ export function AnexosSection({
     setCierreModalCotizacion({ id: anexo.id, name: anexo.name });
   };
 
+  const handleLoadPreview = async (e: React.MouseEvent, anexo: CotizacionListItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (loadingPreview) return;
+    setPreviewAnexoId(anexo.id);
+    setLoadingPreview(true);
+    setPreviewCotizacion(null);
+    try {
+      const result = await getQuoteDetailForPreview(studioSlug, anexo.id);
+      if (result.success && result.data) {
+        setPreviewCotizacion(result.data);
+      } else {
+        toast.error(result.error ?? 'No se pudo cargar la vista previa');
+        setPreviewAnexoId(null);
+      }
+    } catch {
+      toast.error('Error al cargar la vista previa');
+      setPreviewAnexoId(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   const basePath = `/${studioSlug}/studio/commercial/promises/${promiseId}`;
   const nuevaAnexoHref =
     parentCotizacionId
@@ -193,8 +224,17 @@ export function AnexosSection({
                 const canEliminar = !isAutorizada;
                 const canPasarCierre =
                   anexo.status !== 'en_cierre' && anexo.status !== 'autorizada' && anexo.status !== 'aprobada' && anexo.status !== 'approved';
-                const href = `${basePath}/cotizacion/${anexo.id}?from=autorizada`;
+                const href = `${basePath}/cotizacion/${anexo.id}?from=autorizada&isAnnex=true`;
                 const cardClass = 'p-3 border rounded-lg transition-colors relative no-underline text-inherit block bg-zinc-800/50 border-zinc-700 cursor-pointer hover:bg-zinc-800';
+                const visible = optimisticVisibility[anexo.id] ?? anexo.visible_to_client;
+                const cortesiasCount = anexo.cortesias_count_snapshot ?? (Array.isArray(anexo.items_cortesia) ? anexo.items_cortesia.length : 0);
+                const hasDuration = anexo.event_duration != null && anexo.event_duration > 0;
+                const hasCortesias = cortesiasCount > 0;
+                const hasBono = anexo.bono_especial != null && anexo.bono_especial > 0;
+                const precioFinal = anexo.total_a_pagar ?? anexo.price;
+                const precioLista = anexo.precio_calculado ?? anexo.snap_precio_lista ?? null;
+                const mostrarListaTachado = precioLista != null && precioLista > precioFinal;
+                const formatPrecio = (n: number) => n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
                 return (
                   <Link
@@ -207,38 +247,59 @@ export function AnexosSection({
                         e.stopPropagation();
                       }
                     }}
+                    onPointerDown={(e) => {
+                      if ((e.target as HTMLElement).closest?.('[data-quote-actions]')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
                   >
-                    {/* Fila 1: nombre + switch + badge + menú */}
+                    {duplicatingId === anexo.id && (
+                      <div className="absolute inset-0 bg-zinc-900/80 rounded-lg flex items-center justify-center z-10">
+                        <span className="text-sm text-zinc-300">Duplicando...</span>
+                      </div>
+                    )}
+                    {/* Header: nombre + Publicada/No publicada + badge estado + menú (1:1 con cotización) */}
                     <div className="flex items-center gap-2">
                       <h4 className="flex-1 min-w-0 text-sm font-medium truncate text-zinc-200">
                         {anexo.name}
                       </h4>
-                      <div className="flex items-center gap-1.5 shrink-0" data-quote-actions onClick={(e) => e.stopPropagation()}>
-                        <div
-                          className="flex items-center gap-1.5"
-                          onClick={(e) => e.stopPropagation()}
-                          title={anexo.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
+                      <div className="flex items-center gap-1.5 shrink-0" data-quote-actions onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (togglingVisibilityId) return;
+                            const nextVisible = !visible;
+                            setOptimisticVisibility((prev) => ({ ...prev, [anexo.id]: nextVisible }));
+                            setTogglingVisibilityId(anexo.id);
+                            toggleCotizacionVisibility(anexo.id, studioSlug).then((result) => {
+                              if (result.success) {
+                                toast.success(nextVisible ? 'Visible para el prospecto' : 'Ocultada del prospecto');
+                                startTransition(() => onRefresh());
+                              } else {
+                                setOptimisticVisibility((prev) => ({ ...prev, [anexo.id]: visible }));
+                                toast.error(result.error ?? 'Error al cambiar visibilidad');
+                              }
+                            }).finally(() => {
+                              setTogglingVisibilityId(null);
+                              setOptimisticVisibility((prev) => { const next = { ...prev }; delete next[anexo.id]; return next; });
+                            });
+                          }}
+                          loading={togglingVisibilityId === anexo.id}
+                          disabled={togglingVisibilityId !== null && togglingVisibilityId !== anexo.id}
+                          className={
+                            visible
+                              ? 'text-emerald-400 bg-emerald-950/50 border-emerald-600/50 hover:bg-emerald-500/10 h-7 px-2 text-xs relative z-10'
+                              : 'text-zinc-400 border-zinc-600 hover:bg-zinc-800/50 h-7 px-2 text-xs relative z-10'
+                          }
+                          loadingText={visible ? 'Despublicando' : 'Publicando'}
+                          title={visible ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
                         >
-                          <span className="text-xs text-zinc-400 whitespace-nowrap">
-                            {anexo.visible_to_client ? 'Publicada' : 'No publicada'}
-                          </span>
-                          <ZenSwitch
-                            checked={anexo.visible_to_client}
-                            onCheckedChange={() => {
-                              if (togglingVisibilityId) return;
-                              setTogglingVisibilityId(anexo.id);
-                              toggleCotizacionVisibility(anexo.id, studioSlug).then((result) => {
-                                if (result.success) {
-                                  toast.success(anexo.visible_to_client ? 'Ocultada del prospecto' : 'Visible para el prospecto');
-                                  startTransition(() => onRefresh());
-                                } else {
-                                  toast.error(result.error ?? 'Error al cambiar visibilidad');
-                                }
-                              }).finally(() => setTogglingVisibilityId(null));
-                            }}
-                            disabled={togglingVisibilityId === anexo.id}
-                          />
-                        </div>
+                          {visible ? 'Publicada' : 'No publicada'}
+                        </ZenButton>
                         <ZenBadge
                           variant={getStatusVariant(anexo.status)}
                           className="text-[10px] px-1.5 py-0.5 rounded-full"
@@ -250,7 +311,7 @@ export function AnexosSection({
                           onOpenChange={(open) => setDropdownOpenId(open ? anexo.id : null)}
                         >
                           <ZenDropdownMenuTrigger asChild>
-                            <ZenButton variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <ZenButton variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={!!duplicatingId}>
                               <MoreVertical className="h-4 w-4 text-zinc-400" />
                             </ZenButton>
                           </ZenDropdownMenuTrigger>
@@ -289,15 +350,81 @@ export function AnexosSection({
                         </ZenDropdownMenu>
                       </div>
                     </div>
-                    {/* Fila 2: descripción, duración, actualizado */}
-                    <div className="mt-3 min-w-0 space-y-2">
+                    <div className="w-full border-b border-zinc-700/60 my-2 min-w-0" aria-hidden />
+                    {/* Cuerpo: descripción, Horas/Cortesías/Bonos, tiempo entrega, condiciones, Actualizado (1:1 con cotización) */}
+                    <div className="min-w-0 space-y-2">
                       {anexo.description && (
                         <p className="text-xs line-clamp-1 text-zinc-400">{anexo.description}</p>
                       )}
-                      {(anexo.event_duration != null && anexo.event_duration > 0) && (
-                        <div className="flex items-center gap-1 text-sm text-zinc-400">
-                          <Clock className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                          <span>{anexo.event_duration} hrs</span>
+                      {(() => {
+                        const independent = anexo.anexo_entrega_independent ?? false;
+                        const dias = anexo.anexo_entrega_dias != null && anexo.anexo_entrega_dias >= 0 ? anexo.anexo_entrega_dias : null;
+                        const timing = anexo.anexo_entrega_timing === 'before' || anexo.anexo_entrega_timing === 'after' ? anexo.anexo_entrega_timing : null;
+                        if (!independent) {
+                          const N = anexo.parent_delivery_days;
+                          return (
+                            <div className="w-full border-b border-zinc-700/60 pb-2 min-w-0">
+                              <p className="text-xs text-zinc-400">
+                                Tiempo incluido en el plazo definido en las políticas de entrega{N != null && N > 0 ? ` de ${N} días` : ''}
+                              </p>
+                            </div>
+                          );
+                        }
+                        if (dias != null && timing) {
+                          return (
+                            <div className="w-full border-b border-zinc-700/60 pb-2 min-w-0">
+                              <p className="text-xs text-amber-200/90">
+                                {dias} días {timing === 'before' ? 'antes' : 'después'} de la entrega principal
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {(hasDuration || hasCortesias || hasBono) && (
+                        <div className="flex items-center flex-nowrap gap-0 text-sm text-zinc-400">
+                          {hasDuration && (
+                            <>
+                              <span className="inline-flex items-center gap-1 shrink-0" title="Duración">
+                                <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                                <span>{anexo.event_duration} hrs</span>
+                              </span>
+                              {(hasCortesias || hasBono) && <span className="text-zinc-500 px-1">·</span>}
+                            </>
+                          )}
+                          {hasCortesias && (
+                            <>
+                              <span className="inline-flex items-center gap-1 shrink-0 text-emerald-500">
+                                <Gift className="h-3.5 w-3.5" />
+                                <span>{cortesiasCount} Cortesía{cortesiasCount !== 1 ? 's' : ''}</span>
+                              </span>
+                              {hasBono && <span className="text-zinc-500 px-1">·</span>}
+                            </>
+                          )}
+                          {hasBono && (
+                            <span className="inline-flex items-center gap-1 shrink-0 text-amber-500" title="Bono especial">
+                              <Ticket className="h-3.5 w-3.5" />
+                              <span>Bono: ${Number(anexo.bono_especial).toLocaleString('es-MX', { minimumFractionDigits: 0 })}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {anexo.condiciones_visibles_detalle && anexo.condiciones_visibles_detalle.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {anexo.condiciones_visibles_detalle.map((c) => (
+                            <span
+                              key={c.id}
+                              className="inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[11px] bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 max-w-[100px] min-w-0"
+                              title={c.name}
+                            >
+                              {c.is_public ? (
+                                <Globe className="h-2.5 w-2.5 shrink-0 text-zinc-500" />
+                              ) : (
+                                <Lock className="h-2.5 w-2.5 shrink-0 text-zinc-500" />
+                              )}
+                              <span className="truncate">{c.name}</span>
+                            </span>
+                          ))}
                         </div>
                       )}
                       <p className="text-xs text-zinc-500">
@@ -310,15 +437,36 @@ export function AnexosSection({
                         })}
                       </p>
                     </div>
-                    {/* Fila 3: precio + Editar (como footer con borde) */}
-                    <div className="mt-3 pt-3 border-t border-zinc-700 flex items-center justify-between gap-2">
-                      <span className="text-base font-bold tabular-nums text-emerald-400">
-                        ${Number(anexo.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                      </span>
-                      <span className="text-xs text-zinc-400 flex items-center gap-0.5">
-                        Editar
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </span>
+                    {/* Footer: precio lista (tachado si hay descuento) + precio final + Vista previa (1:1 con cotización card) */}
+                    <div
+                      data-quote-actions
+                      className="mt-3 pt-3 border-t border-zinc-700 flex items-center justify-between gap-2 flex-wrap"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onPointerDown={(e) => { e.stopPropagation(); }}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        {mostrarListaTachado && (
+                          <span className="text-sm font-light line-through shrink-0 text-zinc-500">
+                            ${formatPrecio(precioLista)}
+                          </span>
+                        )}
+                        <span className="text-base font-bold tabular-nums text-emerald-400">
+                          ${formatPrecio(precioFinal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 relative z-10">
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-zinc-400 bg-zinc-900/50 hover:bg-zinc-800 hover:text-zinc-200 relative z-10"
+                          onClick={(e) => handleLoadPreview(e, anexo)}
+                          disabled={!!duplicatingId}
+                          loading={loadingPreview && previewAnexoId === anexo.id}
+                          loadingText="Cargando..."
+                        >
+                          Vista previa
+                        </ZenButton>
+                      </div>
                     </div>
                   </Link>
                 );
@@ -362,6 +510,22 @@ export function AnexosSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {previewAnexoId && promiseId && (
+        <CotizacionDetailSheet
+          cotizacion={previewCotizacion}
+          isOpen={!!previewAnexoId}
+          onClose={() => {
+            setPreviewAnexoId(null);
+            setPreviewCotizacion(null);
+          }}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
+          isPreviewMode
+          mostrarBotonAutorizar={false}
+          isLoadingPreview={loadingPreview && !previewCotizacion}
+        />
+      )}
     </>
   );
 }

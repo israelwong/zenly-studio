@@ -16,6 +16,7 @@ interface EditarCotizacionPageProps {
   searchParams: Promise<{
     contactId?: string;
     from?: string;
+    isAnnex?: string;
   }>;
 }
 
@@ -80,13 +81,14 @@ export default async function EditarCotizacionPage({ params, searchParams }: Edi
   const condicionComercial = condicionComercialData ? await condicionComercialData : null;
   const search = await searchParams;
   const returnToAutorizada = search?.from === 'autorizada';
+  const isAnnexFromUrl = search?.isAnnex === 'true';
 
   return (
     <EditarCotizacionClient
       initialCotizacion={cotizacion as ComponentProps<typeof EditarCotizacionClient>['initialCotizacion']}
       initialCondicionComercial={condicionComercial}
       promiseState={promiseState}
-      isAnnex={cotizacion?.is_annex ?? false}
+      isAnnex={cotizacion?.is_annex ?? isAnnexFromUrl}
       returnToAutorizada={returnToAutorizada}
     />
   );

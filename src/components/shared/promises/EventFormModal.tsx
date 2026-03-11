@@ -34,6 +34,12 @@ interface EventFormModalProps {
     studioSlug: string;
     context?: 'promise' | 'event'; // Contexto para adaptar labels y comportamiento
     eventId?: string; // ID del evento cuando context es 'event'
+    /** Abierto desde vista Autorizada: la fecha ya está asignada a este evento; no mostrar avisos de capacidad/conflicto como si fuera nueva. */
+    contextSource?: 'autorizada';
+    /** ID de la promesa (para excluir de conflicto al editar). */
+    promiseId?: string;
+    /** ID del evento ya autorizado (para excluir de conflicto cuando contextSource es autorizada). */
+    eventoId?: string;
     initialData?: {
         id?: string;
         name?: string;
@@ -84,6 +90,9 @@ export function EventFormModal({
     studioSlug,
     context = 'promise',
     eventId,
+    contextSource,
+    promiseId,
+    eventoId,
     initialData,
     onSuccess,
     zIndex = 10050,
@@ -632,8 +641,8 @@ export function EventFormModal({
                         studioSlug,
                         date,
                         undefined,
-                        initialData?.id || undefined,
-                        undefined
+                        (promiseId ?? initialData?.id) || undefined,
+                        eventoId ?? undefined
                     ),
                     checkDateConflictBySlug(studioSlug, date),
                 ]);
@@ -655,7 +664,7 @@ export function EventFormModal({
         };
 
         verificarDisponibilidad();
-    }, [selectedDates, studioSlug, initialData?.id]);
+    }, [selectedDates, studioSlug, initialData?.id, promiseId, eventoId]);
 
     // Revalidar capacidad cuando el usuario guarda en el modal atómico (Ajustar capacidad)
     useEffect(() => {
@@ -1149,16 +1158,18 @@ export function EventFormModal({
                         <label className="text-sm font-medium text-zinc-300 block mb-2">
                             {context === 'event' ? 'Fecha del Evento' : 'Fecha de Interés'}
                         </label>
-                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <Popover open={contextSource === 'autorizada' ? false : calendarOpen} onOpenChange={(open) => contextSource !== 'autorizada' && setCalendarOpen(open)}>
                             <PopoverTrigger asChild>
                                 <button
                                     type="button"
+                                    disabled={contextSource === 'autorizada'}
                                     onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
+                                        if (contextSource === 'autorizada') return;
                                         setCalendarOpen(!calendarOpen);
                                     }}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors"
+                                    className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:border-zinc-700"
                                 >
                                     <span className={selectedDates.length === 0 ? 'text-zinc-500' : ''}>
                                         {formatDatesDisplay()}
@@ -1223,7 +1234,24 @@ export function EventFormModal({
                         ) : null}
                         {/* Mensajes de validación de fecha: debajo de la fila de capacidad, espaciado solo si hay contenido */}
                         <div className="mt-2 space-y-2">
-                            {selectedDates.length > 0 && capacityResult?.isFull && (
+                            {selectedDates.length > 0 && capacityResult?.isFull && (() => {
+                                const isMismaFechaAutorizada = contextSource === 'autorizada' && eventoId && initialData?.event_date && selectedDates.length > 0 && (() => {
+                                    const init = initialData.event_date instanceof Date ? initialData.event_date : new Date(initialData.event_date);
+                                    const sel = selectedDates[0];
+                                    return init.toISOString().split('T')[0] === sel.toISOString().split('T')[0];
+                                })();
+                                if (isMismaFechaAutorizada) {
+                                    return (
+                                        <ZenCard variant="outlined" className="bg-emerald-900/25 border-emerald-600/60">
+                                            <ZenCardContent className="p-3">
+                                                <p className="text-xs text-emerald-200">
+                                                    La fecha de este evento ya está asignada. No se puede cambiar.
+                                                </p>
+                                            </ZenCardContent>
+                                        </ZenCard>
+                                    );
+                                }
+                                return (
                                 <ZenCard variant="outlined" className="bg-amber-900/25 border-amber-600/60">
                                     <ZenCardContent className="p-3">
                                         <div className="flex items-start gap-2">
@@ -1245,7 +1273,8 @@ export function EventFormModal({
                                         </div>
                                     </ZenCardContent>
                                 </ZenCard>
-                            )}
+                                );
+                            })()}
                             {selectedDates.length > 0 && (() => {
                                 const today = new Date();
                                 today.setHours(0, 0, 0, 0);
@@ -1268,8 +1297,11 @@ export function EventFormModal({
                             {selectedDates.length > 0 && (() => {
                                 const fecha = selectedDates[0];
                                 const dateKey = fecha.toISOString().split('T')[0];
-                                const conflictos = conflictosPorFecha.get(dateKey);
-                                if (!conflictos || conflictos.length === 0) return null;
+                                let conflictos = conflictosPorFecha.get(dateKey) ?? [];
+                                if (contextSource === 'autorizada' && eventoId && conflictos.length > 0) {
+                                    conflictos = conflictos.filter((c) => c.evento_id !== eventoId);
+                                }
+                                if (conflictos.length === 0) return null;
                                 return (
                                     <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50">
                                         <ZenCardContent className="p-3">

@@ -101,11 +101,9 @@ export function EditarCotizacionClient({
   const autorizadaPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`;
   const anexosPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/anexos`;
   const isFromCierreFlow = fromCierre || initialCotizacion?.status === 'en_cierre' || initialCotizacion?.status === 'cierre';
-  const backHref = returnToAutorizada
+  const backHref = (returnToAutorizada || isAnnex)
     ? autorizadaPath
-    : isAnnex
-      ? anexosPath
-      : getPromisePathFromState(studioSlug, promiseId, isFromCierreFlow ? 'cierre' : (promiseState ?? 'pendiente'));
+    : getPromisePathFromState(studioSlug, promiseId, isFromCierreFlow ? 'cierre' : (promiseState ?? 'pendiente'));
 
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [showConfirmarCierreModal, setShowConfirmarCierreModal] = useState(false);
@@ -220,9 +218,14 @@ export function EditarCotizacionClient({
           </Link>
         )}
         <div>
-          <div className="flex items-center gap-2">
-            <ZenCardTitle>Editar Cotización</ZenCardTitle>
-            {condicionComercial && !fromCierre && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <ZenCardTitle>{isAnnex ? 'Editar propuesta adicional' : 'Editar Cotización'}</ZenCardTitle>
+            {isAnnex && (
+              <ZenBadge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs shrink-0">
+                Anexo
+              </ZenBadge>
+            )}
+            {condicionComercial && !fromCierre && !isAnnex && (
               <ZenBadge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
                 {condicionComercial.name}
               </ZenBadge>
@@ -230,7 +233,9 @@ export function EditarCotizacionClient({
           </div>
           {!fromCierre && (
             <ZenCardDescription>
-              {condicionComercial?.description || 'Actualiza la información de la cotización'}
+              {isAnnex
+                ? 'Actualiza los servicios adicionales para este evento.'
+                : (condicionComercial?.description || 'Actualiza la información de la cotización')}
             </ZenCardDescription>
           )}
         </div>
@@ -314,7 +319,9 @@ export function EditarCotizacionClient({
       getSaveHandlersRef={saveHandlersRef}
       onPreviewFooterStateChange={setPreviewFooterState}
       promiseState={promiseState ?? undefined}
-      returnPathOverride={returnToAutorizada ? autorizadaPath : undefined}
+      returnPathOverride={(returnToAutorizada || isAnnex) ? autorizadaPath : undefined}
+      isAnnex={isAnnex}
+      parentCotizacionId={initialCotizacion && (initialCotizacion as { parent_cotizacion_id?: string | null }).parent_cotizacion_id ? (initialCotizacion as { parent_cotizacion_id: string }).parent_cotizacion_id : null}
     />
   );
 

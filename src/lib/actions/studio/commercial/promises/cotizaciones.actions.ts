@@ -108,6 +108,14 @@ export interface CotizacionListItem {
   condiciones_visibles?: string[] | null;
   /** Condiciones visibles para el prospecto (pills en card) */
   condiciones_visibles_detalle?: Array<{ id: string; name: string; is_public: boolean }>;
+  /** Anexo: entrega incluida (false) o independiente (true) */
+  anexo_entrega_independent?: boolean;
+  /** Anexo: días cuando entrega independiente */
+  anexo_entrega_dias?: number | null;
+  /** Anexo: 'before' | 'after' cuando entrega independiente */
+  anexo_entrega_timing?: 'before' | 'after' | null;
+  /** Días de entrega del contrato principal (para texto "plazo de N días" en anexos incluidos) */
+  parent_delivery_days?: number | null;
 }
 
 export interface CotizacionesListResponse {
@@ -599,6 +607,9 @@ export async function getAnexosByPromiseId(
         evento_id: true,
         condiciones_comerciales_id: true,
         parent_cotizacion_id: true,
+        parent_cotizacion: {
+          select: { dias_entrega_override: true },
+        },
         condiciones_comerciales: {
           select: {
             id: true,
@@ -616,9 +627,27 @@ export async function getAnexosByPromiseId(
         items_cortesia: true,
         cortesias_count_snapshot: true,
         snap_precio_lista: true,
+        anexo_entrega_independent: true,
+        anexo_entrega_dias: true,
+        anexo_entrega_timing: true,
       },
       orderBy: [{ created_at: 'desc' }],
     });
+
+    let studioDeliveryDefault = 0;
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { studio_id: true },
+    });
+    if (promise?.studio_id) {
+      const studio = await prisma.studios.findUnique({
+        where: { id: promise.studio_id },
+        select: { dias_entrega_default: true, dias_seguridad_default: true },
+      });
+      if (studio) {
+        studioDeliveryDefault = (studio.dias_entrega_default ?? 0) + (studio.dias_seguridad_default ?? 0);
+      }
+    }
 
     const idsVisibles = new Set<string>();
     cotizaciones.forEach((cot) => {
@@ -638,6 +667,9 @@ export async function getAnexosByPromiseId(
     return {
       success: true,
       data: cotizaciones.map((cot) => {
+        const parent = (cot as { parent_cotizacion?: { dias_entrega_override: number | null } | null }).parent_cotizacion;
+        const parentOverride = parent?.dias_entrega_override != null && parent.dias_entrega_override >= 0 ? parent.dias_entrega_override : null;
+        const parentDeliveryDays = parentOverride ?? studioDeliveryDefault;
         const rawVisibles = (cot as { condiciones_visibles?: unknown }).condiciones_visibles;
         const visibleIds = Array.isArray(rawVisibles) ? rawVisibles.filter((x: unknown): x is string => typeof x === 'string') : [];
         const condiciones_visibles_detalle = visibleIds
@@ -682,6 +714,12 @@ export async function getAnexosByPromiseId(
           items_cortesia: itemsCortesia ?? undefined,
           cortesias_count_snapshot: cortesiasCount,
           snap_precio_lista: snapPrecioLista,
+          anexo_entrega_independent: (cot as { anexo_entrega_independent?: boolean }).anexo_entrega_independent ?? false,
+          anexo_entrega_dias: (cot as { anexo_entrega_dias?: number | null }).anexo_entrega_dias ?? null,
+          anexo_entrega_timing: ((cot as { anexo_entrega_timing?: string | null }).anexo_entrega_timing === 'before' || (cot as { anexo_entrega_timing?: string | null }).anexo_entrega_timing === 'after')
+            ? (cot as { anexo_entrega_timing: 'before' | 'after' }).anexo_entrega_timing
+            : null,
+          parent_delivery_days: parentDeliveryDays > 0 ? parentDeliveryDays : null,
         };
       }),
     };

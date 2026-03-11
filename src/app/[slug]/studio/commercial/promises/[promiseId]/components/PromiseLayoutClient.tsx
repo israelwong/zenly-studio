@@ -346,7 +346,11 @@ export function PromiseLayoutClient({
           isFocusMode ? 'w-full' : 'w-full max-w-7xl mx-auto'
         }
       >
-        <ZenCard variant="default" padding="none">
+        <ZenCard
+          variant="default"
+          padding="none"
+          className={isAutorizadaRoute ? 'ring-2 ring-emerald-500/40' : undefined}
+        >
           <PromiseDetailHeader
             studioSlug={studioSlug}
             promiseId={promiseId}

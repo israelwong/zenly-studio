@@ -156,6 +156,9 @@ export function PromiseAutorizadaClient({
           onClose={() => setShowEditModal(false)}
           studioSlug={studioSlug}
           context="promise"
+          contextSource="autorizada"
+          promiseId={promiseId ?? undefined}
+          eventoId={cotizacionAutorizada?.evento_id ?? undefined}
           initialData={{
             id: contactId || undefined,
             name: promiseData.name,
