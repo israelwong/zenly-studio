@@ -65,6 +65,8 @@ interface ResumenCotizacionAutorizadaProps {
   studioSlug: string;
   promiseId?: string;
   onEditar?: () => void;
+  /** Si true, no muestra el título de la card (p. ej. cuando el nombre ya va en el header del modal). */
+  hideCardTitle?: boolean;
 }
 
 // Estructura agrupada por sección y categoría
@@ -79,6 +81,7 @@ export function ResumenCotizacionAutorizada({
   studioSlug,
   promiseId,
   onEditar,
+  hideCardTitle = false,
 }: ResumenCotizacionAutorizadaProps) {
   const router = useRouter();
   const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
@@ -185,23 +188,40 @@ export function ResumenCotizacionAutorizada({
   }, [cotizacion.cotizacion_items]);
 
   return (
-    <ZenCard variant="outlined">
-      <ZenCardHeader>
-        <div className="flex items-center justify-between">
-          <ZenCardTitle className="text-xl">{cotizacion.name}</ZenCardTitle>
-          {onEditar && (
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleEditarCotizacion}
-              className="h-8 px-2 text-zinc-400 hover:text-white"
-            >
-              <Pencil className="h-4 w-4" />
-            </ZenButton>
-          )}
-        </div>
-      </ZenCardHeader>
-      <ZenCardContent className="space-y-4">
+    <ZenCard
+      variant={hideCardTitle ? 'default' : 'outlined'}
+      className={hideCardTitle ? 'border-0 shadow-none' : undefined}
+    >
+      {!hideCardTitle && (
+        <ZenCardHeader>
+          <div className="flex items-center justify-between">
+            <ZenCardTitle className="text-xl">{cotizacion.name}</ZenCardTitle>
+            {onEditar && (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handleEditarCotizacion}
+                className="h-8 px-2 text-zinc-400 hover:text-white"
+              >
+                <Pencil className="h-4 w-4" />
+              </ZenButton>
+            )}
+          </div>
+        </ZenCardHeader>
+      )}
+      {hideCardTitle && onEditar && (
+        <ZenCardHeader className="flex flex-row justify-end">
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={handleEditarCotizacion}
+            className="h-8 px-2 text-zinc-400 hover:text-white"
+          >
+            <Pencil className="h-4 w-4" />
+          </ZenButton>
+        </ZenCardHeader>
+      )}
+      <ZenCardContent className={hideCardTitle ? 'p-0 space-y-4' : 'space-y-4'}>
         {/* Descripción */}
         {cotizacion.description && (
           <div className="pb-4 border-b border-zinc-700">

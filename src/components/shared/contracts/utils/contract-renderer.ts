@@ -6,6 +6,8 @@ import { formatItemQuantity } from "@/lib/utils/contract-item-formatter";
 export interface ContractRendererOptions {
   /** true = estilos negro/zinc para PDF; false = emerald para pantalla */
   isForPdf?: boolean;
+  /** true = ritmo vertical compacto (anexo / modales) */
+  compact?: boolean;
 }
 
 // Estilos inline: Dark Mode ZEN (pantalla) o zinc/negro (PDF). Tabla condiciones sin fondos verdes.
@@ -138,17 +140,26 @@ export function renderCondicionesComercialesBlock(
   options?: ContractRendererOptions
 ): string {
   const isForPdf = options?.isForPdf === true;
+  const compact = options?.compact === true;
   const t = getContractTableTheme(isForPdf);
 
-  let html = '<div class="condiciones-comerciales space-y-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg">';
+  const spaceBlock = compact ? 'space-y-2' : 'space-y-4';
+  const pBlock = compact ? 'pt-3 px-3 pb-2' : 'p-4';
+  const mbTitle = compact ? 'mb-2' : 'mb-3';
+  const mbDesc = compact ? 'mb-1' : 'mb-4';
+  const spaceDetalles = compact ? 'space-y-2' : 'space-y-3';
+  const mtTable = compact ? '2px' : '12px';
+  const mbCalc = compact ? 'mb-0 pt-1' : 'mb-4 pt-3';
 
-  html += `<h3 class="text-lg font-semibold text-zinc-200 mb-3">${condiciones.nombre}</h3>`;
+  let html = `<div class="condiciones-comerciales ${spaceBlock} ${pBlock} bg-zinc-900/50 border border-zinc-800 rounded-lg">`;
+
+  html += `<h3 class="text-lg font-semibold text-zinc-200 ${mbTitle}">${condiciones.nombre}</h3>`;
 
   if (condiciones.descripcion) {
-    html += `<p class="text-zinc-400 mb-4">${condiciones.descripcion}</p>`;
+    html += `<p class="text-zinc-400 ${mbDesc}">${condiciones.descripcion}</p>`;
   }
 
-  html += '<div class="detalles space-y-3">';
+  html += `<div class="detalles ${spaceDetalles}">`;
 
   const esNegociacion = condiciones.es_negociacion === true;
 
@@ -166,8 +177,8 @@ export function renderCondicionesComercialesBlock(
   if (debeMostrarTabla) {
     const pad = (t as { paddingAmount?: string }).paddingAmount ?? "12px 16px";
     html += `
-      <div class="calculo-total mb-4 pt-3">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid ${t.border}; border-radius: 8px; overflow: hidden;">
+      <div class="calculo-total ${mbCalc}">
+        <table style="width: 100%; border-collapse: collapse; margin-top: ${mtTable}; border: 1px solid ${t.border}; border-radius: 8px; overflow: hidden;">
           <thead>
             <tr style="background: ${t.bgHeader}; border-bottom: 1px solid ${t.border};">
               <th style="text-align: left; padding: 12px 16px; color: ${t.textHeader}; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Concepto</th>
@@ -274,10 +285,12 @@ export function renderCondicionesComercialesBlock(
       currency: "MXN",
     }).format(condiciones.total_final);
 
+    const totalRowPad = compact ? "10px 12px" : "14px 16px";
+    const totalRowPadRight = compact ? "10px 12px" : "14px 20px";
     html += `
           <tr style="border-top: 1px solid ${borderTotal}; border-bottom: 1px solid ${t.border};">
-            <td style="padding: 14px 16px; color: ${textTotal}; font-weight: 700; font-size: 15px;">TOTAL A PAGAR</td>
-            <td style="padding: 14px 20px; text-align: right; color: ${textTotal}; font-weight: 700; font-size: 17px;">${totalFinalFormateado}</td>
+            <td style="padding: ${totalRowPad}; color: ${textTotal}; font-weight: 700; font-size: 15px;">TOTAL A PAGAR</td>
+            <td style="padding: ${totalRowPadRight}; text-align: right; color: ${textTotal}; font-weight: 700; font-size: 17px;">${totalFinalFormateado}</td>
           </tr>
         </tbody>
       </table>
@@ -297,9 +310,12 @@ export function renderCondicionesComercialesBlock(
         ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(diferido)
         : null;
 
+      const planMt = compact ? '6px' : '12px';
+      const planPad = compact ? '10px 12px' : '14px 16px';
+      const planPMb = compact ? '6px' : '10px';
       html += `
-      <div class="plan-de-pagos-contract" style="margin-top: 12px; border: 1px solid ${t.border}; border-radius: 8px; padding: 14px 16px; background: transparent;">
-        <p style="font-size: 11px; color: ${t.textHeader}; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 10px 0; font-weight: 600;">Distribución de pagos</p>
+      <div class="plan-de-pagos-contract" style="margin-top: ${planMt}; border: 1px solid ${t.border}; border-radius: 8px; padding: ${planPad}; background: transparent;">
+        <p style="font-size: 11px; color: ${t.textHeader}; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 ${planPMb}px 0; font-weight: 600;">Distribución de pagos</p>
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 6px;">
           <span style="color: ${ZINC_500};">${anticipoLabel}</span>
           <span style="color: ${ZINC_300}; font-weight: 500;">${montoAnticipoFormateado}</span>
@@ -321,8 +337,10 @@ export function renderCondicionesComercialesBlock(
     condiciones.condiciones_metodo_pago &&
     condiciones.condiciones_metodo_pago.length > 0
   ) {
-    html += `<div class="metodos-pago mt-4 pt-3 border-t border-zinc-800">`;
-    html += `<p class="font-medium text-zinc-300 mb-2">Métodos de Pago:</p>`;
+    const metaMt = compact ? 'mt-2 pt-2' : 'mt-4 pt-3';
+    const metaMb = compact ? 'mb-1' : 'mb-2';
+    html += `<div class="metodos-pago ${metaMt} border-t border-zinc-800">`;
+    html += `<p class="font-medium text-zinc-300 ${metaMb}">Métodos de Pago:</p>`;
     html += `<ul class="list-disc list-inside space-y-1 text-zinc-400 ml-4">`;
     condiciones.condiciones_metodo_pago.forEach((metodo) => {
       html += `<li>${metodo.metodo_pago}`;
