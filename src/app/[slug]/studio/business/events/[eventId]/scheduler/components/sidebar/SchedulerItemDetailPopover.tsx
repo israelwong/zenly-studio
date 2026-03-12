@@ -74,13 +74,13 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
     const multiplierLabel = isHourBilling && durationHours != null
       ? `x${durationHours}h`
       : `x${localItem.quantity ?? 1}`;
-    // Prioridad 1: total pre-calculado de la tarea (scheduler_task.budget_amount). Prioridad 2: cálculo manual.
-    const budgetAmountFromTask = st?.budget_amount != null ? Number(st.budget_amount) : null;
+    // HOUR: siempre recalcular costo × durationHours (evita mostrar budget_amount erróneo de syncs anteriores).
+    // SERVICE/UNIT: prioridad budget_amount de la tarea, fallback costo × cantidad.
     const costoTotal =
-      budgetAmountFromTask ??
-      (isHourBilling && durationHours != null
+      isHourBilling && durationHours != null
         ? costoUnitario * durationHours
-        : costoUnitario * (localItem.quantity ?? 1));
+        : (st?.budget_amount != null ? Number(st.budget_amount) : null) ??
+          costoUnitario * (localItem.quantity ?? 1);
 
     // Cargar miembros solo para mostrar el nombre del asignado
     const loadMembers = useCallback(async () => {

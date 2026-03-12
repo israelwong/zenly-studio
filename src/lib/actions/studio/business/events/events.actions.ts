@@ -300,12 +300,14 @@ export async function obtenerEventosConSchedulers(
 /**
  * Sincronizar tareas del scheduler con ítems de cotización
  * MIGRADO A: scheduler-sync.actions.ts (proxy temporal)
+ * Soporta batching: options.batchOffset, options.batchSize; retorna totalExpanded.
  */
 export async function sincronizarTareasEvento(
   studioSlug: string,
-  eventId: string
+  eventId: string,
+  options?: { batchOffset?: number; batchSize?: number }
 ) {
-  return sincronizarTareasEventoCore(studioSlug, eventId);
+  return sincronizarTareasEventoCore(studioSlug, eventId, options);
 }
 
 // ============================================================================

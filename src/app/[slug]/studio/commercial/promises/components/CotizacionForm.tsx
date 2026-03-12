@@ -87,13 +87,13 @@ function AnexoEditorActionButtons({
         variant="primary"
         onClick={onSave}
         loading={loading && savingIntent === 'draft'}
-        loadingText="Guardando..."
+        loadingText={isEditMode ? 'Actualizando...' : 'Guardando...'}
         disabled={loading || isDisabled || condicionDisabled}
         title={saveDisabledTitle}
         className="w-full gap-1.5"
       >
-        <Save className="h-3.5 w-3.5" />
-        Guardar
+        {!isEditMode && <Save className="h-3.5 w-3.5" />}
+        {isEditMode ? 'Actualizar' : 'Guardar'}
       </ZenButton>
       <ZenButton
         type="button"
@@ -103,9 +103,8 @@ function AnexoEditorActionButtons({
         loadingText="Guardando y preparando autorización..."
         disabled={loading || isDisabled || condicionDisabled}
         title={saveDisabledTitle}
-        className="w-full gap-1.5 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+        className="w-full border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
       >
-        <HandCoins className="h-3.5 w-3.5" />
         {isEditMode ? 'Actualizar y Autorizar' : 'Crear y Autorizar'}
       </ZenButton>
       <ZenButton type="button" variant="secondary" onClick={onCancel} disabled={loading} className="w-full">
@@ -2793,10 +2792,12 @@ export function CotizacionForm({
           customActionButtons ??
           (hideActionButtons ? null : isAnnex ? (
             <>
-              <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
+              <div
+                className={`mb-3 rounded-lg border p-3 ${visibleToClient ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'}`}
+              >
                 <p className="text-sm font-medium text-zinc-200 mb-1">Estado de publicación</p>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-zinc-400">
+                  <p className={`text-xs ${visibleToClient ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio'}
                   </p>
                   <ZenSwitch

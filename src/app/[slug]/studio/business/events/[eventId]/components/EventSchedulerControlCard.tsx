@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Calendar, Clock, Loader2, RefreshCw, ChevronDown, ChevronRight, Timer, Bell, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ZenCard,
@@ -148,7 +149,11 @@ export function EventSchedulerControlCard({
   const [loading, setLoading] = useState(true);
   const [structureLoading, setStructureLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncCurrent, setSyncCurrent] = useState(0);
+  const [syncTotal, setSyncTotal] = useState(0);
   const [cleaning, setCleaning] = useState(false);
+  const router = useRouter();
   const [tasks, setTasks] = useState<SchedulerTaskRow[]>([]);
   const [secciones, setSecciones] = useState<SeccionData[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<CatalogCategoryOption[]>([]);
@@ -430,32 +435,73 @@ export function EventSchedulerControlCard({
   const togglePhase = (key: string) => setOpenPhases((prev) => ({ ...prev, [key]: !prev[key] }));
   const toggleCategory = (key: string) => setOpenCategories((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const BATCH_SIZE = 10;
+
   const handleSync = async () => {
     setSyncing(true);
-    const result = await sincronizarTareasEvento(studioSlug, eventId);
-    setSyncing(false);
-    if (result.success) {
-      const created = result.created ?? 0;
-      const updated = result.updated ?? 0;
-      const skipped = result.skipped ?? 0;
-      if (created > 0 || updated > 0) {
-        const parts = [];
-        if (created > 0) parts.push(`${created} creada(s)`);
-        if (updated > 0) parts.push(`${updated} actualizada(s)`);
-        if (skipped > 0) parts.push(`${skipped} ya existían`);
-        toast.success(`Sincronizado: ${parts.join('. ')}.`);
-      } else if (skipped > 0) {
-        toast.info('Las tareas ya están sincronizadas con la cotización.');
-      } else {
+    setSyncProgress(0);
+    setSyncCurrent(0);
+    setSyncTotal(0);
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    try {
+      const first = await sincronizarTareasEvento(studioSlug, eventId, { batchOffset: 0, batchSize: BATCH_SIZE });
+      if (!first.success) {
+        toast.error(first.error ?? 'Error al sincronizar');
+        setSyncing(false);
+        setSyncProgress(0);
+        setSyncCurrent(0);
+        setSyncTotal(0);
+        return;
+      }
+      const totalExpanded = first.totalExpanded ?? 0;
+      totalCreated += first.created ?? 0;
+      totalUpdated += first.updated ?? 0;
+      if (totalExpanded === 0) {
         toast.info('No hay ítems en la cotización autorizada para sincronizar.');
+        await fetchStatus();
+        onUpdated?.();
+        setSyncing(false);
+        setSyncProgress(0);
+        setSyncCurrent(0);
+        setSyncTotal(0);
+        return;
+      }
+      setSyncTotal(totalExpanded);
+      setSyncCurrent(Math.min(BATCH_SIZE, totalExpanded));
+      setSyncProgress(totalExpanded === 0 ? 100 : (Math.min(BATCH_SIZE, totalExpanded) / totalExpanded) * 100);
+
+      for (let batchOffset = BATCH_SIZE; batchOffset < totalExpanded; batchOffset += BATCH_SIZE) {
+        const next = await sincronizarTareasEvento(studioSlug, eventId, { batchOffset, batchSize: BATCH_SIZE });
+        if (!next.success) {
+          toast.error(next.error ?? 'Error al sincronizar');
+          break;
+        }
+        totalCreated += next.created ?? 0;
+        totalUpdated += next.updated ?? 0;
+        const current = Math.min(batchOffset + BATCH_SIZE, totalExpanded);
+        setSyncCurrent(current);
+        setSyncProgress((current / totalExpanded) * 100);
+      }
+
+      setSyncProgress(100);
+      if (totalCreated > 0 || totalUpdated > 0) {
+        const parts = [];
+        if (totalCreated > 0) parts.push(`${totalCreated} creada(s)`);
+        if (totalUpdated > 0) parts.push(`${totalUpdated} actualizada(s)`);
+        toast.success(`Sincronizado: ${parts.join('. ')}.`);
+      } else {
+        toast.info('Las tareas ya están sincronizadas con la cotización.');
       }
       await fetchStatus();
-      if (status?.taskCount && status.taskCount > 0) {
-        await fetchTasksAndCatalog();
-      }
+      await fetchTasksAndCatalog();
       onUpdated?.();
-    } else {
-      toast.error(result.error ?? 'Error al sincronizar');
+      router.refresh();
+    } finally {
+      setSyncing(false);
+      setSyncProgress(0);
+      setSyncCurrent(0);
+      setSyncTotal(0);
     }
   };
 
@@ -611,21 +657,32 @@ export function EventSchedulerControlCard({
             <p className="text-xs text-zinc-400">
               Pendiente de Sincronización
             </p>
+            {syncing && (
+              <div className="w-full rounded-full h-1.5 bg-zinc-800 overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                  style={{ width: `${syncProgress}%` }}
+                />
+              </div>
+            )}
             <ZenButton
               variant="outline"
               size="sm"
               onClick={handleSync}
               disabled={syncing}
-              className="w-full gap-2 text-xs border-zinc-700 hover:bg-zinc-800/50"
+              className={cn(
+                'w-full gap-2 text-xs border-zinc-700 hover:bg-zinc-800/50',
+                !syncing && isInitialState && 'animate-pulse'
+              )}
             >
               {syncing ? (
                 <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Sincronizando…
+                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  {syncTotal > 0 ? `Sincronizando… (${syncCurrent}/${syncTotal})` : 'Sincronizando…'}
                 </>
               ) : (
                 <>
-                  <Calendar className="h-3 w-3" />
+                  <Calendar className="h-3 w-3 shrink-0" />
                   Sincronizar con Cronograma
                 </>
               )}
@@ -940,7 +997,15 @@ export function EventSchedulerControlCard({
             </div>
 
             {/* Volver a sincronizar */}
-            <div>
+            <div className="space-y-1.5">
+              {syncing && (
+                <div className="w-full rounded-full h-1.5 bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                    style={{ width: `${syncProgress}%` }}
+                  />
+                </div>
+              )}
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -949,10 +1014,13 @@ export function EventSchedulerControlCard({
                 className="w-full gap-2 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50"
               >
                 {syncing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                    {syncTotal > 0 ? `Sincronizando… (${syncCurrent}/${syncTotal})` : 'Sincronizando…'}
+                  </>
                 ) : (
                   <>
-                    <RefreshCw className="h-3 w-3" />
+                    <RefreshCw className="h-3 w-3 shrink-0" />
                     Volver a sincronizar
                   </>
                 )}

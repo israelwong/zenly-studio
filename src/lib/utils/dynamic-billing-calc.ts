@@ -5,19 +5,22 @@
 
 /**
  * Calcula cantidad efectiva según billing_type
- * 
+ *
+ * Para HOUR: el multiplicador es durationHours (horas de cobertura). quantity se ignora
+ * para evitar doble multiplicación (ej. $300/h × 8h = $2,400, no $300 × 8 × 8).
+ *
  * @param billingType - Tipo de facturación: HOUR, SERVICE, o UNIT
  * @param quantity - Cantidad base del ítem
  * @param durationHours - Horas totales de cobertura del servicio (puede ser null)
  * @returns Cantidad efectiva a usar en el cálculo
- * 
+ *
  * @example
  * // Item HOUR con 8 horas de cobertura
  * calcularCantidadEfectiva('HOUR', 1, 8) // retorna 8
- * 
+ *
  * // Item SERVICE (independiente de horas)
  * calcularCantidadEfectiva('SERVICE', 2, 8) // retorna 2
- * 
+ *
  * // Item HOUR sin duración (comportamiento legacy)
  * calcularCantidadEfectiva('HOUR', 1, null) // retorna 1
  */
@@ -26,11 +29,11 @@ export function calcularCantidadEfectiva(
   quantity: number,
   durationHours: number | null
 ): number {
-  // Si es HOUR y hay duración válida, multiplicar
+  // HOUR: multiplicador = horas de cobertura (alineado con CatalogoServiciosTree: precio × durationHours)
   if (billingType === 'HOUR' && durationHours !== null && durationHours > 0) {
-    return quantity * durationHours;
+    return durationHours;
   }
-  
+
   // Para SERVICE, UNIT, o HOUR sin duración, usar cantidad base
   return quantity;
 }

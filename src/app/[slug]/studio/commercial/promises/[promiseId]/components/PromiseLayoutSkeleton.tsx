@@ -83,7 +83,7 @@ export function PromiseContentSkeleton() {
           </div>
         </div>
 
-        {/* Columna 2: Cotización Autorizada */}
+        {/* Columna 2: Cotización Autorizada — header, Resumen, Total, Pago, botón */}
         <div className="flex flex-col h-full">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg shadow-black/20 h-full flex flex-col overflow-hidden">
             <div className="border-b border-zinc-800 py-3 px-4 shrink-0">
@@ -91,35 +91,36 @@ export function PromiseContentSkeleton() {
                 <div className="p-2 bg-zinc-800 rounded-lg animate-pulse shrink-0">
                   <div className="w-5 h-5 bg-zinc-700 rounded" />
                 </div>
-                <div className="flex-1">
-                  <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-3 w-32 bg-zinc-800/70 rounded animate-pulse mt-1" />
+                <div className="flex-1 min-w-0">
+                  <div className="h-4 w-36 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-3 w-28 bg-zinc-800/70 rounded animate-pulse mt-1" />
                 </div>
               </div>
             </div>
-            <div className="p-6 flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 flex-1 flex flex-col overflow-hidden">
               <div className="space-y-6">
-                <div>
-                  <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse mt-2" />
-                </div>
-                <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
-                  <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse mb-4" />
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
-                      <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                    <div className="flex justify-between pt-3 border-t border-zinc-700/50">
-                      <div className="h-4 w-16 bg-zinc-700 rounded animate-pulse" />
-                      <div className="h-5 w-28 bg-zinc-700 rounded animate-pulse" />
-                    </div>
+                <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+                  <div className="h-3.5 w-32 bg-zinc-700 rounded animate-pulse mb-3" />
+                  <div className="space-y-2">
+                    <div className="h-3 w-full max-w-[85%] bg-zinc-700/80 rounded animate-pulse" />
+                    <div className="h-3 w-full max-w-[70%] bg-zinc-700/80 rounded animate-pulse" />
+                    <div className="h-3 w-full max-w-[90%] bg-zinc-700/80 rounded animate-pulse pt-2 border-t border-zinc-700/50" />
+                    <div className="h-3 w-full max-w-[60%] bg-zinc-700/80 rounded animate-pulse" />
                   </div>
                 </div>
-                <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-zinc-800 rounded animate-pulse shrink-0" />
-                  <div className="h-3 w-32 bg-zinc-800 rounded animate-pulse" />
+                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 flex items-center justify-between">
+                  <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse" />
+                  <div className="h-7 w-28 bg-zinc-600 rounded animate-pulse" />
+                </div>
+                <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-4 h-4 bg-zinc-700 rounded animate-pulse shrink-0" />
+                    <div className="h-3.5 w-24 bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                  <div className="h-4 w-20 bg-zinc-700/80 rounded animate-pulse" />
+                </div>
+                <div className="pt-2">
+                  <div className="h-11 w-full bg-zinc-700 rounded-lg animate-pulse" />
                 </div>
               </div>
             </div>

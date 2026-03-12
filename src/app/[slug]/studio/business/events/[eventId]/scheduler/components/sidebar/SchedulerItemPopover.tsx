@@ -137,13 +137,13 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const multiplierLabel = isHourBilling && durationHours != null
       ? `x${durationHours}h`
       : `x${localItem.quantity ?? 1}`;
-    // Prioridad 1: total pre-calculado de la tarea (sync). Prioridad 2: cálculo manual como último recurso.
-    const budgetAmountFromTask = st?.budget_amount != null ? Number(st.budget_amount) : null;
+    // HOUR: siempre recalcular costo × durationHours (evita mostrar budget_amount erróneo de syncs anteriores).
+    // SERVICE/UNIT: prioridad budget_amount de la tarea, fallback costo × cantidad.
     const costoTotal =
-      budgetAmountFromTask ??
-      (isHourBilling && durationHours != null
+      isHourBilling && durationHours != null
         ? costoUnitario * durationHours
-        : costoUnitario * (localItem.quantity ?? 1));
+        : (st?.budget_amount != null ? Number(st.budget_amount) : null) ??
+          costoUnitario * (localItem.quantity ?? 1);
 
     const loadMembers = useCallback(async () => {
         try {

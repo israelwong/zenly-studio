@@ -188,7 +188,9 @@ export function CommercialConfigActionButtons({
     <div className="space-y-3">
       {/* Switch de publicación (solo en modo edición) */}
       {showPublishSwitch && isEditMode && onPublishToggle && (
-        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+        <div
+          className={`mb-3 rounded-lg border p-3 ${isCurrentlyVisible ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'}`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
@@ -196,7 +198,7 @@ export function CommercialConfigActionButtons({
                 {isTogglingPublish && (
                   <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin shrink-0" />
                 )}
-                <p className="text-xs text-zinc-400">
+                <p className={`text-xs ${isTogglingPublish ? 'text-zinc-400' : isCurrentlyVisible ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {isTogglingPublish ? 'Guardando...' : (isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio')}
                 </p>
               </div>

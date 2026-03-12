@@ -358,10 +358,17 @@ async function obtenerOCrearInstancia(
  * - duration_days: SSoT catálogo (items.default_duration_days / dias_ejecucion); fallback internal_delivery_days, client_delivery_days, 1.
  * - category: SSoT operational_category del catálogo (Producción/Post/Planeación); fallback mapearCategoriaDesdeNombre.
  */
+export interface SincronizarTareasOptions {
+  batchOffset?: number;
+  batchSize?: number;
+}
+
 export async function sincronizarTareasEvento(
   studioSlug: string,
-  eventId: string
-): Promise<{ success: boolean; created?: number; updated?: number; skipped?: number; error?: string }> {
+  eventId: string,
+  options?: SincronizarTareasOptions
+): Promise<{ success: boolean; created?: number; updated?: number; skipped?: number; totalExpanded?: number; error?: string }> {
+  const { batchOffset = 0, batchSize = 0 } = options ?? {};
   try {
     const studioResult = await validateStudio(studioSlug);
     if (!studioResult.success || !studioResult.studioId) {
@@ -502,6 +509,15 @@ export async function sincronizarTareasEvento(
       }
     }
 
+    // Deduplicar por (item.id, instanceIndex) por si hay ítems repetidos (ej. múltiples cotizaciones con mismo ítem)
+    const seenKey = new Set<string>();
+    const expandedEntriesDedup = expandedEntries.filter((e) => {
+      const key = `${e.item.id}:${e.instanceIndex}`;
+      if (seenKey.has(key)) return false;
+      seenKey.add(key);
+      return true;
+    });
+
     // Huérfanas DRAFT (soft-delete operativo): tareas con cotizacion_item_id = null que "ocupan" un slot de servicio
     const orphanDrafts = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
@@ -539,11 +555,55 @@ export async function sincronizarTareasEvento(
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
     let created = 0;
     let updated = 0;
-    let orderIndex = 0;
+    const orderIndexStart = batchOffset;
+    let orderIndex = orderIndexStart;
     const skippedByOrphan = new Set<string>();
 
+    // Pre-sync: cargar tareas existentes por (scheduler_instance_id, cotizacion_item_id) para actualizar en lugar de insertar
+    const itemIds = orderedItems.map((it) => it.id);
+    const existingTasksPre =
+      itemIds.length === 0
+        ? []
+        : await prisma.studio_scheduler_event_tasks.findMany({
+            where: {
+              scheduler_instance_id: schedulerInstanceId,
+              cotizacion_item_id: { in: itemIds },
+            },
+            select: { id: true, cotizacion_item_id: true, sync_instance_index: true },
+          });
+    const existingTaskByKey = new Map<string, { id: string }>();
+    const existingTaskByItemId = new Map<string, string>(); // primer task id por cotizacion_item_id (fallback 1 tarea por ítem)
+    for (const t of existingTasksPre) {
+      if (t.cotizacion_item_id != null) {
+        existingTaskByKey.set(`${t.cotizacion_item_id}:${t.sync_instance_index}`, { id: t.id });
+        if (!existingTaskByItemId.has(t.cotizacion_item_id)) existingTaskByItemId.set(t.cotizacion_item_id, t.id);
+      }
+    }
+
+    let coberturaTaskId: string | null = null;
+    if (itemIds.length > 0) {
+      const cobertura = await prisma.studio_scheduler_event_tasks.findFirst({
+        where: {
+          scheduler_instance_id: schedulerInstanceId,
+          name: { contains: 'Cobertura', mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      coberturaTaskId = cobertura?.id ?? null;
+    }
+
+    // Cuando la BD solo permite una tarea por cotizacion_item_id, no crear instancias adicionales (instanceIndex > 0)
+    const itemsWithOneTaskOnly = new Set<string>();
+
+    const entriesToProcess =
+      batchSize > 0
+        ? expandedEntriesDedup.slice(batchOffset, batchOffset + batchSize)
+        : expandedEntriesDedup;
+    const isLastBatch = batchSize === 0 || batchOffset + batchSize >= expandedEntriesDedup.length;
+
     await prisma.$transaction(async (tx) => {
-      for (const { item, instanceIndex, taskName, budgetAmount } of expandedEntries) {
+      for (const { item, instanceIndex, taskName, budgetAmount } of entriesToProcess) {
+        if (itemsWithOneTaskOnly.has(item.id) && instanceIndex > 0) continue;
 
         const catalogCategoryId =
           item.scheduler_task?.catalog_category_id ??
@@ -593,20 +653,30 @@ export async function sincronizarTareasEvento(
           continue;
         }
 
+        const itemNameForMatch = (item.name ?? item.name_snapshot ?? '').toLowerCase();
+        const isHoraExtra = itemNameForMatch.includes('hora extra');
+        if (isHoraExtra && coberturaTaskId) {
+          const durationDaysCobertura = Math.max(1, Number(item.items?.default_duration_days ?? item.internal_delivery_days ?? 1));
+          const endDateCobertura = new Date(eventDate);
+          endDateCobertura.setDate(endDateCobertura.getDate() + Math.max(0, durationDaysCobertura - 1));
+          await tx.studio_scheduler_event_tasks.update({
+            where: { id: coberturaTaskId },
+            data: {
+              duration_days: durationDaysCobertura,
+              end_date: endDateCobertura,
+              ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
+            },
+          });
+          updated++;
+          continue;
+        }
+
         const order = orderIndex++;
         const endDate = new Date(eventDate);
         endDate.setDate(endDate.getDate() + Math.max(0, durationDays - 1));
 
-        const compositeKey = {
-          scheduler_instance_id: schedulerInstanceId,
-          cotizacion_item_id: item.id,
-          sync_instance_index: instanceIndex,
-        };
-        const existingTask = await tx.studio_scheduler_event_tasks.findUnique({
-          where: { scheduler_instance_id_cotizacion_item_id_sync_instance_index: compositeKey },
-          select: { id: true },
-        });
-        const hadTask = Boolean(existingTask);
+        const existingTaskId = existingTaskByKey.get(`${item.id}:${instanceIndex}`)?.id ?? null;
+        let hadTask = Boolean(existingTaskId);
 
         const createData = {
             scheduler_instance_id: schedulerInstanceId,
@@ -645,11 +715,31 @@ export async function sincronizarTareasEvento(
             ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
           };
 
-        const task = await tx.studio_scheduler_event_tasks.upsert({
-          where: { scheduler_instance_id_cotizacion_item_id_sync_instance_index: compositeKey },
-          create: createData,
-          update: updateData,
-        });
+        // Cero queries en el bucle: solo mapas pre-cargados. Sin upsert para no violar unique cotizacion_item_id.
+        let task: { id: string };
+        if (existingTaskId) {
+          task = await tx.studio_scheduler_event_tasks.update({
+            where: { id: existingTaskId },
+            data: updateData,
+          });
+        } else {
+          const existingIdByItem = existingTaskByItemId.get(item.id);
+          if (existingIdByItem) {
+            task = await tx.studio_scheduler_event_tasks.update({
+              where: { id: existingIdByItem },
+              data: updateData,
+            });
+            hadTask = true;
+            itemsWithOneTaskOnly.add(item.id);
+          } else {
+            task = await tx.studio_scheduler_event_tasks.create({
+              data: createData,
+            });
+            // BD con unique solo en cotizacion_item_id: evitar crear más tareas para este ítem en el mismo lote
+            itemsWithOneTaskOnly.add(item.id);
+            existingTaskByItemId.set(item.id, task.id);
+          }
+        }
 
         if (instanceIndex === 0 && !hadTask) {
           await tx.studio_cotizacion_items.update({
@@ -661,38 +751,40 @@ export async function sincronizarTareasEvento(
         else updated++;
       }
 
-      // Limpieza de huérfanos: tareas con catalog_category_id no vinculadas a un ítem real. No tocar DRAFT con cotizacion_item_id null (soft-delete operativo).
-      const validItemIds = new Set(orderedItems.map((it) => it.id));
-      const orphanWhere = {
-        scheduler_instance_id: schedulerInstanceId,
-        catalog_category_id: { not: null },
-        NOT: { sync_status: 'DRAFT', cotizacion_item_id: null },
-        OR: validItemIds.size > 0
-          ? [
-              { cotizacion_item_id: null },
-              { cotizacion_item_id: { notIn: [...validItemIds] } },
-            ]
-          : [{ cotizacion_item_id: null }],
-      } as const;
-      const orphans = await tx.studio_scheduler_event_tasks.findMany({
-        where: orphanWhere,
-        select: { id: true },
-      });
-      const orphanIds = orphans.map((o) => o.id);
-      if (orphanIds.length > 0) {
-        await tx.studio_scheduler_event_tasks.updateMany({
-          where: { scheduler_instance_id: schedulerInstanceId, depends_on_task_id: { in: orphanIds } },
-          data: { depends_on_task_id: null },
+      // Limpieza de huérfanos solo en el último lote para no tocar tareas que aún no se han procesado
+      if (isLastBatch) {
+        const validItemIds = new Set(orderedItems.map((it) => it.id));
+        const orphanWhere = {
+          scheduler_instance_id: schedulerInstanceId,
+          catalog_category_id: { not: null },
+          NOT: { sync_status: 'DRAFT', cotizacion_item_id: null },
+          OR: validItemIds.size > 0
+            ? [
+                { cotizacion_item_id: null },
+                { cotizacion_item_id: { notIn: [...validItemIds] } },
+              ]
+            : [{ cotizacion_item_id: null }],
+        } as const;
+        const orphans = await tx.studio_scheduler_event_tasks.findMany({
+          where: orphanWhere,
+          select: { id: true },
         });
-        await tx.studio_cotizacion_items.updateMany({
-          where: { scheduler_task_id: { in: orphanIds } },
-          data: { scheduler_task_id: null },
-        });
-        await tx.studio_scheduler_event_tasks.deleteMany({
-          where: { id: { in: orphanIds } },
-        });
+        const orphanIds = orphans.map((o) => o.id);
+        if (orphanIds.length > 0) {
+          await tx.studio_scheduler_event_tasks.updateMany({
+            where: { scheduler_instance_id: schedulerInstanceId, depends_on_task_id: { in: orphanIds } },
+            data: { depends_on_task_id: null },
+          });
+          await tx.studio_cotizacion_items.updateMany({
+            where: { scheduler_task_id: { in: orphanIds } },
+            data: { scheduler_task_id: null },
+          });
+          await tx.studio_scheduler_event_tasks.deleteMany({
+            where: { id: { in: orphanIds } },
+          });
+        }
       }
-    });
+    }, { timeout: 20000 });
 
     // Inicialización automática: activar estados que tienen tareas
     if (created > 0) {
@@ -724,9 +816,10 @@ export async function sincronizarTareasEvento(
       await revalidateSchedulerPaths(studioSlug, eventId);
     }
 
-    console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length, totalTasks: expandedEntries.length });
+    const totalExpanded = expandedEntriesDedup.length;
+    console.log('[SYNC] Sincronización completada', { eventId, created, updated, totalItems: orderedItems.length, totalTasks: totalExpanded, batchOffset, batchSize: batchSize || totalExpanded });
 
-    return toPlainObject({ success: true, created, updated, skipped: 0 });
+    return toPlainObject({ success: true, created, updated, skipped: 0, totalExpanded });
   } catch (error) {
     console.error('[sincronizarTareasEvento] Error:', error);
     return toPlainObject({

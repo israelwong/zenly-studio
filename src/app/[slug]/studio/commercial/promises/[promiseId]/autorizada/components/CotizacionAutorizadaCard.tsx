@@ -185,130 +185,52 @@ export function CotizacionAutorizadaCard({
   const totalPagado = resumen?.totalPagado ?? 0;
   const hayPagoInicial = totalPagado > 0;
 
-  // Loading state - Skeleton
+  // Loading state - Skeleton que calca Cotización Autorizada: header, Resumen, Total, Pago, botón
   if (loading) {
     return (
       <ZenCard className="h-full flex flex-col">
         <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0 h-[52px] flex flex-col justify-center">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg shrink-0">
               <div className="w-5 h-5 bg-zinc-700 rounded animate-pulse" />
             </div>
-            <div className="flex-1">
-              <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse mb-1" />
-              <div className="h-3 w-32 bg-zinc-800 rounded animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse" />
+              <div className="h-3 w-28 bg-zinc-800 rounded animate-pulse mt-1" />
             </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-4 flex-1 flex flex-col overflow-y-auto">
           <div className="space-y-6">
-            {/* Nombre skeleton */}
-            <div>
-              <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse" />
-              <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse mt-1" />
-            </div>
-
-            {/* Desglose skeleton */}
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
-              <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse mb-4" />
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
-                </div>
-                <div className="flex justify-between items-center pt-3 border-t border-zinc-700/50">
-                  <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="h-4 w-16 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-4 w-28 bg-zinc-700 rounded animate-pulse" />
-                </div>
-                <div className="flex justify-between items-center pt-3 border-t border-zinc-700/50">
-                  <div className="h-4 w-12 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-5 w-32 bg-zinc-700 rounded animate-pulse" />
-                </div>
+            {/* Resumen de Cierre: líneas finas */}
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+              <div className="h-3.5 w-32 bg-zinc-700 rounded animate-pulse mb-3" />
+              <div className="space-y-2">
+                <div className="h-3 w-full max-w-[85%] bg-zinc-700/80 rounded animate-pulse" />
+                <div className="h-3 w-full max-w-[70%] bg-zinc-700/80 rounded animate-pulse" />
+                <div className="h-3 w-full max-w-[90%] bg-zinc-700/80 rounded animate-pulse pt-2 border-t border-zinc-700/50" />
+                <div className="h-3 w-full max-w-[60%] bg-zinc-700/80 rounded animate-pulse" />
               </div>
             </div>
 
-            {/* Pago inicial skeleton */}
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-4 h-4 bg-zinc-700 rounded animate-pulse" />
-                <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
-              </div>
-              <div className="space-y-3">
-                {/* Monto destacado skeleton */}
-                <div className="flex items-baseline justify-between pb-3 border-b border-zinc-700/50">
-                  <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
-                  <div className="h-5 w-32 bg-zinc-700 rounded animate-pulse" />
-                </div>
-                {/* Detalles skeleton */}
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                      <div className="w-3.5 h-3.5 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse mb-1" />
-                      <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                      <div className="w-3.5 h-3.5 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="h-3 w-28 bg-zinc-700 rounded animate-pulse mb-1" />
-                      <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
-                      <div className="w-3.5 h-3.5 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse mb-1" />
-                      <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Total a pagar: bloque prominente (doble altura) */}
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 flex items-center justify-between">
+              <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse" />
+              <div className="h-7 w-28 bg-zinc-600 rounded animate-pulse" />
             </div>
 
-            {/* Contrato skeleton */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className="w-5 h-5 bg-zinc-700 rounded animate-pulse shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
-                    <div className="h-3 w-40 bg-zinc-700 rounded animate-pulse" />
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3.5 h-3.5 bg-zinc-700 rounded animate-pulse shrink-0" />
-                        <div className="h-3 w-20 bg-zinc-700 rounded animate-pulse" />
-                      </div>
-                      <div className="pl-5">
-                        <div className="h-3 w-36 bg-zinc-700 rounded animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="w-4 h-4 bg-zinc-700 rounded animate-pulse shrink-0 mt-0.5" />
+            {/* Pago Inicial: bloque independiente */}
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-4 h-4 bg-zinc-700 rounded animate-pulse shrink-0" />
+                <div className="h-3.5 w-24 bg-zinc-700 rounded animate-pulse" />
               </div>
+              <div className="h-4 w-20 bg-zinc-700/80 rounded animate-pulse" />
             </div>
 
-            {/* Fecha skeleton */}
-            <div className="flex items-center gap-2 pt-2">
-              <div className="w-3.5 h-3.5 bg-zinc-800 rounded animate-pulse shrink-0" />
-              <div className="h-3 w-48 bg-zinc-800 rounded animate-pulse" />
-            </div>
-
-            {/* Botón skeleton */}
+            {/* Botón Gestionar Evento: bloque sólido */}
             <div className="pt-2">
-              <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
-              <div className="h-3 w-56 bg-zinc-800 rounded animate-pulse mt-3 mx-auto" />
+              <div className="h-11 w-full bg-zinc-700 rounded-lg animate-pulse" />
             </div>
           </div>
         </ZenCardContent>

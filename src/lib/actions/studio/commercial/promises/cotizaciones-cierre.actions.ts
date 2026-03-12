@@ -3525,11 +3525,13 @@ export async function autorizarAnexoDirecto(
       const snapshotPrecioCalculado = anexo.precio_calculado != null ? new Prisma.Decimal(Number(anexo.precio_calculado)) : null;
       const snapshotBonoEspecial = anexo.bono_especial != null ? new Prisma.Decimal(Number(anexo.bono_especial)) : null;
 
-      // Vincular anexo al evento del padre vía relación (no usar campo directo evento_id en update)
+      // Vincular anexo al evento del padre vía relación (no usar campo directo evento_id en update).
+      // Al autorizar, hacer visible al cliente para que aparezca en el portal ("Aprobar y sumar al evento").
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'autorizada',
+          visible_to_client: true,
           eventos: { connect: { id: parent.evento_id } },
           condiciones_comerciales: { disconnect: true },
           precio_calculado: snapshotPrecioCalculado,

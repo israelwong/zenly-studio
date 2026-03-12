@@ -689,7 +689,8 @@ export function ConfirmarCierreModal({
               </Popover>
             </div>
 
-            {/* Fase 28.0: Confirmación de Pago Inicial */}
+            {/* Fase 28.0: Confirmación de Pago Inicial — solo si hay total a pagar > 0 */}
+            {totalAPagar > 0 && (
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
               <p className="text-xs text-zinc-400 uppercase tracking-wide font-semibold mb-3">
                 Registro de Pago Inicial
@@ -766,6 +767,7 @@ export function ConfirmarCierreModal({
                 </div>
               )}
             </div>
+            )}
 
             {/* Configuración de Formalización: contrato/anexo y firma. En anexos sin contrato maestro se oculta (cierre solo financiero). */}
             {(!isAnnexContext || hasMasterContract === true) && (
