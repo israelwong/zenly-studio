@@ -323,7 +323,7 @@ const handleCotizacionUpdated = useCallback((cotizacionId, payload) => {
 
 **Orígenes de llamadas a `/api/promise/.../redirect`:** `syncPromiseRoute()` (desde `PromiseRouteGuard.handleSyncRoute`), polling en `/no-disponible`, y `checkAndRedirect()` en `PromiseRedirectOnAuthorized`. El "ghost redirect" en el flujo de firma en `/cierre` venía del Realtime dentro de `PromiseRouteGuard` (callback `onCotizacionUpdated`), no de la API de redirect; todos los puntos ahora respetan el ref síncrono.
 
-**Referencia de la auditoría completa:** [auditoria-redireccion-post-firma.md](auditoria-redireccion-post-firma.md) (resumen integrado arriba).
+**Referencia SSOT:** [20.14-studio-promise-flow-autorizacion-publica](../ssot/20.14-studio-promise-flow-autorizacion-publica.md) §8 (Fixes post-firma).
 
 ---
 

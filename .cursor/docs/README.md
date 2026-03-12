@@ -12,7 +12,7 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 
 ```
 .cursor/docs/
-├── 🎯 masters/        → Fuentes únicas de verdad (SSOT)
+├── 🎯 ssot/            → Fuentes únicas de verdad (SSOT)
 ├── 🏗️  architecture/   → Diseño y arquitectura del sistema
 ├── 🔐 auth/           → Autenticación y autorización
 ├── 📊 audits/         → Auditorías técnicas del sistema
@@ -28,14 +28,16 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 
 ## 🎯 Masters - Fuentes Únicas de Verdad (SSOT)
 
-**📁 [masters/](masters/)**
+**📁 [ssot/](ssot/)** — Criterios: [00.01-meta-criterios-documentacion](ssot/00.01-meta-criterios-documentacion.md) · Índice: [00.02-indice-masters](ssot/00.02-indice-masters.md)
 
 | Documento | Dominio |
 |-----------|---------|
-| [sistema-sincronizacion-maestro.md](masters/sistema-sincronizacion-maestro.md) | Sistema de snapshots y sincronización Catálogo → Cotizaciones |
-| [MASTER_FINANCIAL_SSOT_GUIDE.md](masters/MASTER_FINANCIAL_SSOT_GUIDE.md) | Sistema financiero: cálculo de precios, gastos, utilidades |
-| [ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md](masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md) | Algoritmo de reordenamiento drag & drop en Scheduler |
-| [MASTER_DATE_SSOT_GUIDE.md](masters/MASTER_DATE_SSOT_GUIDE.md) | Manejo de fechas y zonas horarias |
+| [40.05-sistema-sincronizacion-maestro](ssot/40.05-sistema-sincronizacion-maestro.md) | Sistema de snapshots y sincronización Catálogo → Cotizaciones |
+| [30.01-financial-ssot-guide](ssot/30.01-financial-ssot-guide.md) | Sistema financiero: cálculo de precios, gastos, utilidades |
+| [40.03-israel-algorithm-task-reorder](ssot/40.03-israel-algorithm-task-reorder.md) | Algoritmo de reordenamiento drag & drop en Scheduler |
+| [10.05-date-ssot-guide](ssot/10.05-date-ssot-guide.md) | Manejo de fechas y zonas horarias |
+| [40.01-studio-operaciones-scheduler-flow](ssot/40.01-studio-operaciones-scheduler-flow.md) | Scheduler: flujo usuario |
+| [40.02-studio-operaciones-scheduler-arquitectura](ssot/40.02-studio-operaciones-scheduler-arquitectura.md) | Scheduler: arquitectura, fix anexos |
 
 **Úsalos primero:** Estos son las referencias definitivas para sus dominios.
 
@@ -48,17 +50,17 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | Documento | Descripción |
 |-----------|-------------|
 | [README.md](architecture/README.md) | Índice de arquitectura |
-| [ARCHITECTURE_QUOTATION.md](architecture/ARCHITECTURE_QUOTATION.md) | Arquitectura completa de cotizaciones y refactor semántico |
+| [20.20-studio-promises-arquitectura-master](ssot/20.20-studio-promises-arquitectura-master.md) | Arq. cotizaciones, billing_type, event_duration |
 | [cotizacion-a-paquete.md](architecture/cotizacion-a-paquete.md) | Flujo de conversión cotización → paquete con persistencia de custom items |
-| [snapshot-field-mapping.md](architecture/snapshot-field-mapping.md) | Mapeo bidireccional operational_category ↔ task_type (snapshots) |
-| [precios-resiliencia.md](architecture/precios-resiliencia.md) | Motor de precios de paquetes y resiliencia DB |
-| [tenant.md](architecture/tenant.md) | Sistema multi-tenant |
-| [promises-kanban-system.md](architecture/promises-kanban-system.md) | Sistema de promesas y pipeline |
+| [20.22-shared-promises-snapshots-persistence](ssot/20.22-shared-promises-snapshots-persistence.md) | Snapshots, mapeo operational_category↔task_type |
+| [30.10-shared-finanzas-pricing-resilience](ssot/30.10-shared-finanzas-pricing-resilience.md) | Motor precios paquetes, charm |
+| [10.01-core-tenant-architecture](ssot/10.01-core-tenant-architecture.md) | Sistema multi-tenant |
+| [20.21-studio-promises-kanban-logic](ssot/20.21-studio-promises-kanban-logic.md) | Kanban promesas, columnas, Historial |
 | [contracts-flow.md](architecture/contracts-flow.md) | Flujo de contratos |
-| [direct-navigator.md](architecture/direct-navigator.md) | Navegación directa |
+| [10.03-core-direct-navigator](ssot/10.03-core-direct-navigator.md) | Rutas promesas públicas |
 | [promise-detalle.md](architecture/promise-detalle.md) | Detalle de promesas |
 | [redireccionamiento-promesas.md](architecture/redireccionamiento-promesas.md) | Redirects de promesas (incl. post-firma y stayOnCierreRef) |
-| [arquitectura-contratos-y-condiciones.md](architecture/arquitectura-contratos-y-condiciones.md) | **SSOT** contratos y condiciones (persistencia, visualización, fixes) |
+| [20.24-studio-promises-contratos-legal-base](ssot/20.24-studio-promises-contratos-legal-base.md) | SSOT contratos (modelo, bloques, fixes) |
 
 ---
 
@@ -198,10 +200,10 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | Error en login/OAuth | [auth/AUTENTICACION_MASTER.md](auth/AUTENTICACION_MASTER.md) → Problemas Comunes |
 | Problema con Google APIs | [features/google-oauth-implementation.md](features/google-oauth-implementation.md) |
 | Error de conexión a BD | [solutions/FIX_CONEXIONES_DB.md](solutions/FIX_CONEXIONES_DB.md) |
-| Problema con fechas | [masters/MASTER_DATE_SSOT_GUIDE.md](masters/MASTER_DATE_SSOT_GUIDE.md) |
-| Precios incorrectos/inconsistentes | [masters/MASTER_FINANCIAL_SSOT_GUIDE.md](masters/MASTER_FINANCIAL_SSOT_GUIDE.md) |
-| Problema con snapshots | [masters/sistema-sincronizacion-maestro.md](masters/sistema-sincronizacion-maestro.md) |
-| Problema drag & drop Scheduler | [masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md](masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md) |
+| Problema con fechas | [ssot/10.05-date-ssot-guide.md](ssot/10.05-date-ssot-guide.md) |
+| Precios incorrectos/inconsistentes | [ssot/30.01-financial-ssot-guide.md](ssot/30.01-financial-ssot-guide.md) |
+| Problema con snapshots | [ssot/40.05-sistema-sincronizacion-maestro.md](ssot/40.05-sistema-sincronizacion-maestro.md) |
+| Problema drag & drop Scheduler | [ssot/40.03-israel-algorithm-task-reorder.md](ssot/40.03-israel-algorithm-task-reorder.md) |
 | Error de OAuth PKCE | [solutions/OAUTH_PKCE_PROBLEM.md](solutions/OAUTH_PKCE_PROBLEM.md) |
 | Problema con Storage/RLS | [solutions/solucion-storage-rls-autenticacion.md](solutions/solucion-storage-rls-autenticacion.md) |
 
@@ -216,7 +218,7 @@ La documentación está organizada en **8 carpetas temáticas** para facilitar n
 | Validar estado del sistema | [audits/](audits/) |
 | Evaluar opciones técnicas | [analysis/](analysis/) |
 | Entender reglas de negocio | [business/](business/) |
-| Fuente única de verdad | [masters/](masters/) |
+| Fuente única de verdad | [ssot/](ssot/) ([00.02-indice-masters](ssot/00.02-indice-masters.md)) |
 
 ---
 
@@ -253,7 +255,7 @@ Cuando actualices un documento:
 
 ```bash
 # Ver docs por categoría
-ls .cursor/docs/masters/      # Fuentes únicas de verdad
+ls .cursor/docs/ssot/         # Fuentes únicas de verdad (SSOT)
 ls .cursor/docs/auth/         # Todo sobre autenticación
 ls .cursor/docs/features/     # Features implementadas
 ls .cursor/docs/patterns/     # Patrones de código
@@ -282,7 +284,7 @@ find .cursor/docs -name "*oauth*"
 
 | Necesitas | Busca en |
 |-----------|----------|
-| Definición canónica | `masters/` |
+| Definición canónica | `ssot/` |
 | Cómo se autentica | `auth/` |
 | Cómo funciona X | `architecture/` o `features/` |
 | Cómo escribir código | `patterns/` |
@@ -320,7 +322,7 @@ find .cursor/docs -name "*oauth*"
 La documentación está organizada en **8 carpetas temáticas**:
 
 ```
-masters/      → Documentos SSOT (4 docs)
+ssot/         → Documentos SSOT (ver 00.01-meta-criterios, 00.02-indice-masters)
 architecture/ → Arquitectura (11 docs)
 auth/         → Autenticación (3 docs)
 audits/       → Auditorías (4 docs)
@@ -338,7 +340,7 @@ config/       → Config (2 docs)
 
 | Tipo de Documento | Carpeta | Ejemplo |
 |-------------------|---------|---------|
-| Fuente única de verdad | `masters/` | MASTER_DATE_SSOT_GUIDE.md |
+| Fuente única de verdad | `ssot/` | 10.05-date-ssot-guide.md |
 | Diseño del sistema | `architecture/` | tenant.md |
 | Login/OAuth/Sesiones | `auth/` | AUTENTICACION_MASTER.md |
 | Análisis del estado | `audits/` | AUDITORIA_SEGURIDAD_AUTH.md |
@@ -419,7 +421,7 @@ git log --since="1 month ago" -- .cursor/docs/
 - ✅ Creado `sistema-sincronizacion-maestro.md` - Documenta Ley de Actualización Atómica
 - ✅ Actualizado `MASTER_FINANCIAL_SSOT_GUIDE.md` - Documenta fix de `obtenerCatalogo()`
 - ✅ Creado `ARCHITECTURE_QUOTATION.md` - Documenta refactor semántico event_duration
-- ✅ Creado `masters/README.md` - Índice de documentos maestros
+- ✅ SSOT consolidado en `ssot/` (00.01 criterios, 00.02 índice masters)
 - ✅ Actualizado referencias cruzadas entre documentos
 
 ### 2 de febrero de 2026

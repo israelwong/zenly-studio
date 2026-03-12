@@ -7,27 +7,11 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 ## 📚 Documentos Disponibles
 
 ### 1. Arquitectura de Cotizaciones
-**Archivo:** `ARCHITECTURE_QUOTATION.md`  
-**Versión:** 2.0 (Post-Refactor Semántico)  
-**Estado:** ✅ Producción
+**Migrado a SSOT:** [20.20-studio-promises-arquitectura-master](../ssot/20.20-studio-promises-arquitectura-master.md)
 
-**Contenido:**
-- Modelo de datos completo (cotizaciones, items, snapshots)
-- Refactor semántico: event_duration → "Horas de servicio" / "Tiempo de cobertura"
-- Cálculo de precios dinámico por billing_type (HOUR, SERVICE, UNIT)
-- Prioridad de horas de cobertura (cotización > promesa > null)
-- Sincronización: Ley de Actualización Atómica
-- Estados de cotización y permisos
-- Integración con Scheduler (task_type, delivery_days)
-- Negociación y precio personalizado
-- Componentes UI y Server Actions
+**Contenido:** Modelo datos, event_duration, billing_type, Ley Actualización Atómica, integración scheduler.
 
-**Cuándo consultar:**
-- Crear/editar cotizaciones
-- Entender cálculo de subtotales dinámicos
-- Depurar precios incorrectos
-- Entender snapshots y sincronización
-- Onboarding en sistema de cotizaciones
+**Cuándo consultar:** Crear/editar cotizaciones; cálculo subtotales; snapshots; onboarding.
 
 ---
 
@@ -77,93 +61,60 @@ Esta carpeta contiene la documentación arquitectónica definitiva del sistema.
 
 ---
 
-### 4. Mapeo de Campos Snapshot
-**Archivo:** `snapshot-field-mapping.md`  
-**Versión:** 1.0 (Fase 8.1)  
-**Estado:** ✅ Producción
+### 4. Mapeo de Campos Snapshot y Persistencia
+**Migrado a SSOT:** [20.22-shared-promises-snapshots-persistence](../ssot/20.22-shared-promises-snapshots-persistence.md)
 
-**Contenido:**
-- Diferencia entre `operational_category` (catálogo) y `task_type` (snapshot)
-- Funciones de mapeo bidireccional (`operationalCategoryToTaskType`, `taskTypeToOperationalCategory`)
-- Casos de uso: crear cotización, convertir a paquete, scheduler sync
-- Reglas de oro para queries a `studio_items` vs `studio_cotizacion_items`
-- Frontend: ItemFormData y tipos correctos
-- Archivos críticos del sistema
+**Contenido:** operational_category↔task_type, persistencia al autorizar, generateFinancialSummaryHtml, getSnapTotalFinalForEvento.
 
-**Cuándo consultar:**
-- Error "Unknown field operational_category" en snapshots
-- Implementar conversión entre catálogo y cotización
-- Queries que involucren task_type o operational_category
-- Sincronización con scheduler
-- Onboarding: entender arquitectura de snapshots
+**Cuándo consultar:** Error "Unknown field operational_category"; conversión catálogo↔cotización; sincronización scheduler.
 
 ---
 
-### 5. Arquitectura de Precios y Resiliencia
-**Archivo:** `precios-resiliencia.md`  
-**Versión:** 1.0  
-**Estado:** ✅ Producción
+### 5. Arquitectura de Precios y Resiliencia (Paquetes)
+**Migrado a SSOT:** [30.10-shared-finanzas-pricing-resilience](../ssot/30.10-shared-finanzas-pricing-resilience.md)
 
-**Contenido:**
-- Single Source of Truth (SSoT) financiero
-- Motor de precios de paquetes (`package-price-engine.ts`)
-- Formateador visual (`package-price-formatter.ts`)
-- Lógica de charm rounding
-- Puntos de salida y congruencia (4 nodos críticos)
-- Capa de resiliencia y retry con DB
-- Testing unitarios
+**Contenido:** Motor precios, formateador, charm rounding, 4 nodos congruencia.
 
-**Cuándo consultar:**
-- Entender motor de pricing de paquetes
-- Depurar precios inconsistentes entre vitrina/comparador/detalle
-- Revisar lógica de charm rounding (.99)
-- Solucionar errores de conexión a BD
+**Cuándo consultar:** Motor pricing paquetes; precios inconsistentes vitrina/comparador; charm .99.
 
 ---
 
 ### 5. Flows (flujos paso a paso)
-**Carpeta:** [flows/](flows/)
-
-Documentos de flujos operativos explícitos (UI → componentes → Server Actions → servidor) para cierre, autorización, etc. Índice en `flows/README.md`.
+**Migrados a SSOT:** [ssot/](ssot/) — Dominio 20
 
 | Documento | Descripción |
 |-----------|-------------|
-| [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md) | SSOT cierre de cotización: entrada pública y "Pasar a Cierre" (estudio). Incluye modal ConfirmarCierre, recordatorio, payload, pasarACierre, Server Actions, diagrama de secuencia, pantalla de cierre, cancelar, autorizar y crear evento. |
-| [contracts-flow.md](flows/contracts-flow.md) | Flujo de contratos: generación, firma, regeneración (público + Studio); persistencia post-autorización y visualización. |
-| [flujo-autorizar-y-crear-evento.md](flows/flujo-autorizar-y-crear-evento.md) | Autorizar y crear evento: transacción, snapshots financieros, inyección de resumen en contract_content_snapshot. |
+| [20.11-studio-promises-flow-autorizar-evento](../ssot/20.11-studio-promises-flow-autorizar-evento.md) | Autorizar y crear evento: transacción, snapshots, overlay, redirect |
+| [20.12-studio-promises-flow-cierre](../ssot/20.12-studio-promises-flow-cierre.md) | SSOT cierre: Pasar a cierre (público + manual), pantalla cierre, SSOT financiero |
+| [20.13-studio-promises-flow-contratos](../ssot/20.13-studio-promises-flow-contratos.md) | Contratos: generación, firma, regeneración (público + Studio) |
+| [20.14-studio-promise-flow-autorizacion-publica](../ssot/20.14-studio-promise-flow-autorizacion-publica.md) | Autorización pública: Provider, Lock, overlay |
 
-**Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio). Índice en [flows/README.md](flows/README.md).
+**Cuándo consultar:** Entender secuencia exacta de un flujo; homologar comportamiento entre rutas (ej. público vs estudio).
 
 ---
 
 ### 5a. Rutas de promesa (por scope)
-**Carpeta:** [promises/](promises/)
-
-Documentación por **scope** de las tres rutas bajo `[promiseId]`: pendiente, cierre, autorizada. Cada doc describe la pantalla (layout, componentes, carga de datos); los **flows** describen las secuencias de negocio.
+**Documentación activa:** `promesa-cierre.md`, `promesa-pendiente.md` + [20.12-studio-promises-flow-cierre](../ssot/20.12-studio-promises-flow-cierre.md)
 
 | Documento | Descripción |
 |-----------|-------------|
-| [promises/README.md](promises/README.md) | Índice: las 3 rutas, criterio de redirección (`determinePromiseState`, `getPromisePathFromState`), layout compartido. |
-| [promises/cierre.md](promises/cierre.md) | Ruta **cierre**: page, datos, 3 columnas, CotizacionCard, ContratoDigitalCard, ActivacionOperativaCard, CierreActionButtons, skeletons, flujos. |
-| promises/pendiente.md | (Por documentar) Ruta pendiente. |
-| promises/autorizada.md | (Por documentar) Ruta autorizada. |
+| [promesa-cierre.md](promesa-cierre.md) | Ruta **cierre**: page, layout, 3 columnas, CotizacionCard, ContratoDigitalCard, ActivacionOperativaCard, CierreActionButtons, flujos Autorizar/Cancelar. |
+| [promesa-pendiente.md](promesa-pendiente.md) | Ruta **pendiente**: cadenero, carga datos (Protocolo Zenly), layout 3 columnas, PromiseQuotesPanel, modales. |
+
+**Criterio redirección:** `determinePromiseState`, `getPromisePathFromState` en `src/lib/utils/promise-navigation.ts` y `promise-state.actions.ts`.
 
 **Cuándo consultar:** Mantener o extender una pantalla de detalle de promesa; entender qué muestra cada ruta y con qué componentes.
 
 ---
 
 ### 5b. Contratos y condiciones comerciales (SSOT)
-**Archivo principal:** [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md)  
-**Estado:** ✅ SSOT (2026-03-02)
+**Migrado a SSOT:** [20.24-studio-promises-contratos-legal-base](../ssot/20.24-studio-promises-contratos-legal-base.md)
 
-**Contenido:** Modelo de datos y tablas (studio_cotizaciones_cierre, snapshots en studio_cotizaciones), persistencia al autorizar (autorizarYCrearEvento, generateFinancialSummaryHtml, injectFinancialSummaryIntoContractContent, getSnapTotalFinalForEvento), componentes (ContractPreview, useContractRenderer), bloques especiales (@cotizacion_autorizada, @condiciones_comerciales), obtención de datos (getEventContractData, getPromiseContractData), guía para visualizar el contrato en otra vista, formatItemQuantity y ducto de datos, uso por contexto (Studio cierre, público, portal), fixes documentados (bloque duplicado, incompleto, Decimal, bienvenido), casos de uso y archivos clave.
+**Contenido:** Modelo datos, ContractPreview, bloques @cotizacion_autorizada/@condiciones_comerciales, getEventContractData/getPromiseContractData, fixes.
 
-Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotizacion.md), [visualizacion-contrato.md](visualizacion-contrato.md) y [renderizado-contratos.md](renderizado-contratos.md) son **stubs de redirección** al SSOT. Detalle de props de ContratoSection, ContratoGestionCard, modales y portal: [components/contract-rendering-system.md](components/contract-rendering-system.md).
+Stubs: [visualizacion-contrato.md](visualizacion-contrato.md), [renderizado-contratos.md](renderizado-contratos.md). Snapshots: [20.22](../ssot/20.22-shared-promises-snapshots-persistence.md). Flow: [20.13](../ssot/20.13-studio-promises-flow-contratos.md).
 
-**Cuándo consultar:**
-- Implementar o reutilizar la visualización del contrato en una nueva pantalla o modal.
-- Entender qué se persiste al autorizar y por qué no hay relación a condiciones_comerciales tras la firma.
-- Depurar bloque de condiciones duplicado o incompleto; error de Decimal en layout evento.
+**Cuándo consultar:** Visualizar contrato en nueva pantalla; depurar bloque duplicado/incompleto; error Decimal.
 
 ---
 
@@ -212,31 +163,23 @@ Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotiz
 ---
 
 ### 8. Panel de Gestión Logística (Scheduler)
-**Archivo:** `panel-gestion-logistica.md`  
-**Estado:** ✅ Producción
+**Migrado a SSOT:** [40.06-studio-operaciones-logistica-panel](../ssot/40.06-studio-operaciones-logistica-panel.md)
 
-**Contenido (fuente única):**
-- Resumen ejecutivo, arquitectura de componentes (PublicationBar, PublicationSummarySheet, LogisticsTaskCard)
-- Obtención de datos (obtenerMetricasLogisticasEvento, obtenerEstructuraCompletaLogistica)
-- Cálculo de presupuesto por tarea (esquema, función maestra, horas de cobertura, sync cotización→scheduler)
-- Nómina (entidades, estados pendiente/pagado, montos, integridad)
-- Flujo de usuario, archivos del sistema, otros docs del ecosistema Scheduler, mantenimiento
+**Contenido:** PublicationBar, PublicationSummarySheet, LogisticsTaskCard, presupuestos, nómina.
 
-**Cuándo consultar:**
-- Iterar sobre el panel logístico, barra del scheduler, presupuestos o nómina
-- Onboarding en Scheduler / gestión logística
-- **Ver también:** `masters/ISRAEL-ALGORITHM-TASK-REORDER-MASTER.md` para drag & drop
+**Cuándo consultar:** Panel logístico, barra scheduler, presupuestos o nómina. Ver también: [40.03](../ssot/40.03-israel-algorithm-task-reorder.md) (DnD).
 
 ---
 
 ### 9. Componentes compartidos (precio / cierre)
-**Carpeta:** [components/](components/)
+**Migrados a SSOT:** [ssot/](../ssot/) — Dominio 20
 
 | Documento | Descripción |
 |-----------|-------------|
-| [resumen-pago.md](components/resumen-pago.md) | ResumenPago: props, estados (compact / editable / solo lectura), flujo de datos, uso de snapshots en vista Autorizada, fórmula de anticipo % sobre Total a pagar. |
+| [20.15-studio-component-cotizacion-detail-sheet](../ssot/20.15-studio-component-cotizacion-detail-sheet.md) | CotizacionDetailSheet: vista previa, props, Realtime, persistencia |
+| [20.16-studio-component-resumen-pago](../ssot/20.16-studio-component-resumen-pago.md) | ResumenPago: props, estados, fórmulas anticipo, paridad Cierre/Autorizada |
 
-**Cuándo consultar:** Mantener o extender el bloque "Resumen de Cierre/Pago"; asegurar paridad Cierre vs Autorizada; no romper cálculo de anticipo ni precisión de centavos (ver también Master [calculo-utilidad-financiera.md](../masters/calculo-utilidad-financiera.md) §8).
+**Cuándo consultar:** Mantener o extender el bloque "Resumen de Cierre/Pago"; asegurar paridad Cierre vs Autorizada; no romper cálculo de anticipo ni precisión de centavos (ver también Master [30.02-calculo-utilidad-financiera.md](../ssot/30.02-calculo-utilidad-financiera.md) §8).
 
 ---
 
@@ -246,8 +189,7 @@ Los archivos [persistencia-snapshots-cotizacion.md](persistencia-snapshots-cotiz
 .cursor/docs/
 ├── architecture/           # ← ESTÁS AQUÍ
 │   ├── README.md          # Este archivo
-│   ├── components/       # Componentes compartidos (ResumenPago, etc.)
-│   ├── flows/            # Flujos paso a paso (pasar a cierre, contratos, autorización)
+│   ├── flows/             # (Migrado a ssot/) Flujos paso a paso (cierre, contratos, autorización)
 │   ├── promises/         # Rutas de promesa por scope (pendiente, cierre, autorizada)
 │   │   ├── README.md     # Índice y criterio de redirección
 │   │   ├── cierre.md     # Doc detallada ruta cierre
@@ -337,4 +279,4 @@ Cada documento en `architecture/` debe seguir esta estructura:
 **Última actualización:** 2026-03-02  
 **Mantenedor:** Equipo de Desarrollo ZENPro  
 
-**Curación 2026-03-06:** Flujo de cierre unificado en [flujo-cierre-cotizacion.md](flows/flujo-cierre-cotizacion.md) (incluye Pasar a Cierre desde estudio). **Curación 2026-03-02:** SSOT contratos en [arquitectura-contratos-y-condiciones.md](arquitectura-contratos-y-condiciones.md); auditoría post-firma integrada en [redireccionamiento-promesas.md](redireccionamiento-promesas.md) §4. Stubs de redirección: renderizado-contratos, visualizacion-contrato, persistencia-snapshots-cotizacion, auditoria-redireccion-post-firma.
+**Curación 2026-03-10:** Migración a SSOT: cotizaciones (20.20), kanban (20.21), contratos (20.24), perfil (20.26), precios (30.10), panel logístico (40.06). Stubs: renderizado-contratos, visualizacion-contrato → 20.24.
