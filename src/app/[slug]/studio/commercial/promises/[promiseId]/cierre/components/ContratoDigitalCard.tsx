@@ -182,6 +182,7 @@ function ContratoDigitalCardInner({
           eventTypeId={eventTypeId || null}
           condicionesComerciales={condicionesComerciales}
           promiseData={promiseData}
+          isAnnex={(cotizacion as { is_annex?: boolean }).is_annex === true}
         />
       </ZenCardContent>
     </ZenCard>

@@ -881,6 +881,7 @@ export async function obtenerEventoDetalle(
       discount: true,
       promise_id: true,
       evento_id: true,
+      parent_cotizacion_id: true,
       precio_calculado: true,
       negociacion_precio_original: true,
       negociacion_precio_personalizado: true,

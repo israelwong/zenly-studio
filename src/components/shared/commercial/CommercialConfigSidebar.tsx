@@ -194,13 +194,10 @@ export function CommercialConfigActionButtons({
               <p className="text-sm font-medium text-zinc-200">Estado de publicación</p>
               <div className="flex items-center gap-2 mt-0.5">
                 {isTogglingPublish && (
-                  <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin shrink-0" />
                 )}
                 <p className="text-xs text-zinc-400">
-                  {isTogglingPublish 
-                    ? (isCurrentlyVisible ? 'Despublicando...' : 'Publicando...')
-                    : (isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio')
-                  }
+                  {isTogglingPublish ? 'Guardando...' : (isCurrentlyVisible ? 'Visible para el cliente' : 'Solo visible para el estudio')}
                 </p>
               </div>
             </div>

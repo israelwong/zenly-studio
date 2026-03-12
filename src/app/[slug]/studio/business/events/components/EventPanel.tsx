@@ -64,6 +64,7 @@ export function EventPanel({
             mainCotizacionId={eventData.cotizacion?.id ?? null}
             eventId={eventId}
             hasContract={hasContract}
+            promiseId={eventData.promise_id ?? null}
           />
           {eventData.promise_id && (
             <QuickNoteCard

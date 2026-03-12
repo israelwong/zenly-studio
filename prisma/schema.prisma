@@ -1740,6 +1740,7 @@ model studio_event_contracts {
   event                     studio_events                           @relation(fields: [event_id], references: [id], onDelete: Cascade)
   studio                    studios                                 @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   template                  studio_contract_templates?              @relation(fields: [template_id], references: [id])
+  annex_cierre_records      studio_cotizaciones_cierre[]
 
   @@index([studio_id, status])
   @@index([event_id])
@@ -2522,6 +2523,8 @@ model studio_cotizaciones_cierre {
   advance_percentage_override      Decimal?  @db.Decimal(5, 2)
   pago_fecha                        DateTime? @db.Date
   pago_metodo_id                    String?
+  /** Anexos: ID del contrato maestro para cadena de custodia legal. Null = cotización principal. */
+  master_contract_id                String?
   created_at                        DateTime  @default(now())
   updated_at                        DateTime  @updatedAt
 
@@ -2529,9 +2532,11 @@ model studio_cotizaciones_cierre {
   condiciones_comerciales studio_condiciones_comerciales? @relation(fields: [condiciones_comerciales_id], references: [id], onDelete: SetNull)
   contract_template       studio_contract_templates?      @relation(fields: [contract_template_id], references: [id], onDelete: SetNull)
   contract_versions       studio_cotizaciones_cierre_contract_versions[]
+  master_contract         studio_event_contracts?         @relation(fields: [master_contract_id], references: [id], onDelete: SetNull)
 
   @@index([cotizacion_id])
   @@index([created_at])
+  @@index([master_contract_id])
 }
 
 model studio_cotizaciones_cierre_contract_versions {

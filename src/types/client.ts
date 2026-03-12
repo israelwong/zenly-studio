@@ -53,7 +53,9 @@ export interface ClientPipelineStage {
 
 export interface ClientEventDetail extends Omit<ClientEvent, 'cotizacion'> {
   address: string | null;
-  cotizaciones: ClientCotizacion[]; // Array de cotizaciones
+  cotizaciones: ClientCotizacion[]; // Contrato actual: maestra + anexos autorizados
+  /** Anexos pendientes/publicados que el cliente puede aprobar (Mejoras disponibles). */
+  mejorasDisponibles?: ClientCotizacion[];
   // Totales consolidados (suma de todas las cotizaciones)
   total: number;
   pagado: number;

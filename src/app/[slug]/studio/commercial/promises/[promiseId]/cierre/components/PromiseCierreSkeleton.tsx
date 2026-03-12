@@ -4,81 +4,69 @@ import React from 'react';
 import { Bell, CalendarClock } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 
-/** Skeleton para CotizacionCard (condiciones + cotización + auditoría) - altura alineada con vista actual */
+/** Skeleton para CotizacionCard — paridad con: título "Cotización en cierre", nombre, descripción, Resumen de Cierre, Auditoría */
 export function CotizacionCardSkeleton() {
   return (
-    <ZenCard className="h-auto min-h-[520px] flex flex-col">
+    <ZenCard className="h-auto flex flex-col">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-            <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+            <span className="text-zinc-400">Cotización en cierre</span>
           </ZenCardTitle>
-          <div className="h-7 w-28 bg-zinc-800/50 rounded-md animate-pulse" />
+          <div className="h-7 w-24 bg-zinc-800 rounded-md animate-pulse shrink-0" aria-hidden />
         </div>
       </ZenCardHeader>
-      <ZenCardContent className="p-4 space-y-4 flex-1">
-        {/* Nombre y descripción (Personalizada + mensaje descriptivo) */}
-        <div className="space-y-2">
+      <ZenCardContent className="p-4 flex-1 flex flex-col overflow-y-auto space-y-4">
+        {/* Nombre + descripción (2 líneas como en la card real) */}
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-36 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse shrink-0" />
+            <div className="h-5 w-32 bg-zinc-800 rounded animate-pulse" aria-hidden />
+            <div className="h-8 w-8 bg-zinc-800/70 rounded animate-pulse shrink-0" aria-hidden />
           </div>
-          <div className="h-4 w-full max-w-sm bg-zinc-800/50 rounded animate-pulse" />
-          <div className="h-4 w-full max-w-xs bg-zinc-800/40 rounded animate-pulse" />
-          <div className="h-4 w-full max-w-[280px] bg-zinc-800/40 rounded animate-pulse" />
+          <div className="h-4 w-full max-w-xs bg-zinc-800/50 rounded animate-pulse" aria-hidden />
         </div>
 
-        {/* Resumen de Cierre skeleton (Precio lista, Cortesías, Bono, Ajuste, Total) */}
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-3 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-zinc-700">
-            <div className="h-3 w-36 bg-zinc-700 rounded animate-pulse" />
+        {/* Resumen de Cierre: Precio de lista, Ajuste, Total a pagar, Anticipo, Diferido */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-4 space-y-3">
+          <div className="pb-2 border-b border-zinc-700">
+            <div className="h-3.5 w-36 bg-zinc-700 rounded animate-pulse" aria-hidden />
           </div>
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <div className="h-3 w-28 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-28 bg-zinc-700/60 rounded animate-pulse" />
+              <div className="h-3 w-24 bg-zinc-700/60 rounded animate-pulse" />
             </div>
             <div className="flex items-center justify-between">
-              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="h-3 w-28 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-16 bg-zinc-700/50 rounded animate-pulse" />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="h-3 w-32 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-32 bg-zinc-700/60 rounded animate-pulse" />
+              <div className="h-3 w-20 bg-zinc-700/60 rounded animate-pulse" />
             </div>
           </div>
-          <div className="pt-2 border-t border-zinc-700">
+          <div className="pt-2.5 border-t border-zinc-700">
             <div className="flex items-center justify-between">
-              <div className="h-4 w-16 bg-zinc-700 rounded animate-pulse" />
-              <div className="h-5 w-28 bg-emerald-700/30 rounded animate-pulse" />
+              <div className="h-3.5 w-24 bg-zinc-600 rounded animate-pulse" />
+              <div className="h-5 w-28 bg-emerald-700/40 rounded animate-pulse" />
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 pt-0.5">
             <div className="flex items-center justify-between">
-              <div className="h-3 w-20 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-14 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-24 bg-zinc-700/60 rounded animate-pulse" />
+              <div className="h-3 w-20 bg-zinc-700/60 rounded animate-pulse" />
             </div>
             <div className="flex items-center justify-between">
-              <div className="h-3 w-24 bg-zinc-700/50 rounded animate-pulse" />
-              <div className="h-3 w-16 bg-zinc-700/50 rounded animate-pulse" />
+              <div className="h-3 w-20 bg-zinc-700/60 rounded animate-pulse" />
+              <div className="h-3 w-36 bg-zinc-700/60 rounded animate-pulse" />
             </div>
           </div>
         </div>
 
-        <div className="h-px bg-zinc-800" />
-
-        {/* Auditoría Rentabilidad skeleton (ámbar) */}
-        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 ring-2 ring-amber-500/30 p-3">
-          <div className="h-3 w-2/3 bg-zinc-700/25 rounded-sm animate-pulse mb-2" />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
-            <div className="h-3.5 bg-zinc-700/20 rounded-sm justify-self-end w-14 rounded animate-pulse" />
-            <div className="h-3.5 bg-zinc-700/20 rounded-sm animate-pulse" />
-            <div className="h-3.5 bg-zinc-700/20 rounded-sm justify-self-end w-10 rounded animate-pulse" />
+        {/* Auditoría Rentabilidad skeleton */}
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-950/30 ring-2 ring-amber-500/30 p-3 flex-shrink-0">
+          <div className="h-3 w-40 bg-zinc-700/30 rounded animate-pulse mb-2" aria-hidden />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <div className="h-3.5 w-24 bg-zinc-700/20 rounded animate-pulse" />
+            <div className="h-3.5 w-14 bg-zinc-700/20 rounded animate-pulse justify-self-end" />
+            <div className="h-3.5 w-20 bg-zinc-700/20 rounded animate-pulse" />
+            <div className="h-3.5 w-10 bg-zinc-700/20 rounded animate-pulse justify-self-end" />
           </div>
         </div>
       </ZenCardContent>

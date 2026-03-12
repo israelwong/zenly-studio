@@ -1,9 +1,10 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw, Pencil, Clock } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Trash2, MoreVertical, RefreshCw, Pencil, Clock, FileText } from 'lucide-react';
 import {
   ZenBadge,
+  ZenButton,
   ZenConfirmModal,
   ZenDropdownMenu,
   ZenDropdownMenuContent,
@@ -15,6 +16,8 @@ import { getDateOnlyInTimezone, toUtcDateOnly } from '@/lib/utils/date-only';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
+import { AnnexPreviewModal } from '@/components/shared/annex';
+import { getAnnexPreviewData } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';
 
@@ -75,6 +78,8 @@ interface ContratoSectionProps {
     event_name: string | null;
     event_type_name: string | null;
   };
+  /** Si la cotización en cierre es un anexo (propuesta adicional); muestra opción de vista previa del anexo */
+  isAnnex?: boolean;
 }
 
 export const ContratoSection = memo(function ContratoSection({
@@ -99,8 +104,12 @@ export const ContratoSection = memo(function ContratoSection({
   eventTypeId,
   condicionesComerciales,
   promiseData,
+  isAnnex = false,
 }: ContratoSectionProps) {
   const [showContractPreview, setShowContractPreview] = useState(false);
+  const [showAnnexPreview, setShowAnnexPreview] = useState(false);
+  const [annexPreviewData, setAnnexPreviewData] = useState<Parameters<typeof AnnexPreviewModal>[0]['annexData']>(null);
+  const [loadingAnnexPreview, setLoadingAnnexPreview] = useState(false);
   const [showCancelarContratoConfirm, setShowCancelarContratoConfirm] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [isCancellingContrato, setIsCancellingContrato] = useState(false);
@@ -112,6 +121,26 @@ export const ContratoSection = memo(function ContratoSection({
   // Calcular estado del contrato solo cuando la carga haya terminado (evita parpadeo de estados)
   const tieneContratoGenerado = !loadingRegistro && contractData?.contrato_definido && contractData?.contract_template_id;
   const contratoFirmado = !loadingRegistro && !!contractData?.contract_signed_at;
+
+  // Cargar datos del anexo cuando se abre el modal de vista previa
+  useEffect(() => {
+    if (!showAnnexPreview || !isAnnex || !studioSlug || !cotizacionId) return;
+    setLoadingAnnexPreview(true);
+    setAnnexPreviewData(null);
+    getAnnexPreviewData(studioSlug, cotizacionId)
+      .then((res) => {
+        if (res.success && res.data) {
+          setAnnexPreviewData({
+            masterContractId: res.data.masterContractId,
+            masterContractDate: res.data.masterContractDate,
+            cotizacionData: res.data.cotizacionData,
+            condicionesData: res.data.condicionesData,
+            deliveryPolicy: res.data.deliveryPolicy ?? undefined,
+          });
+        }
+      })
+      .finally(() => setLoadingAnnexPreview(false));
+  }, [showAnnexPreview, isAnnex, studioSlug, cotizacionId]);
 
   // Cargar template cuando hay template_id y se necesita para el preview
   useEffect(() => {
@@ -152,6 +181,10 @@ export const ContratoSection = memo(function ContratoSection({
         setShowContractPreview(true);
       });
     }
+  };
+
+  const handleOpenAnnexPreview = () => {
+    setShowAnnexPreview(true);
   };
 
   const handleConfirmCancelarContrato = async () => {
@@ -304,7 +337,7 @@ export const ContratoSection = memo(function ContratoSection({
                 {firmaRequerida ? 'Contrato firmado' : 'Contrato leído'}
               </span>
             </div>
-            {(onRegenerateContract || onCancelarContrato) && (
+            {(onRegenerateContract || onCancelarContrato || isAnnex) && (
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
                   <button
@@ -318,6 +351,15 @@ export const ContratoSection = memo(function ContratoSection({
                   </button>
                 </ZenDropdownMenuTrigger>
                 <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                  {isAnnex && (
+                    <ZenDropdownMenuItem
+                      className="cursor-pointer text-blue-400 focus:text-blue-300"
+                      onSelect={handleOpenAnnexPreview}
+                    >
+                      <FileText className="h-4 w-4 shrink-0 mr-2" />
+                      Vista previa del Anexo
+                    </ZenDropdownMenuItem>
+                  )}
                   {onRegenerateContract && (
                     <ZenDropdownMenuItem
                       className="cursor-pointer text-amber-400 focus:text-amber-300"
@@ -412,6 +454,15 @@ export const ContratoSection = memo(function ContratoSection({
                     </button>
                   </ZenDropdownMenuTrigger>
                   <ZenDropdownMenuContent align="end" className="min-w-[10rem]">
+                    {isAnnex && (
+                      <ZenDropdownMenuItem
+                        className="cursor-pointer text-blue-400 focus:text-blue-300"
+                        onSelect={handleOpenAnnexPreview}
+                      >
+                        <FileText className="h-4 w-4 shrink-0 mr-2" />
+                        Vista previa del Anexo
+                      </ZenDropdownMenuItem>
+                    )}
                     {contratoBoton && contratoBoton !== 'Definir' && !contratoOmitido && onContratoButtonClick && (
                       <ZenDropdownMenuItem
                         className="cursor-pointer text-emerald-400 focus:text-emerald-300"
@@ -594,6 +645,16 @@ export const ContratoSection = memo(function ContratoSection({
         loading={isRegenerating}
       />
 
+      {isAnnex && (
+        <AnnexPreviewModal
+          isOpen={showAnnexPreview}
+          onClose={() => setShowAnnexPreview(false)}
+          title="Vista previa del Anexo"
+          annexData={annexPreviewData}
+          loading={loadingAnnexPreview}
+        />
+      )}
+
       {/* Modal Preview de Contrato Firmado */}
       {contratoFirmado && contractTemplate && (
         <ContractPreviewForPromiseModal
@@ -625,7 +686,8 @@ export const ContratoSection = memo(function ContratoSection({
     prevProps.isClienteNuevo === nextProps.isClienteNuevo &&
     prevProps.onCancelarContrato === nextProps.onCancelarContrato &&
     prevProps.onRegenerateContract === nextProps.onRegenerateContract &&
-    prevProps.contratoOmitido === nextProps.contratoOmitido
+    prevProps.contratoOmitido === nextProps.contratoOmitido &&
+    prevProps.isAnnex === nextProps.isAnnex
   );
 });
 

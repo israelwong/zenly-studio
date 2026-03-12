@@ -9,7 +9,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { obtenerCatalogo, getCatalogShell } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
-import type { ClientEvent, ClientEventDetail, ApiResponse } from '@/types/client';
+import type { ClientEvent, ClientEventDetail, ClientCotizacion, ApiResponse } from '@/types/client';
 import type { PublicSeccionData } from '@/types/public-promise';
 import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 import { calculateCotizacionTotals } from '@/lib/utils/cotizacion-calculation-engine';
@@ -329,6 +329,68 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
     const pendienteConsolidado = cotizaciones.reduce((sum, cot) => sum + cot.pendiente, 0);
     const descuentoConsolidado = cotizaciones.reduce((sum, cot) => sum + (cot.descuento || 0), 0);
 
+    // Mejoras disponibles: anexos pendientes/publicados que el cliente puede aprobar
+    const approvedQuoteIds = promise.quotes.map((q) => q.id);
+    const anexosPendientesRows = approvedQuoteIds.length > 0
+      ? await prisma.studio_cotizaciones.findMany({
+          where: {
+            promise_id: promise.id,
+            is_annex: true,
+            parent_cotizacion_id: { in: approvedQuoteIds },
+            status: { in: ['pendiente', 'negociacion'] },
+            visible_to_client: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            discount: true,
+            status: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
+            cotizacion_items: {
+              select: {
+                ...COTIZACION_ITEMS_SELECT_STANDARD,
+                subtotal: true,
+              },
+              orderBy: { order: 'asc' },
+            },
+          },
+        })
+      : [];
+
+    const mejorasDisponibles: ClientCotizacion[] = anexosPendientesRows.map((cotizacion) => {
+      const engineOut = calculateCotizacionTotals({
+        price: Number(cotizacion.price ?? 0),
+        discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+        negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+        condiciones_comerciales_discount_percentage_snapshot: cotizacion.condiciones_comerciales_discount_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_discount_percentage_snapshot) : null,
+        condiciones_comerciales_advance_percentage_snapshot: cotizacion.condiciones_comerciales_advance_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_percentage_snapshot) : null,
+        condiciones_comerciales_advance_type_snapshot: cotizacion.condiciones_comerciales_advance_type_snapshot ?? null,
+        condiciones_comerciales_advance_amount_snapshot: cotizacion.condiciones_comerciales_advance_amount_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) : null,
+        condiciones_comerciales: null,
+      });
+      const total = engineOut.totalAPagar;
+      const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items, catalogo);
+      return {
+        id: cotizacion.id,
+        name: cotizacion.name,
+        status: cotizacion.status,
+        total,
+        pagado: 0,
+        pendiente: total,
+        descuento: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+        descripcion: cotizacion.description,
+        servicios: serviciosAgrupados,
+      };
+    });
+
     // Obtener pipeline stage del evento (si existe)
     const pipelineStage = promise.event?.stage ? {
       id: promise.event.stage.id,
@@ -347,6 +409,7 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
       address: promise.address,
       event_type: promise.event_type,
       cotizaciones,
+      mejorasDisponibles: mejorasDisponibles.length > 0 ? mejorasDisponibles : undefined,
       total: totalConsolidado,
       pagado: pagadoConsolidado,
       pendiente: pendienteConsolidado,
@@ -363,6 +426,71 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Error al obtener detalle del evento',
+    };
+  }
+}
+
+/**
+ * Registra la solicitud del cliente de sumar un anexo (mejora disponible) al evento.
+ * El estudio completa el proceso con "Autorizar Anexo" en /autorizada (pago y condiciones).
+ */
+export async function solicitarAnexoCliente(
+  studioSlug: string,
+  contactId: string,
+  promiseId: string,
+  cotizacionAnexoId: string
+): Promise<ApiResponse<null>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) {
+      return { success: false, message: 'Studio no encontrado' };
+    }
+
+    const anexo = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionAnexoId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+        is_annex: true,
+        status: { in: ['pendiente', 'negociacion'] },
+        visible_to_client: true,
+      },
+      select: { id: true, name: true },
+    });
+
+    if (!anexo) {
+      return { success: false, message: 'Propuesta no encontrada o no disponible' };
+    }
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: { id: promiseId, contact_id: contactId, studio_id: studio.id },
+      select: { id: true },
+    });
+    if (!promise) {
+      return { success: false, message: 'No tienes acceso a este evento' };
+    }
+
+    await prisma.studio_promise_logs.create({
+      data: {
+        promise_id: promiseId,
+        user_id: null,
+        content: `Cliente solicitó sumar propuesta adicional al evento: ${anexo.name}`,
+        log_type: 'client_request',
+        origin_context: 'CLIENT',
+        metadata: { cotizacion_anexo_id: cotizacionAnexoId, anexo_name: anexo.name },
+      },
+    });
+
+    revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('[solicitarAnexoCliente] Error:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error al registrar la solicitud',
     };
   }
 }

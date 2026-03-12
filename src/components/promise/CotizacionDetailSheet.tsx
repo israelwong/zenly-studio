@@ -106,6 +106,8 @@ interface CotizacionDetailSheetProps {
   hideFinancialSections?: boolean;
   /** Cuando true y cotizacion es null, el sheet muestra skeletons (vista previa Studio cargando). */
   isLoadingPreview?: boolean;
+  /** Si true (ej. context event_review): oculta Condiciones Comerciales, Términos y Condiciones y Aviso de Privacidad. Muestra solo desglose de servicios + total (Ficha Financiera limpia). */
+  hideLegalFooters?: boolean;
   /**
    * Acciones de administración para el footer (solo MODO ESTUDIO / vista previa).
    * Si se define junto con isPreviewMode, se muestra el footer con Guardar borrador, Guardar como paquete, Crear y Publicar.
@@ -149,6 +151,7 @@ export function CotizacionDetailSheet({
   condicionesVisiblesIds,
   isPreviewMode = false,
   hideFinancialSections = false,
+  hideLegalFooters = false,
   isLoadingPreview = false,
   studioFooterActions = null,
 }: CotizacionDetailSheetProps) {
@@ -653,8 +656,8 @@ export function CotizacionDetailSheet({
             />
           </div>
 
-          {/* Condiciones comerciales: skeleton hasta tener lista definitiva para evitar parpadeo (todas → ocultar) */}
-          {!hideFinancialSections && (
+          {/* Condiciones comerciales: skeleton hasta tener lista definitiva para evitar parpadeo (todas → ocultar). Oculto también con hideLegalFooters (Ficha Financiera). */}
+          {!hideFinancialSections && !hideLegalFooters && (
             <>
               <SeparadorZen />
               <div>
@@ -792,18 +795,32 @@ export function CotizacionDetailSheet({
             </>
           )}
 
-          {/* Aviso de privacidad */}
-          <div className="pt-4 mt-4 border-t border-zinc-800/50 pb-0">
-            <Link
-              href={`/${studioSlug}/aviso-privacidad`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
-            >
-              <span>Ver aviso de privacidad</span>
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </div>
+          {/* Total mínimo cuando hideLegalFooters (Ficha Financiera: solo servicios + total) */}
+          {hideLegalFooters && !hideFinancialSections && (
+            <div className="pt-4 mt-4 border-t border-zinc-800/50">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-white">Total a pagar</span>
+                <span className="text-lg font-bold text-emerald-400 tabular-nums">
+                  {formatCurrency(effectiveCotizacion.price ?? 0)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Aviso de privacidad — oculto en Ficha Financiera (event_review) */}
+          {!hideLegalFooters && (
+            <div className="pt-4 mt-4 border-t border-zinc-800/50 pb-0">
+              <Link
+                href={`/${studioSlug}/aviso-privacidad`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+              >
+                <span>Ver aviso de privacidad</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
             </div>
           )}
         </div>
@@ -824,10 +841,7 @@ export function CotizacionDetailSheet({
                           <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" />
                         )}
                         <p className="text-xs text-zinc-400">
-                          {studioFooterActions.isTogglingPublish 
-                            ? (studioFooterActions.visibleToClient ? 'Despublicando...' : 'Publicando...')
-                            : (studioFooterActions.visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio')
-                          }
+                          {studioFooterActions.visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio'}
                         </p>
                       </div>
                     </div>

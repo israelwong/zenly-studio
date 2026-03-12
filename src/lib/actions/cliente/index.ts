@@ -12,6 +12,7 @@ export {
 export {
   obtenerEventosCliente,
   obtenerEventoDetalle,
+  solicitarAnexoCliente,
 } from './eventos.actions';
 
 export {

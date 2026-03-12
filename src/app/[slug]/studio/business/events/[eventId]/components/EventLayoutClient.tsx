@@ -125,6 +125,7 @@ export function EventLayoutClient({
             studioSlug={studioSlug}
             eventId={eventId}
             promiseId={eventData?.promise?.id || null}
+            parentCotizacionId={eventData?.cotizacion?.id ?? null}
             contactId={eventData?.promise?.contact?.id || null}
             contactPhone={eventData?.promise?.contact?.phone || null}
             contactName={eventData?.promise?.contact?.name || null}
@@ -149,6 +150,7 @@ export function EventLayoutClient({
               eventId={eventId}
               eventData={eventData}
               initialResumen={initialResumen}
+              hasContract={contratosCount > 0}
               onEventUpdated={async () => {
                 const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
                 const result = await obtenerEventoDetalle(studioSlug, eventId);

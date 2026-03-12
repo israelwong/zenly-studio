@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
-import { Plus, MoreVertical, FileCheck, Trash2, Clock, Copy, Gift, Ticket, Globe, Lock } from 'lucide-react';
+import { Plus, MoreVertical, FileCheck, Trash2, Clock, Copy, Gift, Ticket, Globe, Lock, FileText } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import {
   AlertDialog,
@@ -15,9 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
-import { deleteCotizacion, toggleCotizacionVisibility, duplicateCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { deleteCotizacion, toggleCotizacionVisibility, duplicateCotizacion, cancelarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { ConfirmarCierreModal } from '../../components/ConfirmarCierreModal';
-import { pasarACierre, type PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
+import { autorizarAnexoDirecto } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import type { PasarACierreOptions } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getQuoteDetailForPreview } from '@/lib/actions/public/promesas.actions';
 import { CotizacionDetailSheet } from '@/components/promise/CotizacionDetailSheet';
@@ -58,10 +62,13 @@ export function AnexosSection({
   eventoIdPrincipal,
   onRefresh,
 }: AnexosSectionProps) {
+  const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cierreModalCotizacion, setCierreModalCotizacion] = useState<{ id: string; name: string } | null>(null);
   const [isPassingToCierre, setIsPassingToCierre] = useState(false);
   const [confirmDeleteAnnex, setConfirmDeleteAnnex] = useState<{ id: string; name: string } | null>(null);
+  const [cancelAnnexWithFunds, setCancelAnnexWithFunds] = useState<{ id: string; name: string } | null>(null);
+  const [isCancellingAnnex, setIsCancellingAnnex] = useState(false);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
   /** Optimista: visible_to_client por id mientras se hace toggle (se limpia al terminar). */
   const [optimisticVisibility, setOptimisticVisibility] = useState<Record<string, boolean>>({});
@@ -95,6 +102,63 @@ export function AnexosSection({
     }
   };
 
+  const handleCancelarAnexoClick = async (anexo: CotizacionListItem) => {
+    setDropdownOpenId(null);
+    setCancelAnnexWithFunds(null);
+    setDeletingId(anexo.id);
+    try {
+      const result = await cancelarCotizacion(studioSlug, anexo.id);
+      if (result.success) {
+        toast.success('Anexo cancelado');
+        if (promiseId) {
+          await createPromiseLog(studioSlug, {
+            promise_id: promiseId,
+            content: `Anexo "${anexo.name}" cancelado.`,
+            log_type: 'system',
+            metadata: { cotizacion_id: anexo.id, action: 'anexo_cancelado' },
+          }).catch(() => {});
+        }
+        startTransition(() => onRefresh());
+      } else {
+        if (result.error?.includes('pagos confirmados') || result.error?.includes('destino del dinero')) {
+          setCancelAnnexWithFunds({ id: anexo.id, name: anexo.name });
+        } else {
+          toast.error(result.error ?? 'Error al cancelar anexo');
+        }
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleCancelAnnexWithFundsConfirm = async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
+    if (!cancelAnnexWithFunds || !promiseId) return;
+    const { id, name } = cancelAnnexWithFunds;
+    setIsCancellingAnnex(true);
+    try {
+      const result = await cancelarCotizacion(studioSlug, id, {
+        motivo: data.reason,
+        solicitante: data.requestedBy,
+        destinoFondos: data.fundDestination,
+      });
+      if (result.success) {
+        toast.success('Anexo cancelado');
+        setCancelAnnexWithFunds(null);
+        await createPromiseLog(studioSlug, {
+          promise_id: promiseId,
+          content: `Anexo "${name}" cancelado. Motivo: ${data.reason}. Destino de fondos: ${data.fundDestination === 'refund' ? 'Devolución' : 'Retenido por política'}.`,
+          log_type: 'system',
+          metadata: { cotizacion_id: id, action: 'anexo_cancelado_con_fondos', fund_destination: data.fundDestination },
+        });
+        startTransition(() => onRefresh());
+      } else {
+        toast.error(result.error ?? 'Error al cancelar anexo');
+      }
+    } finally {
+      setIsCancellingAnnex(false);
+    }
+  };
+
   const handleDuplicar = async (e: React.MouseEvent, anexo: CotizacionListItem) => {
     e.preventDefault();
     e.stopPropagation();
@@ -114,17 +178,21 @@ export function AnexosSection({
     }
   };
 
-  const handleCierreConfirm = async (payload: PasarACierreOptions) => {
+  const handleAutorizarAnexoConfirm = async (payload: PasarACierreOptions) => {
     if (!cierreModalCotizacion) return;
     setIsPassingToCierre(true);
     try {
-      const result = await pasarACierre(studioSlug, cierreModalCotizacion.id, payload);
+      const result = await autorizarAnexoDirecto(studioSlug, promiseId, cierreModalCotizacion.id, payload);
       if (result.success) {
-        toast.success('Propuesta pasada a cierre');
+        toast.success('Anexo autorizado');
         setCierreModalCotizacion(null);
-        startTransition(() => onRefresh());
+        if (eventoIdPrincipal) {
+          router.replace(`/${studioSlug}/studio/business/events/${eventoIdPrincipal}`);
+        } else {
+          startTransition(() => onRefresh());
+        }
       } else {
-        toast.error(result.error ?? 'Error al pasar a cierre');
+        toast.error(result.error ?? 'Error al autorizar anexo');
         throw new Error(result.error);
       }
     } finally {
@@ -132,7 +200,7 @@ export function AnexosSection({
     }
   };
 
-  const handlePasarACierreClick = (anexo: CotizacionListItem) => {
+  const handleAutorizarAnexoClick = (anexo: CotizacionListItem) => {
     setDropdownOpenId(null);
     setCierreModalCotizacion({ id: anexo.id, name: anexo.name });
   };
@@ -217,13 +285,21 @@ export function AnexosSection({
               )}
             </div>
           ) : (
-            <div className="space-y-2">
-              {anexos.map((anexo) => {
+            <div className="space-y-4">
+              {(() => {
+                const anexosContratados = anexos.filter(
+                  (a) => a.status === 'autorizada' || a.status === 'aprobada' || a.status === 'approved'
+                );
+                const propuestasDisponibles = anexos.filter(
+                  (a) => a.status !== 'autorizada' && a.status !== 'aprobada' && a.status !== 'approved'
+                );
+
+                const renderAnexoCard = (anexo: CotizacionListItem, options: { isContratado: boolean }) => {
                 const isAutorizada =
                   anexo.status === 'autorizada' || anexo.status === 'aprobada' || anexo.status === 'approved';
                 const canEliminar = !isAutorizada;
-                const canPasarCierre =
-                  anexo.status !== 'en_cierre' && anexo.status !== 'autorizada' && anexo.status !== 'aprobada' && anexo.status !== 'approved';
+                const canAutorizar =
+                  (anexo.status === 'pendiente' || anexo.status === 'negociacion') && !!eventoIdPrincipal;
                 const href = `${basePath}/cotizacion/${anexo.id}?from=autorizada&isAnnex=true`;
                 const cardClass = 'p-3 border rounded-lg transition-colors relative no-underline text-inherit block bg-zinc-800/50 border-zinc-700 cursor-pointer hover:bg-zinc-800';
                 const visible = optimisticVisibility[anexo.id] ?? anexo.visible_to_client;
@@ -295,7 +371,7 @@ export function AnexosSection({
                               ? 'text-emerald-400 bg-emerald-950/50 border-emerald-600/50 hover:bg-emerald-500/10 h-7 px-2 text-xs relative z-10'
                               : 'text-zinc-400 border-zinc-600 hover:bg-zinc-800/50 h-7 px-2 text-xs relative z-10'
                           }
-                          loadingText={visible ? 'Despublicando' : 'Publicando'}
+                          loadingText="Guardando..."
                           title={visible ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
                         >
                           {visible ? 'Publicada' : 'No publicada'}
@@ -325,15 +401,25 @@ export function AnexosSection({
                                 {duplicatingId === anexo.id ? 'Duplicando...' : 'Duplicar'}
                               </ZenDropdownMenuItem>
                             )}
-                            {canPasarCierre && (
+                            {canAutorizar && (
                               <ZenDropdownMenuItem
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  handlePasarACierreClick(anexo);
+                                  handleAutorizarAnexoClick(anexo);
                                 }}
                               >
                                 <FileCheck className="h-4 w-4 mr-2" />
-                                Pasar a Cierre
+                                Autorizar Anexo
+                              </ZenDropdownMenuItem>
+                            )}
+                            {options.isContratado && isAutorizada && (
+                              <ZenDropdownMenuItem
+                                onClick={(e) => { e.preventDefault(); handleCancelarAnexoClick(anexo); }}
+                                disabled={deletingId === anexo.id}
+                                className="text-red-400 focus:text-red-300"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deletingId === anexo.id ? 'Cancelando...' : 'Cancelar/Eliminar Anexo'}
                               </ZenDropdownMenuItem>
                             )}
                             {canEliminar && (
@@ -437,7 +523,7 @@ export function AnexosSection({
                         })}
                       </p>
                     </div>
-                    {/* Footer: precio lista (tachado si hay descuento) + precio final + Vista previa (1:1 con cotización card) */}
+                    {/* Footer: precio + Ver Documento (contratados) o Vista previa (propuestas) */}
                     <div
                       data-quote-actions
                       className="mt-3 pt-3 border-t border-zinc-700 flex items-center justify-between gap-2 flex-wrap"
@@ -455,6 +541,21 @@ export function AnexosSection({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 relative z-10">
+                        {options.isContratado && anexo.evento_id ? (
+                          <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-zinc-400 bg-zinc-900/50 hover:bg-zinc-800 hover:text-zinc-200 relative z-10"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              router.push(`/${studioSlug}/studio/business/events/${anexo.evento_id}`);
+                            }}
+                          >
+                            <FileText className="h-3.5 w-3.5 mr-1" />
+                            Ver documento
+                          </ZenButton>
+                        ) : null}
                         <ZenButton
                           variant="ghost"
                           size="sm"
@@ -470,7 +571,29 @@ export function AnexosSection({
                     </div>
                   </Link>
                 );
-              })}
+                };
+
+                return (
+                  <>
+                    {anexosContratados.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Contratados</p>
+                        {anexosContratados.map((anexo) => (
+                          <React.Fragment key={anexo.id}>{renderAnexoCard(anexo, { isContratado: true })}</React.Fragment>
+                        ))}
+                      </div>
+                    )}
+                    {propuestasDisponibles.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mt-4">Propuestas disponibles</p>
+                        {propuestasDisponibles.map((anexo) => (
+                          <React.Fragment key={anexo.id}>{renderAnexoCard(anexo, { isContratado: false })}</React.Fragment>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </ZenCardContent>
@@ -480,13 +603,13 @@ export function AnexosSection({
         <ConfirmarCierreModal
           isOpen={!!cierreModalCotizacion}
           onClose={() => setCierreModalCotizacion(null)}
-          onConfirm={handleCierreConfirm}
+          onConfirm={handleAutorizarAnexoConfirm}
           studioSlug={studioSlug}
           cotizacionId={cierreModalCotizacion.id}
           promiseId={promiseId}
           cotizacionName={cierreModalCotizacion.name}
           isLoading={isPassingToCierre}
-          progressMessage={isPassingToCierre ? 'Pasando a cierre...' : undefined}
+          progressMessage={isPassingToCierre ? 'Autorizando anexo...' : undefined}
           isAnnexContext
         />
       )}
@@ -510,6 +633,22 @@ export function AnexosSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CancelationWithFundsModal
+        isOpen={!!cancelAnnexWithFunds}
+        onClose={() => !isCancellingAnnex && setCancelAnnexWithFunds(null)}
+        onConfirm={handleCancelAnnexWithFundsConfirm}
+        title="Cancelar anexo"
+        description={
+          <p className="text-sm text-zinc-400">
+            Este anexo tiene pagos registrados. Indica el motivo de la cancelación, quién la solicita y el destino del dinero (Devolución al cliente o Retenido por política).
+          </p>
+        }
+        isLoading={isCancellingAnnex}
+        saveLabel="Sí, cancelar anexo"
+        cancelLabel="No cancelar"
+        showFundDestination
+      />
 
       {previewAnexoId && promiseId && (
         <CotizacionDetailSheet

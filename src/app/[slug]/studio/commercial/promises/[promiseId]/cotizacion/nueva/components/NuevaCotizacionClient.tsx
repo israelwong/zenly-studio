@@ -184,7 +184,7 @@ export function NuevaCotizacionClient({
           isOpen={!!cierreModalAnnexId}
           onClose={() => {
             setCierreModalAnnexId(null);
-            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+            // No redirigir: si se cierra o "Seguir editando", el usuario se queda en el formulario
           }}
           onConfirm={async (payload: PasarACierreOptions) => {
             const result = await autorizarAnexoDirecto(studioSlug, promiseId, cierreModalAnnexId, payload);

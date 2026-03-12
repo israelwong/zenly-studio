@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, Check, ExternalLink, Plus, List } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { BitacoraSheet } from '@/components/shared/bitacora';
 import { toast } from 'sonner';
@@ -10,6 +11,8 @@ interface EventDetailToolbarProps {
   studioSlug: string;
   eventId: string;
   promiseId: string | null;
+  /** ID de la cotización principal del evento; necesario para "+ Anexar servicio". */
+  parentCotizacionId?: string | null;
   contactId: string | null;
   contactPhone: string | null;
   contactName: string | null;
@@ -23,6 +26,7 @@ export function EventDetailToolbar({
   studioSlug,
   eventId,
   promiseId,
+  parentCotizacionId,
   contactId,
   contactPhone,
   contactName,
@@ -81,13 +85,13 @@ export function EventDetailToolbar({
         {/* Izquierda: Portal + Contrato */}
         <div className="flex items-center gap-3">
           {hasContactData && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <span className="text-xs text-zinc-500 font-medium">Portal del cliente</span>
               <ZenButton
                 variant="ghost"
                 size="sm"
                 onClick={handleCopyPortalUrl}
-                className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : ''}`}
+                className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs ${linkCopied ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/80'}`}
               >
                 {linkCopied ? (
                   <>
@@ -105,7 +109,7 @@ export function EventDetailToolbar({
                 variant="ghost"
                 size="sm"
                 onClick={handlePreviewPortal}
-                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
+                className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/80"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 <span>Abrir portal</span>
@@ -125,6 +129,40 @@ export function EventDetailToolbar({
               >
                 <span>Ver contrato</span>
               </ZenButton>
+            </>
+          )}
+          {promiseId && parentCotizacionId && (
+            <>
+              {(hasContactData || (promiseId && hasContract)) && (
+                <div className="h-5 w-px bg-zinc-700 shrink-0" aria-hidden />
+              )}
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-zinc-500 font-medium">Anexos</span>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-950/20"
+                  asChild
+                >
+                  <Link
+                    href={`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/nueva?isAnnex=true&parentId=${encodeURIComponent(parentCotizacionId)}&returnUrl=${encodeURIComponent(`/${studioSlug}/studio/business/events/${eventId}`)}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Crear</span>
+                  </Link>
+                </ZenButton>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-950/20"
+                  asChild
+                >
+                  <Link href={`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`}>
+                    <List className="h-3.5 w-3.5" />
+                    <span>Gestionar</span>
+                  </Link>
+                </ZenButton>
+              </div>
             </>
           )}
         </div>

@@ -89,6 +89,7 @@ export function EventFinancialSummaryCard({
     initialPayments.map(toPaymentItem)
   );
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
+  const [anexosGroupExpanded, setAnexosGroupExpanded] = useState(true);
   const [annexPreviewId, setAnnexPreviewId] = useState<string | null>(null);
   const [annexPreviewData, setAnnexPreviewData] = useState<Parameters<typeof AnnexPreviewModal>[0]['annexData']>(null);
   const [loadingAnnexPreview, setLoadingAnnexPreview] = useState(false);
@@ -126,13 +127,23 @@ export function EventFinancialSummaryCard({
       .finally(() => setLoadingAnnexPreview(false));
   }, [annexPreviewId, studioSlug]);
 
-  const { totalContract, totalPaid, balanceDue, breakdown } = useMemo(() => {
+  const { totalContract, totalPaid, balanceDue, breakdown, showAnexosSeparatorAfterIndex, anexosLabel } = useMemo(() => {
     const allQuotes: QuoteSnapshot[] =
       initialQuote == null
         ? []
         : Array.isArray(initialQuote)
           ? [...initialQuote]
           : [initialQuote];
+    const isAnnex = (q: QuoteSnapshot) => (q as { parent_cotizacion_id?: string | null }).parent_cotizacion_id != null;
+    const masterFirst = [...allQuotes].sort((a, b) => {
+      const aId = (a as { id?: string }).id;
+      const bId = (b as { id?: string }).id;
+      const aMaster = aId === mainCotizacionId || !isAnnex(a);
+      const bMaster = bId === mainCotizacionId || !isAnnex(b);
+      if (aMaster && !bMaster) return -1;
+      if (!aMaster && bMaster) return 1;
+      return 0;
+    });
     const approvedQuotes = allQuotes.filter((q) =>
       !q.status || APPROVED_STATUSES.includes(String(q.status).toLowerCase())
     );
@@ -153,8 +164,8 @@ export function EventFinancialSummaryCard({
         ? pendingAmountFallback
         : fromQuotes.balanceDue;
     const breakdown =
-      allQuotes.length > 0
-        ? allQuotes.map((q) => {
+      masterFirst.length > 0
+        ? masterFirst.map((q) => {
             const id = (q as { id?: string }).id ?? null;
             const name = (q as { name?: string }).name?.trim() || 'Sin nombre';
             const isApproved = !q.status || APPROVED_STATUSES.includes(String(q.status).toLowerCase());
@@ -164,6 +175,7 @@ export function EventFinancialSummaryCard({
               name,
               total: micro.total,
               isPending: !isApproved,
+              isAnnex: isAnnex(q),
               precioLista: micro.precioLista,
               montoCortesias: micro.montoCortesias,
               cortesiasCount: micro.cortesiasCount,
@@ -176,11 +188,17 @@ export function EventFinancialSummaryCard({
             };
           })
         : [];
+    const firstAnnexIdx = breakdown.findIndex((r) => r.isAnnex);
+    const annexCount = breakdown.filter((r) => r.isAnnex).length;
+    const showAnexosSeparatorAfterIndex = firstAnnexIdx > 0 ? firstAnnexIdx - 1 : -1;
+    const anexosLabel = annexCount > 1 ? `Anexos (${annexCount} anexos)` : 'Anexos';
     return {
       totalContract: contractTotal,
       totalPaid,
       balanceDue,
       breakdown,
+      showAnexosSeparatorAfterIndex,
+      anexosLabel,
     };
   }, [initialQuote, payments, contractValueFallback, paidAmountFallback, pendingAmountFallback, mainCotizacionId]);
 
@@ -280,133 +298,168 @@ export function EventFinancialSummaryCard({
               >
                 <ZenBadge variant="info" size="sm" className="gap-1">
                   <History className="h-3 w-3" />
-                  {payments.length}
+                  Historial {payments.length}
                 </ZenBadge>
               </ZenButton>
             </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-0 pt-0 space-y-0">
-          {/* Filas de cotizaciones/anexos — full-bleed, divisor sutil entre partidas */}
-          {breakdown.length > 0 && (
-            <ul className="divide-y divide-zinc-700/50">
-              {breakdown.map((row) => {
-                const rowKey = row.id ?? row.name;
-                const isRowExpanded = expandedQuoteId === rowKey;
-                const isPending = row.isPending;
-                const isMaster = row.id === mainCotizacionId;
-                return (
-                  <li key={rowKey}>
-                    <button
-                      type="button"
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors bg-zinc-800/40 ${isPending ? 'hover:bg-zinc-800/60' : 'hover:bg-emerald-950/30'}`}
-                      onClick={() => setExpandedQuoteId(isRowExpanded ? null : rowKey)}
-                    >
-                      <span className="flex items-center gap-2 min-w-0">
-                        {isRowExpanded ? <ChevronUp className="h-3 w-3 text-zinc-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-zinc-500 shrink-0" />}
-                        <span className={`truncate text-sm ${isPending ? 'text-zinc-400' : 'text-emerald-100 font-medium'}`}>{row.name}</span>
-                      </span>
-                      <span className={`text-sm tabular-nums shrink-0 ${isPending ? 'text-zinc-500' : 'text-emerald-300'}`}>{formatearMoneda(row.total)}</span>
-                    </button>
-                    {isRowExpanded && (
-                      <div className="px-4 pb-3 pt-4 border-t border-zinc-700/30 bg-zinc-900/30">
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between items-center">
-                            <span className="text-zinc-400">Precio de lista</span>
-                            <span className="tabular-nums font-medium text-zinc-300">{formatearMoneda(row.precioLista)}</span>
-                          </div>
-                          {row.montoCortesias > 0 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-400">Cortesías{row.cortesiasCount > 0 ? ` (${row.cortesiasCount})` : ''}</span>
-                              <span className="tabular-nums font-medium text-violet-400">−{formatearMoneda(row.montoCortesias)}</span>
-                            </div>
-                          )}
-                          {row.montoBono > 0 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-400">Bono Especial</span>
-                              <span className="tabular-nums font-medium text-amber-400">−{formatearMoneda(row.montoBono)}</span>
-                            </div>
-                          )}
-                          {Math.abs(row.ajusteCierre) >= 0.01 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-400">Ajuste por cierre</span>
-                              <span className="tabular-nums font-medium text-zinc-300">
-                                {row.ajusteCierre < 0 ? '−' : '+'}{formatearMoneda(Math.abs(row.ajusteCierre))}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center pt-1.5 border-t border-zinc-700/50">
-                            <span className="font-semibold text-white">Total a pagar</span>
-                            <span className="text-sm font-semibold text-emerald-400 tabular-nums">{formatearMoneda(row.total)}</span>
-                          </div>
-                          {row.anticipo > 0 && (
-                            <div className="space-y-1 -mt-1">
-                              <div className="flex justify-between items-center pt-0.5">
-                                <span className="text-zinc-400">
-                                  {row.advanceType === 'fixed_amount' || row.advanceType === 'Fixed_amount' || row.advanceType === 'amount'
-                                    ? 'Anticipo'
-                                    : `Anticipo (${row.advancePct ?? 0}%)`}
-                                </span>
-                                <span className="text-sm font-medium tabular-nums text-blue-400">{formatearMoneda(row.anticipo)}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400">
-                                  Diferido
-                                  {row.diferido > 0 && (
-                                    <span className="text-xs text-zinc-500 ml-1">(a liquidar 2 días antes del evento)</span>
-                                  )}
-                                </span>
-                                <span className="text-sm font-medium tabular-nums text-zinc-300">{formatearMoneda(row.diferido)}</span>
-                              </div>
-                            </div>
-                          )}
+          {/* Cotización maestra primero; si más de un anexo, grupo "Anexos (N anexos)" contraer/expandir */}
+          {breakdown.length > 0 && (() => {
+            const masterRows = breakdown.filter((r) => !r.isAnnex);
+            const annexRows = breakdown.filter((r) => r.isAnnex);
+            const renderRow = (row: (typeof breakdown)[0], indentAsChild?: boolean) => {
+              const rowKey = row.id ?? row.name;
+              const isRowExpanded = expandedQuoteId === rowKey;
+              const isPending = row.isPending;
+              const isMaster = row.id === mainCotizacionId;
+              return (
+                <li key={rowKey}>
+                  <button
+                    type="button"
+                    className={`w-full flex items-center justify-between gap-2 py-2.5 text-left transition-colors ${indentAsChild ? 'bg-zinc-800/60 pl-6 pr-3' : 'bg-zinc-800/50 px-3'} hover:bg-zinc-800/70`}
+                    onClick={() => setExpandedQuoteId(isRowExpanded ? null : rowKey)}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {isRowExpanded ? <ChevronUp className="h-3 w-3 text-zinc-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-zinc-500 shrink-0" />}
+                      <span className={`truncate text-sm ${isPending ? 'text-zinc-400' : 'text-emerald-100 font-medium'}`}>{row.name}</span>
+                    </span>
+                    <span className={`text-xs tabular-nums shrink-0 ${isPending ? 'text-zinc-500' : 'text-emerald-300'}`}>{formatearMoneda(row.total)}</span>
+                  </button>
+                  {isRowExpanded && (
+                    <div className={`pb-3 pt-4 border-t border-zinc-800 bg-zinc-900/30 ${indentAsChild ? 'pl-7 pr-3' : 'px-3'}`}>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400">Precio de lista</span>
+                          <span className="tabular-nums font-medium text-zinc-300">{formatearMoneda(row.precioLista)}</span>
                         </div>
-                        {row.id ? (
-                          <ZenButton
-                            variant="ghost"
-                            size="sm"
-                            className="w-full mt-3 py-2 text-sm bg-zinc-800/60 text-zinc-300 hover:text-emerald-400 hover:bg-zinc-700/60"
-                            onClick={() => {
-                              if (isMaster) {
-                                if (hasContract) {
-                                  window.dispatchEvent(new CustomEvent('open-contrato-preview'));
-                                } else {
-                                  setCotizacionPreviewId(row.id);
-                                }
-                              } else {
-                                setAnnexPreviewId(row.id);
-                              }
-                            }}
-                          >
-                            {isMaster
-                              ? hasContract
-                                ? 'Ver contrato'
-                                : 'Ver cotización'
-                              : hasContract
-                                ? 'Ver anexo'
-                                : 'Ver cotización'}
-                          </ZenButton>
-                        ) : null}
+                        {row.montoCortesias > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-400">Cortesías{row.cortesiasCount > 0 ? ` (${row.cortesiasCount})` : ''}</span>
+                            <span className="tabular-nums font-medium text-violet-400">−{formatearMoneda(row.montoCortesias)}</span>
+                          </div>
+                        )}
+                        {row.montoBono > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-400">Bono Especial</span>
+                            <span className="tabular-nums font-medium text-amber-400">−{formatearMoneda(row.montoBono)}</span>
+                          </div>
+                        )}
+                        {Math.abs(row.ajusteCierre) >= 0.01 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-400">Ajuste por cierre</span>
+                            <span className="tabular-nums font-medium text-zinc-300">
+                              {row.ajusteCierre < 0 ? '−' : '+'}{formatearMoneda(Math.abs(row.ajusteCierre))}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1.5 border-t border-zinc-800">
+                          <span className="font-semibold text-white">Total a pagar</span>
+                          <span className="text-sm font-semibold text-emerald-400 tabular-nums">{formatearMoneda(row.total)}</span>
+                        </div>
+                        {row.anticipo > 0 && (
+                          <div className="space-y-1 -mt-1">
+                            <div className="flex justify-between items-center pt-0.5">
+                              <span className="text-zinc-400">
+                                {row.advanceType === 'fixed_amount' || row.advanceType === 'Fixed_amount' || row.advanceType === 'amount'
+                                  ? 'Anticipo'
+                                  : `Anticipo (${row.advancePct ?? 0}%)`}
+                              </span>
+                              <span className="text-sm font-medium tabular-nums text-blue-400">{formatearMoneda(row.anticipo)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-zinc-400">
+                                Diferido
+                                {row.diferido > 0 && (
+                                  <span className="text-xs text-zinc-500 ml-1">(a liquidar 2 días antes del evento)</span>
+                                )}
+                              </span>
+                              <span className="text-sm font-medium tabular-nums text-zinc-300">{formatearMoneda(row.diferido)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                      {row.id ? (
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-3 py-2 text-sm bg-zinc-800/60 text-zinc-300 hover:text-emerald-400 hover:bg-zinc-700/60"
+                          onClick={() => {
+                            if (isMaster) {
+                              if (hasContract) {
+                                window.dispatchEvent(new CustomEvent('open-contrato-preview'));
+                              } else {
+                                setCotizacionPreviewId(row.id);
+                              }
+                            } else {
+                              setAnnexPreviewId(row.id);
+                            }
+                          }}
+                        >
+                          {isMaster
+                            ? hasContract
+                              ? 'Ver contrato'
+                              : 'Ver cotización'
+                            : hasContract
+                              ? 'Ver anexo'
+                              : 'Ver cotización'}
+                        </ZenButton>
+                      ) : null}
+                    </div>
+                  )}
+                </li>
+              );
+            };
+            return (
+              <ul className="divide-y divide-zinc-800">
+                {masterRows.map((row) => renderRow(row))}
+                {annexRows.length > 1 ? (
+                  <>
+                    <li>
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors bg-zinc-800/50 hover:bg-zinc-800/60 border-t border-zinc-800"
+                        onClick={() => setAnexosGroupExpanded((e) => !e)}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          {anexosGroupExpanded ? <ChevronUp className="h-3 w-3 text-zinc-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-zinc-500 shrink-0" />}
+                          <span className="text-sm font-medium text-zinc-400">Anexos</span>
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-600 text-xs font-medium text-zinc-200 tabular-nums">
+                            {annexRows.length}
+                          </span>
+                        </span>
+                        <span className="text-xs tabular-nums shrink-0 text-emerald-300">
+                          {formatearMoneda(annexRows.reduce((s, r) => s + r.total, 0))}
+                        </span>
+                      </button>
+                    </li>
+                    {anexosGroupExpanded && annexRows.map((row) => renderRow(row, true))}
+                  </>
+                ) : annexRows.length === 1 ? (
+                  <>
+                    <li className="px-3 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wide bg-zinc-600/30 border-t border-zinc-800">
+                      {anexosLabel}
+                    </li>
+                    {renderRow(annexRows[0])}
+                  </>
+                ) : null}
+              </ul>
+            );
+          })()}
 
           {/* Bloques Contratado / Pagado / Pendiente — 3 columnas, bordes de piso a cielo */}
-          <div className="border-t border-zinc-700/50">
-            <div className="grid grid-cols-3 divide-x divide-zinc-700/50 text-sm">
-              <div className="py-4 px-4">
+          <div className="border-t border-zinc-800">
+            <div className="grid grid-cols-3 divide-x divide-zinc-800 text-sm">
+              <div className="py-4 px-3">
                 <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-0.5">Contratado</p>
                 <p className="font-semibold text-zinc-200 tabular-nums">{formatearMoneda(totalContract)}</p>
               </div>
-              <div className="py-4 px-4">
+              <div className="py-4 px-3">
                 <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-0.5">Pagado</p>
                 <p className="font-semibold text-emerald-400 tabular-nums">{formatearMoneda(totalPaid)}</p>
               </div>
-              <div className="py-4 px-4">
+              <div className="py-4 px-3">
                 <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-0.5">Pendiente</p>
                 <p className="font-semibold text-amber-400 tabular-nums">{formatearMoneda(balanceDue)}</p>
               </div>

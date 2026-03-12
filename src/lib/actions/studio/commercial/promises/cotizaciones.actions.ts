@@ -116,6 +116,10 @@ export interface CotizacionListItem {
   anexo_entrega_timing?: 'before' | 'after' | null;
   /** Días de entrega del contrato principal (para texto "plazo de N días" en anexos incluidos) */
   parent_delivery_days?: number | null;
+  /** Si es propuesta adicional (anexo) a la cotización principal */
+  is_annex?: boolean;
+  /** ID de la cotización principal cuando es anexo */
+  parent_cotizacion_id?: string | null;
 }
 
 export interface CotizacionesListResponse {
@@ -384,6 +388,18 @@ export async function createCotizacion(
 
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
 
+    // Si es anexo, revalidar ficha del evento para que al volver (returnUrl) se vean datos frescos
+    if (isAnnex && validatedData.promise_id) {
+      const event = await prisma.studio_events.findFirst({
+        where: { promise_id: validatedData.promise_id },
+        select: { id: true },
+      });
+      if (event) {
+        revalidateTag('evento-detalle');
+        revalidateTag(`evento-${event.id}`);
+      }
+    }
+
     // Obtener cotizaciรณn con promise_id y status para redirección
     const cotizacionConPromise = await prisma.studio_cotizaciones.findUnique({
       where: { id: cotizacion.id },
@@ -475,6 +491,8 @@ export async function getCotizacionesByPromiseId(
         precio_calculado: true,
         snap_precio_lista: true,
         condiciones_visibles: true,
+        is_annex: true,
+        parent_cotizacion_id: true,
         condiciones_comerciales: {
           select: {
             id: true,
@@ -567,6 +585,8 @@ export async function getCotizacionesByPromiseId(
           precio_calculado: (cot as { precio_calculado?: unknown }).precio_calculado != null ? Number((cot as { precio_calculado: unknown }).precio_calculado) : null,
           snap_precio_lista: (cot as { snap_precio_lista?: unknown }).snap_precio_lista != null ? Number((cot as { snap_precio_lista: unknown }).snap_precio_lista) : null,
           condiciones_visibles_detalle: condiciones_visibles_detalle.length > 0 ? condiciones_visibles_detalle : undefined,
+          is_annex: (cot as { is_annex?: boolean }).is_annex ?? false,
+          parent_cotizacion_id: (cot as { parent_cotizacion_id?: string | null }).parent_cotizacion_id ?? null,
         };
       }),
     };
@@ -3917,7 +3937,9 @@ export async function getDatosConfirmarCierre(
   cotizacionId: string
 ): Promise<{
   success: boolean;
-  data?: {
+    data?: {
+    /** Si la cotización es anexo: true cuando el evento de la cotización principal tiene contrato firmado/generado */
+    hasMasterContract?: boolean;
     cotizacion: {
       id: string;
       name: string;
@@ -3974,6 +3996,8 @@ export async function getDatosConfirmarCierre(
           name: true,
           price: true,
           promise_id: true,
+          parent_cotizacion_id: true,
+          is_annex: true,
           precio_calculado: true,
           bono_especial: true,
           condiciones_visibles: true,
@@ -4035,6 +4059,23 @@ export async function getDatosConfirmarCierre(
       ? (cotizacionRow.condiciones_visibles as string[])
       : null;
 
+    /** Para anexos: si la cotización principal tiene evento con contrato, el anexo debe generar documento legal vinculado */
+    let hasMasterContract = false;
+    if (cotizacionRow.is_annex || cotizacionRow.parent_cotizacion_id) {
+      const parentId = cotizacionRow.parent_cotizacion_id ?? cotizacionRow.id;
+      const parent = await prisma.studio_cotizaciones.findUnique({
+        where: { id: parentId },
+        select: { evento_id: true },
+      });
+      if (parent?.evento_id) {
+        const event = await prisma.studio_events.findUnique({
+          where: { id: parent.evento_id },
+          select: { contract_id: true },
+        });
+        hasMasterContract = !!event?.contract_id;
+      }
+    }
+
     const itemsCortesiaArr = Array.isArray(cotizacionRow.items_cortesia) ? (cotizacionRow.items_cortesia as string[]) : [];
     const itemsCortesiaIds = new Set(itemsCortesiaArr);
     const allItems = cotizacionRow.cotizacion_items ?? [];
@@ -4055,6 +4096,7 @@ export async function getDatosConfirmarCierre(
     return {
       success: true,
       data: {
+        hasMasterContract: cotizacionRow.is_annex || cotizacionRow.parent_cotizacion_id ? hasMasterContract : undefined,
         cotizacion: {
           id: cotizacionRow.id,
           name: cotizacionRow.name,
@@ -4349,6 +4391,14 @@ export async function pasarACierre(
 
     if (!cotizacion) {
       return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Los anexos no pasan por la ruta /cierre: se autorizan directamente desde /autorizada con "Autorizar Anexo"
+    if ((cotizacion as { is_annex?: boolean }).is_annex === true) {
+      return {
+        success: false,
+        error: 'Los anexos (propuestas adicionales) no pasan por cierre. Usa "Autorizar Anexo" en la vista Autorizada.',
+      };
     }
 
     // Verificar que la cotización NO esté ya en cierre

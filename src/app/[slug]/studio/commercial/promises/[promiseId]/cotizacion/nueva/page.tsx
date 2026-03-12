@@ -10,6 +10,8 @@ interface NuevaCotizacionPageProps {
     contactId?: string;
     isAnnex?: string;
     parentId?: string;
+    /** URL a la que redirigir tras guardar (ej. ficha del evento). */
+    returnUrl?: string;
   }>;
 }
 
@@ -20,6 +22,7 @@ export default async function NuevaCotizacionPage({ params, searchParams }: Nuev
   const contactId = search.contactId || null;
   const isAnnex = search.isAnnex === 'true';
   const parentId = search.parentId ?? null;
+  const returnUrl = search.returnUrl ?? null;
 
   return (
     <NuevaCotizacionClient
@@ -29,6 +32,7 @@ export default async function NuevaCotizacionPage({ params, searchParams }: Nuev
       contactId={contactId}
       isAnnex={isAnnex}
       parentCotizacionId={parentId}
+      returnUrl={returnUrl}
     />
   );
 }

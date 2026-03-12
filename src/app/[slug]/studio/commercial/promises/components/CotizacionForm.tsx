@@ -43,6 +43,78 @@ import { useMediaUpload } from '@/hooks/useMediaUpload';
 
 const DUPLICATE_NAME_ERROR = 'Ya existe una cotización con ese nombre en esta promesa';
 
+/** Botones del sidebar para editor de anexo: Guardar (→ autorizada) y Guardar y Autorizar (→ abre modal cierre). */
+function AnexoEditorActionButtons({
+  onRequestPreview,
+  loading,
+  isDisabled,
+  condicionIdsVisiblesSize,
+  saveDisabledTitle,
+  onSave,
+  onSaveAndAutorizar,
+  onCancel,
+  savingIntent,
+  isEditMode,
+}: {
+  onRequestPreview?: () => void;
+  loading: boolean;
+  isDisabled: boolean;
+  condicionIdsVisiblesSize: number;
+  saveDisabledTitle?: string;
+  onSave: () => void;
+  onSaveAndAutorizar: () => void;
+  onCancel: () => void;
+  savingIntent: 'draft' | 'publish' | null;
+  isEditMode?: boolean;
+}) {
+  const condicionDisabled = condicionIdsVisiblesSize === 0;
+  return (
+    <div className="space-y-3">
+      {onRequestPreview && (
+        <ZenButton
+          type="button"
+          variant="outline"
+          onClick={onRequestPreview}
+          disabled={loading || isDisabled}
+          className="w-full gap-1.5 border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/70"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Vista previa
+        </ZenButton>
+      )}
+      <ZenButton
+        type="button"
+        variant="primary"
+        onClick={onSave}
+        loading={loading && savingIntent === 'draft'}
+        loadingText="Guardando..."
+        disabled={loading || isDisabled || condicionDisabled}
+        title={saveDisabledTitle}
+        className="w-full gap-1.5"
+      >
+        <Save className="h-3.5 w-3.5" />
+        Guardar
+      </ZenButton>
+      <ZenButton
+        type="button"
+        variant="outline"
+        onClick={onSaveAndAutorizar}
+        loading={loading && savingIntent === 'publish'}
+        loadingText="Guardando y preparando autorización..."
+        disabled={loading || isDisabled || condicionDisabled}
+        title={saveDisabledTitle}
+        className="w-full gap-1.5 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+      >
+        <HandCoins className="h-3.5 w-3.5" />
+        {isEditMode ? 'Actualizar y Autorizar' : 'Crear y Autorizar'}
+      </ZenButton>
+      <ZenButton type="button" variant="secondary" onClick={onCancel} disabled={loading} className="w-full">
+        Cancelar
+      </ZenButton>
+    </div>
+  );
+}
+
 /** Mapea status de cotización al estado de ruta del estudio (pendiente | cierre | autorizada). */
 function cotizacionStatusToRouteState(status: string): PromiseRouteState {
   const s = (status || '').toLowerCase();
@@ -104,6 +176,10 @@ interface CotizacionFormProps {
   isAnnex?: boolean;
   /** ID de la cotización principal cuando isAnnex es true. */
   parentCotizacionId?: string | null;
+  /** Ref: si true, en el próximo save publish de anexo no redirigir y llamar a onAnnexSaveSuccessOpenCierreModal con el id. */
+  skipRedirectAnnexAndOpenCierreModalRef?: React.MutableRefObject<boolean>;
+  /** Callback cuando anexo se guarda con “Guardar y Autorizar”: recibe el id para abrir ConfirmarCierreModal. */
+  onAnnexSaveSuccessOpenCierreModal?: (cotizacionId: string) => void;
 }
 
 export function CotizacionForm({
@@ -137,6 +213,8 @@ export function CotizacionForm({
   returnPathOverride = null,
   isAnnex = false,
   parentCotizacionId = null,
+  skipRedirectAnnexAndOpenCierreModalRef,
+  onAnnexSaveSuccessOpenCierreModal,
 }: CotizacionFormProps & {
   onCreateAsRevision?: (data: {
     nombre: string;
@@ -314,6 +392,8 @@ export function CotizacionForm({
   const [anexoEntregaDiasError, setAnexoEntregaDiasError] = useState<string | null>(null);
   /** Solo anexos: días de entrega del contrato padre (para la etiqueta informativa). */
   const [parentDeliveryDays, setParentDeliveryDays] = useState<number | null>(null);
+  /** Solo anexos: si true, se muestran y usan horas de cobertura para ítems "Por hora"; si false, horas = 0 y sin auto-fill. */
+  const [anexoDefinirHorasCobertura, setAnexoDefinirHorasCobertura] = useState(false);
   /** Defaults globales del estudio para mostrar valor heredado (días entrega + seguridad). */
   const [studioDeliveryDefaults, setStudioDeliveryDefaults] = useState<{ dias_entrega_default: number | null; dias_seguridad_default: number | null } | null>(null);
   const [openHorasHelp, setOpenHorasHelp] = useState(false);
@@ -533,17 +613,26 @@ export function CotizacionForm({
           }
           // Cargar horas de cobertura de la cotización si existe
           const cotizacionEventDuration = (cotizacionData as { event_duration?: number | null }).event_duration;
-          if (cotizacionEventDuration) {
-            setDurationHours(cotizacionEventDuration);
-          } else if (promiseId) {
-            // Si no hay event_duration en la cotización, intentar cargar desde promise como fallback
-            try {
-              const durationResult = await getPromiseDurationHours(promiseId);
-              if (durationResult.success && durationResult.duration_hours) {
-                setDurationHours(durationResult.duration_hours);
+          if (isAnnex) {
+            // Anexos: no heredar 8h de la promesa; solo usar valor guardado si existe
+            if (cotizacionEventDuration != null && cotizacionEventDuration > 0) {
+              setDurationHours(cotizacionEventDuration);
+              setAnexoDefinirHorasCobertura(true);
+            } else {
+              setDurationHours(0);
+            }
+          } else {
+            if (cotizacionEventDuration) {
+              setDurationHours(cotizacionEventDuration);
+            } else if (promiseId) {
+              try {
+                const durationResult = await getPromiseDurationHours(promiseId);
+                if (durationResult.success && durationResult.duration_hours) {
+                  setDurationHours(durationResult.duration_hours);
+                }
+              } catch (error) {
+                console.error('[CotizacionForm] Error cargando duration_hours desde promise:', error);
               }
-            } catch (error) {
-              console.error('[CotizacionForm] Error cargando duration_hours desde promise:', error);
             }
           }
 
@@ -708,8 +797,8 @@ export function CotizacionForm({
           });
         }
 
-        // Cargar duration_hours desde promise si no se cargó desde cotización
-        if (promiseId && !cotizacionData) {
+        // Cargar duration_hours desde promise si no se cargó desde cotización (solo cotización normal; anexos no heredan)
+        if (promiseId && !cotizacionData && !isAnnex) {
           try {
             const durationResult = await getPromiseDurationHours(promiseId);
             if (durationResult.success && durationResult.duration_hours) {
@@ -718,6 +807,9 @@ export function CotizacionForm({
           } catch (error) {
             console.error('[CotizacionForm] Error cargando duration_hours:', error);
           }
+        }
+        if (promiseId && !cotizacionData && isAnnex) {
+          setDurationHours(0);
         }
       } catch (error) {
         console.error('[CotizacionForm] Error cargando datos:', error);
@@ -1027,8 +1119,13 @@ export function CotizacionForm({
     let totalCosto = 0;
     let totalGasto = 0;
 
-    // Cotizaciones: horas SÍ son multiplicador real para ítems HOUR (cantidad × horas para precio/costo/gasto).
-    const durationHoursForCalc = durationHours != null && durationHours > 0 ? durationHours : null;
+    // Cotizaciones: horas SÍ son multiplicador real para ítems HOUR (cantidad × horas). Anexos: solo si "Inicializar horas extra de cobertura" está ON.
+    const durationHoursForCalc =
+      isAnnex && !anexoDefinirHorasCobertura
+        ? null
+        : durationHours != null && durationHours > 0
+          ? durationHours
+          : null;
 
     const toBillingType = (v: string | null | undefined): 'HOUR' | 'SERVICE' | 'UNIT' =>
       (String(v || 'SERVICE').toUpperCase() as 'HOUR' | 'SERVICE' | 'UNIT');
@@ -1199,12 +1296,13 @@ export function CotizacionForm({
       cantidad: number;
       cantidadEfectiva?: number;
     }>);
-  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales, itemOverrides]);
+  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems, itemsCortesia, bonoEspecial, selectedCondicionComercialId, condicionNegociacion, condicionesComerciales, itemOverrides, isAnnex, anexoDefinirHorasCobertura]);
 
   // Vista previa lateral: datos en tiempo real para CotizacionDetailSheet (mismo formato que vista pública)
   const getPreviewData = useCallback((): PublicCotizacion | null => {
     if (!catalogo.length || !servicioMap.size) return null;
-    const durationForPreview = durationHours != null && durationHours > 0 ? durationHours : null;
+    const durationForPreview =
+      isAnnex && !anexoDefinirHorasCobertura ? null : (durationHours != null && durationHours > 0 ? durationHours : null);
     const secciones: PublicSeccionData[] = catalogo.map((seccion, sIdx) => {
       const categorias = seccion.categorias.map((categoria, cIdx) => {
         const serviciosCatalog = (categoria.servicios ?? [])
@@ -1309,6 +1407,8 @@ export function CotizacionForm({
     cotizacionId,
     servicioMap,
     durationHours,
+    isAnnex,
+    anexoDefinirHorasCobertura,
   ]);
 
   useEffect(() => {
@@ -2075,8 +2175,8 @@ export function CotizacionForm({
       return;
     }
 
-    // Sincronización duración: si la cotización tiene distinta duración que la promesa, preguntar alcance
-    if (isEditMode && promiseId && !options?.skipDurationScopeCheck) {
+    // Sincronización duración: si la cotización tiene distinta duración que la promesa, preguntar alcance (no aplicar a anexos)
+    if (isEditMode && promiseId && !isAnnex && !options?.skipDurationScopeCheck) {
       const durationResult = await getPromiseDurationHours(promiseId);
       const horasPromesa = durationResult.success ? (durationResult.duration_hours ?? null) : null;
       const horasCotizacion = durationHours != null && durationHours > 0 ? durationHours : null;
@@ -2358,6 +2458,19 @@ export function CotizacionForm({
         toast.success('Cotización publicada exitosamente');
       } else {
         toast.success('Cotización guardada como borrador');
+      }
+
+      // Anexo + "Guardar y Autorizar": no redirigir, abrir modal de cierre
+      if (isAnnex && result.data?.id && skipRedirectAnnexAndOpenCierreModalRef?.current && onAnnexSaveSuccessOpenCierreModal) {
+        skipRedirectAnnexAndOpenCierreModalRef.current = false;
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        window.dispatchEvent(new CustomEvent('promise-state-update'));
+        router.refresh();
+        onAnnexSaveSuccessOpenCierreModal(result.data.id);
+        isSubmittingRef.current = false;
+        setSavingIntent(null);
+        setLoading(false);
+        return;
       }
 
       window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -2678,7 +2791,39 @@ export function CotizacionForm({
         hideActionButtons={hideActionButtons}
         actionButtons={
           customActionButtons ??
-          (hideActionButtons ? null : (
+          (hideActionButtons ? null : isAnnex ? (
+            <>
+              <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
+                <p className="text-sm font-medium text-zinc-200 mb-1">Estado de publicación</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-zinc-400">
+                    {visibleToClient ? 'Visible para el cliente' : 'Solo visible para el estudio'}
+                  </p>
+                  <ZenSwitch
+                    checked={visibleToClient}
+                    onCheckedChange={setVisibleToClient}
+                    variant={visibleToClient ? 'emerald' : 'default'}
+                  />
+                </div>
+              </div>
+              <AnexoEditorActionButtons
+                onRequestPreview={onRequestPreview}
+                loading={loading}
+                isDisabled={isDisabled}
+                condicionIdsVisiblesSize={condicionIdsVisibles.size}
+                saveDisabledTitle={condicionIdsVisibles.size === 0 ? 'Selecciona al menos una condición visible' : undefined}
+                onSave={() => { if (redirectingRef.current) return; handleSave(false); }}
+                onSaveAndAutorizar={() => {
+                  if (redirectingRef.current) return;
+                  if (skipRedirectAnnexAndOpenCierreModalRef) skipRedirectAnnexAndOpenCierreModalRef.current = true;
+                  handleSave(true);
+                }}
+                onCancel={handleCancelClick}
+                savingIntent={savingIntent}
+                isEditMode={isEditMode}
+              />
+            </>
+          ) : (
             <CommercialConfigActionButtons
               onGuardarComoPaquete={handleGuardarComoPaqueteClick}
               isSavingAsPaquete={isSavingAsPaquete}
@@ -2852,45 +2997,88 @@ export function CotizacionForm({
                     {/* Bloques verticales: Horas de servicio y Días de entrega, cada uno al 100% con espaciado generoso */}
                     <div className="flex flex-col gap-6 mt-2">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-1.5">
-                          <ZenLabel className="text-zinc-200 mb-0">Horas de servicio</ZenLabel>
-                          <Popover open={openHorasHelp} onOpenChange={setOpenHorasHelp}>
-                            <PopoverTrigger asChild>
-                              <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
-                                <Info className="h-3.5 w-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              side="right"
-                              align="start"
-                              sideOffset={10}
-                              className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
-                            >
-                              <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
-                              <button type="button" onClick={() => setOpenHorasHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                              <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
-                                Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento.
-                              </p>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <ZenInput
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          value={durationHours !== null ? durationHours.toString() : ''}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === '') setDurationHours(null);
-                            else {
-                              const numValue = Number(value);
-                              setDurationHours(numValue > 0 ? numValue : null);
-                            }
-                          }}
-                          placeholder="Ej: 8"
-                        />
+                        {isAnnex ? (
+                          <div className="flex flex-col gap-3 w-full rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+                            <div className="flex items-center gap-2">
+                              <ZenSwitch
+                                id="anexo-definir-horas"
+                                size="sm"
+                                checked={anexoDefinirHorasCobertura}
+                                onCheckedChange={(checked) => {
+                                  setAnexoDefinirHorasCobertura(!!checked);
+                                  if (!checked) setDurationHours(0);
+                                }}
+                              />
+                              <ZenLabel htmlFor="anexo-definir-horas" className="text-zinc-200 cursor-pointer font-normal">
+                                Inicializar horas extra de cobertura
+                              </ZenLabel>
+                            </div>
+                            {anexoDefinirHorasCobertura && (
+                              <>
+                                <ZenInput
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={durationHours !== null && durationHours > 0 ? durationHours.toString() : ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === '') setDurationHours(0);
+                                    else {
+                                      const numValue = Number(value);
+                                      setDurationHours(numValue > 0 ? numValue : 0);
+                                    }
+                                  }}
+                                  placeholder="Ej: 2"
+                                />
+                                <p className="text-xs text-zinc-500">
+                                  Las horas definidas ayudan a inicializar los servicios del catálogo que son por hora.
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <ZenLabel className="text-zinc-200 mb-0">Horas de servicio</ZenLabel>
+                              <Popover open={openHorasHelp} onOpenChange={setOpenHorasHelp}>
+                                <PopoverTrigger asChild>
+                                  <button type="button" className="inline-flex text-zinc-500 hover:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/30 rounded" aria-label="Información">
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  side="right"
+                                  align="start"
+                                  sideOffset={10}
+                                  className="relative w-72 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/20 p-0 overflow-visible data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
+                                >
+                                  <div className="absolute left-0 top-4 -translate-x-full w-0 h-0 border-[6px] border-transparent border-r-zinc-800" aria-hidden />
+                                  <button type="button" onClick={() => setOpenHorasHelp(false)} className="absolute top-2.5 right-2.5 p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/80 transition-colors focus:outline-none focus:ring-1 focus:ring-zinc-600" aria-label="Cerrar">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                  <p className="text-sm text-zinc-300 leading-relaxed p-4 pr-8">
+                                    Estas horas corresponden a la duración definida en la promesa. Puedes modificarlas para esta cotización sin afectar la duración original del evento.
+                                  </p>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <ZenInput
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              value={durationHours !== null ? durationHours.toString() : ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '') setDurationHours(null);
+                                else {
+                                  const numValue = Number(value);
+                                  setDurationHours(numValue > 0 ? numValue : null);
+                                }
+                              }}
+                              placeholder="Ej: 8"
+                            />
+                          </>
+                        )}
                       </div>
                       <div className="space-y-2">
                         {isAnnex ? (
@@ -3906,7 +4094,7 @@ export function CotizacionForm({
         <div className="flex items-center gap-2 shrink-0 text-sm tabular-nums">
           <span className="text-zinc-400">Cortesías</span>
           <span className="font-semibold text-white">
-            -{formatearMoneda(calculoPrecio.montoCortesias)}
+            {calculoPrecio.montoCortesias > 0 ? `-${formatearMoneda(calculoPrecio.montoCortesias)}` : formatearMoneda(0)}
           </span>
         </div>
         {/* Botones ocultos por ahora — quitar false && para mostrar */}
@@ -3947,7 +4135,7 @@ export function CotizacionForm({
             className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
           >
             {loading && savingIntent === 'publish' ? (
-              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> Publicando…</span>
+              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> Guardando…</span>
             ) : (
               <span className="flex items-center gap-2"><HandCoins className="h-4 w-4" /> Publicar</span>
             )}

@@ -474,6 +474,11 @@ export function ConfirmarCierreModal({
       closeOnClickOutside={false}
       isLoading={isLoading || isSubmitting}
       saveDisabled={loading || !canConfirm || isSubmitting}
+      footerLeftContent={isAnnexContext ? (
+        <ZenButton type="button" variant="ghost" size="sm" onClick={handleClose} disabled={isSubmitting}>
+          Seguir editando
+        </ZenButton>
+      ) : undefined}
     >
       <div className="space-y-6">
         {isAnnexContext && (
