@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Clock, Users, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, LayoutDashboard } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { type TareasSchedulerPayload, type SchedulerData } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { obtenerEventoDetalle, actualizarSchedulerStaging } from '@/lib/actions/studio/business/events/events.actions';
@@ -15,6 +15,7 @@ import {
 } from '@/lib/actions/studio/business/events/scheduler-date-reminders.actions';
 import { toast } from 'sonner';
 import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
+import { PublicationSummarySheet } from './components/shared/PublicationSummarySheet';
 import { SchedulerDateRangeConfig } from './components/date-config/SchedulerDateRangeConfig';
 import { DateRangeConflictModal } from './components/date-config/DateRangeConflictModal';
 import { useSchedulerHeaderData } from './hooks/useSchedulerHeaderData';
@@ -45,6 +46,7 @@ export default function EventSchedulerPage() {
   const [payload, setPayload] = useState<TareasSchedulerPayload | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
   const [isUpdatingStructure, setIsUpdatingStructure] = useState(false);
   const [columnWidth, setColumnWidth] = useState(() => {
     if (typeof window === 'undefined') return 60;
@@ -1156,6 +1158,16 @@ export default function EventSchedulerPage() {
             >
               {isMaximized ? <Minimize2 className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" /> : <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />}
             </ZenButton>
+            <ZenButton
+              variant="primary"
+              size="sm"
+              onClick={() => setLogisticsSheetOpen(true)}
+              className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 shrink-0"
+              aria-label="Panel logístico"
+            >
+              <LayoutDashboard className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
+              Logistica
+            </ZenButton>
           </div>
         </ZenCardHeader>
 
@@ -1222,6 +1234,19 @@ export default function EventSchedulerPage() {
         onClose={conflict.close}
         conflictCount={conflict.count}
         proposedRange={conflict.proposedRange ?? { from: new Date(), to: new Date() }}
+      />
+
+      <PublicationSummarySheet
+        open={logisticsSheetOpen}
+        onOpenChange={setLogisticsSheetOpen}
+        studioSlug={studioSlug}
+        eventId={eventId}
+        onPublished={() => {
+          setLogisticsSheetOpen(false);
+          handlePublished();
+        }}
+        sectionOrder={normalizedSecciones ? [...normalizedSecciones].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((s) => s.id) : undefined}
+        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
       />
     </div>
   );

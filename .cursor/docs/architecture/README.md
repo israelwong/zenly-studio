@@ -165,7 +165,7 @@ Stubs: [visualizacion-contrato.md](visualizacion-contrato.md), [renderizado-cont
 ### 8. Panel de Gestión Logística (Scheduler)
 **Migrado a SSOT:** [40.06-studio-operaciones-logistica-panel](../ssot/40.06-studio-operaciones-logistica-panel.md)
 
-**Contenido:** PublicationBar, PublicationSummarySheet, LogisticsTaskCard, presupuestos, nómina.
+**Contenido:** PublicationSummarySheet (trigger en cabecera), LogisticsTaskCard, presupuestos, nómina.
 
 **Cuándo consultar:** Panel logístico, barra scheduler, presupuestos o nómina. Ver también: [40.03](../ssot/40.03-israel-algorithm-task-reorder.md) (DnD).
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Loader2, Check, Calendar } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Loader2, Check, Calendar, Pencil } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
@@ -188,9 +188,10 @@ export const EventDetailHeader = function EventDetailHeader({
                 />
               ) : (
                 <ZenCardTitle
-                  className="mb-0 cursor-pointer rounded px-1 py-0.5 hover:bg-zinc-800/60 transition-colors"
+                  className="mb-0 cursor-pointer rounded px-1 py-0.5 hover:bg-zinc-800/60 transition-colors flex items-center gap-1.5"
                   onClick={handleStartEditName}
                 >
+                  <Pencil className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden />
                   {displayName}
                 </ZenCardTitle>
               )}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -22,8 +22,11 @@ import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients
 import { toast } from 'sonner';
 import { LogisticsTaskCard } from './LogisticsTaskCard';
 import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
+import { getStageLabel } from '../../utils/scheduler-section-stages';
 
+const STAGE_ORDER = ['UNASSIGNED', 'PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY'] as const;
 const STAGE_BORDER: Record<string, string> = {
+  UNASSIGNED: 'border-l-zinc-500',
   PLANNING: 'border-l-blue-500',
   PRODUCTION: 'border-l-purple-500',
   POST_PRODUCTION: 'border-l-amber-500',
@@ -106,6 +109,7 @@ export function PublicationSummarySheet({
         categoryId: string;
         stageKey: string;
         categoryLabel: string;
+        categoryName: string;
         tareas: Array<{
           id: string;
           name: string;
@@ -131,14 +135,7 @@ export function PublicationSummarySheet({
     }>;
   } | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      cargarEstructura();
-      verificarGoogleCalendar();
-    }
-  }, [open, studioSlug, eventId]);
-
-  const cargarEstructura = async () => {
+  const cargarEstructura = useCallback(async () => {
     setLoadingEstructura(true);
     try {
       const result = await obtenerEstructuraCompletaLogistica(
@@ -160,9 +157,9 @@ export function PublicationSummarySheet({
     } finally {
       setLoadingEstructura(false);
     }
-  };
+  }, [studioSlug, eventId, sectionOrder, catalogCategoryOrderByStage, onOpenChange]);
 
-  const verificarGoogleCalendar = async () => {
+  const verificarGoogleCalendar = useCallback(async () => {
     try {
       const conectado = await tieneGoogleCalendarHabilitado(studioSlug);
       setGoogleCalendarConectado(conectado);
@@ -170,7 +167,14 @@ export function PublicationSummarySheet({
       console.error('Error verificando Google Calendar:', error);
       setGoogleCalendarConectado(false);
     }
-  };
+  }, [studioSlug]);
+
+  useEffect(() => {
+    if (open) {
+      cargarEstructura();
+      verificarGoogleCalendar();
+    }
+  }, [open, cargarEstructura, verificarGoogleCalendar]);
 
   const handleInvitarPendientes = async () => {
     setLoading(true);
@@ -307,45 +311,62 @@ export function PublicationSummarySheet({
           {loadingEstructura ? (
             <PublicationSheetSkeleton />
           ) : estructura ? (
-            <div className="flex-1 flex flex-col min-h-0 px-6 py-4 gap-4">
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
-                {estructura.secciones.map((seccion) => (
-                  <div key={seccion.sectionId} className="space-y-3">
-                    <h2 className="text-sm font-semibold text-white uppercase tracking-[0.15em] border-b border-zinc-800 pb-1">
-                      {seccion.sectionName}
-                    </h2>
-                    {seccion.categorias.map((cat) => {
-                      const stageBorder = STAGE_BORDER[cat.stageKey] ?? 'border-l-zinc-600';
-                      return (
-                        <div key={cat.categoryId} className="space-y-2">
-                          <h3 className="text-xs font-medium text-zinc-300 uppercase tracking-wider pl-0.5">
-                            {cat.categoryLabel}
-                          </h3>
-                          <div className={`border-l-4 pl-2.5 ${stageBorder} space-y-2`}>
-                            {cat.tareas.map((tarea) => (
-                              <LogisticsTaskCard
-                                key={tarea.id}
-                                tarea={tarea}
-                                googleCalendarConectado={googleCalendarConectado}
-                                onAssignPersonal={() =>
-                                  setAssignCrewForTask({
-                                    taskId: tarea.id,
-                                    itemId: tarea.itemId ?? undefined,
-                                    startDate: tarea.startDate,
-                                    endDate: tarea.endDate,
-                                  })
-                                }
-                                onInvitar={googleCalendarConectado ? handleInvitarTarea : undefined}
-                                onCancelarInvitacion={googleCalendarConectado ? handleCancelarInvitacion : undefined}
-                                onConectarGoogle={() => setShowGoogleBundleModal(true)}
-                              />
+            <div className="flex-1 flex flex-col min-h-0 px-4 py-4 gap-4">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+                {estructura.secciones.map((seccion) => {
+                  const byStage = new Map<string, typeof seccion.categorias>();
+                  for (const cat of seccion.categorias) {
+                    if (!byStage.has(cat.stageKey)) byStage.set(cat.stageKey, []);
+                    byStage.get(cat.stageKey)!.push(cat);
+                  }
+                  return (
+                    <div key={seccion.sectionId} className="rounded-lg bg-zinc-800/30 p-3 space-y-3">
+                      <h2 className="text-sm font-semibold text-white uppercase tracking-[0.12em]">
+                        {seccion.sectionName}
+                      </h2>
+                      {STAGE_ORDER.filter((sk) => byStage.has(sk)).map((stageKey) => {
+                        const categorias = byStage.get(stageKey)!;
+                        const totalTareas = categorias.reduce((s, c) => s + c.tareas.length, 0);
+                        const stageBorder = STAGE_BORDER[stageKey] ?? 'border-l-zinc-600';
+                        return (
+                          <div key={stageKey} className="space-y-2">
+                            <h3 className="text-xs font-medium text-zinc-200 flex items-center gap-2">
+                              {getStageLabel(stageKey)}
+                              <span className="text-zinc-500 font-normal">({totalTareas})</span>
+                            </h3>
+                            {categorias.map((cat) => (
+                              <div key={cat.categoryId} className="space-y-1.5 pl-2">
+                                <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+                                  {cat.categoryName}
+                                </p>
+                                <div className={`border-l-2 pl-2 ${stageBorder} space-y-2`}>
+                                  {cat.tareas.map((tarea) => (
+                                    <LogisticsTaskCard
+                                      key={tarea.id}
+                                      tarea={tarea}
+                                      googleCalendarConectado={googleCalendarConectado}
+                                      onAssignPersonal={() =>
+                                        setAssignCrewForTask({
+                                          taskId: tarea.id,
+                                          itemId: tarea.itemId ?? undefined,
+                                          startDate: tarea.startDate,
+                                          endDate: tarea.endDate,
+                                        })
+                                      }
+                                      onInvitar={googleCalendarConectado ? handleInvitarTarea : undefined}
+                                      onCancelarInvitacion={googleCalendarConectado ? handleCancelarInvitacion : undefined}
+                                      onConectarGoogle={() => setShowGoogleBundleModal(true)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
                             ))}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (

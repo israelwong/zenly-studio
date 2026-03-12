@@ -1181,6 +1181,7 @@ export async function obtenerEstructuraCompletaLogistica(
         categoryId: string;
         stageKey: string;
         categoryLabel: string;
+        categoryName: string;
         tareas: Array<{
           id: string;
           name: string;
@@ -1232,6 +1233,7 @@ export async function obtenerEstructuraCompletaLogistica(
             },
           },
           assigned_to_crew_member: { select: { id: true, name: true, email: true } },
+          scheduler_custom_category: { select: { id: true, name: true } },
         },
       }),
       prisma.studio_events.findFirst({
@@ -1275,7 +1277,7 @@ export async function obtenerEstructuraCompletaLogistica(
       POST_PRODUCTION: 'Edición',
       DELIVERY: 'Entrega',
     };
-    const bySection = new Map<string, { sectionName: string; order: number; byCategory: Map<string, { stageKey: string; categoryLabel: string; tareas: Array<{
+    const bySection = new Map<string, { sectionName: string; order: number; byCategory: Map<string, { stageKey: string; categoryLabel: string; categoryName: string; tareas: Array<{
       id: string;
       name: string;
       startDate: Date;
@@ -1300,8 +1302,12 @@ export async function obtenerEstructuraCompletaLogistica(
       const sectionId = t.catalog_section_id_snapshot ?? 'sin-seccion';
       const sectionName = t.catalog_section_name_snapshot ?? 'Sin sección';
       const stageKey = t.category ?? 'PLANNING';
-      const categoryId = t.catalog_category_id ?? `l:${stageKey}`;
+      const categoryId = t.scheduler_custom_category_id ?? t.catalog_category_id ?? `l:${stageKey}`;
       const categoryLabel = STAGE_LABELS[stageKey] ?? stageKey;
+      const categoryName =
+        t.scheduler_custom_category?.name ??
+        t.catalog_category_name_snapshot ??
+        categoryLabel;
       let budgetAmount: number | null = t.budget_amount != null ? Number(t.budget_amount) : null;
       let costoUnitario: number | null = null;
       let quantity: number | null = null;
@@ -1338,7 +1344,7 @@ export async function obtenerEstructuraCompletaLogistica(
       }
       const sec = bySection.get(sectionId)!;
       if (!sec.byCategory.has(categoryId)) {
-        sec.byCategory.set(categoryId, { stageKey, categoryLabel, tareas: [] });
+        sec.byCategory.set(categoryId, { stageKey, categoryLabel, categoryName, tareas: [] });
       }
       const cat = sec.byCategory.get(categoryId)!;
       cat.tareas.push({
@@ -1371,7 +1377,7 @@ export async function obtenerEstructuraCompletaLogistica(
       sectionName,
       order: sectionOrderMap.get(sectionId) ?? 9999,
       categorias: Array.from(byCategory.entries())
-        .map(([categoryId, { stageKey, categoryLabel, tareas: ts }]) => ({ categoryId, stageKey, categoryLabel, tareas: ts }))
+        .map(([categoryId, { stageKey, categoryLabel, categoryName, tareas: ts }]) => ({ categoryId, stageKey, categoryLabel, categoryName, tareas: ts }))
         .sort((a, b) => {
           const ia = STAGE_ORDER.indexOf(a.stageKey);
           const ib = STAGE_ORDER.indexOf(b.stageKey);

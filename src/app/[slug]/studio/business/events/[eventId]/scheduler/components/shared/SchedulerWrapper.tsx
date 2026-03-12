@@ -3,7 +3,6 @@
 import React, { useMemo } from 'react';
 import { type DateRange } from 'react-day-picker';
 import { EventSchedulerView } from './EventSchedulerView';
-import { PublicationBar } from './PublicationBar';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SchedulerData } from '@/lib/actions/studio/business/events';
 import type { SchedulerViewData } from './EventSchedulerView';
@@ -93,11 +92,6 @@ export function SchedulerWrapper({
 
   const cotizacionesIds = useMemo(() => filteredCotizaciones?.map(c => c.id).join(',') || '', [filteredCotizaciones]);
 
-  const sectionOrder = useMemo(() => {
-    if (!initialSecciones?.length) return undefined;
-    return [...initialSecciones].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((s) => s.id);
-  }, [initialSecciones]);
-
   const filteredEventData = useMemo((): SchedulerViewData => {
     return { ...eventData, cotizaciones: filteredCotizaciones } as SchedulerViewData;
   }, [eventData?.id, eventData?.scheduler?.id, eventData?.scheduler?.tasks, cotizacionesIds]);
@@ -134,13 +128,6 @@ export function SchedulerWrapper({
         onReminderDelete={onReminderDelete}
         scrollToDate={scrollToDate}
         isUpdatingStructure={isUpdatingStructure}
-      />
-      <PublicationBar
-        studioSlug={studioSlug}
-        eventId={eventId}
-        onPublished={onPublished ?? (() => onDataChange?.(eventData))}
-        sectionOrder={sectionOrder}
-        catalogCategoryOrderByStage={catalogCategoryOrderByStage}
       />
     </>
   );
