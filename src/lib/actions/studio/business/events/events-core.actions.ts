@@ -35,7 +35,7 @@ export async function getEvents(
 ): Promise<EventsListResponse> {
   try {
     const validatedParams = getEventsSchema.parse(params || {});
-    const { page, limit, search, stage_id, status } = validatedParams;
+    const { page, limit, search, stage_id, status, includeArchived } = validatedParams;
 
     const studioResult = await validateStudio(studioSlug);
     if (!studioResult.success || !studioResult.studioId) {
@@ -44,7 +44,6 @@ export async function getEvents(
 
     const where: Prisma.studio_eventsWhereInput = {
       studio_id: studioResult.studioId,
-      // Solo mostrar eventos con cotización aprobada o autorizada
       cotizacion_id: { not: null },
       cotizacion: {
         status: {
@@ -56,8 +55,14 @@ export async function getEvents(
     if (status) {
       where.status = status;
     } else {
-      // Por defecto, excluir cancelados y archivados
       where.status = { notIn: ['CANCELLED', 'ARCHIVED'] };
+    }
+
+    if (!includeArchived) {
+      where.OR = [
+        { stage_id: null },
+        { stage: { slug: { not: 'archivado' } } },
+      ];
     }
 
     if (stage_id) {
@@ -65,7 +70,6 @@ export async function getEvents(
     }
 
     if (search) {
-      // Buscar en promise.name ya que name ya no existe en evento
       where.promise = {
         name: { contains: search, mode: 'insensitive' },
       };
@@ -125,6 +129,14 @@ export async function getEvents(
             take: 1,
             orderBy: {
               date: 'asc',
+            },
+          },
+          scheduler: {
+            select: {
+              id: true,
+              tasks: {
+                select: { id: true, status: true },
+              },
             },
           },
         },

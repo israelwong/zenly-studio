@@ -28,7 +28,8 @@ export default async function EventsPage({ params }: EventsPageProps) {
     async () => {
       return getEvents(studioSlug, {
         page: 1,
-        limit: 1000, // Cargar todos para el kanban
+        limit: 1000,
+        includeArchived: true, // Cargar todos; filtro archivados en cliente
       });
     },
     ['events-list', studioSlug],

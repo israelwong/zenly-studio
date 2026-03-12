@@ -25,6 +25,10 @@ export async function serializeEventWithContact(evento: any): Promise<EventWithC
   const eventAddress = evento.promise?.address || null;
   const eventDate = evento.promise?.event_date || evento.event_date;
 
+  const tasks = evento.scheduler?.tasks ?? [];
+  const schedulerTasksTotal = tasks.length;
+  const schedulerTasksCompleted = tasks.filter((t: { status: string }) => t.status === 'COMPLETED').length;
+
   return {
     id: evento.id,
     studio_id: evento.studio_id,
@@ -53,6 +57,8 @@ export async function serializeEventWithContact(evento: any): Promise<EventWithC
         ? evento.promise.reminder
         : null,
     last_log: evento.promise?.logs?.[0] ?? null,
+    scheduler_tasks_total: schedulerTasksTotal,
+    scheduler_tasks_completed: schedulerTasksCompleted,
   };
 }
 

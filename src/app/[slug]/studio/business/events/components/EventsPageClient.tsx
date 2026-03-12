@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { Calendar } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { EventsKanbanClient } from './EventsKanbanClient';
+import { EventsListClient } from './EventsListClient';
 import { Suspense } from 'react';
 import { EventsSkeleton } from './EventsSkeleton';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
@@ -44,7 +44,7 @@ export function EventsPageClient({
         </ZenCardHeader>
         <ZenCardContent className="p-6 flex-1 min-h-0 overflow-hidden">
           <Suspense fallback={<EventsSkeleton />}>
-            <EventsKanbanClient
+            <EventsListClient
               studioSlug={studioSlug}
               initialPipelineStages={initialPipelineStages}
               eventsPromise={eventsPromise}

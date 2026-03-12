@@ -10,6 +10,8 @@ export const getEventsSchema = z.object({
   search: z.string().optional(),
   stage_id: z.string().cuid().optional(),
   status: z.enum(['ACTIVE', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ARCHIVED']).optional(),
+  /** Incluir eventos archivados (stage slug = archivado). Por defecto false. */
+  includeArchived: z.boolean().optional().default(false),
 });
 
 export const moveEventSchema = z.object({
@@ -105,6 +107,10 @@ export interface EventWithContact {
   } | null;
   /** Último log/comentario de la promesa asociada */
   last_log?: { content: string; created_at: Date } | null;
+  /** Total de tareas del Scheduler (solo lectura para listado) */
+  scheduler_tasks_total?: number;
+  /** Tareas completadas del Scheduler (solo lectura para listado) */
+  scheduler_tasks_completed?: number;
 }
 
 export interface EventPipelineStage {
