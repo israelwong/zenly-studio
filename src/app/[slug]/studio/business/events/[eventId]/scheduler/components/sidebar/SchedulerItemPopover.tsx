@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenButton, ZenBadge, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
+import { ZenButton, ZenBadge, ZenAvatar, ZenAvatarFallback, ZenCalendar } from '@/components/ui/zen';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { asignarCrewAItem, obtenerCrewMembers, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import { X, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, UserPlus, Loader2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -20,6 +20,8 @@ import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeC
 import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
+import { isDateInRange } from '../../utils/coordinate-utils';
+import type { DateRange } from 'react-day-picker';
 
 interface CrewMember {
     id: string;
@@ -32,6 +34,8 @@ interface CrewMember {
     variable_salary: number | null;
 }
 
+import type { DateRange } from 'react-day-picker';
+
 interface SchedulerItemPopoverProps {
     item: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
     studioSlug: string;
@@ -39,6 +43,8 @@ interface SchedulerItemPopoverProps {
     children: React.ReactNode;
     onItemUpdate?: (updatedItem: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]) => void;
     onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+    /** Rango del cronograma para validar fechas en el calendario */
+    dateRange?: DateRange;
     /** Modo controlado: si se proporciona, el popover usa estos valores en lugar del estado interno */
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -115,7 +121,7 @@ export function getBillingTypeBadge(
     }
 }
 
-export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete, open: openProp, onOpenChange }: SchedulerItemPopoverProps) {
+export function SchedulerItemPopover({ item, studioSlug, eventId, children, onItemUpdate, onTaskToggleComplete, dateRange, open: openProp, onOpenChange }: SchedulerItemPopoverProps) {
     const router = useRouter();
     // Hook de sincronización (optimista + servidor)
     const { localItem, updateCrewMember, updateCompletionStatus, updateSchedulerTaskDates } = useSchedulerItemSync(item, onItemUpdate);
@@ -132,6 +138,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
     const [isSavingDates, setIsSavingDates] = useState(false);
     const [durationDays, setDurationDays] = useState(1);
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
+    const [tempDateRange, setTempDateRange] = useState<{ from: Date; to: Date } | null>(null);
 
     // Usar localItem (sincronizado con servidor)
     const selectedMemberId = localItem.assigned_to_crew_member_id;
@@ -500,6 +508,41 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
         }
     }, [localItem, taskStartDate, durationChanged, durationDays, studioSlug, eventId, updateSchedulerTaskDates, onItemUpdate]);
 
+    /** Teletransporte: mover tarea a nuevo rango (inicio y fin). */
+    const handleTeleportRange = useCallback(async (newStart: Date, newEnd: Date) => {
+        if (!localItem.scheduler_task || !taskStartDate) return;
+        const norm = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+        const startNorm = norm(newStart);
+        const endNorm = norm(newEnd);
+        const days = Math.max(1, Math.min(365, differenceInCalendarDays(endNorm, startNorm) + 1));
+        if (dateRange && (!isDateInRange(startNorm, dateRange) || !isDateInRange(endNorm, dateRange))) {
+            toast.error('Las fechas deben estar dentro del rango del cronograma');
+            return;
+        }
+        const snapshot = { ...localItem };
+        setIsSavingDates(true);
+        try {
+            await updateSchedulerTaskDates(startNorm, endNorm, days, async () => {
+                const res = await actualizarSchedulerTaskFechas(studioSlug, eventId, localItem.scheduler_task!.id, {
+                    start_date: startNorm,
+                    end_date: endNorm,
+                });
+                if (!res.success) {
+                    onItemUpdate?.(snapshot);
+                    throw new Error(res.error ?? 'Error al mover tarea');
+                }
+            });
+            toast.success('Tarea movida correctamente');
+            setDatePickerOpen(false);
+            setOpen(false);
+            window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Error al mover tarea');
+        } finally {
+            setIsSavingDates(false);
+        }
+    }, [localItem, taskStartDate, dateRange, studioSlug, eventId, updateSchedulerTaskDates, onItemUpdate]);
+
     return (
         <>
             <Popover open={open} onOpenChange={setOpen}>
@@ -573,15 +616,57 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs text-zinc-500">Rango</label>
-                                            <div className="text-xs text-zinc-500 py-2">
-                                                {taskStartDate && (computedEndDate ?? taskEndDate) ? (
-                                                    <span className="text-zinc-300">
-                                                        {format(taskStartDate, "d MMM", { locale: es })} - {format(computedEndDate ?? taskEndDate!, "d MMM", { locale: es })}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-zinc-400">—</span>
-                                                )}
-                                            </div>
+                                            <Popover open={datePickerOpen} onOpenChange={(open) => {
+                                                setDatePickerOpen(open);
+                                                if (!open) setTempDateRange(null);
+                                            }}>
+                                                <PopoverTrigger asChild>
+                                                    <ZenButton
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="w-full justify-start text-xs h-8 font-normal"
+                                                        disabled={isSavingDates}
+                                                    >
+                                                        <Calendar className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                                                        {taskStartDate && (computedEndDate ?? taskEndDate) ? (
+                                                            `${format(taskStartDate, "d MMM", { locale: es })} - ${format(computedEndDate ?? taskEndDate!, "d MMM", { locale: es })}`
+                                                        ) : '—'}
+                                                    </ZenButton>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="start" sideOffset={4}>
+                                                    <div className="p-3">
+                                                        <ZenCalendar
+                                                            mode="range"
+                                                            selected={tempDateRange ?? { from: taskStartDate ?? undefined, to: (computedEndDate ?? taskEndDate) ?? undefined }}
+                                                            onSelect={(range) => setTempDateRange(range?.from && range?.to ? { from: range.from, to: range.to } : null)}
+                                                            defaultMonth={taskStartDate ?? undefined}
+                                                            numberOfMonths={2}
+                                                            showOutsideDays={false}
+                                                            disabled={dateRange ? (d) => !dateRange.from || !dateRange.to || !isDateInRange(d, dateRange) : undefined}
+                                                            locale={es}
+                                                            className="rounded-lg"
+                                                        />
+                                                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                                                            <ZenButton variant="ghost" size="sm" onClick={() => setDatePickerOpen(false)} disabled={isSavingDates}>
+                                                                Cancelar
+                                                            </ZenButton>
+                                                            <ZenButton
+                                                                variant="primary"
+                                                                size="sm"
+                                                                disabled={isSavingDates}
+                                                                loading={isSavingDates}
+                                                                onClick={() => {
+                                                                    const range = tempDateRange ?? (taskStartDate && (computedEndDate ?? taskEndDate) ? { from: taskStartDate, to: computedEndDate ?? taskEndDate! } : null);
+                                                                    if (range?.from && range?.to) void handleTeleportRange(range.from, range.to);
+                                                                }}
+                                                            >
+                                                                Confirmar
+                                                            </ZenButton>
+                                                        </div>
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
                                     </div>
                                     {durationChanged && (

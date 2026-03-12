@@ -42,6 +42,8 @@ interface SchedulerManualTaskPopoverProps {
   onDeleteConfirmOpenChange?: (open: boolean) => void;
   /** Contenido a la derecha de la fila (p. ej. menú de acciones). Cuando se usa, el popover envuelve trigger + rightSlot en la fila. */
   rightSlot?: React.ReactNode;
+  /** Rango del cronograma para teletransporte de fechas. */
+  dateRange?: import('react-day-picker').DateRange;
 }
 
 function getInitials(name: string) {
@@ -61,6 +63,7 @@ export function SchedulerManualTaskPopover({
   deleteConfirmOpen: deleteConfirmOpenProp,
   onDeleteConfirmOpenChange,
   rightSlot,
+  dateRange,
 }: SchedulerManualTaskPopoverProps) {
   const [openInternal, setOpenInternal] = useState(false);
   const [deleteConfirmOpenInternal, setDeleteConfirmOpenInternal] = useState(false);
@@ -302,6 +305,35 @@ export function SchedulerManualTaskPopover({
     await onManualTaskDelete?.(task.id);
   };
 
+  const handleTeleportDate = useCallback(
+    async (startDate: Date, endDate: Date) => {
+      const snapshot: ManualTaskPatch = {
+        start_date: task.start_date ? new Date(task.start_date) : undefined,
+        end_date: task.end_date ? new Date(task.end_date) : undefined,
+      };
+      onManualTaskPatch?.(task.id, { start_date: startDate, end_date: endDate });
+      onSaveSuccess?.({ start_date: startDate, end_date: endDate });
+      try {
+        const res = await actualizarSchedulerTaskFechas(studioSlug, eventId, task.id, {
+          start_date: startDate,
+          end_date: endDate,
+        });
+        if (!res.success) {
+          onManualTaskPatch?.(task.id, snapshot);
+          toast.error(res.error ?? 'Error al mover tarea');
+          return;
+        }
+        toast.success('Tarea movida correctamente');
+        setOpen(false);
+        window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
+      } catch {
+        onManualTaskPatch?.(task.id, snapshot);
+        toast.error('Error al mover tarea');
+      }
+    },
+    [studioSlug, eventId, task.id, task.start_date, task.end_date, onManualTaskPatch, onSaveSuccess]
+  );
+
   const taskFormContent = (
     <TaskForm
       mode="edit"
@@ -316,6 +348,8 @@ export function SchedulerManualTaskPopover({
       onCompletedChange={handleCompletedChange}
       onOpenSelectCrew={() => setSelectCrewModalOpen(true)}
       onRemoveCrew={() => void handleSelectCrewFromModal(null)}
+      onTeleportDate={handleTeleportDate}
+      dateRange={dateRange}
       isSaving={isSaving}
       isAssigningCrew={isAssigningCrew}
       isUpdatingCompletion={isUpdatingCompletion}

@@ -284,6 +284,8 @@ export const TaskBar = React.memo(({
       manualTask={manualTask}
       onDelete={handleDelete}
       onToggleComplete={handleToggleComplete}
+      onTaskUpdate={onUpdate}
+      dateRange={dateRange}
       onItemUpdate={onItemUpdate}
       onManualTaskPatch={onManualTaskPatch}
     >
@@ -321,6 +323,7 @@ export const TaskBar = React.memo(({
           group ${statusColor}
           rounded px-2 py-1 shadow-md cursor-grab active:cursor-grabbing
           transition-colors
+          ${!isResizing ? 'transition-transform duration-200 ease-out' : ''}
           ${isUpdating ? 'opacity-75' : 'opacity-100'}
           flex items-center justify-center text-xs font-medium text-white
           overflow-hidden whitespace-nowrap
@@ -331,7 +334,7 @@ export const TaskBar = React.memo(({
             className="w-full h-full flex items-center justify-between gap-1 px-1.5 pointer-events-none"
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
-          <span className={`flex-1 min-w-0 truncate text-center text-xs flex items-center justify-center gap-1 ${isCompleted ? 'font-normal' : 'font-medium'}`}>
+          <span className={`flex-1 min-w-0 truncate text-center text-xs flex items-center justify-center gap-1 ${isCompleted ? 'font-normal italic text-zinc-400 line-through decoration-2 decoration-zinc-500' : 'font-medium'}`}>
             {taskName}
             {(item as { _is_annex?: boolean })?._is_annex && (
               <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[9px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">

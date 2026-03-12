@@ -5,12 +5,17 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Trash2, CheckCircle2, Calendar, Circle, UserPlus, UserMinus } from 'lucide-react';
+import { Trash2, CheckCircle2, Calendar, CalendarDays, Circle, UserPlus, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ZenCalendar, ZenButton } from '@/components/ui/zen';
 import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
+import { isDateInRange } from '../../utils/coordinate-utils';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { asignarCrewAItem, obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { asignarCrewATareaScheduler } from '@/lib/actions/studio/business/events/scheduler-actions';
@@ -37,6 +42,8 @@ interface TaskBarContextMenuProps {
   children: React.ReactNode;
   onDelete: (taskId: string) => Promise<void>;
   onToggleComplete: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onTaskUpdate?: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
+  dateRange?: import('react-day-picker').DateRange;
   onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onManualTaskPatch?: (taskId: string, patch: ManualTaskPatch) => void;
 }
@@ -55,10 +62,13 @@ export function TaskBarContextMenu({
   children,
   onDelete,
   onToggleComplete,
+  onTaskUpdate,
+  dateRange,
   onItemUpdate,
   onManualTaskPatch,
 }: TaskBarContextMenuProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [tempDateRange, setTempDateRange] = useState<{ from: Date; to: Date } | null>(null);
   const [isTogglingComplete, setIsTogglingComplete] = useState(false);
   const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
   const [showRemoveCrewConfirm, setShowRemoveCrewConfirm] = useState(false);
@@ -250,6 +260,55 @@ export function TaskBarContextMenu({
 
           {/* Opciones */}
           <div className="py-1">
+            {/* Asignar fecha específica (teletransporte) */}
+            {onTaskUpdate && dateRange?.from && dateRange?.to && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100">
+                  <CalendarDays className="h-4 w-4 text-zinc-400" />
+                  <span>Asignar fecha específica</span>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="p-2 bg-zinc-900 border-zinc-800 min-w-[320px]" sideOffset={4}>
+                  <ZenCalendar
+                    mode="range"
+                    selected={tempDateRange ?? { from: startDate, to: endDate }}
+                    onSelect={(range) => setTempDateRange(range?.from && range?.to ? { from: range.from, to: range.to } : null)}
+                    defaultMonth={startDate}
+                    numberOfMonths={2}
+                    showOutsideDays={false}
+                    disabled={(d) => !dateRange.from || !dateRange.to || !isDateInRange(d, dateRange)}
+                    locale={es}
+                    className="rounded-lg"
+                  />
+                  <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-zinc-800">
+                    <ZenButton variant="ghost" size="sm" onClick={() => setTempDateRange(null)}>
+                      Cancelar
+                    </ZenButton>
+                    <ZenButton
+                      variant="primary"
+                      size="sm"
+                      onClick={async () => {
+                        const range = tempDateRange ?? { from: startDate, to: endDate };
+                        if (!onTaskUpdate || !range.from || !range.to) return;
+                        if (!isDateInRange(range.from, dateRange) || !isDateInRange(range.to, dateRange)) {
+                          toast.error('Las fechas deben estar dentro del rango del cronograma');
+                          return;
+                        }
+                        try {
+                          await onTaskUpdate(taskId, range.from, range.to);
+                          setTempDateRange(null);
+                          toast.success('Tarea movida correctamente');
+                        } catch {
+                          toast.error('Error al mover tarea');
+                        }
+                      }}
+                    >
+                      Confirmar
+                    </ZenButton>
+                  </div>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
+
             {/* Toggle completado */}
             <ContextMenuItem
               onClick={handleToggleComplete}

@@ -149,7 +149,7 @@ export const EventDetailHeader = function EventDetailHeader({
   };
 
   const eventDateLabel = eventData.event_date
-    ? formatDisplayDateLong(eventData.event_date)
+    ? `Evento ${formatDisplayDateLong(eventData.event_date)}`
     : 'Detalle del evento';
 
   return (

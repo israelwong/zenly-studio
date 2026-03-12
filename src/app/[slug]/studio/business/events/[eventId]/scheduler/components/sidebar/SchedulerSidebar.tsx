@@ -177,6 +177,8 @@ interface SchedulerSidebarProps {
   catalogCategoryOrderByStage?: Record<string, string[]> | null;
   /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
   isUpdatingStructure?: boolean;
+  /** Rango del cronograma para teletransporte de fechas en popovers. */
+  dateRange?: import('react-day-picker').DateRange;
 }
 
 
@@ -776,12 +778,12 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
     </span>
   ) : null;
 
+  // Llamar onTaskToggleComplete directamente: EventScheduler decide si abre modal (budget > 0)
+  // o completa. No usar updateCompletionStatus aquí para evitar optimistic update prematuro.
   const handleToggleComplete = useCallback(async () => {
-    if (!onTaskToggleComplete || !updateCompletionStatus) return;
-    await updateCompletionStatus(!isCompleted, async () => {
-      await onTaskToggleComplete(localTask.id, !isCompleted);
-    });
-  }, [onTaskToggleComplete, updateCompletionStatus, localTask.id, isCompleted]);
+    if (!onTaskToggleComplete) return;
+    await onTaskToggleComplete(localTask.id, !isCompleted);
+  }, [onTaskToggleComplete, localTask.id, isCompleted]);
 
   const handleAssignCrew = useCallback(async (crewMemberId: string | null) => {
     if (!studioSlug || !eventId || !onManualTaskPatch) return;
@@ -1136,6 +1138,7 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
             onManualTaskPatch={onManualTaskPatch}
             onManualTaskDelete={onManualTaskDelete}
             onSaveSuccess={applyPatch}
+            dateRange={dateRange}
             open={popoverOpen}
             onOpenChange={setPopoverOpen}
             deleteConfirmOpen={deleteConfirmOpen}
@@ -1263,6 +1266,7 @@ function SchedulerItem({
   sortableProps,
   addSubtaskProps,
   activeDragData,
+  dateRange,
 }: {
   item: CotizacionItem;
   metadata: ItemMetadata;
@@ -1283,6 +1287,7 @@ function SchedulerItem({
     onAddManualTaskSubmit: (sectionId: string, stage: string, catalogCategoryId: string | null, data: { name: string; durationDays: number; budgetAmount?: number }, startDate?: Date, parentId?: string | null) => Promise<void>;
   };
   activeDragData?: { taskId: string; isManual: boolean } | null;
+  dateRange?: import('react-day-picker').DateRange;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
@@ -1325,12 +1330,12 @@ function SchedulerItem({
     </span>
   ) : null;
 
+  // Llamar onTaskToggleComplete directamente: EventScheduler decide si abre modal (budget > 0)
+  // o completa. Evita optimistic update prematuro que causaba desincronización.
   const handleToggleComplete = useCallback(async () => {
-    if (!onTaskToggleComplete || !taskId || !updateCompletionStatus) return;
-    await updateCompletionStatus(!isCompleted, async () => {
-      await onTaskToggleComplete(taskId, !isCompleted);
-    });
-  }, [onTaskToggleComplete, updateCompletionStatus, taskId, isCompleted]);
+    if (!onTaskToggleComplete || !taskId) return;
+    await onTaskToggleComplete(taskId, !isCompleted);
+  }, [onTaskToggleComplete, taskId, isCompleted]);
 
   const handleAssignCrew = useCallback(async (crewMemberId: string | null) => {
     if (!studioSlug || !localItem.id) return;
@@ -1567,6 +1572,7 @@ function SchedulerItem({
               eventId={eventId}
               onItemUpdate={onItemUpdate}
               onTaskToggleComplete={onTaskToggleComplete}
+              dateRange={dateRange}
               open={popoverOpen}
               onOpenChange={setPopoverOpen}
             >
@@ -1823,6 +1829,7 @@ export const SchedulerSidebar = ({
   onCategoriesReordered,
   catalogCategoryOrderByStage,
   isUpdatingStructure = false,
+  dateRange,
 }: SchedulerSidebarProps) => {
   /** Ordena secciones por order de categorías (Visual Order = Logical Order desde el primer render). */
   const sortSeccionesByCategoryOrder = useCallback((secciones: typeof seccionesProp) => {
@@ -2882,6 +2889,7 @@ export const SchedulerSidebar = ({
                               : undefined
                           }
                           activeDragData={activeDragData}
+                          dateRange={dateRange}
                         />
                       );
                     }

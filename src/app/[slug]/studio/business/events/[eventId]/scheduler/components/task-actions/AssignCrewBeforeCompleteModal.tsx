@@ -224,13 +224,18 @@ export function AssignCrewBeforeCompleteModal({
         }
       >
         <div className="space-y-4">
-          {/* Información del item */}
-          <div className="bg-zinc-800/50 rounded-lg p-3 space-y-1">
-            <div className="text-sm text-zinc-400">Tarea:</div>
-            <div className="text-sm font-medium text-zinc-200">{itemName}</div>
+          {/* Información del item — nombre prominente, monto destacado */}
+          <div className="bg-zinc-800/50 rounded-lg p-4 space-y-2">
+            <h3 className="text-xl font-bold text-zinc-100 leading-tight">{itemName}</h3>
+            {!hasNoCrew && (
+              <p className="text-xs text-zinc-500">
+                Al asignar personal, esta tarea se marcará como completada y se generará un registro en la nómina pendiente de pago.
+              </p>
+            )}
             {costoTotal != null && costoTotal > 0 && (
-              <div className="text-xs text-zinc-500">
-                Costo: <span className="text-emerald-400 font-medium">{formatCurrency(costoTotal)}</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40">
+                <span className="text-xs text-emerald-300/90 font-medium">Costo:</span>
+                <span className="text-sm font-bold text-emerald-400">{formatCurrency(costoTotal)}</span>
               </div>
             )}
           </div>

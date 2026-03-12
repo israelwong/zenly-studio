@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ZenButton, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
+import { ZenButton, ZenAvatar, ZenAvatarFallback, ZenCalendar } from '@/components/ui/zen';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
+import { isDateInRange } from '../../utils/coordinate-utils';
 import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { X, UserPlus } from 'lucide-react';
+import { X, UserPlus, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ManualTaskPayload } from '../../utils/scheduler-section-stages';
 import type { ManualTaskPatch } from './SchedulerManualTaskPopover';
@@ -48,6 +50,8 @@ export interface TaskFormEditProps {
   onCompletedChange: (checked: boolean) => void;
   onOpenSelectCrew: () => void;
   onRemoveCrew: () => void;
+  onTeleportDate?: (startDate: Date, endDate: Date) => Promise<void>;
+  dateRange?: import('react-day-picker').DateRange;
   isSaving: boolean;
   isAssigningCrew: boolean;
   isUpdatingCompletion: boolean;
@@ -170,6 +174,8 @@ function TaskFormEdit({
   onCompletedChange,
   onOpenSelectCrew,
   onRemoveCrew,
+  onTeleportDate,
+  dateRange,
   isSaving,
   isAssigningCrew,
   isUpdatingCompletion,
@@ -189,6 +195,8 @@ function TaskFormEdit({
   const [localCompleted, setLocalCompleted] = useState(initialCompleted);
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [tempDateRange, setTempDateRange] = useState<{ from: Date; to: Date } | null>(null);
 
   const loadMembers = useCallback(async () => {
     try {
@@ -295,15 +303,66 @@ function TaskFormEdit({
       <div className="border-t border-zinc-800" />
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-400">Programación</label>
-        <div className="text-xs text-zinc-500">
-          {taskStartDate && taskEndDate ? (
-            <span className="text-zinc-300">
-              {format(taskStartDate, 'd MMM', { locale: es })} - {format(taskEndDate, 'd MMM', { locale: es })}
-            </span>
-          ) : (
-            <span className="text-zinc-400">—</span>
-          )}
-        </div>
+        {onTeleportDate && taskStartDate && taskEndDate ? (
+          <Popover open={datePopoverOpen} onOpenChange={(open) => { setDatePopoverOpen(open); if (!open) setTempDateRange(null); }}>
+            <PopoverTrigger asChild>
+              <ZenButton
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full justify-start text-xs h-8 font-normal"
+                disabled={isSaving}
+              >
+                <Calendar className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                {format(taskStartDate, 'd MMM', { locale: es })} - {format(taskEndDate, 'd MMM', { locale: es })}
+              </ZenButton>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="start" sideOffset={4}>
+              <div className="p-3">
+                <ZenCalendar
+                  mode="range"
+                  selected={tempDateRange ?? { from: taskStartDate, to: taskEndDate }}
+                  onSelect={(range) => setTempDateRange(range?.from && range?.to ? { from: range.from, to: range.to } : null)}
+                  defaultMonth={taskStartDate ?? undefined}
+                  numberOfMonths={2}
+                  showOutsideDays={false}
+                  disabled={dateRange ? (d) => !dateRange.from || !dateRange.to || !isDateInRange(d, dateRange) : undefined}
+                  locale={es}
+                  className="rounded-lg"
+                />
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                  <ZenButton variant="ghost" size="sm" onClick={() => setDatePopoverOpen(false)} disabled={isSaving}>
+                    Cancelar
+                  </ZenButton>
+                  <ZenButton
+                    variant="primary"
+                    size="sm"
+                    disabled={isSaving}
+                    onClick={() => {
+                      const range = tempDateRange ?? { from: taskStartDate, to: taskEndDate };
+                      if (range.from && range.to && onTeleportDate) {
+                        void onTeleportDate(range.from, range.to);
+                        setDatePopoverOpen(false);
+                      }
+                    }}
+                  >
+                    Confirmar
+                  </ZenButton>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <div className="text-xs text-zinc-500">
+            {taskStartDate && taskEndDate ? (
+              <span className="text-zinc-300">
+                {format(taskStartDate, 'd MMM', { locale: es })} - {format(taskEndDate, 'd MMM', { locale: es })}
+              </span>
+            ) : (
+              <span className="text-zinc-400">—</span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2 py-1.5">
           <Checkbox
             id={`manual-completed-${task.id}`}

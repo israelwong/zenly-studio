@@ -489,9 +489,13 @@ export const EventScheduler = React.memo(function EventScheduler({
     loadCrewPreference();
   }, [studioSlug]);
 
-  // Callback para actualizar un item específico en localEventData
+  // Callback para actualizar un item específico en localEventData (incl. teletransporte de fechas)
   const handleItemUpdate = useCallback((updatedItem: CotizacionItem) => {
     let updatedData: SchedulerViewData;
+    const taskId = updatedItem.scheduler_task?.id;
+    const newStart = updatedItem.scheduler_task?.start_date;
+    const newEnd = updatedItem.scheduler_task?.end_date;
+
     setLocalEventData(prev => {
       const newData = {
         ...prev,
@@ -500,32 +504,24 @@ export const EventScheduler = React.memo(function EventScheduler({
           cotizacion_items: (cotizacion.cotizacion_items ?? []).map(item => {
             if (item.id === updatedItem.id) {
               // Asegurar que el item actualizado tenga todos los campos necesarios
-              // Especialmente importante para scheduler_task cuando se completa
-              // Preservar todos los campos del scheduler_task original y mergear con los actualizados
-              // IMPORTANTE: Crear un nuevo objeto para que React detecte el cambio
+              // Especialmente importante para scheduler_task cuando se completa o teletransporta
               const mergedSchedulerTask = updatedItem.scheduler_task && item.scheduler_task
                 ? {
-                  ...item.scheduler_task, // Preservar campos originales (start_date, end_date, etc.)
-                  ...updatedItem.scheduler_task, // Sobrescribir con campos actualizados (completed_at, status, progress_percent, etc.)
-                  // Asegurar que completed_at sea un nuevo valor (no undefined)
+                  ...item.scheduler_task,
+                  ...updatedItem.scheduler_task,
                   completed_at: updatedItem.scheduler_task.completed_at !== undefined
                     ? updatedItem.scheduler_task.completed_at
                     : item.scheduler_task.completed_at,
-                  // Asegurar que status sea un nuevo valor
                   status: updatedItem.scheduler_task.status || item.scheduler_task.status,
-                  // Asegurar que progress_percent sea un nuevo valor
                   progress_percent: updatedItem.scheduler_task.progress_percent !== undefined
                     ? updatedItem.scheduler_task.progress_percent
                     : item.scheduler_task.progress_percent,
                 }
                 : (updatedItem.scheduler_task || item.scheduler_task);
 
-              // Mergear el item completo preservando todos los campos originales
-              // y sobrescribiendo solo los campos actualizados
               const mergedItem = {
-                ...item, // Preservar todos los campos originales del item
-                ...updatedItem, // Sobrescribir con campos actualizados
-                // Asegurar que assigned_to_crew_member_id se preserve correctamente
+                ...item,
+                ...updatedItem,
                 assigned_to_crew_member_id: updatedItem.assigned_to_crew_member_id !== undefined
                   ? updatedItem.assigned_to_crew_member_id
                   : item.assigned_to_crew_member_id,
@@ -540,11 +536,21 @@ export const EventScheduler = React.memo(function EventScheduler({
           }),
         })),
       } as SchedulerViewData;
+
+      // Sincronizar scheduler.tasks para que el Timeline recalcule posición (itemsMapForRows usa tasks)
+      if (taskId && newStart != null && newEnd != null && newData.scheduler?.tasks) {
+        newData.scheduler = {
+          ...newData.scheduler,
+          tasks: newData.scheduler.tasks.map(t =>
+            t.id === taskId ? { ...t, start_date: newStart, end_date: newEnd } : t
+          ),
+        };
+      }
+
       updatedData = newData as SchedulerViewData;
       return newData as SchedulerViewData;
     });
 
-    // Notificar al padre para actualizar stats inmediatamente
     if (updatedData!) {
       notifyParentDataChange(updatedData);
     }
@@ -2998,7 +3004,12 @@ export const EventScheduler = React.memo(function EventScheduler({
           return;
         }
 
-        // Actualización optimista
+        const completedTaskPatch = {
+          completed_at: new Date().toISOString(),
+          status: 'COMPLETED' as const,
+          progress_percent: 100,
+        };
+
         let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = {
@@ -3011,31 +3022,34 @@ export const EventScheduler = React.memo(function EventScheduler({
                     ...item,
                     scheduler_task: item.scheduler_task ? {
                       ...item.scheduler_task,
-                      completed_at: new Date().toISOString(),
-                      status: 'COMPLETED',
-                      progress_percent: 100,
+                      ...completedTaskPatch,
                     } : null,
                   };
                 }
                 return item;
               }),
             })),
+            scheduler: prev.scheduler
+              ? {
+                  ...prev.scheduler,
+                  tasks: (prev.scheduler.tasks ?? []).map(t =>
+                    t.id === taskId ? { ...t, ...completedTaskPatch } : t
+                  ),
+                }
+              : prev.scheduler,
           };
           updatedData = newData as SchedulerViewData;
           return newData as SchedulerViewData;
         });
 
-        // Notificar al padre para actualizar stats
         if (updatedData!) {
           notifyParentDataChange(updatedData);
         }
 
         if (skipPayment) {
-          toast.success('Tarea completada (sin generar pago de nómina)');
+          toast.success('Tarea completada');
         } else if (result.payrollResult?.success && result.payrollResult.personalNombre) {
           toast.success(`Tarea completada. Pago de nómina generado para ${result.payrollResult.personalNombre}`);
-        } else if (result.payrollResult?.error) {
-          toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult.error || 'Sin personal asignado'}`);
         } else {
           toast.success('Tarea completada');
         }
@@ -3153,27 +3167,6 @@ export const EventScheduler = React.memo(function EventScheduler({
           ? crewResult.data.find(m => m.id === crewMemberId)
           : null;
 
-        setLocalEventData(prev => ({
-          ...prev,
-          cotizaciones: prev.cotizaciones?.map(cotizacion => ({
-            ...cotizacion,
-            cotizacion_items: (cotizacion.cotizacion_items ?? []).map(item => {
-              if (item.id === pendingTaskCompletion.itemId) {
-                return {
-                  ...item,
-                  assigned_to_crew_member_id: crewMemberId,
-                  assigned_to_crew_member: crewMember ? {
-                    id: crewMember.id,
-                    name: crewMember.name,
-                    tipo: crewMember.tipo as 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR',
-                  } : null,
-                };
-              }
-              return item;
-            }),
-          })) ?? [],
-        }) as any);
-
         const result = await actualizarSchedulerTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
           isCompleted: true,
           skipPayroll: skipPayment,
@@ -3188,6 +3181,13 @@ export const EventScheduler = React.memo(function EventScheduler({
           throw new Error(result.error);
         }
 
+        const completedAtIso = new Date().toISOString();
+        const completedTaskPatch = {
+          completed_at: completedAtIso,
+          status: 'COMPLETED' as const,
+          progress_percent: 100,
+        };
+
         let updatedData: SchedulerViewData;
         setLocalEventData(prev => {
           const newData = {
@@ -3195,31 +3195,38 @@ export const EventScheduler = React.memo(function EventScheduler({
             cotizaciones: prev.cotizaciones?.map(cotizacion => ({
               ...cotizacion,
               cotizacion_items: (cotizacion.cotizacion_items ?? []).map(item => {
-                if (item.scheduler_task?.id === pendingTaskCompletion.taskId) {
-                  return {
-                    ...item,
-                    scheduler_task: item.scheduler_task ? {
-                      ...item.scheduler_task,
-                      completed_at: new Date().toISOString(),
-                      status: 'COMPLETED',
-                      progress_percent: 100,
-                    } : null,
-                  };
-                }
-                return item;
+                const isTargetItem = item.id === pendingTaskCompletion.itemId || item.scheduler_task?.id === pendingTaskCompletion.taskId;
+                if (!isTargetItem) return item;
+                return {
+                  ...item,
+                  assigned_to_crew_member_id: crewMemberId,
+                  assigned_to_crew_member: crewMember ? {
+                    id: crewMember.id,
+                    name: crewMember.name,
+                    tipo: crewMember.tipo as 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR',
+                  } : null,
+                  scheduler_task: item.scheduler_task ? {
+                    ...item.scheduler_task,
+                    ...completedTaskPatch,
+                  } : null,
+                };
               }),
-            })),
+            })) ?? [],
+            scheduler: prev.scheduler
+              ? {
+                  ...prev.scheduler,
+                  tasks: (prev.scheduler.tasks ?? []).map(t =>
+                    t.id === pendingTaskCompletion.taskId ? { ...t, ...completedTaskPatch } : t
+                  ),
+                }
+              : prev.scheduler,
           };
           updatedData = newData as SchedulerViewData;
           return newData as SchedulerViewData;
         });
 
-        if (skipPayment) {
-          toast.success('Personal asignado y tarea completada (sin generar pago de nómina)');
-        } else if (result.payrollResult?.success && result.payrollResult.personalNombre) {
-          toast.success(`Personal asignado y tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
-        } else if (result.payrollResult?.error) {
-          toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult.error}`);
+        if (result.payrollResult?.success && result.payrollResult.personalNombre) {
+          toast.success(`Personal asignado y tarea completada. Pago de nómina generado para ${result.payrollResult.personalNombre}`);
         } else {
           toast.success('Personal asignado y tarea completada');
         }

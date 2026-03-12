@@ -307,6 +307,7 @@ export const SchedulerPanel = React.memo(({
           <SchedulerSidebar
             ghostPortalEl={ghostPortalEl}
             sidebarWidth={sidebarWidth}
+            dateRange={dateRange}
             secciones={secciones}
             fullSecciones={fullSecciones}
             itemsMap={itemsMap}
