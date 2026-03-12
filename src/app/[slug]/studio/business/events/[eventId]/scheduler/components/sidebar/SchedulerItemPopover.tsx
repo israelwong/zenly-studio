@@ -80,20 +80,38 @@ export function getNatureBadge(profitType: string | null | undefined): { label: 
     return { label: 'Producto', className: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' };
 }
 
+/** Tipo de Servicio traducido (billing_type / unit_type). HOUR/SERVICE/PRODUCT|UNIT. */
+export function getUnitTypeLabel(billingType: string | null | undefined): string {
+    const bt = (billingType ?? '').toUpperCase();
+    switch (bt) {
+        case 'HOUR':
+            return 'Por hora';
+        case 'SERVICE':
+            return 'Servicio fijo';
+        case 'UNIT':
+        case 'PRODUCT':
+            return 'Producto / Unidad';
+        default:
+            return '—';
+    }
+}
+
 /** Badge Multiplicador: Presupuesto por hora / Presupuesto fijo / Presupuesto por unidad (billing_type). Tema oscuro ZEN. Exportado para SchedulerItemDetailPopover. */
 export function getBillingTypeBadge(
     billingType: string | null | undefined
 ): { label: string; className: string } {
     const bt = (billingType ?? '').toUpperCase();
+    const label = getUnitTypeLabel(billingType);
     switch (bt) {
         case 'HOUR':
-            return { label: 'Presupuesto por hora', className: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' };
+            return { label, className: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' };
         case 'SERVICE':
-            return { label: 'Presupuesto fijo', className: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' };
+            return { label, className: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' };
         case 'UNIT':
-            return { label: 'Presupuesto por unidad', className: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' };
+        case 'PRODUCT':
+            return { label, className: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' };
         default:
-            return { label: '—', className: 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30' };
+            return { label, className: 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30' };
     }
 }
 
@@ -126,13 +144,13 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
       duration_hours_snapshot?: number | null;
       budget_amount?: number | null;
     } | undefined;
-    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? null;
+    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? (localItem as { unit_type?: string | null }).unit_type ?? (localItem as { billing_type_snapshot?: string | null }).billing_type_snapshot ?? null;
     const profitType = st?.profit_type_snapshot ?? (localItem as { profit_type?: string | null }).profit_type ?? null;
     const natureBadge = getNatureBadge(profitType);
     const billingBadge = getBillingTypeBadge(billingType);
     const itemName = localItem.name || 'Sin nombre';
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
-    const durationHours = st?.duration_hours_snapshot ?? null;
+    const durationHours = st?.duration_hours_snapshot ?? (localItem as { duration_hours?: number | null }).duration_hours ?? null;
     const isHourBilling = (billingType ?? '').toUpperCase() === 'HOUR';
     const multiplierLabel = isHourBilling && durationHours != null
       ? `x${durationHours}h`

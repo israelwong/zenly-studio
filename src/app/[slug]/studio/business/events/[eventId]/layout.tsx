@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
-import { unstable_cache } from 'next/cache';
+import { unstable_cache, revalidateTag } from 'next/cache';
 import { obtenerEventoDetalle, obtenerCotizacionesAutorizadasCount } from '@/lib/actions/studio/business/events';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
+import { cleanupOrphanAnnexes } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getAllEventContracts } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
 import { sanitizarCotizacion } from '@/lib/utils/sanitize-cotizacion-for-client';
@@ -21,10 +22,16 @@ export default async function EventLayout({
 }: EventLayoutProps) {
   const { slug: studioSlug, eventId } = await params;
 
+  const { cleaned } = await cleanupOrphanAnnexes(studioSlug, eventId);
+  if (cleaned) {
+    revalidateTag('evento-detalle');
+    revalidateTag(`evento-${eventId}`);
+  }
+
   const getCachedEventDetail = unstable_cache(
     async () => obtenerEventoDetalle(studioSlug, eventId),
     ['event-detail', studioSlug, eventId],
-    { tags: ['evento-detalle', `evento-${eventId}`], revalidate: false }
+    { tags: ['evento-detalle', `evento-${eventId}`], revalidate: 30 }
   );
 
   let eventResult: Awaited<ReturnType<typeof getCachedEventDetail>>;

@@ -20,9 +20,11 @@ interface SchedulerAgrupacionCellProps {
     hideBadge?: boolean;
     /** Stage para color del badge (alineado con powerbar) */
     stageCategory?: TaskCategoryStage;
+    /** Si true, muestra badge "Anexo" inline tras el nombre */
+    isAnnex?: boolean;
 }
 
-export function SchedulerAgrupacionCell({ servicio, isCompleted = false, isSubtask = false, assignedCrewMember, duration, hideBadge = false, stageCategory }: SchedulerAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, isSubtask = false, assignedCrewMember, duration, hideBadge = false, stageCategory, isAnnex = false }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
 
     // Generar iniciales del nombre
@@ -79,7 +81,14 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, isSubta
                     ? 'font-normal text-zinc-300 hover:text-zinc-200'
                     : 'font-medium text-zinc-300 hover:text-zinc-200'
                     }`}>
-                    {servicio}
+                    <>
+                        {servicio}
+                        {isAnnex && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0 ml-1 align-middle">
+                                Anexo
+                            </span>
+                        )}
+                    </>
                 </p>
             </div>
 

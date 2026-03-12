@@ -63,13 +63,13 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
       duration_hours_snapshot?: number | null;
       budget_amount?: number | null;
     } | undefined;
-    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? null;
+    const billingType = st?.billing_type_snapshot ?? (localItem as { billing_type?: string | null }).billing_type ?? (localItem as { unit_type?: string | null }).unit_type ?? (localItem as { billing_type_snapshot?: string | null }).billing_type_snapshot ?? null;
     const profitType = st?.profit_type_snapshot ?? (localItem as { profit_type?: string | null }).profit_type ?? null;
     const natureBadge = getNatureBadge(profitType);
     const billingBadge = getBillingTypeBadge(billingType);
     const itemName = localItem.name || 'Sin nombre';
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
-    const durationHours = st?.duration_hours_snapshot ?? null;
+    const durationHours = st?.duration_hours_snapshot ?? (localItem as { duration_hours?: number | null }).duration_hours ?? null;
     const isHourBilling = (billingType ?? '').toUpperCase() === 'HOUR';
     const multiplierLabel = isHourBilling && durationHours != null
       ? `x${durationHours}h`

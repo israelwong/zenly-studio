@@ -186,17 +186,24 @@ export default function EventSchedulerPage() {
           name: data.name ?? data.promise?.name ?? 'Evento',
           event_date: data.event_date ?? data.promise?.event_date ?? null,
           promise: data.promise ?? null,
-          cotizaciones: cotizaciones.map(cot => ({
+          cotizaciones: cotizaciones.map(cot => {
+            const parentId = (cot as { parent_cotizacion_id?: string | null }).parent_cotizacion_id;
+            const isAnexo = !!(cot as { is_anexo?: boolean }).is_anexo || !!parentId;
+            return {
             id: cot.id,
             name: cot.name,
             status: cot.status,
+            parent_cotizacion_id: parentId ?? undefined,
+            is_anexo: isAnexo,
             cotizacion_items: (cot.cotizacion_items ?? []).map(item => {
-              const st = item.scheduler_task as { budget_amount?: unknown; duration_hours_snapshot?: number } | null | undefined;
+              const st = item.scheduler_task as { budget_amount?: unknown; duration_hours_snapshot?: number; billing_type_snapshot?: string | null; profit_type_snapshot?: string | null } | null | undefined;
               const schedulerTask = item.scheduler_task
                 ? {
                     ...item.scheduler_task,
                     budget_amount: st?.budget_amount != null ? Number(st.budget_amount) : null,
                     duration_hours_snapshot: st?.duration_hours_snapshot ?? null,
+                    billing_type_snapshot: st?.billing_type_snapshot ?? (item as { billing_type?: string | null }).billing_type ?? null,
+                    profit_type_snapshot: st?.profit_type_snapshot ?? (item as { profit_type?: string | null }).profit_type ?? null,
                   }
                 : null;
               return {
@@ -219,35 +226,66 @@ export default function EventSchedulerPage() {
                 scheduler_task: schedulerTask,
               };
             })
-          })),
+          };
+          }),
           scheduler: data.scheduler ? {
             id: data.scheduler.id,
             start_date: data.scheduler.start_date,
             end_date: data.scheduler.end_date,
             catalog_category_order_by_stage: data.scheduler.catalog_category_order_by_stage,
-            tasks: (data.scheduler.tasks ?? []).map(task => ({
-              id: task.id,
-              name: task.name,
-              start_date: task.start_date,
-              end_date: task.end_date,
-              duration_days: task.duration_days,
-              status: task.status,
-              progress_percent: task.progress_percent,
-              completed_at: task.completed_at,
-              cotizacion_item_id: task.cotizacion_item_id,
-              category: task.category,
-              catalog_category_id: task.catalog_category_id,
-              scheduler_custom_category_id: task.scheduler_custom_category_id,
-              order: task.order,
-              budget_amount: task.budget_amount ?? null,
-              assigned_to_crew_member_id: task.assigned_to_crew_member_id,
-              assigned_to_crew_member: task.assigned_to_crew_member,
-              notes_count: task.notes_count,
-            }))
+            tasks: (data.scheduler.tasks ?? []).map(task => {
+              const st = task as { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null; profit_type_snapshot?: string | null };
+              return {
+                id: task.id,
+                name: task.name,
+                start_date: task.start_date,
+                end_date: task.end_date,
+                duration_days: task.duration_days,
+                status: task.status,
+                progress_percent: task.progress_percent,
+                completed_at: task.completed_at,
+                cotizacion_item_id: task.cotizacion_item_id,
+                category: task.category,
+                catalog_category_id: task.catalog_category_id,
+                scheduler_custom_category_id: task.scheduler_custom_category_id,
+                order: task.order,
+                budget_amount: task.budget_amount ?? null,
+                billing_type_snapshot: st?.billing_type_snapshot ?? null,
+                duration_hours_snapshot: st?.duration_hours_snapshot ?? null,
+                profit_type_snapshot: st?.profit_type_snapshot ?? null,
+                assigned_to_crew_member_id: task.assigned_to_crew_member_id,
+                assigned_to_crew_member: task.assigned_to_crew_member,
+                notes_count: task.notes_count,
+              };
+            })
           } : null,
           secciones: data.secciones ?? [],
           schedulerDateReminders: data.schedulerDateReminders ?? [],
         };
+        const taskCount = payloadData.scheduler?.tasks?.length ?? 0;
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('[SCHEDULER] Tareas cargadas en página cronograma:', taskCount, { eventId });
+          const firstItem = data.cotizaciones?.[0]?.cotizacion_items?.[0];
+          const firstTask = payloadData.scheduler?.tasks?.[0];
+          console.log('[DEBUG] Raw Item 0 (fetch):', {
+            name: firstItem?.name,
+            unit_type: (firstItem as { unit_type?: string })?.unit_type,
+            billing_type: (firstItem as { billing_type?: string })?.billing_type,
+            duration_snapshot: (firstItem?.scheduler_task as { duration_hours_snapshot?: number })?.duration_hours_snapshot,
+            item_scheduler_task_snapshots: firstItem?.scheduler_task ? {
+              billing_type_snapshot: (firstItem.scheduler_task as { billing_type_snapshot?: string }).billing_type_snapshot,
+              duration_hours_snapshot: (firstItem.scheduler_task as { duration_hours_snapshot?: number }).duration_hours_snapshot,
+              profit_type_snapshot: (firstItem.scheduler_task as { profit_type_snapshot?: string }).profit_type_snapshot,
+            } : null,
+            first_scheduler_task_snapshots: firstTask ? {
+              billing_type_snapshot: (firstTask as { billing_type_snapshot?: string }).billing_type_snapshot,
+              duration_hours_snapshot: (firstTask as { duration_hours_snapshot?: number }).duration_hours_snapshot,
+              profit_type_snapshot: (firstTask as { profit_type_snapshot?: string }).profit_type_snapshot,
+            } : null,
+            is_annex: (firstItem as { _is_annex?: boolean })?._is_annex,
+            raw_item: firstItem,
+          });
+        }
         setPayload(payloadData);
         setDateRange((prev) => {
           if (!prev && data.scheduler?.start_date && data.scheduler?.end_date) {

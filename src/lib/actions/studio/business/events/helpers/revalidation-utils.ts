@@ -14,11 +14,14 @@ export async function revalidateEventPaths(studioSlug: string, eventId: string):
 }
 
 /**
- * Revalida paths del scheduler específicamente
+ * Revalida paths del scheduler específicamente.
+ * Incluye tags de evento-detalle para invalidar unstable_cache usado por layout y Editor.
  */
 export async function revalidateSchedulerPaths(studioSlug: string, eventId: string): Promise<void> {
   revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
   revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+  revalidateTag('evento-detalle');
+  revalidateTag(`evento-${eventId}`);
 }
 
 /**

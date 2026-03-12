@@ -614,6 +614,7 @@ export interface EventoDetalle extends EventoBasico {
     payment_method: string;
     payment_date: Date;
     concept: string | null;
+    cotizacion_id?: string | null;
   }>;
   agenda?: Array<{
     id: string;
@@ -851,6 +852,9 @@ export async function obtenerEventoDetalle(
           catalog_category_name_snapshot: true,
           catalog_section_id_snapshot: true,
           catalog_section_name_snapshot: true,
+          billing_type_snapshot: true,
+          duration_hours_snapshot: true,
+          profit_type_snapshot: true,
           scheduler_custom_category_id: true,
           parent_id: true,
           depends_on_task_id: true,
@@ -909,6 +913,7 @@ export async function obtenerEventoDetalle(
           cost_snapshot: true,
           profit_type: true,
           profit_type_snapshot: true,
+          billing_type: true,
           service_category_id: true,
           service_categories: {
             select: {
@@ -1102,6 +1107,9 @@ export async function obtenerEventoDetalle(
               depends_on_task_id: (t as { depends_on_task_id?: string | null }).depends_on_task_id ?? null,
               checklist_items: (t as { checklist_items?: unknown }).checklist_items ?? null,
               budget_amount: t.budget_amount,
+              billing_type_snapshot: (t as { billing_type_snapshot?: string | null }).billing_type_snapshot ?? null,
+              duration_hours_snapshot: (t as { duration_hours_snapshot?: number | null }).duration_hours_snapshot ?? null,
+              profit_type_snapshot: (t as { profit_type_snapshot?: string | null }).profit_type_snapshot ?? null,
               assigned_to: null,
               assigned_to_crew_member: t.assigned_to_crew_member
                 ? {
@@ -1233,6 +1241,7 @@ export async function obtenerEventoDetalle(
           cortesias_monto_snapshot: cot.cortesias_monto_snapshot != null ? Number(cot.cortesias_monto_snapshot) : null,
           cortesias_count_snapshot: cot.cortesias_count_snapshot != null ? Number(cot.cortesias_count_snapshot) : null,
           cotizacion_items: itemsOrdenados,
+          is_anexo: !!cot.parent_cotizacion_id,
         });
         return sanitized;
       }),
@@ -1242,6 +1251,7 @@ export async function obtenerEventoDetalle(
         payment_method: pago.metodo_pago,
         payment_date: pago.payment_date || pago.created_at,
         concept: pago.concept,
+        cotizacion_id: pago.cotizacion_id ?? null,
       })),
       // Serializar scheduler (estructura desde tasks + catálogo; sin JSONB)
       scheduler: evento.scheduler ? (() => {

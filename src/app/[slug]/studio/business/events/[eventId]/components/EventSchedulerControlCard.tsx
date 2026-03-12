@@ -202,7 +202,11 @@ export function EventSchedulerControlCard({
         }),
       ]);
       if (tasksRes.success && tasksRes.data) {
-        setTasks(tasksRes.data as SchedulerTaskRow[]);
+        const taskRows = tasksRes.data as SchedulerTaskRow[];
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('[SCHEDULER] Tareas cargadas en editor:', taskRows.length, { eventId });
+        }
+        setTasks(taskRows);
       } else {
         setTasks([]);
       }

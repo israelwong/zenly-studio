@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, History, ChevronDown, ChevronUp } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenConfirmModal } from '@/components/ui/zen';
+import { useRouter } from 'next/navigation';
+import { Plus, History, ChevronDown, ChevronUp, MoreVertical, Edit, XCircle, Trash2 } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { AnnexPreviewModal } from '@/components/shared/annex';
 import { CotizacionPreviewModal } from '@/components/shared/cotizaciones';
 import { getAnnexPreviewData } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
@@ -21,6 +22,8 @@ import {
   eliminarPago,
   type PaymentItem,
 } from '@/lib/actions/studio/business/events/payments.actions';
+import { cancelarCotizacion, deleteCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import { toast } from 'sonner';
 
 const APPROVED_STATUSES = ['autorizada', 'aprobada', 'approved'];
@@ -31,6 +34,7 @@ export interface PaymentSummaryItem {
   payment_method: string;
   payment_date: Date;
   concept: string;
+  cotizacion_id?: string | null;
 }
 
 interface EventFinancialSummaryCardProps {
@@ -103,6 +107,12 @@ export function EventFinancialSummaryCard({
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [annexMenuOpenId, setAnnexMenuOpenId] = useState<string | null>(null);
+  const [annexCancelWithFunds, setAnnexCancelWithFunds] = useState<{ id: string; name: string } | null>(null);
+  const [annexCancelSimple, setAnnexCancelSimple] = useState<{ id: string; name: string } | null>(null);
+  const [annexDeleteConfirm, setAnnexDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [annexActionLoading, setAnnexActionLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setPayments(initialPayments.map(toPaymentItem));
@@ -128,12 +138,18 @@ export function EventFinancialSummaryCard({
   }, [annexPreviewId, studioSlug]);
 
   const { totalContract, totalPaid, balanceDue, breakdown, showAnexosSeparatorAfterIndex, anexosLabel } = useMemo(() => {
-    const allQuotes: QuoteSnapshot[] =
+    const rawQuotes: QuoteSnapshot[] =
       initialQuote == null
         ? []
         : Array.isArray(initialQuote)
           ? [...initialQuote]
           : [initialQuote];
+    // Filtrar cotizaciones sin id o con estado eliminada (integridad: evitar referencias huérfanas)
+    const allQuotes = rawQuotes.filter((q) => {
+      const id = (q as { id?: string }).id;
+      const status = (q as { status?: string }).status ?? '';
+      return id != null && id !== '' && status.toLowerCase() !== 'deleted';
+    });
     const isAnnex = (q: QuoteSnapshot) => (q as { parent_cotizacion_id?: string | null }).parent_cotizacion_id != null;
     const masterFirst = [...allQuotes].sort((a, b) => {
       const aId = (a as { id?: string }).id;
@@ -168,11 +184,13 @@ export function EventFinancialSummaryCard({
         ? masterFirst.map((q) => {
             const id = (q as { id?: string }).id ?? null;
             const name = (q as { name?: string }).name?.trim() || 'Sin nombre';
+            const status = (q as { status?: string }).status ?? null;
             const isApproved = !q.status || APPROVED_STATUSES.includes(String(q.status).toLowerCase());
             const micro = getQuoteMicroSummary(q);
             return {
               id,
               name,
+              status,
               total: micro.total,
               isPending: !isApproved,
               isAnnex: isAnnex(q),
@@ -269,6 +287,82 @@ export function EventFinancialSummaryCard({
     setIsReceiptModalOpen(true);
   };
 
+  const hasPaymentsForAnnex = (cotizacionId: string) =>
+    initialPayments.some((p) => (p as { cotizacion_id?: string | null }).cotizacion_id === cotizacionId);
+
+  const handleAnnexEdit = (row: (typeof breakdown)[0]) => {
+    setAnnexMenuOpenId(null);
+    if (!row.id || !promiseId || !studioSlug) return;
+    if (!row.isPending) {
+      toast.info('Este anexo está autorizado. Los cambios pueden requerir una nueva versión.');
+    }
+    router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${row.id}?from=evento&returnUrl=${encodeURIComponent(`/${studioSlug}/studio/business/events/${eventId || ''}`)}`);
+  };
+
+  const handleAnnexCancelWithFundsConfirm = async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
+    if (!annexCancelWithFunds?.id || !studioSlug) {
+      toast.error('Datos incompletos para cancelar');
+      return;
+    }
+    setAnnexActionLoading(true);
+    try {
+      const result = await cancelarCotizacion(studioSlug, annexCancelWithFunds.id, {
+        motivo: data.reason,
+        solicitante: data.requestedBy,
+        destinoFondos: data.fundDestination,
+      });
+      if (result.success) {
+        toast.success('Anexo cancelado');
+        setAnnexCancelWithFunds(null);
+        onPaymentAdded?.();
+      } else {
+        toast.error(result.error ?? 'Error al cancelar');
+      }
+    } finally {
+      setAnnexActionLoading(false);
+    }
+  };
+
+  const handleAnnexCancelSimpleConfirm = async () => {
+    if (!annexCancelSimple?.id || !studioSlug) {
+      toast.error('Datos incompletos para cancelar');
+      return;
+    }
+    setAnnexActionLoading(true);
+    try {
+      const result = await cancelarCotizacion(studioSlug, annexCancelSimple.id);
+      if (result.success) {
+        toast.success('Anexo cancelado');
+        setAnnexCancelSimple(null);
+        onPaymentAdded?.();
+      } else {
+        toast.error(result.error ?? 'Error al cancelar');
+      }
+    } finally {
+      setAnnexActionLoading(false);
+    }
+  };
+
+  const handleAnnexDeleteConfirm = async () => {
+    if (!annexDeleteConfirm?.id || !studioSlug) {
+      toast.error('Datos incompletos para eliminar');
+      return;
+    }
+    setAnnexActionLoading(true);
+    try {
+      const result = await deleteCotizacion(annexDeleteConfirm.id, studioSlug);
+      if (result.success) {
+        toast.success('Anexo eliminado');
+        setAnnexDeleteConfirm(null);
+        onPaymentAdded?.();
+      } else {
+        toast.error(result.error ?? 'Error al eliminar');
+      }
+    } finally {
+      setAnnexActionLoading(false);
+    }
+  };
+
   return (
     <>
       <ZenCard>
@@ -316,17 +410,80 @@ export function EventFinancialSummaryCard({
               const isMaster = row.id === mainCotizacionId;
               return (
                 <li key={rowKey}>
-                  <button
-                    type="button"
-                    className={`w-full flex items-center justify-between gap-2 py-2.5 text-left transition-colors ${indentAsChild ? 'bg-zinc-800/60 pl-6 pr-3' : 'bg-zinc-800/50 px-3'} hover:bg-zinc-800/70`}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={`w-full flex items-center justify-between gap-2 py-2.5 text-left transition-colors cursor-pointer ${indentAsChild ? 'bg-zinc-800/60 pl-6 pr-3' : 'bg-zinc-800/50 px-3'} hover:bg-zinc-800/70`}
                     onClick={() => setExpandedQuoteId(isRowExpanded ? null : rowKey)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setExpandedQuoteId(isRowExpanded ? null : rowKey);
+                      }
+                    }}
                   >
                     <span className="flex items-center gap-2 min-w-0">
                       {isRowExpanded ? <ChevronUp className="h-3 w-3 text-zinc-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-zinc-500 shrink-0" />}
                       <span className={`truncate text-sm ${isPending ? 'text-zinc-400' : 'text-emerald-100 font-medium'}`}>{row.name}</span>
                     </span>
-                    <span className={`text-xs tabular-nums shrink-0 ${isPending ? 'text-zinc-500' : 'text-emerald-300'}`}>{formatearMoneda(row.total)}</span>
-                  </button>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className={`text-xs tabular-nums ${isPending ? 'text-zinc-500' : 'text-emerald-300'}`}>{formatearMoneda(row.total)}</span>
+                      {row.isAnnex && row.id && promiseId && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <ZenDropdownMenu open={annexMenuOpenId === row.id} onOpenChange={(open) => setAnnexMenuOpenId(open ? row.id : null)}>
+                            <ZenDropdownMenuTrigger asChild>
+                              <ZenButton variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-zinc-300">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </ZenButton>
+                            </ZenDropdownMenuTrigger>
+                            <ZenDropdownMenuContent align="end">
+                              <ZenDropdownMenuItem onClick={() => handleAnnexEdit(row)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </ZenDropdownMenuItem>
+                              <ZenDropdownMenuSeparator />
+                              <ZenDropdownMenuItem
+                                onClick={() => {
+                                  setAnnexMenuOpenId(null);
+                                  const annexId = row.id;
+                                  if (!annexId || typeof annexId !== 'string') {
+                                    console.warn('[EventFinancialSummaryCard] Cancelar: row.id inválido', { row });
+                                    toast.error('No se pudo identificar el anexo');
+                                    return;
+                                  }
+                                  if (row.isPending || !hasPaymentsForAnnex(annexId)) {
+                                    setAnnexCancelSimple({ id: annexId, name: row.name });
+                                  } else {
+                                    setAnnexCancelWithFunds({ id: annexId, name: row.name });
+                                  }
+                                }}
+                                className="text-amber-400 focus:text-amber-300"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancelar
+                              </ZenDropdownMenuItem>
+                              <ZenDropdownMenuItem
+                                onClick={() => {
+                                  setAnnexMenuOpenId(null);
+                                  const annexId = row.id;
+                                  if (!annexId || typeof annexId !== 'string') {
+                                    console.warn('[EventFinancialSummaryCard] Eliminar: row.id inválido', { row });
+                                    toast.error('No se pudo identificar el anexo');
+                                    return;
+                                  }
+                                  setAnnexDeleteConfirm({ id: annexId, name: row.name });
+                                }}
+                                className="text-red-400 focus:text-red-300"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </ZenDropdownMenuItem>
+                            </ZenDropdownMenuContent>
+                          </ZenDropdownMenu>
+                        </div>
+                      )}
+                    </span>
+                  </div>
                   {isRowExpanded && (
                     <div className={`pb-3 pt-4 border-t border-zinc-800 bg-zinc-900/30 ${indentAsChild ? 'pl-7 pr-3' : 'px-3'}`}>
                       <div className="space-y-2 text-sm">
@@ -545,6 +702,48 @@ export function EventFinancialSummaryCard({
         studioSlug={studioSlug}
         promiseId={promiseId}
         title={cotizacionPreviewId ? breakdown.find((r) => r.id === cotizacionPreviewId)?.name ?? 'Cotización' : 'Cotización'}
+      />
+
+      <CancelationWithFundsModal
+        isOpen={!!annexCancelWithFunds}
+        onClose={() => !annexActionLoading && setAnnexCancelWithFunds(null)}
+        onConfirm={handleAnnexCancelWithFundsConfirm}
+        title="Cancelar anexo"
+        description={
+          <p className="text-sm text-zinc-400">
+            Hay pagos registrados en este anexo. Indica el motivo, quién solicita la cancelación y el destino del dinero.
+          </p>
+        }
+        isLoading={annexActionLoading}
+        saveLabel="Sí, cancelar"
+        cancelLabel="No cancelar"
+        showFundDestination
+      />
+
+      <ZenConfirmModal
+        isOpen={!!annexCancelSimple}
+        onClose={() => !annexActionLoading && setAnnexCancelSimple(null)}
+        onConfirm={handleAnnexCancelSimpleConfirm}
+        title="Cancelar anexo"
+        description="¿Deseas cancelar este anexo? El estado pasará a cancelado."
+        confirmText="Sí, cancelar"
+        cancelText="No"
+        variant="destructive"
+        loading={annexActionLoading}
+        loadingText="Cancelando..."
+      />
+
+      <ZenConfirmModal
+        isOpen={!!annexDeleteConfirm}
+        onClose={() => !annexActionLoading && setAnnexDeleteConfirm(null)}
+        onConfirm={handleAnnexDeleteConfirm}
+        title="Eliminar anexo"
+        description="¿Eliminar permanentemente este anexo? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={annexActionLoading}
+        loadingText="Eliminando..."
       />
     </>
   );

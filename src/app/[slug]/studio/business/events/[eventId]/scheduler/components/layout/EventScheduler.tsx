@@ -83,6 +83,7 @@ interface ItemMetadata {
   hideBadge?: boolean;
   isSubtask?: boolean;
   stageCategory?: TaskCategoryStage;
+  isAnnex?: boolean;
 }
 
 interface EventSchedulerProps {
@@ -1162,17 +1163,25 @@ export const EventScheduler = React.memo(function EventScheduler({
     const allItemsForMap: CotizacionItem[] = [];
     cotizaciones.forEach((cot) => {
       const isApproved = cot.status === 'autorizada' || cot.status === 'aprobada' || cot.status === 'approved' || cot.status === 'seleccionada';
-      if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
+      const parentId = (cot as { parent_cotizacion_id?: string | null }).parent_cotizacion_id;
+      if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push({ ...item, _parent_cotizacion_id: parentId } as CotizacionItem));
     });
-    // Construcción directa del Map sin ordenamiento previo
-    // buildSchedulerRows se encarga del ordenamiento usando scheduler_task.order
-    const itemsMapForRows = new Map<string, CotizacionItem>();
-    allItemsForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
-    
-    // ✅ CRÍTICO: Usar latestSeccionesRef.current (siempre fresco, incluso en clausuras)
+    const schedulerTasks = localEventData.scheduler?.tasks ?? [];
+    const rowsMap = new Map<string, CotizacionItem>();
+    for (const item of allItemsForMap) {
+      const tasksForItem = schedulerTasks.filter(
+        (t): t is typeof t & { cotizacion_item_id: string } => t.cotizacion_item_id === item.id
+      );
+      const tasks = tasksForItem.length > 0 ? tasksForItem : (item.scheduler_task ? [item.scheduler_task] : []);
+      const isAnnex = !!(item as { _parent_cotizacion_id?: string | null })._parent_cotizacion_id;
+      for (const task of tasks) {
+        const taskId = (task as { id?: string }).id;
+        if (!taskId) continue;
+        rowsMap.set(taskId, { ...item, scheduler_task: task, _is_annex: isAnnex } as CotizacionItem);
+      }
+    }
     const currentSecciones = latestSeccionesRef.current;
-    
-    const rows = buildSchedulerRows(currentSecciones, itemsMapForRows, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage, catalogCategoryOrderByStage ?? null);
+    const rows = buildSchedulerRows(currentSecciones, rowsMap, manualTasksForRows, activeSectionIds, explicitlyActivatedStageIds, customCategoriesBySectionStage, catalogCategoryOrderByStage ?? null);
     const blocks = groupRowsIntoBlocks(rows);
     const map = new Map<string, { stageKey: string; catalogCategoryId: string | null; order: number }>();
     for (const b of blocks) {
@@ -1377,8 +1386,20 @@ export const EventScheduler = React.memo(function EventScheduler({
           if (isApproved) cot.cotizacion_items?.forEach((item) => item && allItemsForMap.push(item));
         });
         // Construcción directa del Map sin ordenamiento previo
-        const itemsMapForRows = new Map<string, CotizacionItem>();
-        allItemsForMap.forEach((item) => itemsMapForRows.set(item.item_id || item.id, item));
+        const schedulerTasks = localEventData.scheduler?.tasks ?? [];
+        const rowsMap = new Map<string, CotizacionItem>();
+        for (const item of allItemsForMap) {
+          const tasksForItem = schedulerTasks.filter(
+            (t): t is typeof t & { cotizacion_item_id: string } => t.cotizacion_item_id === item.id
+          );
+          const tasks = tasksForItem.length > 0 ? tasksForItem : (item.scheduler_task ? [item.scheduler_task] : []);
+          for (const task of tasks) {
+            const taskId = (task as { id?: string }).id;
+            if (!taskId) continue;
+            rowsMap.set(taskId, { ...item, scheduler_task: task } as CotizacionItem);
+          }
+        }
+        const itemsMapForRows = rowsMap;
 
         // ✅ CRÍTICO: Usar currentSecciones (desde ref, siempre fresco)
         const rows = buildSchedulerRows(
@@ -2040,7 +2061,7 @@ export const EventScheduler = React.memo(function EventScheduler({
     [studioSlug, eventId, localEventData, notifyParentDataChange, applySegmentOrderNormalization]
   );
 
-  const itemsMap = useMemo(() => {
+  const { itemsMap, itemsMapForRows } = useMemo(() => {
     const allItems: CotizacionItem[] = [];
     localEventData.cotizaciones?.forEach((cotizacion) => {
       const isApproved = cotizacion.status === 'autorizada'
@@ -2048,15 +2069,80 @@ export const EventScheduler = React.memo(function EventScheduler({
         || cotizacion.status === 'approved'
         || cotizacion.status === 'seleccionada';
       if (isApproved) {
-        cotizacion.cotizacion_items?.forEach((item) => allItems.push(item));
+        const parentId = (cotizacion as { parent_cotizacion_id?: string | null }).parent_cotizacion_id;
+        const cotIsAnexo = !!(cotizacion as { is_anexo?: boolean }).is_anexo || !!parentId;
+        cotizacion.cotizacion_items?.forEach((item) =>
+          allItems.push({
+            ...item,
+            _parent_cotizacion_id: parentId,
+            _is_annex: cotIsAnexo,
+          } as CotizacionItem)
+        );
       }
     });
 
-    // Construcción directa del Map sin ordenamiento previo
-    const map = new Map<string, CotizacionItem>();
-    allItems.forEach((item) => map.set(item.item_id || item.id, item));
-    return map;
-  }, [localEventData.cotizaciones]);
+    const schedulerTasks = localEventData.scheduler?.tasks ?? [];
+    const catalogMap = new Map<string, CotizacionItem>();
+    const rowsMap = new Map<string, CotizacionItem>();
+
+    for (const item of allItems) {
+      catalogMap.set(item.item_id || item.id, item);
+      const tasksForItem = schedulerTasks.filter(
+        (t): t is typeof t & { cotizacion_item_id: string } =>
+          t.cotizacion_item_id === item.id
+      );
+      const tasks = tasksForItem.length > 0 ? tasksForItem : (item.scheduler_task ? [item.scheduler_task] : []);
+      // isAnnex redundante: varias fuentes para no perderlo (item ya tiene _is_annex desde allItems)
+      const isAnnex = !!(
+        (item as { _is_annex?: boolean })._is_annex ||
+        (item as { is_annex?: boolean }).is_annex ||
+        (item as { _parent_cotizacion_id?: string | null })._parent_cotizacion_id
+      );
+      const itemSt = item.scheduler_task as { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null; profit_type_snapshot?: string | null } | null | undefined;
+      const itemBilling = (item as { billing_type?: string | null }).billing_type ?? (item as { billing_type_snapshot?: string | null }).billing_type_snapshot;
+      const itemProfit = (item as { profit_type?: string | null }).profit_type ?? (item as { profit_type_snapshot?: string | null }).profit_type_snapshot;
+      const itemUnitType = (item as { unit_type?: string | null }).unit_type;
+      for (const task of tasks) {
+        const taskId = (task as { id?: string }).id;
+        if (!taskId) continue;
+        // Snapshots en raíz de la tarea: prioridad task → item.scheduler_task → item
+        const taskWithSnapshots = {
+          ...task,
+          billing_type_snapshot: (task as { billing_type_snapshot?: string | null }).billing_type_snapshot ?? itemSt?.billing_type_snapshot ?? itemUnitType ?? itemBilling ?? null,
+          duration_hours_snapshot: (task as { duration_hours_snapshot?: number | null }).duration_hours_snapshot ?? itemSt?.duration_hours_snapshot ?? (item as { duration_hours?: number | null }).duration_hours ?? null,
+          profit_type_snapshot: (task as { profit_type_snapshot?: string | null }).profit_type_snapshot ?? itemSt?.profit_type_snapshot ?? itemProfit ?? null,
+        };
+        rowsMap.set(taskId, { ...item, scheduler_task: taskWithSnapshots, _is_annex: isAnnex } as CotizacionItem);
+      }
+    }
+
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development' && allItems.length > 0) {
+      const firstRow = Array.from(rowsMap.values())[0];
+      const rawItem = allItems[0];
+      console.log('[DEBUG] Raw Item 0:', {
+        name: rawItem?.name,
+        unit_type: (rawItem as { unit_type?: string }).unit_type,
+        billing_type: (rawItem as { billing_type?: string }).billing_type,
+        item_scheduler_task: rawItem?.scheduler_task ? {
+          billing_type_snapshot: (rawItem.scheduler_task as { billing_type_snapshot?: string }).billing_type_snapshot,
+          duration_hours_snapshot: (rawItem.scheduler_task as { duration_hours_snapshot?: number }).duration_hours_snapshot,
+          profit_type_snapshot: (rawItem.scheduler_task as { profit_type_snapshot?: string }).profit_type_snapshot,
+        } : null,
+        first_row_task: firstRow?.scheduler_task ? {
+          billing_type_snapshot: (firstRow.scheduler_task as { billing_type_snapshot?: string }).billing_type_snapshot,
+          duration_hours_snapshot: (firstRow.scheduler_task as { duration_hours_snapshot?: number }).duration_hours_snapshot,
+          profit_type_snapshot: (firstRow.scheduler_task as { profit_type_snapshot?: string }).profit_type_snapshot,
+        } : null,
+        is_annex: (firstRow as { _is_annex?: boolean })?._is_annex,
+        raw_object: rawItem,
+      });
+    }
+
+    return {
+      itemsMap: catalogMap,
+      itemsMapForRows: rowsMap,
+    };
+  }, [localEventData.cotizaciones, localEventData.scheduler?.tasks]);
 
   // Dependencia en localEventData para que cualquier cambio (p. ej. duración en Popover) entregue un array nuevo al Grid y las keys con end_date.getTime() disparen remontaje de barras.
   const manualTasks = useMemo(() => {
@@ -3278,6 +3364,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         duration={durationDays}
         hideBadge={metadata.hideBadge}
         stageCategory={metadata.stageCategory}
+        isAnnex={metadata.isAnnex}
       />
     );
   };
@@ -3352,7 +3439,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           columnWidth={columnWidth}
           secciones={seccionesFiltradasConItems}
           fullSecciones={secciones}
-          itemsMap={itemsMap as React.ComponentProps<typeof SchedulerPanel>['itemsMap']}
+          itemsMap={itemsMapForRows as React.ComponentProps<typeof SchedulerPanel>['itemsMap']}
           manualTasks={manualTasks as React.ComponentProps<typeof SchedulerPanel>['manualTasks']}
           studioSlug={studioSlug}
           eventId={eventId}

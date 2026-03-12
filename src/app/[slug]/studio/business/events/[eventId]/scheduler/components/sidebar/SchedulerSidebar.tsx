@@ -105,6 +105,8 @@ interface ItemMetadata {
   isSubtask?: boolean;
   /** Stage para color del badge (alinado con powerbar) */
   stageCategory?: TaskCategoryStage;
+  /** Si true, la tarea pertenece a un anexo (cotización adicional) */
+  isAnnex?: boolean;
 }
 
 
@@ -1530,7 +1532,14 @@ function SchedulerItem({
       </ZenAvatar>
       <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
         <p className={`text-sm leading-tight line-clamp-2 ${isCompleted ? 'font-normal italic text-zinc-500 line-through decoration-2 decoration-zinc-500' : ((localItem.scheduler_task as { parent_id?: string | null })?.parent_id ? 'font-normal text-zinc-200' : 'font-medium text-zinc-200')}`}>
-          {metadata.servicioNombre}
+          <>
+            {metadata.servicioNombre}
+            {metadata.isAnnex && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0 ml-1 align-middle">
+                Anexo
+              </span>
+            )}
+          </>
         </p>
         {localItem.assigned_to_crew_member && (
           <p className={`text-[11px] leading-tight truncate ${isCompleted ? 'font-normal italic text-zinc-600 line-through decoration-2 decoration-zinc-600' : 'text-zinc-500'}`}>
@@ -2840,6 +2849,7 @@ export const SchedulerSidebar = ({
                             hideBadge: hasItemDuration,
                             isSubtask: isValidSubtask,
                             stageCategory: stageRow.category,
+                            isAnnex: !!(row.item as { _is_annex?: boolean })._is_annex,
                           }}
                           studioSlug={studioSlug}
                           eventId={eventId}

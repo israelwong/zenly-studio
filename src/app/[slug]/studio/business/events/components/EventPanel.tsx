@@ -54,6 +54,7 @@ export function EventPanel({
               payment_method: p.payment_method,
               payment_date: p.payment_date,
               concept: p.concept ?? '',
+              cotizacion_id: p.cotizacion_id ?? null,
             }))}
             studioSlug={studioSlug}
             cotizacionId={eventData.cotizacion?.id ?? null}

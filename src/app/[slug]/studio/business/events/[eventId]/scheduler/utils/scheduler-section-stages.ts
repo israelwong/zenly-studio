@@ -755,7 +755,8 @@ export function buildSchedulerRows(
 
   // Ítems de cotización: sección y categoría desde snapshot de la tarea (inmutable); fallback a catálogo solo para datos legacy.
   let displayIndex = 0;
-  for (const item of itemsMap.values()) {
+  const itemsFromMap = Array.from(itemsMap.values());
+  for (const item of itemsFromMap) {
     const task = item.scheduler_task as (typeof item.scheduler_task) & {
       catalog_category_id?: string | null;
       catalog_category_name_snapshot?: string | null;

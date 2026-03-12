@@ -331,7 +331,14 @@ export const TaskBar = React.memo(({
             className="w-full h-full flex items-center justify-between gap-1 px-1.5 pointer-events-none"
             title={`${taskName}\n${format(localStartDate, 'd MMM', { locale: es })} - ${format(localEndDate, 'd MMM', { locale: es })}`}
           >
-          <span className={`flex-1 min-w-0 truncate text-center text-xs ${isCompleted ? 'font-normal' : 'font-medium'}`}>{taskName}</span>
+          <span className={`flex-1 min-w-0 truncate text-center text-xs flex items-center justify-center gap-1 ${isCompleted ? 'font-normal' : 'font-medium'}`}>
+            {taskName}
+            {(item as { _is_annex?: boolean })?._is_annex && (
+              <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[9px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">
+                Anexo
+              </span>
+            )}
+          </span>
           <div className="shrink-0 flex items-center gap-1">
             {item?.scheduler_task?.sync_status === 'INVITED' && (
               <div title="Sincronizado con Google Calendar">

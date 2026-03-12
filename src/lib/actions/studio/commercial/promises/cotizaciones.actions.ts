@@ -7,6 +7,44 @@ import { Prisma } from '@prisma/client';
 import { withRetry } from '@/lib/database/retry-helper';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
+/**
+ * Limpia referencias huérfanas en el evento: si evento.cotizacion_id apunta a una cotización inexistente, lo resetea.
+ * Se ejecuta al cargar el panel del evento para evitar "Cotización no encontrada".
+ */
+export async function cleanupOrphanAnnexes(
+  studioSlug: string,
+  eventId: string
+): Promise<{ cleaned: boolean }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { cleaned: false };
+
+    const evento = await prisma.studio_events.findFirst({
+      where: { id: eventId, studio_id: studio.id },
+      select: { cotizacion_id: true },
+    });
+    if (!evento?.cotizacion_id) return { cleaned: false };
+
+    const existe = await prisma.studio_cotizaciones.findUnique({
+      where: { id: evento.cotizacion_id },
+      select: { id: true },
+    });
+    if (existe) return { cleaned: false };
+
+    await prisma.studio_events.update({
+      where: { id: eventId },
+      data: { cotizacion_id: null, updated_at: new Date() },
+    });
+    return { cleaned: true };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error en cleanupOrphanAnnexes:', error);
+    return { cleaned: false };
+  }
+}
+
 /** Snapshot: mapeo operational_category (catálogo) → task_type (cotización) para Workflows Inteligentes */
 function operationalCategoryToTaskType(oc: OperationalCategory | null): CotizacionItemType | undefined {
   if (!oc) return undefined;
@@ -1564,21 +1602,48 @@ export async function deleteCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Verificar que la cotizaciรณn existe y pertenece al studio
+    // Verificar que la cotización existe y pertenece al studio
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
         studio_id: studio.id,
       },
+      select: { id: true, name: true, promise_id: true, evento_id: true },
     });
 
     if (!cotizacion) {
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Eliminar la cotizaciรณn (los items se eliminan en cascade)
-    await prisma.studio_cotizaciones.delete({
-      where: { id: cotizacionId },
+    await prisma.$transaction(async (tx) => {
+      // 1. Desvincular scheduler_tasks (evitar FK violation al borrar cotizacion_items)
+      const itemIds = await tx.studio_cotizacion_items.findMany({
+        where: { cotizacion_id: cotizacionId },
+        select: { id: true },
+      });
+      if (itemIds.length > 0) {
+        await tx.studio_scheduler_event_tasks.updateMany({
+          where: { cotizacion_item_id: { in: itemIds.map((i) => i.id) } },
+          data: { cotizacion_item_id: null },
+        });
+      }
+
+      // 2. Limpiar pagos.cotizacion_id (studio_pagos no tiene onDelete: Cascade)
+      await tx.studio_pagos.updateMany({
+        where: { cotizacion_id: cotizacionId },
+        data: { cotizacion_id: null },
+      });
+
+      // 3. Limpiar evento.cotizacion_id si apunta a esta cotización
+      await tx.studio_events.updateMany({
+        where: { cotizacion_id: cotizacionId },
+        data: { cotizacion_id: null, updated_at: new Date() },
+      });
+
+      // 4. Eliminar cotización (cascade: cotizacion_items, cierre, etc.)
+      await tx.studio_cotizaciones.delete({
+        where: { id: cotizacionId },
+      });
     });
 
     // Registrar log si hay promise_id
@@ -1600,6 +1665,11 @@ export async function deleteCotizacion(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.evento_id) {
+      revalidatePath(`/${studioSlug}/studio/business/events/${cotizacion.evento_id}`);
+      revalidateTag('evento-detalle');
+      revalidateTag(`evento-${cotizacion.evento_id}`);
+    }
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/autorizada`);
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/anexos`);
@@ -1613,7 +1683,7 @@ export async function deleteCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error eliminando cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error eliminando cotización:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al eliminar cotizaciรณn',
@@ -3662,12 +3732,11 @@ export async function cancelarCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    // Usar studio_id directo (como deleteCotizacion) para evitar fallos con promise_id null
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
-        promise: {
-          studio_id: studio.id,
-        },
+        studio_id: studio.id,
       },
     });
 
@@ -3675,10 +3744,12 @@ export async function cancelarCotizacion(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Solo se pueden cancelar cotizaciones autorizadas, aprobadas o en cierre
+    const isAnnex = cotizacion.parent_cotizacion_id != null;
     const estadosCancelables = ['aprobada', 'autorizada', 'approved', 'en_cierre'];
-    if (!estadosCancelables.includes(cotizacion.status)) {
-      return { success: false, error: 'Solo se pueden cancelar cotizaciones autorizadas, aprobadas o en cierre' };
+    const estadosCancelablesAnnex = [...estadosCancelables, 'pendiente', 'negociacion'];
+    const estadosPermitidos = isAnnex ? estadosCancelablesAnnex : estadosCancelables;
+    if (!estadosPermitidos.includes(cotizacion.status)) {
+      return { success: false, error: isAnnex ? 'Solo se pueden cancelar anexos en pendiente, negociación, autorizada o aprobada' : 'Solo se pueden cancelar cotizaciones autorizadas, aprobadas o en cierre' };
     }
 
     const pagosCount = await prisma.studio_pagos.count({
@@ -3738,6 +3809,11 @@ export async function cancelarCotizacion(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.evento_id) {
+      revalidatePath(`/${studioSlug}/studio/business/events/${cotizacion.evento_id}`);
+      revalidateTag('evento-detalle');
+      revalidateTag(`evento-${cotizacion.evento_id}`);
+    }
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
       
@@ -3756,7 +3832,7 @@ export async function cancelarCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error cancelando cotizaciรณn:', error);
+    console.error('[COTIZACIONES] Error cancelando cotización:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al cancelar cotizaciรณn',

@@ -157,10 +157,29 @@ export function AnexosSection({
     }
   };
 
-  /** Cancelar: abre CancelationWithFundsModal (motivo, solicitante, destino fondos). Flujo estándar aunque el monto sea 0. */
-  const handleCancelarAnexoClick = (anexo: CotizacionListItem) => {
+  /** Cancelar: Caso A (pendiente) → cancelar directo sin modal. Caso B (autorizado) → intentar sin datos; si hay pagos, abrir CancelationWithFundsModal. */
+  const handleCancelarAnexoClick = async (anexo: CotizacionListItem) => {
     setDropdownOpenId(null);
-    setCancelAnnexWithFunds({ id: anexo.id, name: anexo.name });
+    setCancellingAnnexId(anexo.id);
+    try {
+      const result = await cancelarCotizacion(studioSlug, anexo.id);
+      if (result.success) {
+        toast.success('Propuesta cancelada');
+        await createPromiseLog(studioSlug, {
+          promise_id: promiseId!,
+          content: `Propuesta "${anexo.name}" cancelada.`,
+          log_type: 'system',
+          metadata: { cotizacion_id: anexo.id, action: 'anexo_cancelado' },
+        }).catch(() => {});
+        startTransition(() => onRefresh());
+      } else if (result.error?.includes('Hay pagos confirmados') || result.error?.includes('destino del dinero')) {
+        setCancelAnnexWithFunds({ id: anexo.id, name: anexo.name });
+      } else {
+        toast.error(result.error ?? 'Error al cancelar');
+      }
+    } finally {
+      setCancellingAnnexId(null);
+    }
   };
 
   const handleCancelAnnexWithFundsConfirm = async (data: { reason: string; requestedBy: 'estudio' | 'cliente'; fundDestination: 'retain' | 'refund' }) => {
