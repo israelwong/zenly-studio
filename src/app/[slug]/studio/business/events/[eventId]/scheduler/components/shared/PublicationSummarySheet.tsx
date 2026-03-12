@@ -48,34 +48,35 @@ interface PublicationSummarySheetProps {
 
 function PublicationSheetSkeleton() {
   return (
-    <div className="flex-1 flex flex-col min-h-0 px-6 py-4 gap-4">
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
+    <div className="flex-1 flex flex-col min-h-0 px-4 py-4 gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {[1, 2].map((sectionIdx) => (
-          <div key={sectionIdx} className="space-y-3">
-            <div className="border-b border-zinc-800 pb-1">
-              <Skeleton className="h-3 w-32 rounded" />
-            </div>
-            {[1, 2].map((catIdx) => (
-              <div key={catIdx} className="space-y-2">
-                <div className="pl-0.5">
+          <div key={sectionIdx} className="rounded-lg bg-zinc-800/30 p-3 space-y-3">
+            <Skeleton className="h-3 w-32 rounded" />
+            {[1, 2].map((stageIdx) => (
+              <div key={stageIdx} className="space-y-2">
+                <div className="flex items-center gap-2">
                   <Skeleton className="h-3 w-24 rounded" />
+                  <Skeleton className="h-3 w-8 rounded" />
                 </div>
-                <div className="border-l-4 border-l-zinc-600 pl-2.5 space-y-2">
-                  {[1, 2, 3].map((cardIdx) => (
-                    <div
-                      key={cardIdx}
-                      className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-800/30"
-                    >
-                      <Skeleton className="h-4 w-[85%] rounded mb-1.5" />
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Skeleton className="h-3 w-20 rounded" />
-                        <Skeleton className="h-3 w-3 rounded shrink-0" />
-                        <Skeleton className="h-3 w-24 rounded" />
-                        <Skeleton className="h-3 w-3 rounded shrink-0" />
-                        <Skeleton className="h-5 w-14 rounded" />
+                <div className="space-y-1.5 pl-2">
+                  <Skeleton className="h-2.5 w-20 rounded" />
+                  <div className="border-l-2 border-l-zinc-600 pl-2 space-y-2">
+                    {[1, 2].map((cardIdx) => (
+                      <div
+                        key={cardIdx}
+                        className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-800/30"
+                      >
+                        <Skeleton className="h-4 w-[85%] rounded mb-1.5" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Skeleton className="h-3 w-20 rounded" />
+                          <Skeleton className="h-3 w-3 rounded shrink-0" />
+                          <Skeleton className="h-3 w-24 rounded" />
+                          <Skeleton className="h-5 w-14 rounded" />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

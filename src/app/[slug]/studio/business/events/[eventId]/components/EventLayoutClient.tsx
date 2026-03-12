@@ -143,7 +143,7 @@ export function EventLayoutClient({
             }
           />
         )}
-        <ZenCardContent className="p-6">
+        <ZenCardContent className={isSchedulerRoute ? 'p-0' : 'p-6'}>
           {isBaseRoute ? (
             <EventPanel
               studioSlug={studioSlug}
