@@ -137,13 +137,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const multiplierLabel = isHourBilling && durationHours != null
       ? `x${durationHours}h`
       : `x${localItem.quantity ?? 1}`;
-    // HOUR: siempre recalcular costo × durationHours (evita mostrar budget_amount erróneo de syncs anteriores).
-    // SERVICE/UNIT: prioridad budget_amount de la tarea, fallback costo × cantidad.
-    const costoTotal =
-      isHourBilling && durationHours != null
-        ? costoUnitario * durationHours
-        : (st?.budget_amount != null ? Number(st.budget_amount) : null) ??
-          costoUnitario * (localItem.quantity ?? 1);
+    // Database-first: presupuesto solo desde budget_amount de la tarea (sin cálculos al vuelo)
+    const budgetAmount = st?.budget_amount != null ? Number(st.budget_amount) : null;
 
     const loadMembers = useCallback(async () => {
         try {
@@ -531,7 +526,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                     {multiplierLabel}
                                 </ZenBadge>
                                 <span className="text-emerald-400 font-medium">
-                                    {costoTotal > 0 ? formatCurrency(costoTotal) : '—'}
+                                    {budgetAmount != null && budgetAmount > 0 ? formatCurrency(budgetAmount) : '—'}
                                 </span>
                             </div>
                         </div>
@@ -701,7 +696,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     studioSlug={studioSlug}
                     itemId={localItem.id}
                     itemName={itemName}
-                    costoTotal={costoTotal}
+                    costoTotal={budgetAmount ?? undefined}
                 />
             )}
 

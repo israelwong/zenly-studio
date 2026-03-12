@@ -73,21 +73,8 @@ export function LogisticsTaskCard({
   const mostrarBotonInvitar = googleCalendarConectado && tarea.tienePersonal && onInvitar && !tieneInvitacionEnviada;
   const mostrarBotonCancelar = googleCalendarConectado && tieneInvitacionEnviada && onCancelarInvitacion;
 
-  // Desglose según tipo: HOUR = costo/h × horas; SERVICE/UNIT = costo × cantidad
-  const tooltipDesglose = ((): string | null => {
-    if (tarea.budgetAmount == null) return null;
-    const bt = tarea.billingType ?? 'SERVICE';
-    const costo = tarea.costoUnitario ?? 0;
-    const q = tarea.quantity ?? 1;
-    const horas = tarea.durationHours ?? null;
-    if (bt === 'HOUR' && horas != null && horas > 0 && costo > 0) {
-      return `${fmt(costo)}/h × ${horas} h`;
-    }
-    if ((bt === 'SERVICE' || bt === 'UNIT') && costo > 0) {
-      return `${fmt(costo)} × ${q}`;
-    }
-    return `Total ${fmt(tarea.budgetAmount)}`;
-  })();
+  // Database-first: solo mostrar total desde budget_amount (sin cálculos con catálogo)
+  const tooltipDesglose = tarea.budgetAmount != null ? `Total ${fmt(tarea.budgetAmount)}` : null;
 
   const pagado = tarea.payrollState?.status === 'pagado';
   const IconPago = pagado ? CheckCircle2 : Clock;

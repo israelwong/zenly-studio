@@ -31,7 +31,8 @@ interface AssignCrewBeforeCompleteModalProps {
   /** Solo presente para ítems de cotización; ausente para tareas manuales */
   itemId?: string;
   itemName: string;
-  costoTotal: number;
+  /** Presupuesto desde budget_amount de la tarea (database-first). Opcional si no hay tarea sincronizada. */
+  costoTotal?: number;
 }
 
 function getInitials(name: string) {
@@ -227,7 +228,7 @@ export function AssignCrewBeforeCompleteModal({
           <div className="bg-zinc-800/50 rounded-lg p-3 space-y-1">
             <div className="text-sm text-zinc-400">Tarea:</div>
             <div className="text-sm font-medium text-zinc-200">{itemName}</div>
-            {costoTotal > 0 && (
+            {costoTotal != null && costoTotal > 0 && (
               <div className="text-xs text-zinc-500">
                 Costo: <span className="text-emerald-400 font-medium">{formatCurrency(costoTotal)}</span>
               </div>

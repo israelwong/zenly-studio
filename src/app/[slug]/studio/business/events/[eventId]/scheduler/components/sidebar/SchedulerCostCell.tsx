@@ -12,14 +12,12 @@ function formatCurrency(value: number) {
 }
 
 export function SchedulerCostCell({ item }: SchedulerCostCellProps) {
-  // Mostrar costo total interno: costo (unitario) * cantidad
-  // Este es el costo que se paga al personal, no el precio al cliente
-  const unitaryCost = item.cost ?? 0;
-  const totalCost = unitaryCost * item.quantity;
+  // Database-first: presupuesto solo desde budget_amount de la tarea (sin cálculos al vuelo)
+  const budgetAmount = item.scheduler_task?.budget_amount != null ? Number(item.scheduler_task.budget_amount) : null;
 
   return (
     <div className="text-sm text-zinc-300 font-medium">
-      {totalCost > 0 ? formatCurrency(totalCost) : '—'}
+      {budgetAmount != null && budgetAmount > 0 ? formatCurrency(budgetAmount) : '—'}
     </div>
   );
 }

@@ -2785,9 +2785,9 @@ export const EventScheduler = React.memo(function EventScheduler({
         return;
       }
 
-      // Calcular costo
-      const costoUnitario = itemFound.cost ?? itemFound.cost_snapshot ?? 0;
-      const costoTotal = costoUnitario * (itemFound.quantity || 1);
+      // Database-first: presupuesto solo desde budget_amount de la tarea (sin cálculos al vuelo)
+      const st = itemFound.scheduler_task as { budget_amount?: number | null } | undefined;
+      const costoTotal = st?.budget_amount != null ? Number(st.budget_amount) : 0;
       const itemName = itemFound.name || itemFound.name_snapshot || 'Tarea sin nombre';
 
       // Si tiene personal asignado, verificar si tiene sueldo fijo
