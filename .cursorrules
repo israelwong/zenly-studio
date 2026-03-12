@@ -8,6 +8,35 @@
 
 ---
 
+## 📋 PROTOCOLO SSOT — MIGRACIÓN DE DOCUMENTACIÓN POR ITERACIÓN
+
+Cada iteración de desarrollo incluye una **fase de Migración de Documentación SSOT**. Seguir este protocolo siempre.
+
+### 1. Protocolo de Inicio de Tarea
+
+- **Antes de implementar cualquier cambio**, lee siempre: `.cursor/docs/ssot/00.01-meta-criterios-documentacion.md`
+- Cuando te asignen una sección (ej. "Vamos a trabajar en el Scheduler"), **lo primero** es pedir el documento Legacy de referencia.
+
+### 2. Proceso de Refactorización Documental
+
+- **Identificar Dominio**: Clasifica el contenido según la arquitectura de 7 dominios:
+  - `10` Core · `20` Comercial · `30` Financiero · `40` Operaciones · `50` Admin · `60` Cliente · `70` Config
+- **Crear/Actualizar SSOT**: Genera el nuevo documento en la ruta correspondiente siguiendo los criterios de *Riqueza de información* (Ejemplos, DB, Actions, Fixes).
+- **Depuración**: Una vez creado el nuevo SSOT, notifica para descontinuar/borrar el documento viejo y evitar duplicidad (Zombies).
+
+### 3. Verificación de Integridad
+
+- Cada vez que escribas un doc, pasa el **Checklist de la Sección 6** de los criterios.
+- Si falta la persistencia en DB o los archivos clave, el documento **no se considera terminado**.
+
+### 4. Referencias Cruzadas
+
+- Los documentos de *Flow* deben enlazar a los de *Arquitectura* y viceversa.
+- Usar **rutas relativas** en los enlaces.
+- Si un documento SSOT menciona una Server Action, el comentario de la función en el código debe incluir el ID del doc. Ej: `// @ssot 40.02`
+
+---
+
 ## 🤖 MODO HAIKU - REGLAS DE EFICIENCIA
 
 **PRINCIPIO FUNDAMENTAL: Máxima utilidad, mínimos tokens**
