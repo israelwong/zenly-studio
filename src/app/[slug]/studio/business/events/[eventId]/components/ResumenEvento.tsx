@@ -140,10 +140,14 @@ export function ResumenEvento({ studioSlug, eventId, eventData, initialResumen }
 
   const getDisplayValue = useCallback(
     (field: ContactField) => {
-      if (localContactOverrides[field] !== undefined) return localContactOverrides[field] ?? '—';
+      if (localContactOverrides[field] !== undefined) {
+        const v = localContactOverrides[field];
+        if (field === 'email' && (!v || !String(v).trim())) return 'Sin correo definido';
+        return v ?? (field === 'email' ? 'Sin correo definido' : '—');
+      }
       if (field === 'name') return contact?.name ?? 'Sin nombre';
       if (field === 'phone') return contact?.phone ?? '—';
-      return contact?.email ?? '—';
+      return contact?.email?.trim() || 'Sin correo definido';
     },
     [contact, localContactOverrides]
   );
@@ -720,7 +724,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData, initialResumen }
                   onClick={(e) => {
                     e.stopPropagation();
                     const val = getDisplayValue('email');
-                    if (val && val !== '—') {
+                    if (val && val !== 'Sin correo definido') {
                       navigator.clipboard.writeText(val).then(
                         () => toast.success('Correo copiado'),
                         () => {}

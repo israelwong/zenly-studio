@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users } from 'lucide-react';
+import { Users, Archive, ArchiveRestore } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
@@ -14,6 +14,8 @@ import { EventDetailHeader } from './EventDetailHeader';
 import { EventDetailToolbar } from './EventDetailToolbar';
 import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
 import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
+import { ArchiveEventModal } from './ArchiveEventModal';
+import { UnarchiveEventModal } from './UnarchiveEventModal';
 import { getAllEventContracts } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { toast } from 'sonner';
 
@@ -50,6 +52,19 @@ export function EventLayoutClient({
   const [contratosCount, setContratosCount] = useState(initialContratosCount ?? 0);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [crewManagerOpen, setCrewManagerOpen] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
+
+  const { archivadoStage, firstActiveStage, isArchived } = useMemo(() => {
+    const archivado = pipelineStages.find((s) => s.slug === 'archivado');
+    const firstActive = pipelineStages.find((s) => s.slug !== 'archivado');
+    const currentStage = pipelineStages.find((s) => s.id === eventData?.stage_id);
+    return {
+      archivadoStage: archivado ?? null,
+      firstActiveStage: firstActive ?? null,
+      isArchived: currentStage?.slug === 'archivado',
+    };
+  }, [eventData?.stage_id, pipelineStages]);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Evento';
@@ -107,7 +122,11 @@ export function EventLayoutClient({
   };
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <ZenCard variant="default" padding="none">
+      <ZenCard
+        variant="default"
+        padding="none"
+        className={isArchived ? 'ring-1 ring-amber-500/50 border-amber-500/40' : undefined}
+      >
         <EventDetailHeader
           studioSlug={studioSlug}
           eventId={eventId}
@@ -131,15 +150,39 @@ export function EventLayoutClient({
             contactName={eventData?.promise?.contact?.name || null}
             hasContract={contratosCount > 0}
             rightContent={
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setCrewManagerOpen(true)}
-                className="gap-2"
-              >
-                <Users className="h-4 w-4" />
-                Personal
-              </ZenButton>
+              <div className="flex items-center gap-2">
+                {archivadoStage && !isArchived && (
+                  <ZenButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowArchiveModal(true)}
+                    className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 border-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Archivar
+                  </ZenButton>
+                )}
+                {firstActiveStage && isArchived && (
+                  <ZenButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowUnarchiveModal(true)}
+                    className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-amber-400 border-amber-500/50 hover:bg-amber-950/30 hover:text-amber-300"
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    Desarchivar
+                  </ZenButton>
+                )}
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCrewManagerOpen(true)}
+                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/80"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Personal
+                </ZenButton>
+              </div>
             }
           />
         )}
@@ -202,6 +245,40 @@ export function EventLayoutClient({
         isOpen={crewManagerOpen}
         onClose={() => setCrewManagerOpen(false)}
       />
+
+      {archivadoStage && (
+        <ArchiveEventModal
+          open={showArchiveModal}
+          onOpenChange={setShowArchiveModal}
+          studioSlug={studioSlug}
+          eventId={eventId}
+          archivadoStage={archivadoStage}
+          balanceDue={eventData?.pending_amount ?? 0}
+          onArchived={async () => {
+            const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
+            const result = await obtenerEventoDetalle(studioSlug, eventId);
+            if (result.success && result.data) {
+              setEventData(sanitizeEventDataForClient(result.data));
+            }
+          }}
+        />
+      )}
+      {firstActiveStage && (
+        <UnarchiveEventModal
+          open={showUnarchiveModal}
+          onOpenChange={setShowUnarchiveModal}
+          studioSlug={studioSlug}
+          eventId={eventId}
+          firstActiveStage={firstActiveStage}
+          onUnarchived={async () => {
+            const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
+            const result = await obtenerEventoDetalle(studioSlug, eventId);
+            if (result.success && result.data) {
+              setEventData(sanitizeEventDataForClient(result.data));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

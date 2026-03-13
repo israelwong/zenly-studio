@@ -698,7 +698,7 @@ export async function sincronizarTareasEvento(
             billing_type_snapshot: billingType,
             duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
-            ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
+            budget_amount: budgetAmount,
           };
         const updateData = {
             order,
@@ -712,7 +712,7 @@ export async function sincronizarTareasEvento(
             billing_type_snapshot: billingType,
             duration_hours_snapshot: durationHoursSnapshot,
             profit_type_snapshot: profitTypeSnapshot,
-            ...(budgetAmount > 0 ? { budget_amount: budgetAmount } : {}),
+            budget_amount: budgetAmount,
           };
 
         // Cero queries en el bucle: solo mapas pre-cargados. Sin upsert para no violar unique cotizacion_item_id.

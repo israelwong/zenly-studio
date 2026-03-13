@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Calendar, Clock, Lock } from 'lucide-react';
+import { Calendar, Lock } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -76,7 +76,6 @@ export function EventCronogramaCard({
           <div className="space-y-3">
             {scheduler.start_date && scheduler.end_date && (
               <div className="flex items-start gap-2.5">
-                <Clock className="h-4 w-4 text-zinc-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-zinc-400 mb-0.5">Rango de fechas</p>
                   <p className="text-xs text-zinc-300">

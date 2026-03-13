@@ -4,8 +4,8 @@ import React from 'react';
 import { ResumenEvento } from '../[eventId]/components/ResumenEvento';
 import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancialSummaryCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
-import { EventSchedulerControlCard } from '../[eventId]/components/EventSchedulerControlCard';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
+import { ZENTodoList } from '@/features/scheduler/components/ZENTodoList';
 import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/QuickNoteCard';
 // import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
@@ -92,12 +92,11 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 3: Cronograma + Flujo de Trabajo */}
+        {/* Columna 3: ZENTodoList (reemplaza Flujo de Trabajo antiguo) */}
         <div className="lg:col-span-1 space-y-6">
-          <EventSchedulerControlCard
+          <ZENTodoList
             studioSlug={studioSlug}
             eventId={eventId}
-            eventDate={eventData.promise?.event_date || eventData.event_date || null}
             onUpdated={onEventUpdated}
           />
         </div>

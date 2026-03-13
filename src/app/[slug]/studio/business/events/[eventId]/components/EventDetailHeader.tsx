@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Loader2, Check, Calendar, Pencil } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Loader2, Check, Calendar, Pencil, Archive, ArchiveRestore } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { createPromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
+import { ArchiveEventModal } from './ArchiveEventModal';
+import { UnarchiveEventModal } from './UnarchiveEventModal';
 
 interface EventDetailHeaderProps {
   studioSlug: string;
@@ -37,15 +39,19 @@ export const EventDetailHeader = function EventDetailHeader({
   const router = useRouter();
   const pathname = usePathname();
   const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
-  const [isChangingStage, setIsChangingStage] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const [savedNameFeedback, setSavedNameFeedback] = useState(false);
   const [googleCalendarConectado, setGoogleCalendarConectado] = useState(false);
   const [showGoogleBundleModal, setShowGoogleBundleModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+  const archivadoStage = pipelineStages.find((s) => s.slug === 'archivado');
+  const firstActiveStage = pipelineStages.find((s) => s.slug !== 'archivado');
+  const balanceDue = eventData?.pending_amount ?? 0;
 
   useEffect(() => {
     tieneGoogleCalendarHabilitado(studioSlug).then(setGoogleCalendarConectado).catch(() => setGoogleCalendarConectado(false));
@@ -117,34 +123,6 @@ export const EventDetailHeader = function EventDetailHeader({
     if (e.key === 'Escape') {
       setEditNameValue(displayName);
       setIsEditingName(false);
-    }
-  };
-
-  const handlePipelineStageChange = async (newStageId: string) => {
-    if (!eventId || newStageId === currentPipelineStageId) return;
-
-    setIsChangingStage(true);
-    try {
-      const { moveEvent, obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
-      const result = await moveEvent(studioSlug, {
-        event_id: eventId,
-        new_stage_id: newStageId,
-      });
-
-      if (result.success) {
-        toast.success('Etapa actualizada correctamente');
-        const eventResult = await obtenerEventoDetalle(studioSlug, eventId);
-        if (eventResult.success && eventResult.data) {
-          onEventUpdated(eventResult.data);
-        }
-      } else {
-        toast.error(result.error || 'Error al cambiar etapa');
-      }
-    } catch (error) {
-      console.error('Error cambiando etapa:', error);
-      toast.error('Error al cambiar etapa');
-    } finally {
-      setIsChangingStage(false);
     }
   };
 
@@ -229,42 +207,6 @@ export const EventDetailHeader = function EventDetailHeader({
               Conectar Google Calendar
             </ZenButton>
           )}
-          {pipelineStages.length > 0 && currentPipelineStageId && (
-            <>
-              <div className="relative flex items-center">
-                <select
-                  value={currentPipelineStageId || ''}
-                  onChange={(e) => handlePipelineStageChange(e.target.value)}
-                  disabled={isChangingStage || loading}
-                  className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${isChangingStage
-                    ? "border-zinc-700 focus:ring-blue-500/50 focus:border-blue-500"
-                    : isArchived
-                      ? "border-amber-500 focus:ring-amber-500/50 focus:border-amber-500"
-                      : "border-zinc-700 focus:ring-blue-500/50 focus:border-blue-500"
-                    }`}
-                >
-                  {isChangingStage ? (
-                    <option value={currentPipelineStageId}>Actualizando estado...</option>
-                  ) : (
-                    pipelineStages.map((stage) => (
-                      <option key={stage.id} value={stage.id}>
-                        {stage.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-                {isChangingStage ? (
-                  <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-zinc-400 pointer-events-none" />
-                ) : (
-                  <div className="absolute right-2 pointer-events-none">
-                    <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
           <ZenDropdownMenu>
             <ZenDropdownMenuTrigger asChild>
               <ZenButton
@@ -276,6 +218,24 @@ export const EventDetailHeader = function EventDetailHeader({
               </ZenButton>
             </ZenDropdownMenuTrigger>
             <ZenDropdownMenuContent align="end">
+              {archivadoStage && !isArchived && (
+                <ZenDropdownMenuItem
+                  onClick={() => setShowArchiveModal(true)}
+                  className="text-zinc-300 focus:text-zinc-100 focus:bg-zinc-800"
+                >
+                  <Archive className="h-3.5 w-3.5 mr-2" />
+                  Archivar evento
+                </ZenDropdownMenuItem>
+              )}
+              {firstActiveStage && isArchived && (
+                <ZenDropdownMenuItem
+                  onClick={() => setShowUnarchiveModal(true)}
+                  className="text-amber-400 focus:text-amber-300 focus:bg-amber-950/20"
+                >
+                  <ArchiveRestore className="h-3.5 w-3.5 mr-2" />
+                  Desarchivar evento
+                </ZenDropdownMenuItem>
+              )}
               {eventData.status !== 'CANCELLED' && (
                 <ZenDropdownMenuItem
                   onClick={onCancelClick}
@@ -297,6 +257,35 @@ export const EventDetailHeader = function EventDetailHeader({
       }}
       studioSlug={studioSlug}
     />
+    {archivadoStage && (
+      <ArchiveEventModal
+        open={showArchiveModal}
+        onOpenChange={setShowArchiveModal}
+        studioSlug={studioSlug}
+        eventId={eventId}
+        archivadoStage={archivadoStage}
+        balanceDue={balanceDue}
+        onArchived={async () => {
+          const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
+          const result = await obtenerEventoDetalle(studioSlug, eventId);
+          if (result.success && result.data) onEventUpdated(result.data);
+        }}
+      />
+    )}
+    {firstActiveStage && (
+      <UnarchiveEventModal
+        open={showUnarchiveModal}
+        onOpenChange={setShowUnarchiveModal}
+        studioSlug={studioSlug}
+        eventId={eventId}
+        firstActiveStage={firstActiveStage}
+        onUnarchived={async () => {
+          const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
+          const result = await obtenerEventoDetalle(studioSlug, eventId);
+          if (result.success && result.data) onEventUpdated(result.data);
+        }}
+      />
+    )}
     </>
   );
 };
