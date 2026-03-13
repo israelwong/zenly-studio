@@ -13,6 +13,7 @@ export {
   actualizarRangoScheduler,
   crearSchedulerTask,
   actualizarSchedulerTask,
+  asignarCrewYCompletarTarea,
   eliminarSchedulerTask,
   obtenerSchedulerTask,
   sincronizarTareasEvento,

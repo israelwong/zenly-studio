@@ -62,6 +62,10 @@ export default async function EventLayout({
       ? (eventDataRaw.cotizaciones as Record<string, unknown>[]).map(sanitizarCotizacion)
       : eventDataRaw.cotizaciones,
   };
+
+  // Debug: si muestra 'Sin nombre' o objeto incompleto tras completar tarea, el problema está en Prisma/include
+  console.log('SERVER FETCH:', eventData.name ?? eventData.promise?.name ?? 'null');
+
   const [stagesResult, resumenResult, countResult, contractsResult] = await Promise.all([
     getEventPipelineStages(studioSlug),
     obtenerResumenEventoCreado(studioSlug, eventId),

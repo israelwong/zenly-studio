@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Calendar, Loader2, Plus, RefreshCw, ExternalLink } from 'lucide-react';
+import { Calendar, Loader2, Plus, ExternalLink } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { checkSchedulerStatus, sincronizarTareasEvento } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
@@ -27,6 +27,7 @@ function mapSchedulerTasksToTodoList(
     id: t.id,
     name: t.name,
     status: t.status ?? 'PENDING',
+    is_annex: false,
     progress_percent: t.progress_percent ?? 0,
     category: t.category,
     catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
@@ -250,22 +251,23 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
                   {syncing ? (
                     <Loader2 className="h-3 w-3 animate-spin shrink-0" />
                   ) : (
-                    <RefreshCw className="h-3 w-3 shrink-0" />
+                    'Sincronizar'
                   )}
-                  Sincronizar
                 </ZenButton>
               )}
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                asChild
-                className="h-7 gap-1 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
-              >
-                <Link href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`} aria-label="Ir al cronograma">
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                  Cronograma
-                </Link>
-              </ZenButton>
+              {!syncing && (
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  asChild
+                  className="h-7 gap-1 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+                >
+                  <Link href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`} aria-label="Ir al cronograma">
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    Cronograma
+                  </Link>
+                </ZenButton>
+              )}
             </div>
           </div>
         </ZenCardHeader>
@@ -295,12 +297,12 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
                 disabled={syncing}
                 className="w-full gap-2 text-xs border-zinc-700 hover:bg-zinc-800/50"
               >
-                {syncing ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                    {syncTotal > 0 ? `Sincronizando… (${syncCurrent}/${syncTotal})` : 'Sincronizando…'}
-                  </>
-                ) : (
+              {syncing ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      {syncTotal > 0 ? `Sincronizando tareas (${syncCurrent}/${syncTotal})` : 'Sincronizando tareas'}
+                    </>
+                  ) : (
                   <>
                     <Calendar className="h-3 w-3 shrink-0" />
                     Sincronizar con Cronograma
@@ -309,7 +311,7 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
               </ZenButton>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-3">
+            <div className={cn('flex-1 min-h-0 flex flex-col overflow-hidden space-y-3', syncing && 'pointer-events-none opacity-60')}>
               {tasksLoading ? (
                 <div className="flex items-center justify-center py-6 px-4 text-zinc-500">
                   <Loader2 className="h-5 w-5 animate-spin" />

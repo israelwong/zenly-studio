@@ -179,6 +179,10 @@ interface SchedulerSidebarProps {
   isUpdatingStructure?: boolean;
   /** Rango del cronograma para teletransporte de fechas en popovers. */
   dateRange?: import('react-day-picker').DateRange;
+  /** Contexto de uso: 'scheduler' | 'todolist'. Ajusta UI (menús, popovers) según contexto. */
+  context?: 'scheduler' | 'todolist';
+  /** Si true, oculta el header interno (usado cuando está dentro de ZenCard con header propio). */
+  hideHeader?: boolean;
 }
 
 
@@ -208,6 +212,102 @@ export function parseSchedulerCategoryDroppableId(
 }
 
 /** Layout: handle 2rem + línea 1px + contenido con pl-4. */
+
+/** Contenedor de sección memoizado: evita re-render cuando solo cambia orden de tareas. */
+const SectionHeaderRow = React.memo(function SectionHeaderRow({
+  sectionId,
+  sectionName,
+  isExpanded,
+  taskCount,
+  onToggle,
+  children,
+}: {
+  sectionId: string;
+  sectionName: string;
+  isExpanded: boolean;
+  taskCount: number;
+  onToggle: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      key={sectionId}
+      className="w-full border-b border-white/5 pl-3 pr-2 flex items-center min-h-[32px] box-border overflow-hidden"
+      style={{ height: ROW_HEIGHTS.SECTION, minHeight: ROW_HEIGHTS.SECTION, maxHeight: ROW_HEIGHTS.SECTION, boxSizing: 'border-box' }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-sm hover:bg-zinc-800/40 transition-colors py-0 h-full cursor-pointer text-zinc-400 hover:text-white"
+        aria-label={isExpanded ? 'Contraer sección' : 'Expandir sección'}
+      >
+        {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+        <span className="text-base font-semibold truncate flex-1 min-w-0">{sectionName}</span>
+        {!isExpanded && taskCount > 0 && (
+          <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
+            {taskCount} tarea{taskCount !== 1 ? 's' : ''}
+          </span>
+        )}
+      </button>
+      {children}
+    </div>
+  );
+});
+
+/** Contenedor de etapa memoizado: evita re-render cuando solo cambia orden de tareas. */
+const StageHeaderRow = React.memo(function StageHeaderRow({
+  stageId,
+  stageLabel,
+  stageCategory,
+  isExpanded,
+  taskRowsCount,
+  onToggle,
+  onDelete,
+  taskIds,
+}: {
+  stageId: string;
+  stageLabel: string;
+  stageCategory: string;
+  isExpanded: boolean;
+  taskRowsCount: number;
+  onToggle: () => void;
+  onDelete?: (sectionId: string, stageCategory: string, taskIds: string[]) => void;
+  taskIds: string[];
+}) {
+  const sectionId = stageId.includes('-') ? stageId.slice(0, stageId.lastIndexOf('-')) : stageId;
+  return (
+    <div
+      className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden ${POWER_BAR_STAGE_CLASSES[stageCategory as TaskCategoryStage].bg}`}
+      style={{ height: ROW_HEIGHTS.STAGE, minHeight: ROW_HEIGHTS.STAGE, maxHeight: ROW_HEIGHTS.STAGE, boxSizing: 'border-box' }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-1 min-w-0 flex-1 text-left py-0 pr-1 rounded-sm hover:bg-zinc-800/40 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+        aria-label={isExpanded ? 'Contraer etapa' : 'Expandir etapa'}
+      >
+        {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+        <span className="text-xs font-medium truncate">{stageLabel}</span>
+      </button>
+      {taskRowsCount > 0 && (
+        <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
+          {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
+        </span>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(sectionId, stageCategory, taskIds)}
+          className="p-1 rounded hover:bg-red-900/40 text-zinc-500 hover:text-red-400 flex-shrink-0"
+          title="Eliminar etapa"
+          aria-label="Eliminar etapa"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+});
 
 /** Fila clonada para DragOverlay: 60px, avatar, nombre, fondo sólido, sombra potente, cursor grabbing */
 function SchedulerDragOverlayRow({
@@ -682,6 +782,7 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
   categoriesWithDataByStage = new Map(),
   onAddCustomCategory,
   updatingTaskId: updatingTaskIdProp = null,
+  dateRange,
 }: {
   task: ManualTaskPayload;
   studioSlug: string;
@@ -729,6 +830,7 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
   onAddCustomCategory?: (sectionId: string, stage: string, name: string) => Promise<void>;
   /** Prop para que areEqual detecte id -> null y re-renderice; Triple Guardia spinner. */
   updatingTaskId?: string | null;
+  dateRange?: import('react-day-picker').DateRange;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [forceClearSpinner, setForceClearSpinner] = useState(false);
@@ -878,6 +980,17 @@ const ManualTaskRow = React.memo(function ManualTaskRow({
               className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
               onSelect={async () => {
                 setActionsMenuOpen(false);
+                const nextCompleted = !isCompleted;
+                applyPatch({
+                  status: nextCompleted ? 'COMPLETED' : 'PENDING',
+                  completed_at: nextCompleted ? new Date().toISOString() : null,
+                  progress_percent: nextCompleted ? 100 : 0,
+                });
+                onManualTaskPatch?.(localTask.id, {
+                  status: nextCompleted ? 'COMPLETED' : 'PENDING',
+                  completed_at: nextCompleted ? new Date().toISOString() : null,
+                  progress_percent: nextCompleted ? 100 : 0,
+                });
                 await handleToggleComplete();
               }}
             >
@@ -1428,12 +1541,15 @@ function SchedulerItem({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 p-0 bg-zinc-900 border-zinc-800 z-[100000]" align="end" sideOffset={4} onClick={(e) => e.stopPropagation()}>
-            {onTaskToggleComplete && (
+            {onTaskToggleComplete && taskId && (
               <DropdownMenuItem
                 className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
                 onSelect={async () => {
                   setActionsMenuOpen(false);
-                  await handleToggleComplete();
+                  const nextCompleted = !isCompleted;
+                  await updateCompletionStatus(nextCompleted, async () => {
+                    await onTaskToggleComplete(taskId, nextCompleted);
+                  });
                 }}
               >
                 {isCompleted ? (
@@ -1830,6 +1946,8 @@ export const SchedulerSidebar = ({
   catalogCategoryOrderByStage,
   isUpdatingStructure = false,
   dateRange,
+  context = 'scheduler',
+  hideHeader = false,
 }: SchedulerSidebarProps) => {
   /** Ordena secciones por order de categorías (Visual Order = Logical Order desde el primer render). */
   const sortSeccionesByCategoryOrder = useCallback((secciones: typeof seccionesProp) => {
@@ -2217,9 +2335,11 @@ export const SchedulerSidebar = ({
   return (
     <SchedulerBackdropProvider>
     <div className="w-full bg-zinc-950 overflow-visible relative box-border" style={{ minHeight: totalMinHeight }}>
-      <div className="h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30 box-border">
-        <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
-      </div>
+      {!hideHeader && (
+        <div className="h-12 min-h-12 max-h-12 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 flex items-center px-4 flex-shrink-0 sticky top-0 left-0 z-30 box-border">
+          <span className="text-xs font-semibold text-zinc-400 uppercase">Tareas</span>
+        </div>
+      )}
 
       {!isMounted ? (
         <div className="flex items-center justify-center py-8 text-zinc-500 text-sm">Cargando...</div>
@@ -2249,40 +2369,25 @@ export const SchedulerSidebar = ({
             const sectionData = sectionFromLocal ?? localSecciones.find((s) => s.id === block.row.id);
             const stageIdsWithData = stageIdsWithDataBySection.get(block.row.id) ?? new Set<string>();
             return (
-              <div
-                key={block.row.id}
-                className="w-full border-b border-white/5 pl-3 pr-2 flex items-center min-h-[32px] box-border overflow-hidden"
-                style={{ height: ROW_HEIGHTS.SECTION, minHeight: ROW_HEIGHTS.SECTION, maxHeight: ROW_HEIGHTS.SECTION, boxSizing: 'border-box' }}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleSection(block.row.id)}
-                  className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-sm hover:bg-zinc-800/40 transition-colors py-0 h-full cursor-pointer text-zinc-400 hover:text-white"
-                  aria-label={sectionExpanded ? 'Contraer sección' : 'Expandir sección'}
-                >
-                  {sectionExpanded ? (
-                    <ChevronDown className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0" />
-                  )}
-                  <span className="text-base font-semibold truncate flex-1 min-w-0">{block.row.name}</span>
-                  {!sectionExpanded && taskCount > 0 && (
-                    <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                      {taskCount} tarea{taskCount !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </button>
-                {sectionData && onToggleStage && (
-                  <SchedulerSectionStagesConfigPopover
-                    sectionId={block.row.id}
-                    sectionName={block.row.name}
-                    stageIdsWithData={stageIdsWithData}
-                    explicitlyActivatedStageIds={explicitlyActivatedStageIds}
-                    customCategoriesBySectionStage={customCategoriesBySectionStage}
-                    onToggleStage={onToggleStage}
-                  />
-                )}
-              </div>
+              <SectionHeaderRow
+                sectionId={block.row.id}
+                sectionName={block.row.name}
+                isExpanded={sectionExpanded}
+                taskCount={taskCount}
+                onToggle={() => toggleSection(block.row.id)}
+                children={
+                  context === 'scheduler' && sectionData && onToggleStage ? (
+                    <SchedulerSectionStagesConfigPopover
+                      sectionId={block.row.id}
+                      sectionName={block.row.name}
+                      stageIdsWithData={stageIdsWithData}
+                      explicitlyActivatedStageIds={explicitlyActivatedStageIds}
+                      customCategoriesBySectionStage={customCategoriesBySectionStage}
+                      onToggleStage={onToggleStage}
+                    />
+                  ) : undefined
+                }
+              />
             );
           })()}
               {stageBlocks.length > 0 && (
@@ -2309,36 +2414,16 @@ export const SchedulerSidebar = ({
             const isLastStageInSection = nextBlock == null || nextBlock.type === 'section';
           return (
             <React.Fragment key={stageRow.id}>
-                <div
-                  className={`border-b border-white/5 pl-6 pr-2 flex items-center justify-between gap-2 min-h-[32px] box-border overflow-hidden ${POWER_BAR_STAGE_CLASSES[stageRow.category as TaskCategoryStage].bg}`}
-                  style={{ height: ROW_HEIGHTS.STAGE, minHeight: ROW_HEIGHTS.STAGE, maxHeight: ROW_HEIGHTS.STAGE, boxSizing: 'border-box' }}
-                >
-                <button
-                  type="button"
-                  onClick={() => toggleStage(stageRow.id)}
-                  className="flex items-center gap-1 min-w-0 flex-1 text-left py-0 pr-1 rounded-sm hover:bg-zinc-800/40 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  aria-label={isExpanded ? 'Contraer etapa' : 'Expandir etapa'}
-                >
-                  {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                  <span className="text-xs font-medium truncate">{stageRow.label}</span>
-                </button>
-                {taskRowsCount > 0 && (
-                  <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded shrink-0">
-                    {taskRowsCount} tarea{taskRowsCount !== 1 ? 's' : ''}
-                  </span>
-                )}
-                {(onDeleteStage || onRemoveEmptyStage) && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteStageClick(stageRow.sectionId, stageRow.category, taskIds)}
-                    className="p-1 rounded hover:bg-red-900/40 text-zinc-500 hover:text-red-400 flex-shrink-0"
-                    title="Eliminar etapa"
-                    aria-label="Eliminar etapa"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                </div>
+                <StageHeaderRow
+                  stageId={stageRow.id}
+                  stageLabel={stageRow.label}
+                  stageCategory={stageRow.category}
+                  isExpanded={isExpanded}
+                  taskRowsCount={taskRowsCount}
+                  onToggle={() => toggleStage(stageRow.id)}
+                  onDelete={(onDeleteStage || onRemoveEmptyStage) ? handleDeleteStageClick : undefined}
+                  taskIds={taskIds}
+                />
 
                 {isExpanded ? (
                   <div className="relative">

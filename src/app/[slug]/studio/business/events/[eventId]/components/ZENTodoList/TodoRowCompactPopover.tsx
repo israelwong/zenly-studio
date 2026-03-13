@@ -8,9 +8,11 @@ import { format } from 'date-fns';
 import { addDays } from 'date-fns';
 import { obtenerCrewMembers, actualizarSchedulerTaskFechas, asignarCrewAItem } from '@/lib/actions/studio/business/events';
 import { SelectCrewModal } from '../../scheduler/components/crew-assignment/SelectCrewModal';
+import { AgendaFormModal } from '@/components/shared/agenda';
+import { displayTaskName } from './todo-list-utils';
 import { toast } from 'sonner';
 import { es } from 'date-fns/locale';
-import { Calendar, UserPlus, X, Copy, User, Clock } from 'lucide-react';
+import { Calendar, UserPlus, Copy, Clock, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TodoListTask } from '@/lib/actions/studio/business/events';
 
@@ -44,12 +46,14 @@ function buildLlamadoTexto(
   ].join('\n');
 }
 
-/** Desglose financiero: HOUR = cost/hr × hrs; UNIT = cost/unidad × units; SERVICE/FIXED = Honorario fijo.
- * Usa billing_type de la tarea; fallback: si nombre contiene "por hora" → HOUR. */
+/** Desglose financiero: HOUR = cost/hr × hrs; UNIT = cost/unidad × units; PRODUCT = cost × qty; SERVICE/FIXED = Honorario/Costo fijo.
+ * profit_type_snapshot === 'product' → (Costo fijo) y cost × quantity. */
 function renderFinancialBreakdown(task: TodoListTask): React.ReactNode {
   const total = task.budget_amount ?? 0;
   if (total <= 0) return null;
   const meta = task.item_meta;
+  const profitType = (meta?.profit_type ?? '').toLowerCase();
+  const isProduct = profitType === 'product';
   let billingType = (meta?.billing_type ?? '').toUpperCase();
   if (!billingType && /por hora|hora/i.test(task.name ?? '')) billingType = 'HOUR';
   let costPerUnit = meta?.cost ?? 0;
@@ -74,10 +78,20 @@ function renderFinancialBreakdown(task: TodoListTask): React.ReactNode {
       </div>
     );
   }
+  if (isProduct && quantity > 0) {
+    if (costPerUnit <= 0 && total > 0) costPerUnit = total / quantity;
+    return (
+      <div className="mt-1.5 text-xs text-zinc-400">
+        {formatCurrency(costPerUnit)} × {quantity} ={' '}
+        <span className="font-semibold text-emerald-400">{formatCurrency(total)}</span>
+      </div>
+    );
+  }
+  const fixedLabel = isProduct ? '(Costo fijo)' : '(Honorario fijo)';
   return (
     <div className="mt-1.5 text-xs text-zinc-400">
       <span className="font-semibold text-emerald-400">{formatCurrency(total)}</span>{' '}
-      <span className="text-zinc-500">(Honorario fijo)</span>
+      <span className="text-zinc-500">{fixedLabel}</span>
     </div>
   );
 }
@@ -93,6 +107,8 @@ interface TodoRowCompactPopoverProps {
   onStaffChangeOptimistic?: (staffId: string | null, staffName?: string) => void;
   /** Override de staff para mostrar en el Popover (reactivo con estado optimista del padre) */
   displayStaffOverride?: { id: string; name: string } | null;
+  /** Cerrar el Popover (ej. antes de abrir modal de Agenda) */
+  onClosePopover?: () => void;
 }
 
 export function TodoRowCompactPopover({
@@ -104,6 +120,7 @@ export function TodoRowCompactPopover({
   onUpdated,
   onStaffChangeOptimistic,
   displayStaffOverride,
+  onClosePopover,
 }: TodoRowCompactPopoverProps) {
   const router = useRouter();
   const [members, setMembers] = useState<Array<{ id: string; name: string; email: string | null; tipo: string }>>([]);
@@ -113,6 +130,7 @@ export function TodoRowCompactPopover({
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [tempDateRange, setTempDateRange] = useState<{ from: Date; to: Date } | null>(null);
   const [durationDays, setDurationDays] = useState(task.duration_days ?? 1);
+  const [agendaModalOpen, setAgendaModalOpen] = useState(false);
 
   const startDate = task.start_date instanceof Date ? task.start_date : new Date(task.start_date);
   const endDate = task.end_date instanceof Date ? task.end_date : new Date(task.end_date);
@@ -241,59 +259,64 @@ export function TodoRowCompactPopover({
         sideOffset={4}
       >
         <div className="space-y-4">
-          <div className="text-xs text-zinc-400">
-            <div className="text-base text-zinc-300 font-medium">{task.name}</div>
-            {renderFinancialBreakdown(task)}
+          {/* Header: título + Copiar Llamado */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 text-xs text-zinc-400 overflow-hidden">
+              <div className="text-base text-zinc-300 font-medium break-words">{displayTaskName(task.name ?? '')}</div>
+              {renderFinancialBreakdown(task)}
+            </div>
+            <ZenButton
+              variant="ghost"
+              size="icon"
+              onClick={() => void handleCopiarLlamado()}
+              className="shrink-0 size-8 rounded-md"
+              aria-label="Copiar llamado"
+            >
+              <Copy className="h-4 w-4 text-zinc-400" />
+            </ZenButton>
           </div>
 
           <div className="border-t border-zinc-800" />
 
-          {/* Staff */}
+          {/* Slot de asignación directa */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400 flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5" />
-              Personal
-            </label>
             {effectiveStaffId ? (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-2.5 space-y-2">
-                <div className="flex items-center gap-2">
-                  <ZenAvatar className="h-7 w-7 shrink-0">
-                    <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[10px]">
-                      {assignedMember ? getInitials(assignedMember.name) : '—'}
-                    </ZenAvatarFallback>
-                  </ZenAvatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-zinc-300 truncate font-medium">{assignedMember?.name ?? task.assigned_to_crew_member?.name ?? '—'}</div>
-                  </div>
+              <div className="rounded-md border border-zinc-800/50 bg-zinc-800/20 p-2 flex items-center gap-2">
+                <ZenAvatar className="h-6 w-6 shrink-0">
+                  <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[9px]">
+                    {assignedMember ? getInitials(assignedMember.name) : '—'}
+                  </ZenAvatarFallback>
+                </ZenAvatar>
+                <div className="flex-1 min-w-0 text-xs text-zinc-300 truncate font-medium">
+                  {assignedMember?.name ?? task.assigned_to_crew_member?.name ?? '—'}
                 </div>
-                <div className="flex gap-1.5">
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectCrewModalOpen(true)}
-                    className="flex-1 gap-1 h-7 text-xs"
-                  >
-                    <UserPlus className="h-3 w-3" />
-                    Cambiar
-                  </ZenButton>
+                <div className="flex items-center gap-0.5 shrink-0">
                   <button
-                    onClick={() => void handleSelectCrew(null)}
-                    className="flex items-center justify-center gap-1 h-7 px-2 text-xs hover:bg-zinc-700 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-300 transition-colors"
+                    type="button"
+                    onClick={() => setSelectCrewModalOpen(true)}
+                    className="px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
                   >
-                    <X className="h-3 w-3" />
+                    Cambiar
+                  </button>
+                  <span className="text-zinc-600">·</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleSelectCrew(null)}
+                    className="px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-red-400 transition-colors"
+                  >
                     Quitar
                   </button>
                 </div>
               </div>
             ) : (
               <ZenButton
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setSelectCrewModalOpen(true)}
-                className="w-full gap-1.5 text-xs h-8"
+                className="w-full gap-1.5 text-xs h-8 justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
               >
-                <UserPlus className="h-3 w-3" />
-                Seleccionar personal
+                <UserPlus className="h-3.5 w-3.5 shrink-0" />
+                Asignar responsable
               </ZenButton>
             )}
           </div>
@@ -306,22 +329,25 @@ export function TodoRowCompactPopover({
               <Calendar className="h-3.5 w-3.5" />
               Programación
             </label>
-            <div className={cn('grid gap-3 items-stretch', dateRange ? 'grid-cols-2' : 'grid-cols-1')}>
-              <div className="flex flex-col gap-1.5">
-                <ZenInput
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={String(durationDays)}
-                  onChange={(e) => setDurationDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
-                  label="Duración (días)"
-                  icon={Clock}
-                  iconPosition="left"
-                  className={cn(INPUT_HEIGHT, '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none')}
-                />
+            <div className={cn('flex gap-3 items-end', dateRange ? '' : 'flex-col')}>
+              <div className="flex flex-col gap-1.5 w-20 shrink-0">
+                <label className="text-xs text-zinc-500 flex items-center gap-1.5 h-5">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  Días
+                </label>
+                <div className="w-full min-w-0 [&>div]:w-full [&_input]:min-w-0">
+                  <ZenInput
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={String(durationDays)}
+                    onChange={(e) => setDurationDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))}
+                    className={cn(INPUT_HEIGHT, '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none')}
+                  />
+                </div>
               </div>
               {dateRange && (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-1 min-w-0 flex-col gap-1.5">
                   <label className="text-xs text-zinc-500 flex items-center gap-1.5 h-5">
                     <Calendar className="h-3 w-3 shrink-0" />
                     Rango
@@ -373,9 +399,17 @@ export function TodoRowCompactPopover({
 
           <div className="border-t border-zinc-800" />
 
-          <ZenButton variant="primary" size="sm" className={cn('w-full gap-2', INPUT_HEIGHT)} onClick={() => void handleCopiarLlamado()}>
-            <Copy className="h-3.5 w-3.5" />
-            Copiar Llamado
+          <ZenButton
+            variant="outline"
+            size="sm"
+            className={cn('w-full gap-2', INPUT_HEIGHT)}
+            onClick={() => {
+              onClosePopover?.();
+              setAgendaModalOpen(true);
+            }}
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Añadir a Agenda
           </ZenButton>
         </div>
       </PopoverContent>
@@ -387,6 +421,22 @@ export function TodoRowCompactPopover({
         studioSlug={studioSlug}
         currentMemberId={effectiveStaffId ?? undefined}
         eventId={eventId}
+      />
+
+      <AgendaFormModal
+        isOpen={agendaModalOpen}
+        onClose={() => setAgendaModalOpen(false)}
+        studioSlug={studioSlug}
+        prefillData={{
+          concept: task.name,
+          date: startDate,
+        }}
+        contexto="evento"
+        eventoId={eventId}
+        onSuccess={() => {
+          setAgendaModalOpen(false);
+          onUpdated();
+        }}
       />
     </>
   );

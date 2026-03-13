@@ -67,6 +67,7 @@ export function useSchedulerManualTaskSync(
           ...prev,
           completed_at: isCompleted ? new Date().toISOString() : null,
           status: isCompleted ? 'COMPLETED' : 'PENDING',
+          progress_percent: isCompleted ? 100 : 0,
         };
         return updatedTask;
       });
@@ -75,6 +76,7 @@ export function useSchedulerManualTaskSync(
         onTaskPatch(task.id, {
           status: isCompleted ? 'COMPLETED' : 'PENDING',
           completed_at: isCompleted ? new Date().toISOString() : null,
+          progress_percent: isCompleted ? 100 : 0,
         });
       }
       // Ejecutar acción del servidor

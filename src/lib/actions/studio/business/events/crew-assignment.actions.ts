@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { validateStudio } from './helpers/studio-validator';
 
 // ============================================================================
@@ -237,8 +237,10 @@ export async function asignarCrewAItem(
 
     revalidatePath(`/${studioSlug}/studio/business/events`);
     if (eventId) {
+      revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
       revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
       revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+      revalidateTag(`evento-${eventId}`);
     }
 
     let googleSyncFailed = false;

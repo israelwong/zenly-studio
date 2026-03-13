@@ -5,9 +5,8 @@ import { ResumenEvento } from '../[eventId]/components/ResumenEvento';
 import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancialSummaryCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
 import { EventDeliverablesCard } from '../[eventId]/components/EventDeliverablesCard';
-import { ZENTodoList } from '../[eventId]/components/ZENTodoList';
+import { EventTodoCardCompact } from './EventTodoCardCompact';
 import { QuickNoteCard } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/QuickNoteCard';
-// import { EventItinerarioCard } from '../[eventId]/components/EventItinerarioCard';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventoResumenData } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
@@ -18,6 +17,8 @@ interface EventPanelProps {
   eventData: EventoDetalle;
   initialResumen?: EventoResumenData | null;
   onEventUpdated?: () => void;
+  /** Callback para actualización optimista de eventData (sync). */
+  onEventDataChange?: (data: EventoDetalle) => void;
   /** Si hay contrato(s) para el evento (muestra sección Documentos). */
   hasContract?: boolean;
 }
@@ -28,6 +29,7 @@ export function EventPanel({
   eventData,
   initialResumen,
   onEventUpdated,
+  onEventDataChange,
   hasContract = false,
 }: EventPanelProps) {
   return (
@@ -92,14 +94,14 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 3: ZENTodoList (reemplaza Flujo de Trabajo antiguo) */}
+        {/* Columna 3: Tareas (ZENTodoList compacto — Top 5 + Drawer) */}
         <div className="lg:col-span-1 flex flex-col min-h-0">
-          <ZENTodoList
+          <EventTodoCardCompact
             studioSlug={studioSlug}
             eventId={eventId}
+            eventData={eventData}
             secciones={eventData.secciones}
-            initialScheduler={eventData.scheduler}
-            onUpdated={onEventUpdated}
+            onEventUpdated={onEventUpdated}
           />
         </div>
       </div>

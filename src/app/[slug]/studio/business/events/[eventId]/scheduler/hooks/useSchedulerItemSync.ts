@@ -144,10 +144,10 @@ export function useSchedulerItemSync(
       updatedItem = {
         ...prev,
         scheduler_task: {
-          ...prev.scheduler_task, // Preservar todos los campos originales
+          ...prev.scheduler_task,
           completed_at: isCompleted ? new Date().toISOString() : null,
           status: isCompleted ? 'COMPLETED' : 'PENDING',
-          progress_percent: isCompleted ? 100 : (prev.scheduler_task.progress_percent || 0),
+          progress_percent: isCompleted ? 100 : 0,
         },
       } as CotizacionItem;
 

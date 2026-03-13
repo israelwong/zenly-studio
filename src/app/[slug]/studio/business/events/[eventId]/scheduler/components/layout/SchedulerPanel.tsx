@@ -103,6 +103,8 @@ interface SchedulerPanelProps {
   onReminderDelete?: (reminderId: string) => Promise<void>;
   /** Order de categorías (catalog + custom) por stage desde JSONB del scheduler instance. */
   catalogCategoryOrderByStage?: Record<string, string[]> | null;
+  /** Si true, solo renderiza el sidebar (sin Timeline). Para uso en TodoList. */
+  sidebarOnly?: boolean;
 }
 
 /**
@@ -182,6 +184,7 @@ export const SchedulerPanel = React.memo(({
   onReminderDelete,
   catalogCategoryOrderByStage,
   isUpdatingStructure,
+  sidebarOnly = false,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [ghostPortalEl, setGhostPortalEl] = useState<HTMLDivElement | null>(null);
@@ -276,7 +279,7 @@ export const SchedulerPanel = React.memo(({
   );
 
 
-  if (!dateRange?.from || !dateRange?.to) {
+  if (!sidebarOnly && (!dateRange?.from || !dateRange?.to)) {
     return (
       <div className="flex items-center justify-center h-[400px] bg-zinc-950/50">
         <p className="text-zinc-500 text-sm">Configura el rango de fechas del evento</p>
@@ -285,24 +288,24 @@ export const SchedulerPanel = React.memo(({
   }
 
   return (
-    <div className={isMaximized ? 'overflow-hidden bg-zinc-950 flex flex-col flex-1 min-h-0' : 'overflow-hidden bg-zinc-950'}>
+    <div className={isMaximized || sidebarOnly ? 'overflow-hidden bg-zinc-950 flex flex-col flex-1 min-h-0' : 'overflow-hidden bg-zinc-950'}>
       {/* Contenedor principal: overflow-visible durante drag para que la fila no se recorte */}
       <div
         ref={setScrollRef}
         onScroll={handleTimelineScroll}
-        className={`flex bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'} ${isMaximized ? 'flex-1 min-h-0' : 'h-[calc(100vh-300px)]'}`}
+        className={`flex bg-zinc-950 relative ${activeDragData ? 'overflow-visible' : 'overflow-auto'} ${isMaximized || sidebarOnly ? 'flex-1 min-h-0' : 'h-[calc(100vh-300px)]'}`}
       >
         {/* Ghost portal: dentro del contenedor para que sidebar z-30 quede por encima */}
         <div
           ref={setGhostPortalEl}
           className="absolute inset-0 pointer-events-none z-20"
-          style={{ left: sidebarWidth }}
+          style={{ left: sidebarOnly ? 0 : sidebarWidth }}
           aria-hidden
         />
         {/* Sidebar Sticky Left */}
         <div
-          className={`flex-shrink-0 bg-zinc-950 sticky left-0 z-30 overflow-visible ${!onSidebarWidthChange ? 'border-r border-zinc-800' : ''}`}
-          style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+          className={`flex-shrink-0 bg-zinc-950 sticky left-0 z-30 overflow-visible ${!onSidebarWidthChange && !sidebarOnly ? 'border-r border-zinc-800' : ''}`}
+          style={{ width: sidebarOnly ? '100%' : sidebarWidth, minWidth: sidebarOnly ? '100%' : sidebarWidth }}
         >
           <SchedulerSidebar
             ghostPortalEl={ghostPortalEl}
@@ -358,10 +361,13 @@ export const SchedulerPanel = React.memo(({
             updatingTaskId={updatingTaskId}
             isUpdatingStructure={isUpdatingStructure}
             googleCalendarEnabled={googleCalendarEnabled}
+            context={sidebarOnly ? 'todolist' : 'scheduler'}
+            hideHeader={sidebarOnly}
           />
         </div>
 
-        {/* Timeline: --column-width para zoom dinámico en Grid y TaskBars */}
+        {/* Timeline: --column-width para zoom dinámico en Grid y TaskBars (oculto en sidebarOnly) */}
+        {!sidebarOnly && (
         <div
           className={`flex-1 min-w-0 ${isMaximized ? 'min-h-0 flex flex-col' : ''}`}
           style={{ ['--column-width' as string]: `${columnWidth}px` }}
@@ -401,9 +407,10 @@ export const SchedulerPanel = React.memo(({
             onReminderDelete={onReminderDelete}
           />
         </div>
+        )}
       </div>
       {/* Resizer vía Portal: fixed con bounds explícitos del contenedor visible */}
-      {onSidebarWidthChange &&
+      {!sidebarOnly && onSidebarWidthChange &&
         resizerBounds.height > 0 &&
         typeof document !== 'undefined' &&
         createPortal(

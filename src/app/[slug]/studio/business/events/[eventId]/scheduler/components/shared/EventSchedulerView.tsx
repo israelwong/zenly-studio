@@ -47,6 +47,8 @@ interface EventSchedulerViewProps {
   scrollToDate?: string;
   /** V4.0: Indica si hay una operación de reordenamiento de estructura en curso (bloquear UI). */
   isUpdatingStructure?: boolean;
+  /** Si true, solo renderiza el sidebar (sin Timeline). Para uso en TodoList. */
+  sidebarOnly?: boolean;
 }
 
 export const EventSchedulerView = React.memo(function EventSchedulerView({
@@ -79,6 +81,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
   onReminderDelete,
   scrollToDate,
   isUpdatingStructure,
+  sidebarOnly = false,
 }: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>(initialSecciones ?? []);
   const [loadingSecciones, setLoadingSecciones] = useState(!(initialSecciones && initialSecciones.length > 0));
@@ -192,14 +195,15 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
     );
   }
 
-  // Usar SchedulerPanel como vista principal
-  if (secciones.length > 0 && defaultDateRange) {
+  // Usar SchedulerPanel como vista principal (sidebarOnly: puede renderizar sin dateRange usando fallback)
+  const effectiveDateRange = defaultDateRange ?? (sidebarOnly ? { from: new Date(), to: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } : undefined);
+  if (secciones.length > 0 && (effectiveDateRange || sidebarOnly)) {
     return (
       <EventScheduler
         studioSlug={studioSlug}
         eventId={eventId}
         eventData={eventData}
-        dateRange={defaultDateRange}
+        dateRange={effectiveDateRange ?? undefined}
         secciones={secciones}
         columnWidth={columnWidth}
         isMaximized={isMaximized}
@@ -224,6 +228,7 @@ export const EventSchedulerView = React.memo(function EventSchedulerView({
         onReminderMoveDateRevert={onReminderMoveDateRevert}
         onReminderDelete={onReminderDelete}
         scrollToDate={scrollToDate}
+        sidebarOnly={sidebarOnly}
       />
     );
   }

@@ -24,9 +24,10 @@ interface CrewMember {
 
 interface AssignCrewBeforeCompleteModalProps {
   isOpen: boolean;
+  /** Solo para cancelar/cerrar. NO ejecuta ninguna acción de completar. La completación SOLO ocurre al hacer click en "Asignar y completar" o "Completar sin pago". */
   onClose: () => void;
   onCompleteWithoutPayment: () => void;
-  onAssignAndComplete: (crewMemberId: string, skipPayment?: boolean) => Promise<void>;
+  onAssignAndComplete: (crewMemberId: string, skipPayment?: boolean, staffName?: string) => Promise<void>;
   studioSlug: string;
   /** Solo presente para ítems de cotización; ausente para tareas manuales */
   itemId?: string;
@@ -133,7 +134,7 @@ export function AssignCrewBeforeCompleteModal({
     // Si tiene honorarios variables, proceder normalmente (skipPayment = false por defecto)
     setIsAssigning(true);
     try {
-      await onAssignAndComplete(selectedMemberId, false);
+      await onAssignAndComplete(selectedMemberId, false, selectedMember?.name);
       // Cerrar modal si la operación fue exitosa
       onClose();
     } catch (error) {
@@ -154,7 +155,8 @@ export function AssignCrewBeforeCompleteModal({
     setIsAssigning(true);
     try {
       // Pasar a pago (comportamiento normal, skipPayment = false)
-      await onAssignAndComplete(pendingCrewMemberId, false);
+      const member = members.find(m => m.id === pendingCrewMemberId);
+      await onAssignAndComplete(pendingCrewMemberId, false, member?.name);
       setShowFixedSalaryConfirmModal(false);
       setPendingCrewMemberId(null);
       onClose();
@@ -172,7 +174,8 @@ export function AssignCrewBeforeCompleteModal({
     setIsAssigning(true);
     try {
       // Completar sin pasar a pago (skipPayment = true)
-      await onAssignAndComplete(pendingCrewMemberId, true);
+      const member = members.find(m => m.id === pendingCrewMemberId);
+      await onAssignAndComplete(pendingCrewMemberId, true, member?.name);
       setShowFixedSalaryConfirmModal(false);
       setPendingCrewMemberId(null);
       onClose();
@@ -203,6 +206,7 @@ export function AssignCrewBeforeCompleteModal({
       <ZenDialog
         isOpen={isOpen}
         onClose={onClose}
+        onCancel={onClose}
         title={hasNoCrew ? "¿Deseas agregar personal?" : "Asignar personal para generar pago"}
         description={
           hasNoCrew
@@ -211,7 +215,6 @@ export function AssignCrewBeforeCompleteModal({
         }
         maxWidth="md"
         closeOnClickOutside={false}
-        onCancel={onClose}
         cancelLabel="Cancelar"
         cancelVariant="secondary"
         cancelAlignRight

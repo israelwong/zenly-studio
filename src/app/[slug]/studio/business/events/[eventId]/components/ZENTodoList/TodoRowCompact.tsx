@@ -1,18 +1,13 @@
 'use client';
 
 import React, { memo, useState, useEffect, useRef } from 'react';
-import { Loader2, Check, MoreHorizontal, CalendarPlus } from 'lucide-react';
+import { Loader2, Check, User } from 'lucide-react';
 import {
   actualizarSchedulerTask,
   asignarCrewAItem,
 } from '@/lib/actions/studio/business/events';
 import { Popover, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import {
-  ZenDropdownMenu,
-  ZenDropdownMenuContent,
-  ZenDropdownMenuItem,
-  ZenDropdownMenuTrigger,
-} from '@/components/ui/zen';
+import { displayTaskName } from './todo-list-utils';
 import { TodoRowCompactPopover } from './TodoRowCompactPopover';
 import { AssignCrewBeforeCompleteModal } from '../../scheduler/components/task-actions/AssignCrewBeforeCompleteModal';
 import { toast } from 'sonner';
@@ -39,11 +34,10 @@ function formatDateRange(start: Date, end: Date): string {
 function buildMetadataFinancial(
   task: TodoListTask,
   optimisticStaffOverride?: { id: string; name: string } | null
-): { text: string; className: string } {
+): { text: string; className: string; prefix?: string; suffix?: string; showUserIcon?: boolean } {
   const startDate = task.start_date instanceof Date ? task.start_date : new Date(task.start_date);
   const endDate = task.end_date instanceof Date ? task.end_date : new Date(task.end_date);
   const dateStr = formatDateRange(startDate, endDate);
-  const cat = task.catalog_category_name_snapshot ?? task.catalog_category?.name;
   const staffName =
     optimisticStaffOverride === null
       ? undefined
@@ -63,29 +57,30 @@ function buildMetadataFinancial(
     : null;
 
   const parts: string[] = [dateStr];
-  if (cat) parts.push(cat);
 
   const amt = amountStr ?? (hasBudget ? formatCurrency(task.budget_amount!) : null);
 
   if (hasBudget && !staffName) {
+    const prefix = [...parts, amt!].join(' · ') + ' · ';
     return {
-      text: [...parts, amt!, 'Sin asignar'].join(' · '),
+      text: prefix + 'Sin asignar',
       className: 'text-amber-500',
+      prefix,
+      suffix: 'Sin asignar',
+      showUserIcon: true,
     };
   }
   if (staffName) {
     const withAmt = (suffix: string) => [...parts, staffName, ...(amt ? [amt] : []), suffix].join(' · ');
+    const baseText = [...parts, staffName, ...(amt ? [amt] : [])].join(' · ');
     if (hasPayroll && payrollStatus === 'pagado') {
       return { text: withAmt('Pago confirmado'), className: 'text-emerald-500' };
     }
     if (hasPayroll && payrollStatus === 'pendiente') {
       return { text: withAmt('Enviado a nómina'), className: 'text-zinc-500' };
     }
-    if (hasBudget) {
-      return { text: withAmt('Enviado a nómina'), className: 'text-zinc-500' };
-    }
     return {
-      text: [...parts, staffName].join(' · '),
+      text: baseText,
       className: 'text-zinc-500',
     };
   }
@@ -380,19 +375,35 @@ export const TodoRowCompact = memo(function TodoRowCompact({
           >
             <div
               className={cn(
-                'text-xs truncate transition-all',
+                'text-xs truncate transition-all flex items-center gap-1.5 min-w-0',
                 isOptimisticCompleted ? 'line-through text-zinc-500' : 'text-zinc-200'
               )}
             >
-              {task.name}
+              <span className="truncate">{displayTaskName(task.name ?? '')}</span>
+              {task.is_annex && (
+                <span className="shrink-0 px-1 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400">
+                  Anexo
+                </span>
+              )}
             </div>
             <div className={cn('text-[11px] mt-0.5 flex items-center gap-1.5 min-w-0', metadata.className)}>
-              <span className="truncate">{metadata.text}</span>
+              {metadata.prefix && metadata.suffix && metadata.showUserIcon ? (
+                <>
+                  <span className="truncate">{metadata.prefix}</span>
+                  <User className="h-3 w-3 shrink-0 opacity-70" />
+                  <span className="shrink-0">{metadata.suffix}</span>
+                </>
+              ) : (
+                <span className="truncate">{metadata.text}</span>
+              )}
               {isOptimisticCompleted && (
                 <span className="shrink-0 text-[10px] text-zinc-500 whitespace-nowrap">
                   · ✓ Completada
                   {(task.assigned_to_crew_member?.name ?? optimisticStaffOverride?.name) && (
-                    <> · {task.assigned_to_crew_member?.name ?? optimisticStaffOverride?.name} · {task.payroll_state?.status === 'pagado' ? 'Pago confirmado' : 'Enviado a nómina'}</>
+                    <>
+                      {' · '}{task.assigned_to_crew_member?.name ?? optimisticStaffOverride?.name}
+                      {task.payroll_state?.hasPayroll && <> · {task.payroll_state?.status === 'pagado' ? 'Pago confirmado' : 'Enviado a nómina'}</>}
+                    </>
                   )}
                 </span>
               )}
@@ -412,6 +423,7 @@ export const TodoRowCompact = memo(function TodoRowCompact({
             );
           }}
           displayStaffOverride={optimisticStaffOverride}
+          onClosePopover={() => setPopoverOpen(false)}
         />
       </Popover>
 
@@ -425,27 +437,6 @@ export const TodoRowCompact = memo(function TodoRowCompact({
         itemName={task.name}
         costoTotal={task.budget_amount ?? undefined}
       />
-
-      {/* Menú contextual */}
-      <ZenDropdownMenu>
-        <ZenDropdownMenuTrigger asChild>
-          <button
-            type="button"
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 p-1 rounded hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity"
-            aria-label="Más opciones"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-        </ZenDropdownMenuTrigger>
-        <ZenDropdownMenuContent align="end" className="z-[100]">
-          <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
-            <CalendarPlus className="h-3.5 w-3.5 mr-2" />
-            Añadir a Agenda
-            <span className="ml-1 text-[10px] text-zinc-600">(próximamente)</span>
-          </ZenDropdownMenuItem>
-        </ZenDropdownMenuContent>
-      </ZenDropdownMenu>
     </div>
   );
 });

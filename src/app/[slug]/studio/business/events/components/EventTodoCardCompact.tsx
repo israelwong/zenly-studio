@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Calendar, ChevronRight, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { checkSchedulerStatus, sincronizarTareasEvento, obtenerTareasParaTodoList } from '@/lib/actions/studio/business/events';
+import { listarCategoriasOperativas } from '@/lib/actions/studio/business/events/scheduler-custom-categories.actions';
 import type { TodoListTask } from '@/lib/actions/studio/business/events';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
@@ -13,6 +14,7 @@ import { TodoRowCompact } from '../[eventId]/components/ZENTodoList/TodoRowCompa
 import { buildHierarchy } from '../[eventId]/components/ZENTodoList/todo-list-utils';
 import { getStageLabel } from '../[eventId]/scheduler/utils/scheduler-section-stages';
 import { QuickCreateTaskPopover } from './QuickCreateTaskPopover';
+import { AddCategoryPopover } from './AddCategoryPopover';
 import { SIN_CATEGORIA_SECTION_ID } from '../[eventId]/scheduler/utils/scheduler-section-stages';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { cn } from '@/lib/utils';
@@ -25,15 +27,13 @@ function mapSchedulerTasksToTodoList(
   eventData: EventoDetalle
 ): TodoListTask[] {
   const tasks = scheduler.tasks ?? [];
-  const items = [
-    ...(eventData.cotizacion?.cotizacion_items ?? []),
-    ...(eventData.cotizaciones ?? []).flatMap((c) => c.cotizacion_items ?? []),
-  ];
   const itemById = new Map<
     string,
-    { cost: number; billing_type: string | null; quantity: number; duration_hours: number | null }
+    { cost: number; billing_type: string | null; quantity: number; duration_hours: number | null; is_annex: boolean }
   >();
-  for (const i of items) {
+  const principalItems = eventData.cotizacion?.cotizacion_items ?? [];
+  const annexCotizaciones = eventData.cotizaciones ?? [];
+  for (const i of principalItems) {
     if (!i?.id) continue;
     const st = (i as { scheduler_task?: { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null } }).scheduler_task;
     const cost = (i as { cost?: number }).cost != null ? Number((i as { cost: number }).cost) : (i as { cost_snapshot?: number }).cost_snapshot != null ? Number((i as { cost_snapshot: number }).cost_snapshot) : 0;
@@ -44,7 +44,24 @@ function mapSchedulerTasksToTodoList(
       billing_type: itemBilling ?? (catalogBilling != null ? String(catalogBilling) : null),
       quantity: (i as { quantity?: number }).quantity ?? 1,
       duration_hours: st?.duration_hours_snapshot ?? null,
+      is_annex: !!(eventData.cotizacion as { is_annex?: boolean })?.is_annex,
     });
+  }
+  for (const cot of annexCotizaciones) {
+    for (const i of cot.cotizacion_items ?? []) {
+      if (!i?.id) continue;
+      const st = (i as { scheduler_task?: { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null } }).scheduler_task;
+      const cost = (i as { cost?: number }).cost != null ? Number((i as { cost: number }).cost) : (i as { cost_snapshot?: number }).cost_snapshot != null ? Number((i as { cost_snapshot: number }).cost_snapshot) : 0;
+      const itemBilling = (i as { billing_type?: string | null }).billing_type ?? st?.billing_type_snapshot ?? null;
+      const catalogBilling = (i as { items?: { billing_type?: string } | null }).items?.billing_type ?? null;
+      itemById.set(i.id, {
+        cost,
+        billing_type: itemBilling ?? (catalogBilling != null ? String(catalogBilling) : null),
+        quantity: (i as { quantity?: number }).quantity ?? 1,
+        duration_hours: st?.duration_hours_snapshot ?? null,
+        is_annex: !!(cot as { is_annex?: boolean }).is_annex || !!(cot as { parent_cotizacion_id?: string | null }).parent_cotizacion_id,
+      });
+    }
   }
 
   return tasks.map((t) => {
@@ -60,6 +77,7 @@ function mapSchedulerTasksToTodoList(
       status: t.status ?? 'PENDING',
       progress_percent: t.progress_percent ?? 0,
       category: t.category,
+      is_annex: item?.is_annex ?? false,
       catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
       catalog_category_name_snapshot: (t as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? null,
       catalog_category: (t as { catalog_category?: { id: string; name: string } | null }).catalog_category ?? null,
@@ -134,6 +152,7 @@ export function EventTodoCardCompact({
   const [optimisticCompletedIds, setOptimisticCompletedIds] = useState<Set<string>>(new Set());
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [customCategories, setCustomCategories] = useState<Array<{ id: string; name: string; section_id: string; stage: string; order: number }>>([]);
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((prev) => {
@@ -180,15 +199,18 @@ export function EventTodoCardCompact({
 
   const fetchTasks = useCallback(async () => {
     if (!hasInitialData) setTasksLoading(true);
-    const result = await obtenerTareasParaTodoList(studioSlug, eventId);
+    const [tasksResult, customResult] = await Promise.all([
+      obtenerTareasParaTodoList(studioSlug, eventId),
+      listarCategoriasOperativas(studioSlug, eventId),
+    ]);
     if (!hasInitialData) setTasksLoading(false);
-    if (result.success) {
-      setTasks(result.data);
-      if (result.data.length > 0) {
+    if (tasksResult.success) {
+      setTasks(tasksResult.data);
+      if (tasksResult.data.length > 0) {
         setIsSynced(true);
         setDateRange((prev) => {
           if (prev) return prev;
-          const dates = result.data.flatMap((t) => [
+          const dates = tasksResult.data.flatMap((t) => [
             t.start_date instanceof Date ? t.start_date : new Date(t.start_date),
             t.end_date instanceof Date ? t.end_date : new Date(t.end_date),
           ]);
@@ -197,6 +219,7 @@ export function EventTodoCardCompact({
         });
       }
     } else if (!hasInitialData) setTasks([]);
+    if (customResult.success && customResult.data) setCustomCategories(customResult.data);
   }, [studioSlug, eventId, hasInitialData]);
 
   useEffect(() => {
@@ -272,7 +295,10 @@ export function EventTodoCardCompact({
   }, [fetchStatus, fetchTasks, onEventUpdated]);
 
   const sortedTasks = useMemo(() => sortTasksForDisplay(tasks), [tasks]);
-  const hierarchy = useMemo(() => buildHierarchy(sortedTasks), [sortedTasks]);
+  const hierarchy = useMemo(
+    () => buildHierarchy(sortedTasks, customCategories, secciones ?? []),
+    [sortedTasks, customCategories, secciones]
+  );
   const eventName = eventData.promise?.name ?? eventData.name ?? 'Evento';
   const schedulerHref = `/${studioSlug}/studio/business/events/${eventId}/scheduler`;
 
@@ -290,21 +316,27 @@ export function EventTodoCardCompact({
                 size="sm"
                 onClick={handleSync}
                 disabled={syncing}
-                className="h-6 px-2 text-xs min-w-[5.5rem] justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                className="h-6 px-2 text-xs min-w-[5.5rem] justify-center gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
                 aria-label="Sincronizar tareas"
               >
-                {syncing ? 'Sincronizando…' : 'Sincronizar'}
+                {syncing ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin shrink-0" />
+                ) : (
+                  'Sincronizar'
+                )}
               </ZenButton>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                asChild
-                className="h-6 px-2 text-xs min-w-[5.5rem] justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
-              >
-                <Link href={schedulerHref} aria-label="Ir al cronograma">
-                  Cronograma
-                </Link>
-              </ZenButton>
+              {!syncing && (
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  asChild
+                  className="h-6 px-2 text-xs min-w-[5.5rem] justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+                >
+                  <Link href={schedulerHref} aria-label="Ir al cronograma">
+                    Cronograma
+                  </Link>
+                </ZenButton>
+              )}
             </div>
           </div>
         </ZenCardHeader>
@@ -316,9 +348,10 @@ export function EventTodoCardCompact({
                 style={{ width: `${syncProgress}%` }}
               />
             </div>
-            <span className="text-xs text-zinc-500">
-              {syncTotal > 0 ? `Sincronizando… (${syncCurrent}/${syncTotal})` : 'Sincronizando…'}
-            </span>
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+              {syncTotal > 0 ? `Sincronizando tareas (${syncCurrent}/${syncTotal})` : 'Sincronizando tareas'}
+            </div>
           </div>
         )}
         <ZenCardContent className="p-0 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -352,7 +385,10 @@ export function EventTodoCardCompact({
             </div>
           ) : (
             <div
-              className="flex-1 min-h-0 max-h-[700px] overflow-y-auto overscroll-contain"
+              className={cn(
+                'flex-1 min-h-0 max-h-[700px] overflow-y-auto overscroll-contain',
+                syncing && 'pointer-events-none opacity-60'
+              )}
               style={{ scrollbarGutter: 'stable' }}
             >
               <style>{`
@@ -381,10 +417,19 @@ export function EventTodoCardCompact({
                       {!sectionCollapsed &&
                         section.phases.map((phase) => (
                           <div key={`${section.sectionId}-${phase.phaseKey}`} className="border-b border-zinc-800/30 last:border-b-0">
-                            <div className="px-3 py-1.5 bg-zinc-900/50">
+                            <div className="px-3 py-1.5 bg-zinc-900/50 flex items-center justify-between gap-2 group/stage">
                               <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">
                                 {getStageLabel(phase.phaseKey)}
                               </span>
+                              <AddCategoryPopover
+                                studioSlug={studioSlug}
+                                eventId={eventId}
+                                sectionId={resolvedSectionId}
+                                sectionName={section.sectionName}
+                                stageKey={phase.phaseKey}
+                                stageLabel={getStageLabel(phase.phaseKey)}
+                                onSuccess={handleUpdated}
+                              />
                             </div>
                             {phase.categories.map((cat) => {
                               const catKey = `${section.sectionId}-${phase.phaseKey}-${cat.categoryId}`;

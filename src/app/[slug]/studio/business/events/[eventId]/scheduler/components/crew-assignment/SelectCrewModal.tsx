@@ -330,15 +330,14 @@ export function SelectCrewModal({
                 disabled={selectedMemberId === currentMemberId || isAssigning}
                 loading={isAssigning}
               >
-                {currentMemberId ? 'Cambiar asignación' : 'Asignar personal'}
+                Asignar personal
               </ZenButton>
-              {currentMemberId && (
+              {currentMemberId && !isAssigning && (
                 <ZenButton
                   variant="outline"
                   size="sm"
                   className="w-full"
                   onClick={handleRemove}
-                  disabled={isAssigning}
                 >
                   Quitar asignación
                 </ZenButton>

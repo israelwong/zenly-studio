@@ -10,11 +10,16 @@ import {
   type AgendaItem,
 } from '@/lib/actions/shared/agenda-unified.actions';
 
+/** Datos para pre-llenar al crear (concept, date, etc.). No incluir id. */
+export type AgendaPrefillData = Partial<Pick<AgendaItem, 'concept' | 'date' | 'time' | 'description'>>;
+
 interface AgendaFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   studioSlug: string;
   initialData?: AgendaItem | null;
+  /** Pre-llenado al crear nuevo (ej. desde tarea: concept=nombre, date=start_date) */
+  prefillData?: AgendaPrefillData | null;
   contexto?: 'promise' | 'evento';
   promiseId?: string | null;
   eventoId?: string | null;
@@ -26,6 +31,7 @@ export function AgendaFormModal({
   onClose,
   studioSlug,
   initialData,
+  prefillData,
   contexto,
   promiseId,
   eventoId,
@@ -52,7 +58,7 @@ export function AgendaFormModal({
       // Determinar contexto si no está especificado
       const finalContexto = contexto || (initialData?.contexto as 'promise' | 'evento' | undefined) || 'promise';
 
-      if (initialData) {
+      if (initialData?.id) {
         // Actualizar
         const result = await actualizarAgendamiento(studioSlug, {
           id: initialData.id,
@@ -128,7 +134,7 @@ export function AgendaFormModal({
     >
       <AgendaForm
         studioSlug={studioSlug}
-        initialData={initialData || undefined}
+        initialData={initialData?.id ? initialData : (prefillData as AgendaItem | undefined) || undefined}
         contexto={contexto}
         promiseId={promiseId}
         eventoId={eventoId}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Users, Archive, ArchiveRestore } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton } from '@/components/ui/zen';
@@ -42,10 +42,23 @@ export function EventLayoutClient({
 }: EventLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
 
   const isBaseRoute = pathname && !pathname.includes('/scheduler') && pathname.endsWith(`/events/${eventId}`);
   const isSchedulerRoute = pathname != null && pathname.includes('/scheduler');
   const [eventData, setEventData] = useState<EventoDetalle>(initialEventData);
+
+  /** Blindaje: nunca sobrescribir con data vacía/corrupta. Si el fetch devuelve sin nombre/financials cuando teníamos datos, mantener anterior. */
+  const setEventDataSafe = useCallback((newData: EventoDetalle | null) => {
+    if (newData == null) return;
+    const hasValidName = !!(newData.promise?.name ?? newData.name);
+    const hasValidId = !!newData.id;
+    setEventData((prev) => {
+      if (!hasValidId) return prev;
+      if (!hasValidName && prev?.promise?.name) return prev;
+      return sanitizeEventDataForClient(newData);
+    });
+  }, []);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cotizacionesCount, setCotizacionesCount] = useState(initialCotizacionesCount ?? 0);
@@ -133,7 +146,7 @@ export function EventLayoutClient({
           eventData={eventData}
           pipelineStages={pipelineStages}
           currentPipelineStageId={eventData?.stage_id || null}
-          loading={false}
+          loading={isPending}
           onEventUpdated={(updatedData) => {
             setEventData(sanitizeEventDataForClient(updatedData));
           }}
@@ -194,12 +207,15 @@ export function EventLayoutClient({
               eventData={eventData}
               initialResumen={initialResumen}
               hasContract={contratosCount > 0}
-              onEventUpdated={async () => {
-                const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
-                const result = await obtenerEventoDetalle(studioSlug, eventId);
-                if (result.success && result.data) {
-                  setEventData(sanitizeEventDataForClient(result.data));
-                }
+              onEventDataChange={(data) => setEventData(sanitizeEventDataForClient(data))}
+              onEventUpdated={() => {
+                startTransition(async () => {
+                  const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
+                  const result = await obtenerEventoDetalle(studioSlug, eventId);
+                  if (result.success && result.data) {
+                    setEventDataSafe(result.data);
+                  }
+                });
               }}
             />
           ) : (
@@ -258,7 +274,7 @@ export function EventLayoutClient({
             const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
             const result = await obtenerEventoDetalle(studioSlug, eventId);
             if (result.success && result.data) {
-              setEventData(sanitizeEventDataForClient(result.data));
+              setEventDataSafe(result.data);
             }
           }}
         />
@@ -274,7 +290,7 @@ export function EventLayoutClient({
             const { obtenerEventoDetalle } = await import('@/lib/actions/studio/business/events/events.actions');
             const result = await obtenerEventoDetalle(studioSlug, eventId);
             if (result.success && result.data) {
-              setEventData(sanitizeEventDataForClient(result.data));
+              setEventDataSafe(result.data);
             }
           }}
         />

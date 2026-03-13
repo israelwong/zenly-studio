@@ -299,9 +299,8 @@ export async function actualizarSchedulerTask(
       itemName?: string;
     };
   }
-): Promise<{ success: boolean; error?: string; payrollResult?: { success: boolean; personalNombre?: string; error?: string }; googleSyncFailed?: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
-    let googleSyncFailed = false;
     const studioResult = await validateStudio(studioSlug);
     if (!studioResult.success || !studioResult.studioId) {
       return { success: false, error: studioResult.error };
@@ -392,42 +391,13 @@ export async function actualizarSchedulerTask(
       data: updateData,
     });
 
-    // Si se completó la tarea, intentar crear nómina automáticamente
-    // Retornar información de nómina para mostrar toast en el cliente
-    let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
+    // Si se completó la tarea, intentar crear nómina automáticamente (side-effect; no retornar para evitar rehidratación)
     if (data.isCompleted === true && task.cotizacion_item_id && !data.skipPayroll) {
-      // Importar dinámicamente para evitar dependencias circulares
       const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
-
-      // Crear nómina (esperar resultado para retornarlo)
       try {
-        const result = await crearNominaDesdeTareaCompletada(
-          studioSlug,
-          eventId,
-          taskId,
-          data.itemData // Pasar datos del item si están disponibles
-        );
-        if (result.success && result.data) {
-          payrollResult = {
-            success: true,
-            personalNombre: result.data.personalNombre,
-          };
-        } else {
-          payrollResult = {
-            success: false,
-            error: result.error,
-          };
-        }
+        await crearNominaDesdeTareaCompletada(studioSlug, eventId, taskId, data.itemData);
       } catch (error) {
-        // Log error pero no bloquear la actualización de la tarea
-        console.error(
-          '[SCHEDULER] ❌ Error creando nómina automática (no crítico):',
-          error
-        );
-        payrollResult = {
-          success: false,
-          error: error instanceof Error ? error.message : 'Error desconocido',
-        };
+        console.error('[SCHEDULER] ❌ Error creando nómina automática (no crítico):', error);
       }
     }
 
@@ -450,23 +420,102 @@ export async function actualizarSchedulerTask(
 
     // El personal se sincroniza con Google desde el resumen de publicación (Aprobar); no sync inmediato para respetar DRAFT.
 
-    await revalidateSchedulerPaths(studioSlug, eventId);
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
-
-    if (data.isCompleted === false && task.cotizacion_item_id) {
-      revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+    // V6.0: Sin revalidatePath para actualizaciones de status/completado — Frontend gestiona UI optimista
+    const isCompletionOnly = Object.keys(updateData).every(
+      (k) => ['status', 'progress_percent', 'completed_at'].includes(k)
+    );
+    if (!isCompletionOnly) {
+      await revalidateSchedulerPaths(studioSlug, eventId);
+      revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
+      if (data.isCompleted === false && task.cotizacion_item_id) {
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+      }
     }
 
-    return {
-      success: true,
-      payrollResult: payrollResult || undefined,
-      ...(googleSyncFailed ? { googleSyncFailed: true } : {}),
-    };
+    // Solo { success: true } — devolver más datos dispara rehidratación agresiva en el cliente
+    return { success: true };
   } catch (error) {
     console.error('[SCHEDULER] Error actualizando tarea:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar tarea',
+    };
+  }
+}
+
+/**
+ * Asignar staff y completar tarea en una transacción atómica.
+ * Garantiza persistencia: si una operación falla, falla todo.
+ */
+export async function asignarCrewYCompletarTarea(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  crewMemberId: string,
+  options?: { skipPayroll?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studioResult = await validateStudio(studioSlug);
+    if (!studioResult.success || !studioResult.studioId) {
+      return { success: false, error: studioResult.error };
+    }
+
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        scheduler_instance: { event_id: eventId },
+      },
+      select: {
+        id: true,
+        cotizacion_item_id: true,
+      },
+    });
+    if (!task) return { success: false, error: 'Tarea no encontrada' };
+
+    const crewMember = await prisma.studio_crew_members.findFirst({
+      where: { id: crewMemberId, studio_id: studioResult.studioId },
+      select: { id: true, name: true },
+    });
+    if (!crewMember) return { success: false, error: 'Personal no encontrado' };
+
+    await prisma.$transaction(async (tx) => {
+      if (task.cotizacion_item_id) {
+        await tx.studio_cotizacion_items.update({
+          where: { id: task.cotizacion_item_id },
+          data: {
+            assigned_to_crew_member_id: crewMemberId,
+            assignment_date: new Date(),
+          },
+        });
+      }
+      await tx.studio_scheduler_event_tasks.update({
+        where: { id: taskId },
+        data: {
+          assigned_to_crew_member_id: crewMemberId,
+          status: 'COMPLETED',
+          progress_percent: 100,
+          completed_at: new Date(),
+        },
+      });
+    });
+
+    console.log(`PERSISTIENDO: Tarea ID: ${taskId}, Staff: ${crewMemberId} (${crewMember.name})`);
+
+    if (!options?.skipPayroll && task.cotizacion_item_id) {
+      try {
+        const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
+        await crearNominaDesdeTareaCompletada(studioSlug, eventId, taskId);
+      } catch (err) {
+        console.error('[SCHEDULER] Error creando nómina (no crítico):', err);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[SCHEDULER] Error asignarCrewYCompletarTarea:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al asignar y completar',
     };
   }
 }

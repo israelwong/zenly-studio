@@ -11,6 +11,7 @@ export interface TodoListTask {
   catalog_section_name_snapshot: string | null;
   catalog_category_name_snapshot: string | null;
   catalog_category: { id: string; name: string } | null;
+  scheduler_custom_category: { id: string; name: string } | null;
   duration_days: number;
   duration_hours_snapshot: number | null;
   start_date: Date;
@@ -21,6 +22,8 @@ export interface TodoListTask {
   assigned_to_crew_member: { id: string; name: string } | null;
   /** Si la tarea tiene registro de nómina (pago asignado/cerrado) */
   payroll_state?: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+  /** Si la tarea proviene de un anexo (cotización con parent_cotizacion_id o is_annex) */
+  is_annex?: boolean;
   /** Datos del ítem de cotización para popover (solo si cotizacion_item_id) */
   item_meta?: {
     profit_type: string | null;
@@ -55,6 +58,7 @@ export async function obtenerTareasParaTodoList(
         catalog_section_name_snapshot: true,
         catalog_category_name_snapshot: true,
         catalog_category: { select: { id: true, name: true } },
+        scheduler_custom_category: { select: { id: true, name: true } },
         duration_days: true,
         duration_hours_snapshot: true,
         quantity_snapshot: true,
@@ -76,6 +80,9 @@ export async function obtenerTareasParaTodoList(
             billing_type: true,
             profit_type: true,
             items: { select: { billing_type: true } },
+            cotizaciones: {
+              select: { parent_cotizacion_id: true, is_annex: true },
+            },
           },
         },
       },
@@ -106,7 +113,12 @@ export async function obtenerTareasParaTodoList(
     }
 
     const data: TodoListTask[] = tasks.map((t) => {
-      const item = t.cotizacion_item as typeof t.cotizacion_item & { items?: { billing_type?: string } | null };
+      const item = t.cotizacion_item as typeof t.cotizacion_item & {
+        items?: { billing_type?: string } | null;
+        cotizaciones?: { parent_cotizacion_id?: string | null; is_annex?: boolean } | null;
+      };
+      const cot = item?.cotizaciones;
+      const isAnnex = !!(cot?.parent_cotizacion_id ?? cot?.is_annex);
       const taskBilling = (t as { billing_type_snapshot?: string | null }).billing_type_snapshot;
       const billingType: string | null =
         taskBilling ??
@@ -132,12 +144,14 @@ export async function obtenerTareasParaTodoList(
       return {
         id: t.id,
         name: t.name,
+        is_annex: isAnnex,
         status: t.status ?? 'PENDING',
         progress_percent: t.progress_percent ?? 0,
         category: t.category,
         catalog_section_name_snapshot: t.catalog_section_name_snapshot,
         catalog_category_name_snapshot: t.catalog_category_name_snapshot,
         catalog_category: t.catalog_category,
+        scheduler_custom_category: (t as { scheduler_custom_category?: { id: string; name: string } | null }).scheduler_custom_category ?? null,
         duration_days: t.duration_days,
         duration_hours_snapshot: t.duration_hours_snapshot,
         start_date: t.start_date,

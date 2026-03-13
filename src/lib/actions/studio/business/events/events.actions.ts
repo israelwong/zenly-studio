@@ -105,6 +105,7 @@ import {
   obtenerSchedulerTask as obtenerSchedulerTaskCore,
   actualizarRangoScheduler as actualizarRangoSchedulerCore,
   actualizarSchedulerStaging as actualizarSchedulerStagingCore,
+  asignarCrewYCompletarTarea as asignarCrewYCompletarTareaCore,
   type CheckSchedulerStatusResult,
   type ActualizarSchedulerStagingInput,
 } from './scheduler-tasks.actions';
@@ -285,6 +286,20 @@ export async function actualizarSchedulerStaging(
   input: ActualizarSchedulerStagingInput
 ) {
   return actualizarSchedulerStagingCore(studioSlug, eventId, input);
+}
+
+/**
+ * Asignar staff y completar tarea en transacción atómica.
+ * MIGRADO A: scheduler-tasks.actions.ts
+ */
+export async function asignarCrewYCompletarTarea(
+  studioSlug: string,
+  eventId: string,
+  taskId: string,
+  crewMemberId: string,
+  options?: { skipPayroll?: boolean }
+) {
+  return asignarCrewYCompletarTareaCore(studioSlug, eventId, taskId, crewMemberId, options);
 }
 
 /**
@@ -1106,7 +1121,7 @@ export async function obtenerEventoDetalle(
               scheduler_custom_category: (t as { scheduler_custom_category?: { id: string; name: string } | null }).scheduler_custom_category ?? null,
               depends_on_task_id: (t as { depends_on_task_id?: string | null }).depends_on_task_id ?? null,
               checklist_items: (t as { checklist_items?: unknown }).checklist_items ?? null,
-              budget_amount: t.budget_amount,
+              budget_amount: Number(t.budget_amount ?? 0),
               billing_type_snapshot: (t as { billing_type_snapshot?: string | null }).billing_type_snapshot ?? null,
               duration_hours_snapshot: (t as { duration_hours_snapshot?: number | null }).duration_hours_snapshot ?? null,
               profit_type_snapshot: (t as { profit_type_snapshot?: string | null }).profit_type_snapshot ?? null,
@@ -1256,19 +1271,45 @@ export async function obtenerEventoDetalle(
       // Serializar scheduler (estructura desde tasks + catálogo; sin JSONB)
       scheduler: evento.scheduler ? (() => {
         const scheduler = evento.scheduler!;
+        const rawTasks = scheduler.tasks ?? [];
+        // Inicialización preventiva: order secuencial por categoría cuando order es null/0 (evita lag en primer DnD)
+        const resolvedCat = (t: (typeof rawTasks)[0]) =>
+          t.catalog_category_id ??
+          (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
+          (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.items?.service_category_id ??
+          null;
+        const groupKey = (t: (typeof rawTasks)[0]) => `${t.category ?? ''}::${resolvedCat(t) ?? ''}`;
+        const lastOrderByGroup = new Map<string, number>();
+        const orderByTaskId = new Map<string, number>();
+        for (const t of rawTasks) {
+          const id = (t as { id?: string }).id;
+          if (!id) continue;
+          const ord = (t as { order?: number }).order;
+          const needsSeq = ord == null || ord === 0;
+          if (needsSeq) {
+            const k = groupKey(t);
+            const last = lastOrderByGroup.get(k) ?? -1;
+            const next = last + 1;
+            lastOrderByGroup.set(k, next);
+            orderByTaskId.set(id, next);
+          } else {
+            orderByTaskId.set(id, Number(ord));
+          }
+        }
         return {
           ...(scheduler as any),
-          tasks: (scheduler.tasks ?? []).map((t) => {
-            const resolvedCatalogCategoryId =
-              t.catalog_category_id ??
-              (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.service_category_id ??
-              (t as { cotizacion_item?: { service_category_id?: string | null; items?: { service_category_id?: string | null } | null } | null }).cotizacion_item?.items?.service_category_id ??
-              null;
+          tasks: rawTasks.map((t) => {
+            const taskId = (t as { id?: string }).id;
+            const resolvedCatalogCategoryId = resolvedCat(t);
             const { catalog_category: _cat, cotizacion_item: _ci, ...rest } = t as typeof t & { cotizacion_item?: unknown };
+            const finalOrder = taskId ? (orderByTaskId.get(taskId) ?? (t as { order?: number }).order ?? 0) : ((t as { order?: number }).order ?? 0);
             return {
               ...(rest as any),
-              budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-              order: t.order ?? 0,
+              budget_amount: Number(t.budget_amount ?? 0),
+              order: finalOrder,
+              status: (t as { status?: string }).status ?? 'PENDING',
+              progress_percent: (t as { progress_percent?: number }).progress_percent ?? 0,
+              completed_at: (t as { completed_at?: Date | null }).completed_at ?? null,
               catalog_category_id: resolvedCatalogCategoryId,
               catalog_category_nombre: t.catalog_category?.name ?? null,
               assigned_to_crew_member_id: t.assigned_to_crew_member_id,
