@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { Clock, DollarSign, Loader2, Check } from 'lucide-react';
+import { Calendar, DollarSign, Loader2, Check } from 'lucide-react';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 import {
   ContextMenu,
@@ -20,12 +20,13 @@ import {
   actualizarSchedulerTaskFechas,
   asignarCrewAItem,
 } from '@/lib/actions/studio/business/events';
-import { AssignCrewBeforeCompleteModal } from '@/app/[slug]/studio/business/events/[eventId]/scheduler/components/task-actions/AssignCrewBeforeCompleteModal';
+import { AssignCrewBeforeCompleteModal } from '../../scheduler/components/task-actions/AssignCrewBeforeCompleteModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
-import type { TodoListTask } from '@/features/scheduler/actions/obtener-tareas-todolist';
+import type { TodoListTask } from '@/lib/actions/studio/business/events';
 
 const SCHEDULER_TASK_UPDATED = 'scheduler-task-updated';
 
@@ -50,6 +51,14 @@ function formatearMoneda(n: number): string {
 function isDateInRange(d: Date, range: { from: Date; to: Date }): boolean {
   const t = d.getTime();
   return t >= range.from.getTime() && t <= range.to.getTime();
+}
+
+function formatDateRange(start: Date, end: Date): string {
+  const sameDay = start.getTime() === end.getTime();
+  if (sameDay) return format(start, 'd MMM', { locale: es });
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  if (sameMonth) return `${format(start, 'd')}-${format(end, 'd MMM')}`;
+  return `${format(start, 'd MMM')} - ${format(end, 'd MMM')}`;
 }
 
 interface TodoRowProps {
@@ -88,12 +97,7 @@ export const TodoRow = memo(function TodoRow({
   const startDate = task.start_date instanceof Date ? task.start_date : new Date(task.start_date);
   const endDate = task.end_date instanceof Date ? task.end_date : new Date(task.end_date);
 
-  const durationLabel =
-    task.duration_hours_snapshot != null && task.duration_hours_snapshot > 0
-      ? `${task.duration_hours_snapshot}h`
-      : task.duration_days === 1
-        ? '1d'
-        : `${task.duration_days}d`;
+  const dateLabel = formatDateRange(startDate, endDate);
 
   const handleToggleComplete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -249,44 +253,48 @@ export const TodoRow = memo(function TodoRow({
             }
           }}
           className={cn(
-            'flex items-center gap-2 py-2 px-3 rounded-md cursor-pointer transition-colors',
+            'flex flex-col gap-0.5 py-2 px-3 rounded-md cursor-pointer transition-colors',
             'hover:bg-zinc-800/50 border border-transparent hover:border-zinc-700/50',
             isCompleted && 'opacity-70'
           )}
         >
-          <div
-            className={cn(
-              'shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all',
-              isCompleted
-                ? 'bg-emerald-500/20 border-emerald-500/50'
-                : canCompleteDirect
-                  ? 'border-zinc-500 hover:border-emerald-500'
-                  : hasBudget
-                    ? 'border-amber-500/50 hover:border-amber-500'
-                    : 'border-zinc-600 opacity-50'
-            )}
-          >
-            {completing ? (
-              <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-400" />
-            ) : isCompleted ? (
-              <span className="text-emerald-400 text-[10px]">✓</span>
-            ) : null}
+          {/* L1: Checkbox + Nombre */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className={cn(
+                'shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all',
+                isCompleted
+                  ? 'bg-emerald-500/20 border-emerald-500/50'
+                  : canCompleteDirect
+                    ? 'border-zinc-500 hover:border-emerald-500'
+                    : hasBudget
+                      ? 'border-amber-500/50 hover:border-amber-500'
+                      : 'border-zinc-600 opacity-50'
+              )}
+            >
+              {completing ? (
+                <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-400" />
+              ) : isCompleted ? (
+                <Check className="h-2.5 w-2.5 text-emerald-400" strokeWidth={2.5} />
+              ) : null}
+            </div>
+            <span
+              className={cn(
+                'flex-1 min-w-0 text-xs truncate transition-all duration-200',
+                isCompleted ? 'line-through text-zinc-500 decoration-zinc-500' : 'text-zinc-300'
+              )}
+            >
+              {task.name}
+            </span>
           </div>
-          <span
-            className={cn(
-              'flex-1 min-w-0 text-xs truncate transition-all duration-200',
-              isCompleted ? 'line-through text-zinc-500 decoration-zinc-500' : 'text-zinc-300'
-            )}
-          >
-            {task.name}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-500" title="Duración">
-              <Clock className="h-2.5 w-2.5" />
-              {durationLabel}
+          {/* L2: Badges (fecha/rango, personal, presupuesto) */}
+          <div className="flex flex-wrap gap-1.5 pl-6">
+            <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
+              <Calendar className="h-2.5 w-2.5" />
+              {dateLabel}
             </span>
             {(task.budget_amount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-400" title="Monto">
+              <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-700/50">
                 <DollarSign className="h-2.5 w-2.5" />
                 {formatearMoneda(task.budget_amount!)}
               </span>
@@ -294,33 +302,27 @@ export const TodoRow = memo(function TodoRow({
             {task.assigned_to_crew_member ? (
               <span
                 className={cn(
-                  'relative shrink-0',
-                  hasPayrollClosed && 'ring-1 ring-emerald-500/50 rounded-full'
+                  'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  hasPayrollClosed ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-700/50' : 'bg-blue-500/20 text-blue-400 border border-blue-700/50'
                 )}
               >
-                <ZenAvatar
-                  className={cn(
-                    'h-5 w-5',
-                    hasPayrollClosed && 'ring-1 ring-emerald-500/50'
-                  )}
-                >
+                <ZenAvatar className="h-3.5 w-3.5 shrink-0">
                   <ZenAvatarFallback
                     className={cn(
-                      'text-[9px]',
+                      'text-[8px]',
                       hasPayrollClosed ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'
                     )}
                   >
                     {getInitials(task.assigned_to_crew_member.name)}
                   </ZenAvatarFallback>
                 </ZenAvatar>
-                {hasPayrollClosed && (
-                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-emerald-500">
-                    <Check className="h-1.5 w-1.5 text-white" strokeWidth={3} />
-                  </span>
-                )}
+                {task.assigned_to_crew_member.name}
+                {hasPayrollClosed && <Check className="h-2.5 w-2.5" strokeWidth={2.5} />}
               </span>
             ) : (
-              <span className="w-5 h-5 shrink-0 rounded-full bg-zinc-700/50" aria-hidden />
+              <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-800/60 text-zinc-500 border border-zinc-700/50">
+                Sin asignar
+              </span>
             )}
           </div>
         </div>

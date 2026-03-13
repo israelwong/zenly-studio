@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { unstable_cache, revalidateTag } from 'next/cache';
-import { obtenerEventoDetalle, obtenerCotizacionesAutorizadasCount } from '@/lib/actions/studio/business/events';
+import { obtenerEventoDetalle, obtenerCotizacionesAutorizadasCount, getEventPipelineStages } from '@/lib/actions/studio/business/events';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { cleanupOrphanAnnexes } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getAllEventContracts } from '@/lib/actions/studio/business/contracts/contracts.actions';
@@ -62,13 +62,15 @@ export default async function EventLayout({
       ? (eventDataRaw.cotizaciones as Record<string, unknown>[]).map(sanitizarCotizacion)
       : eventDataRaw.cotizaciones,
   };
-  const pipelineStages: EventPipelineStage[] = [];
-
-  const [resumenResult, countResult, contractsResult] = await Promise.all([
+  const [stagesResult, resumenResult, countResult, contractsResult] = await Promise.all([
+    getEventPipelineStages(studioSlug),
     obtenerResumenEventoCreado(studioSlug, eventId),
     obtenerCotizacionesAutorizadasCount(studioSlug, eventId),
     getAllEventContracts(studioSlug, eventId),
   ]);
+
+  const pipelineStages: EventPipelineStage[] =
+    stagesResult.success && stagesResult.data ? stagesResult.data : [];
 
   // Sanitizar initialResumen.cotizacion (Decimal → number, Date intactas) antes de pasar al cliente
   const initialResumen =

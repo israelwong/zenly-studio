@@ -3,9 +3,9 @@
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
-import { getStageLabel } from '@/app/[slug]/studio/business/events/[eventId]/scheduler/utils/scheduler-section-stages';
 import { TodoRow } from './TodoRow';
-import type { TodoListTask } from '@/features/scheduler/actions/obtener-tareas-todolist';
+import { buildHierarchy } from './todo-list-utils';
+import type { TodoListTask } from '@/lib/actions/studio/business/events';
 
 interface TodoDrawerProps {
   studioSlug: string;
@@ -19,99 +19,6 @@ interface TodoDrawerProps {
   optimisticCompletedIds?: Set<string>;
   addOptimisticComplete?: (id: string) => void;
   removeOptimisticComplete?: (id: string) => void;
-}
-
-type HierarchyKey = string;
-
-interface GroupedTasks {
-  sectionId: string;
-  sectionName: string;
-  phases: Array<{
-    phaseKey: string;
-    phaseLabel: string;
-    categories: Array<{
-      categoryId: string;
-      categoryName: string;
-      tasks: TodoListTask[];
-    }>;
-  }>;
-}
-
-function buildHierarchy(tasks: TodoListTask[]): GroupedTasks[] {
-  const sectionMap = new Map<
-    string,
-    Map<string, Map<string, TodoListTask[]>>
-  >();
-
-  for (const task of tasks) {
-    const sectionName = task.catalog_section_name_snapshot ?? 'Sin sección';
-    const sectionId = task.catalog_section_name_snapshot ?? '__sin_seccion__';
-    const phaseKey = task.category ?? 'UNASSIGNED';
-    const phaseLabel = getStageLabel(task.category);
-    const categoryName =
-      task.catalog_category_name_snapshot ??
-      task.catalog_category?.name ??
-      'Sin categoría';
-    const categoryId =
-      task.catalog_category?.id ?? `__${phaseKey}__${categoryName}__`;
-
-    if (!sectionMap.has(sectionId)) {
-      sectionMap.set(
-        sectionId,
-        new Map<string, Map<string, TodoListTask[]>>()
-      );
-    }
-    const phaseMap = sectionMap.get(sectionId)!;
-    if (!phaseMap.has(phaseKey)) {
-      phaseMap.set(phaseKey, new Map<string, TodoListTask[]>());
-    }
-    const catMap = phaseMap.get(phaseKey)!;
-    if (!catMap.has(categoryId)) {
-      catMap.set(categoryId, []);
-    }
-    catMap.get(categoryId)!.push(task);
-  }
-
-  const PHASE_ORDER = ['PLANNING', 'PRODUCTION', 'POST_PRODUCTION', 'DELIVERY', 'UNASSIGNED'];
-  const result: GroupedTasks[] = [];
-
-  for (const [sectionId, phaseMap] of sectionMap) {
-    const firstTask = tasks.find(
-      (t) =>
-        (t.catalog_section_name_snapshot ?? '__sin_seccion__') === sectionId
-    );
-    const phases: GroupedTasks['phases'] = [];
-    for (const phaseKey of PHASE_ORDER) {
-      if (!phaseMap.has(phaseKey)) continue;
-      const catMap = phaseMap.get(phaseKey)!;
-      const categories: GroupedTasks['phases'][0]['categories'] = [];
-      for (const [categoryId, taskList] of catMap) {
-        const categoryName = taskList[0]
-          ? taskList[0].catalog_category_name_snapshot ??
-            taskList[0].catalog_category?.name ??
-            'Sin categoría'
-          : 'Sin categoría';
-        categories.push({ categoryId, categoryName, tasks: taskList });
-      }
-      if (categories.length > 0) {
-        phases.push({
-          phaseKey,
-          phaseLabel: getStageLabel(phaseKey),
-          categories,
-        });
-      }
-    }
-    result.push({
-      sectionId,
-      sectionName:
-        sectionId === '__sin_seccion__'
-          ? 'Sin sección'
-          : firstTask?.catalog_section_name_snapshot ?? sectionId,
-      phases,
-    });
-  }
-
-  return result;
 }
 
 export function TodoDrawer({

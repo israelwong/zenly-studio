@@ -24,6 +24,9 @@ export {
   obtenerEstadoNominaPorTarea,
 } from './payroll-actions';
 
+export { obtenerTareasParaTodoList } from './obtener-tareas-todolist.actions';
+export type { TodoListTask } from './obtener-tareas-todolist.actions';
+
 export {
   actualizarSchedulerTaskFechas,
   obtenerSchedulerTareas,

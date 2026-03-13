@@ -21,6 +21,14 @@ export interface TodoListTask {
   assigned_to_crew_member: { id: string; name: string } | null;
   /** Si la tarea tiene registro de nómina (pago asignado/cerrado) */
   payroll_state?: { hasPayroll: boolean; status?: 'pendiente' | 'pagado' };
+  /** Datos del ítem de cotización para popover (solo si cotizacion_item_id) */
+  item_meta?: {
+    profit_type: string | null;
+    billing_type: string | null;
+    quantity: number;
+    cost: number;
+    duration_hours: number | null;
+  };
 }
 
 export async function obtenerTareasParaTodoList(
@@ -49,6 +57,8 @@ export async function obtenerTareasParaTodoList(
         catalog_category: { select: { id: true, name: true } },
         duration_days: true,
         duration_hours_snapshot: true,
+        billing_type_snapshot: true,
+        profit_type_snapshot: true,
         start_date: true,
         end_date: true,
         budget_amount: true,
@@ -56,6 +66,16 @@ export async function obtenerTareasParaTodoList(
         assigned_to_crew_member_id: true,
         assigned_to_crew_member: {
           select: { id: true, name: true },
+        },
+        cotizacion_item: {
+          select: {
+            quantity: true,
+            cost: true,
+            cost_snapshot: true,
+            billing_type: true,
+            profit_type: true,
+            items: { select: { duration_hours: true } },
+          },
         },
       },
       orderBy: [{ category: 'asc' }, { order: 'asc' }, { end_date: 'asc' }],
@@ -84,29 +104,56 @@ export async function obtenerTareasParaTodoList(
       }
     }
 
-    const data: TodoListTask[] = tasks.map((t) => ({
-      id: t.id,
-      name: t.name,
-      status: t.status,
-      progress_percent: t.progress_percent != null ? Number(t.progress_percent) : null,
-      category: t.category,
-      catalog_section_name_snapshot: t.catalog_section_name_snapshot,
-      catalog_category_name_snapshot: t.catalog_category_name_snapshot,
-      catalog_category: t.catalog_category,
-      duration_days: t.duration_days,
-      duration_hours_snapshot: t.duration_hours_snapshot,
-      start_date: t.start_date,
-      end_date: t.end_date,
-      budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
-      cotizacion_item_id: t.cotizacion_item_id,
-      assigned_to_crew_member_id: t.assigned_to_crew_member_id,
-      assigned_to_crew_member: t.assigned_to_crew_member
-        ? { id: t.assigned_to_crew_member.id, name: t.assigned_to_crew_member.name }
-        : null,
-      payroll_state: t.cotizacion_item_id
-        ? (payrollByItem.get(t.cotizacion_item_id) ?? { hasPayroll: false })
-        : { hasPayroll: false },
-    }));
+    const data: TodoListTask[] = tasks.map((t) => {
+      const item = t.cotizacion_item;
+      const billingType: string | null =
+        (t as { billing_type_snapshot?: string | null }).billing_type_snapshot ??
+        (item?.billing_type != null ? String(item.billing_type) : null);
+      const profitType =
+        (t as { profit_type_snapshot?: string | null }).profit_type_snapshot ??
+        item?.profit_type ??
+        null;
+      const durationHours =
+        t.duration_hours_snapshot ??
+        item?.items?.duration_hours ??
+        null;
+      const quantity = item?.quantity ?? 1;
+      const cost = item?.cost != null ? Number(item.cost) : (item?.cost_snapshot != null ? Number(item.cost_snapshot) : 0);
+
+      return {
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        progress_percent: t.progress_percent != null ? Number(t.progress_percent) : null,
+        category: t.category,
+        catalog_section_name_snapshot: t.catalog_section_name_snapshot,
+        catalog_category_name_snapshot: t.catalog_category_name_snapshot,
+        catalog_category: t.catalog_category,
+        duration_days: t.duration_days,
+        duration_hours_snapshot: t.duration_hours_snapshot,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        budget_amount: t.budget_amount != null ? Number(t.budget_amount) : null,
+        cotizacion_item_id: t.cotizacion_item_id,
+        assigned_to_crew_member_id: t.assigned_to_crew_member_id,
+        assigned_to_crew_member: t.assigned_to_crew_member
+          ? { id: t.assigned_to_crew_member.id, name: t.assigned_to_crew_member.name }
+          : null,
+        payroll_state: t.cotizacion_item_id
+          ? (payrollByItem.get(t.cotizacion_item_id) ?? { hasPayroll: false })
+          : { hasPayroll: false },
+        item_meta:
+          t.cotizacion_item_id && item
+            ? {
+                profit_type: profitType,
+                billing_type: billingType,
+                quantity,
+                cost,
+                duration_hours: durationHours,
+              }
+            : undefined,
+      };
+    });
 
     return { success: true, data };
   } catch (error) {
