@@ -361,6 +361,8 @@ async function obtenerOCrearInstancia(
 export interface SincronizarTareasOptions {
   batchOffset?: number;
   batchSize?: number;
+  /** Si true, tareas de anexos (is_annex) se agrupan en sección separada para fechas independientes. */
+  groupAnnexInSeparateSection?: boolean;
 }
 
 export async function sincronizarTareasEvento(
@@ -368,7 +370,7 @@ export async function sincronizarTareasEvento(
   eventId: string,
   options?: SincronizarTareasOptions
 ): Promise<{ success: boolean; created?: number; updated?: number; skipped?: number; totalExpanded?: number; error?: string }> {
-  const { batchOffset = 0, batchSize = 0 } = options ?? {};
+    const { batchOffset = 0, batchSize = 0, groupAnnexInSeparateSection = false } = options ?? {};
   try {
     const studioResult = await validateStudio(studioSlug);
     if (!studioResult.success || !studioResult.studioId) {
@@ -399,6 +401,9 @@ export async function sincronizarTareasEvento(
       },
       select: {
         id: true,
+        is_annex: true,
+        parent_cotizacion_id: true,
+        anexo_entrega_independent: true,
         event_duration: true,
         promise: { select: { duration_hours: true } },
         cotizacion_items: {
@@ -468,6 +473,9 @@ export async function sincronizarTareasEvento(
 
     // Horas de cobertura por cotización (prioridad: event_duration > promise.duration_hours) para multiplicador HOUR
     const itemToDurationHours = new Map<string, number | null>();
+    const itemToIsAnnex = new Map<string, boolean>();
+    const itemToAnnexIndependentDates = new Map<string, boolean>();
+    const itemToAnnexSection = new Map<string, { id: string; name: string }>();
     for (const c of cotizacionesRows) {
       const hours =
         c.event_duration != null
@@ -475,8 +483,16 @@ export async function sincronizarTareasEvento(
           : c.promise?.duration_hours != null
             ? Number(c.promise.duration_hours)
             : null;
+      const isAnnex = !!(c as { is_annex?: boolean }).is_annex;
+      const annexIndependent = !!(c as { anexo_entrega_independent?: boolean }).anexo_entrega_independent;
+      const annexSection = isAnnex && annexIndependent
+        ? { id: `annex-${c.id}`, name: `Anexo (entrega independiente)` }
+        : null;
       for (const it of c.cotizacion_items ?? []) {
         itemToDurationHours.set(it.id, hours);
+        itemToIsAnnex.set(it.id, isAnnex);
+        itemToAnnexIndependentDates.set(it.id, isAnnex && annexIndependent);
+        if (annexSection) itemToAnnexSection.set(it.id, annexSection);
       }
     }
 
@@ -634,10 +650,11 @@ export async function sincronizarTareasEvento(
         const durationHours = itemToDurationHours.get(item.id) ?? null;
         const durationHoursSnapshot = durationHours != null ? durationHours : undefined;
 
-        // Snapshots solo desde el ítem procesado (no catálogo global)
+        // Snapshots: anexo con fechas independientes → nueva sección; aditivo → categoría del catálogo
+        const annexSection = itemToAnnexSection.get(item.id);
         const sectionRef = item.service_categories?.section_categories ?? item.items?.service_categories?.section_categories;
-        const snapshotSectionId = sectionRef?.service_sections?.id ?? null;
-        const snapshotSectionName = sectionRef?.service_sections?.name ?? 'Sin sección';
+        const snapshotSectionId = annexSection?.id ?? sectionRef?.service_sections?.id ?? null;
+        const snapshotSectionName = annexSection?.name ?? sectionRef?.service_sections?.name ?? 'Sin sección';
         const snapshotCategoryName = categoryName ?? 'Sin categoría';
 
         // Exclusión: ítem cuyo “servicio” ya está ocupado por una tarea huérfana DRAFT (soft-delete operativo)
@@ -811,6 +828,7 @@ export async function sincronizarTareasEvento(
       }
     }
 
+    // Stay on Event: revalidar sin redirect. Nancy permanece en el evento actual.
     if (created > 0 || updated > 0) {
       const { revalidateSchedulerPaths } = await import('./helpers/revalidation-utils');
       await revalidateSchedulerPaths(studioSlug, eventId);

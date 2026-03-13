@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenButton, ZenCalendar, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 import { format } from 'date-fns';
@@ -75,6 +76,7 @@ function CatalogTaskPopover({
   const [isSavingDates, setIsSavingDates] = useState(false);
   const [assignCrewModalOpen, setAssignCrewModalOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const router = useRouter();
   const [tempDateRange, setTempDateRange] = useState<{ from: Date; to: Date } | null>(null);
   const [durationDays, setDurationDays] = useState(task.duration_days ?? 1);
 
@@ -171,6 +173,7 @@ function CatalogTaskPopover({
         onUpdated();
         setSelectCrewModalOpen(false);
         setOpen(false);
+        router.refresh();
       } else toast.error(result.error ?? 'Error');
     } catch {
       toast.error('Error al asignar');

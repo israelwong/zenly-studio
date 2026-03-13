@@ -433,7 +433,7 @@ export function EventDeliverablesCard({
               variant="ghost"
               size="sm"
               onClick={() => handleOpenForm()}
-              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+              className="h-6 px-2 text-xs min-w-[5.5rem] justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
             >
               <Plus className="h-3 w-3 mr-1" />
               Agregar

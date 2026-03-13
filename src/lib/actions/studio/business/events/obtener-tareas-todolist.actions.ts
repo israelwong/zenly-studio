@@ -6,7 +6,7 @@ export interface TodoListTask {
   id: string;
   name: string;
   status: string;
-  progress_percent: number | null;
+  progress_percent: number;
   category: string;
   catalog_section_name_snapshot: string | null;
   catalog_category_name_snapshot: string | null;
@@ -57,6 +57,7 @@ export async function obtenerTareasParaTodoList(
         catalog_category: { select: { id: true, name: true } },
         duration_days: true,
         duration_hours_snapshot: true,
+        quantity_snapshot: true,
         billing_type_snapshot: true,
         profit_type_snapshot: true,
         start_date: true,
@@ -74,7 +75,7 @@ export async function obtenerTareasParaTodoList(
             cost_snapshot: true,
             billing_type: true,
             profit_type: true,
-            items: { select: { duration_hours: true } },
+            items: { select: { billing_type: true } },
           },
         },
       },
@@ -105,26 +106,34 @@ export async function obtenerTareasParaTodoList(
     }
 
     const data: TodoListTask[] = tasks.map((t) => {
-      const item = t.cotizacion_item;
+      const item = t.cotizacion_item as typeof t.cotizacion_item & { items?: { billing_type?: string } | null };
+      const taskBilling = (t as { billing_type_snapshot?: string | null }).billing_type_snapshot;
       const billingType: string | null =
-        (t as { billing_type_snapshot?: string | null }).billing_type_snapshot ??
-        (item?.billing_type != null ? String(item.billing_type) : null);
+        taskBilling ??
+        (item?.billing_type != null ? String(item.billing_type) : null) ??
+        (item?.items?.billing_type != null ? String(item.items.billing_type) : null);
       const profitType =
         (t as { profit_type_snapshot?: string | null }).profit_type_snapshot ??
         item?.profit_type ??
         null;
-      const durationHours =
-        t.duration_hours_snapshot ??
-        item?.items?.duration_hours ??
-        null;
-      const quantity = item?.quantity ?? 1;
-      const cost = item?.cost != null ? Number(item.cost) : (item?.cost_snapshot != null ? Number(item.cost_snapshot) : 0);
+      const durationHours = t.duration_hours_snapshot ?? null;
+      const taskQuantity = (t as { quantity_snapshot?: number | null }).quantity_snapshot;
+      const quantity = t.cotizacion_item_id ? (item?.quantity ?? 1) : (taskQuantity ?? 1);
+      const budgetNum = t.budget_amount != null ? Number(t.budget_amount) : 0;
+      const cost =
+        t.cotizacion_item_id
+          ? (item?.cost != null ? Number(item.cost) : (item?.cost_snapshot != null ? Number(item.cost_snapshot) : 0))
+          : (taskBilling === 'HOUR' && durationHours && durationHours > 0
+              ? budgetNum / durationHours
+              : taskBilling === 'UNIT' && taskQuantity && taskQuantity > 0
+                ? budgetNum / taskQuantity
+                : budgetNum);
 
       return {
         id: t.id,
         name: t.name,
-        status: t.status,
-        progress_percent: t.progress_percent != null ? Number(t.progress_percent) : null,
+        status: t.status ?? 'PENDING',
+        progress_percent: t.progress_percent ?? 0,
         category: t.category,
         catalog_section_name_snapshot: t.catalog_section_name_snapshot,
         catalog_category_name_snapshot: t.catalog_category_name_snapshot,
@@ -141,17 +150,25 @@ export async function obtenerTareasParaTodoList(
           : null,
         payroll_state: t.cotizacion_item_id
           ? (payrollByItem.get(t.cotizacion_item_id) ?? { hasPayroll: false })
-          : { hasPayroll: false },
+          : { hasPayroll: false } as const,
         item_meta:
-          t.cotizacion_item_id && item
+          t.cotizacion_item_id
             ? {
                 profit_type: profitType,
                 billing_type: billingType,
-                quantity,
-                cost,
+                quantity: item?.quantity ?? 1,
+                cost: item ? (item.cost != null ? Number(item.cost) : (item.cost_snapshot != null ? Number(item.cost_snapshot) : 0)) : 0,
                 duration_hours: durationHours,
               }
-            : undefined,
+            : (billingType || budgetNum > 0)
+              ? {
+                  profit_type: profitType,
+                  billing_type: billingType,
+                  quantity,
+                  cost,
+                  duration_hours: durationHours,
+                }
+              : undefined,
       };
     });
 

@@ -153,6 +153,7 @@ export const TodoRow = memo(function TodoRow({
   };
 
   const handleAssignAndComplete = async (crewMemberId: string, skipPayment?: boolean) => {
+    addOptimisticComplete?.(task.id);
     try {
       if (task.cotizacion_item_id) {
         const assignResult = await asignarCrewAItem(
@@ -161,6 +162,7 @@ export const TodoRow = memo(function TodoRow({
           crewMemberId
         );
         if (!assignResult.success) {
+          removeOptimisticComplete?.(task.id);
           toast.error(assignResult.error ?? 'Error al asignar personal');
           throw new Error(assignResult.error);
         }
@@ -175,10 +177,12 @@ export const TodoRow = memo(function TodoRow({
         window.dispatchEvent(new CustomEvent(SCHEDULER_TASK_UPDATED));
         onUpdated();
       } else {
+        removeOptimisticComplete?.(task.id);
         toast.error(result.error ?? 'Error');
         throw new Error(result.error);
       }
     } catch (err) {
+      removeOptimisticComplete?.(task.id);
       if (err instanceof Error && err.message) {
         toast.error(err.message);
       }
@@ -188,6 +192,7 @@ export const TodoRow = memo(function TodoRow({
 
   const handleCompleteWithoutPayment = async () => {
     setCompleting(true);
+    addOptimisticComplete?.(task.id);
     try {
       const result = await actualizarSchedulerTask(studioSlug, eventId, task.id, {
         isCompleted: true,
@@ -198,9 +203,11 @@ export const TodoRow = memo(function TodoRow({
         window.dispatchEvent(new CustomEvent(SCHEDULER_TASK_UPDATED));
         onUpdated();
       } else {
+        removeOptimisticComplete?.(task.id);
         toast.error(result.error ?? 'Error');
       }
     } catch {
+      removeOptimisticComplete?.(task.id);
       toast.error('Error al completar');
     } finally {
       setCompleting(false);

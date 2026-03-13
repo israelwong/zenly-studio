@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Loader2, Plus, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { Calendar, Loader2, Plus, RefreshCw, ExternalLink } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { checkSchedulerStatus, sincronizarTareasEvento } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { TodoDrawer } from './TodoDrawer';
 import { TodoStats } from './TodoStats';
 import {
   obtenerTareasParaTodoList,
@@ -26,7 +26,7 @@ function mapSchedulerTasksToTodoList(
   return tasks.map((t) => ({
     id: t.id,
     name: t.name,
-    status: t.status,
+    status: t.status ?? 'PENDING',
     progress_percent: t.progress_percent ?? 0,
     category: t.category,
     catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
@@ -75,7 +75,6 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
   const [taskCount, setTaskCount] = useState(initialTasks.length);
   const [tasks, setTasks] = useState<TodoListTask[]>(initialTasks);
   const [tasksLoading, setTasksLoading] = useState(!hasInitialData);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>(
     initialScheduler?.start_date && initialScheduler?.end_date
       ? { from: new Date(initialScheduler.start_date), to: new Date(initialScheduler.end_date) }
@@ -246,6 +245,7 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
                   onClick={handleSync}
                   disabled={syncing}
                   className="h-7 gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                  aria-label="Sincronizar tareas"
                 >
                   {syncing ? (
                     <Loader2 className="h-3 w-3 animate-spin shrink-0" />
@@ -255,6 +255,17 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
                   Sincronizar
                 </ZenButton>
               )}
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                asChild
+                className="h-7 gap-1 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+              >
+                <Link href={`/${studioSlug}/studio/business/events/${eventId}/scheduler`} aria-label="Ir al cronograma">
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                  Cronograma
+                </Link>
+              </ZenButton>
             </div>
           </div>
         </ZenCardHeader>
@@ -310,7 +321,6 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
                   tasks={tasks}
                   dateRange={dateRange}
                   onUpdated={handleUpdated}
-                  onOpenDrawer={() => setDrawerOpen(true)}
                   optimisticCompletedIds={optimisticCompletedIds}
                   addOptimisticComplete={addOptimisticComplete}
                   removeOptimisticComplete={removeOptimisticComplete}
@@ -332,19 +342,6 @@ export function ZENTodoList({ studioSlug, eventId, secciones, initialScheduler, 
         stage="PLANNING"
       />
 
-      <TodoDrawer
-        studioSlug={studioSlug}
-        eventId={eventId}
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSync={handleSync}
-        tasks={tasks}
-        dateRange={dateRange}
-        onUpdated={handleUpdated}
-        optimisticCompletedIds={optimisticCompletedIds}
-        addOptimisticComplete={addOptimisticComplete}
-        removeOptimisticComplete={removeOptimisticComplete}
-      />
     </>
   );
 }

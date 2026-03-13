@@ -1637,6 +1637,14 @@ export async function crearTareaManualScheduler(
     catalog_category_name_snapshot?: string | null;
     /** Costo estimado (budget_amount). Opcional. */
     budget_amount?: number | null;
+    /** HOUR | SERVICE | UNIT. Para Creación Rápida. */
+    billing_type_snapshot?: string | null;
+    /** Horas cuando billing_type_snapshot = HOUR. */
+    duration_hours_snapshot?: number | null;
+    /** Unidades cuando billing_type_snapshot = UNIT. */
+    quantity_snapshot?: number | null;
+    /** servicio | product. Para Creación Rápida. */
+    profit_type_snapshot?: string | null;
     /** Fecha de inicio (celda clicada en grid). Si se omite, usa cascada (hoy en rango o inicio evento). */
     start_date?: Date;
     /** ID de tarea padre para subtarea. Si se omite, es tarea principal. */
@@ -1810,6 +1818,10 @@ export async function crearTareaManualScheduler(
       parent_id: parentIdNorm,
       order: newOrder,
       budget_amount: params.budget_amount != null && params.budget_amount >= 0 ? params.budget_amount : null,
+      billing_type_snapshot: params.billing_type_snapshot ?? null,
+      duration_hours_snapshot: params.duration_hours_snapshot ?? null,
+      quantity_snapshot: params.quantity_snapshot ?? null,
+      profit_type_snapshot: params.profit_type_snapshot ?? null,
     };
     const task = await prisma.studio_scheduler_event_tasks.create({
       data: createData as Parameters<typeof prisma.studio_scheduler_event_tasks.create>[0]['data'],

@@ -1955,6 +1955,8 @@ model studio_scheduler_event_tasks {
   billing_type_snapshot       String?
   /// Snapshot al sincronizar: horas de cobertura (event_duration o promise.duration_hours) para multiplicador cuando billing_type_snapshot = HOUR.
   duration_hours_snapshot     Int?
+  /// Snapshot al crear: unidades para billing_type_snapshot = UNIT.
+  quantity_snapshot           Int?
   /// Snapshot al sincronizar: servicio | product. Para badge Naturaleza (Servicio/Producto).
   profit_type_snapshot        String?
   parent_id                  String?

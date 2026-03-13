@@ -22,7 +22,6 @@ interface TodoStatsProps {
   tasks: TodoListTask[];
   dateRange: { from: Date; to: Date } | null;
   onUpdated: () => void;
-  onOpenDrawer: () => void;
   optimisticCompletedIds?: Set<string>;
   addOptimisticComplete?: (id: string) => void;
   removeOptimisticComplete?: (id: string) => void;
@@ -66,7 +65,6 @@ export function TodoStats({
   tasks,
   dateRange,
   onUpdated,
-  onOpenDrawer,
   optimisticCompletedIds = new Set(),
   addOptimisticComplete,
   removeOptimisticComplete,
@@ -393,16 +391,6 @@ export function TodoStats({
         </div>
       )}
 
-      <div className="px-4 shrink-0 mt-3">
-        <ZenButton
-          variant="ghost"
-          size="sm"
-          onClick={onOpenDrawer}
-          className="w-full text-xs text-zinc-400 hover:text-zinc-200"
-        >
-          Ver detalles
-        </ZenButton>
-      </div>
     </div>
   );
 }
