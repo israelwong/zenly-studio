@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ResumenEvento } from '../[eventId]/components/ResumenEvento';
 import { EventFinancialSummaryCard } from '../[eventId]/components/EventFinancialSummaryCard';
 import { EventAgendamiento } from '../[eventId]/components/EventAgendamiento';
@@ -32,10 +32,25 @@ export function EventPanel({
   onEventDataChange,
   hasContract = false,
 }: EventPanelProps) {
+  const col1Ref = useRef<HTMLDivElement>(null);
+  const [col1Height, setCol1Height] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = col1Ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setCol1Height(entry.contentRect.height);
+    });
+    ro.observe(el);
+    setCol1Height(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, [eventData?.id]);
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div ref={col1Ref} className="lg:col-span-1 space-y-6">
           <ResumenEvento
             studioSlug={studioSlug}
             eventId={eventId}
@@ -79,8 +94,11 @@ export function EventPanel({
           )}
         </div>
 
-        {/* Columna 2: Tareas (ZENTodoList compacto — altura limitada al viewport, lista con scroll interno) */}
-        <div className="lg:col-span-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-10rem)]">
+        {/* Columna 2: Tareas (max-height = altura columna 1; lista con scroll interno) */}
+        <div
+          className="lg:col-span-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-10rem)]"
+          style={col1Height != null ? { maxHeight: col1Height } : undefined}
+        >
           <EventTodoCardCompact
             studioSlug={studioSlug}
             eventId={eventId}

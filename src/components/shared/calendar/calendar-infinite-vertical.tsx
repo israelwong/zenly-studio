@@ -724,9 +724,9 @@ export function CalendarInfiniteVertical({
         )}
       >
         {listPositioned ? (
-          <SheetHeader className="shrink-0 border-b border-zinc-800 bg-zinc-950">
+          <SheetHeader className="shrink-0 border-b border-zinc-800 bg-zinc-950 py-2">
             {/* Navbar: Selector año/mes + scroll al mes */}
-            <div className="flex items-center gap-2 px-4 py-3">
+            <div className="flex items-center gap-2 px-4 py-1.5">
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -768,7 +768,7 @@ export function CalendarInfiniteVertical({
                 ))}
               </div>
             </div>
-            <div className="px-4 pb-2 flex items-center justify-between gap-2">
+            <div className="px-4 pb-1.5 flex items-center justify-between gap-2">
               <div>
                 <SheetTitle className="text-sm font-semibold text-zinc-100">Calendario</SheetTitle>
                 <SheetDescription className="text-xs text-zinc-400">
