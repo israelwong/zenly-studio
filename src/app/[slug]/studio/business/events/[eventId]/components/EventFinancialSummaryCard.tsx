@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, History, ChevronDown, ChevronUp, MoreVertical, Edit, XCircle, Trash2 } from 'lucide-react';
+import { Plus, History, ChevronDown, ChevronUp, MoreVertical, Edit, XCircle, Trash2, DollarSign } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenBadge, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { AnnexPreviewModal } from '@/components/shared/annex';
 import { CotizacionPreviewModal } from '@/components/shared/cotizaciones';
@@ -69,6 +69,7 @@ function toPaymentItem(p: PaymentSummaryItem): PaymentItem {
     concept: p.concept,
     description: null,
     created_at: p.payment_date,
+    cotizacion_id: p.cotizacion_id ?? null,
   };
 }
 
@@ -112,6 +113,9 @@ export function EventFinancialSummaryCard({
   const [annexCancelSimple, setAnnexCancelSimple] = useState<{ id: string; name: string } | null>(null);
   const [annexDeleteConfirm, setAnnexDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [annexActionLoading, setAnnexActionLoading] = useState(false);
+  /** Contexto al abrir modal de pago: cotización específica (principal o anexo) para pagos contextuales. */
+  const [paymentContext, setPaymentContext] = useState<{ quoteId: string; quoteName: string; totalPending: number } | null>(null);
+  const [rowMenuOpenId, setRowMenuOpenId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -220,17 +224,65 @@ export function EventFinancialSummaryCard({
     };
   }, [initialQuote, payments, contractValueFallback, paidAmountFallback, pendingAmountFallback, mainCotizacionId]);
 
+  const quotesForModal = useMemo(() => {
+    return breakdown
+      .filter((r): r is typeof r & { id: string } => r.id != null && r.id !== '')
+      .map((r) => {
+        const paidForQuote = payments.filter((p) => p.cotizacion_id === r.id).reduce((s, p) => s + p.amount, 0);
+        return {
+          id: r.id,
+          name: r.name,
+          totalPending: r.total - paidForQuote,
+          isAnnex: r.isAnnex,
+        };
+      });
+  }, [breakdown, payments]);
+
   const handleAddNew = () => {
     if (!cotizacionId) {
       toast.error('No hay cotización asociada');
       return;
     }
     setEditingPayment(null);
+    const mainRow = breakdown.find((r) => r.id === mainCotizacionId);
+    const paidMain = mainRow ? payments.filter((p) => p.cotizacion_id === mainCotizacionId).reduce((s, p) => s + p.amount, 0) : 0;
+    const mainPending = mainRow ? mainRow.total - paidMain : balanceDue;
+    setPaymentContext({
+      quoteId: cotizacionId,
+      quoteName: mainRow?.name ?? 'Cotización principal',
+      totalPending: mainPending,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleAddPaymentForRow = (row: (typeof breakdown)[0]) => {
+    if (!row.id) {
+      toast.error('No se puede registrar pago para esta fila');
+      return;
+    }
+    setEditingPayment(null);
+    const paidForRow = payments.filter((p) => p.cotizacion_id === row.id).reduce((s, p) => s + p.amount, 0);
+    const totalPending = row.total - paidForRow;
+    setPaymentContext({ quoteId: row.id, quoteName: row.name, totalPending });
+    setRowMenuOpenId(null);
+    setAnnexMenuOpenId(null);
     setIsModalOpen(true);
   };
 
   const handleEdit = (payment: PaymentItem) => {
     setEditingPayment(payment);
+    if (payment.cotizacion_id) {
+      const row = breakdown.find((r) => r.id === payment.cotizacion_id);
+      const paidForRow = row ? payments.filter((p) => p.cotizacion_id === payment.cotizacion_id).reduce((s, p) => s + p.amount, 0) : 0;
+      const totalPending = row ? row.total - paidForRow + payment.amount : balanceDue + payment.amount;
+      setPaymentContext({
+        quoteId: payment.cotizacion_id,
+        quoteName: row?.name ?? 'Cotización',
+        totalPending,
+      });
+    } else {
+      setPaymentContext(null);
+    }
     setIsModalOpen(true);
   };
 
@@ -428,23 +480,42 @@ export function EventFinancialSummaryCard({
                     </span>
                     <span className="flex items-center gap-1 shrink-0">
                       <span className={`text-xs tabular-nums ${isPending ? 'text-zinc-500' : 'text-emerald-300'}`}>{formatearMoneda(row.total)}</span>
-                      {row.isAnnex && row.id && promiseId && (
+                      {row.id && (
                         <div onClick={(e) => e.stopPropagation()}>
-                          <ZenDropdownMenu open={annexMenuOpenId === row.id} onOpenChange={(open) => setAnnexMenuOpenId(open ? row.id : null)}>
+                          <ZenDropdownMenu
+                            open={rowMenuOpenId === row.id || annexMenuOpenId === row.id}
+                            onOpenChange={(open) => {
+                              if (!open) {
+                                setRowMenuOpenId(null);
+                                setAnnexMenuOpenId(null);
+                              } else {
+                                setRowMenuOpenId(row.id);
+                                if (row.isAnnex && promiseId) setAnnexMenuOpenId(row.id);
+                              }
+                            }}
+                          >
                             <ZenDropdownMenuTrigger asChild>
                               <ZenButton variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-zinc-300">
                                 <MoreVertical className="h-3.5 w-3.5" />
                               </ZenButton>
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end">
-                              <ZenDropdownMenuItem onClick={() => handleAnnexEdit(row)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Editar
+                              <ZenDropdownMenuItem onClick={() => handleAddPaymentForRow(row)} className="text-emerald-400 focus:text-emerald-300">
+                                <DollarSign className="mr-2 h-4 w-4" />
+                                Registrar Pago
                               </ZenDropdownMenuItem>
+                              {row.isAnnex && promiseId && (
+                                <>
+                                  <ZenDropdownMenuSeparator />
+                                  <ZenDropdownMenuItem onClick={() => { setAnnexMenuOpenId(null); setRowMenuOpenId(null); handleAnnexEdit(row); }}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Editar
+                                  </ZenDropdownMenuItem>
                               <ZenDropdownMenuSeparator />
                               <ZenDropdownMenuItem
                                 onClick={() => {
                                   setAnnexMenuOpenId(null);
+                                  setRowMenuOpenId(null);
                                   const annexId = row.id;
                                   if (!annexId || typeof annexId !== 'string') {
                                     console.warn('[EventFinancialSummaryCard] Cancelar: row.id inválido', { row });
@@ -465,6 +536,7 @@ export function EventFinancialSummaryCard({
                               <ZenDropdownMenuItem
                                 onClick={() => {
                                   setAnnexMenuOpenId(null);
+                                  setRowMenuOpenId(null);
                                   const annexId = row.id;
                                   if (!annexId || typeof annexId !== 'string') {
                                     console.warn('[EventFinancialSummaryCard] Eliminar: row.id inválido', { row });
@@ -478,6 +550,8 @@ export function EventFinancialSummaryCard({
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Eliminar
                               </ZenDropdownMenuItem>
+                                </>
+                              )}
                             </ZenDropdownMenuContent>
                           </ZenDropdownMenu>
                         </div>
@@ -625,20 +699,30 @@ export function EventFinancialSummaryCard({
         </ZenCardContent>
       </ZenCard>
 
-      {isModalOpen && cotizacionId && (
+      {isModalOpen && (paymentContext?.quoteId ?? cotizacionId) && (
         <PaymentFormModal
-          key={editingPayment?.id ?? 'new'}
+          key={editingPayment?.id ?? paymentContext?.quoteId ?? 'new'}
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
             setEditingPayment(null);
+            setPaymentContext(null);
           }}
           studioSlug={studioSlug}
-          cotizacionId={cotizacionId}
+          cotizacionId={paymentContext?.quoteId ?? cotizacionId ?? ''}
+          quoteName={paymentContext?.quoteName}
+          quotes={quotesForModal}
+          defaultQuoteId={paymentContext?.quoteId ?? mainCotizacionId ?? undefined}
+          contextualMode={!!paymentContext}
           montoPendiente={
-            editingPayment ? balanceDue + editingPayment.amount : balanceDue
+            editingPayment && paymentContext
+              ? paymentContext.totalPending + editingPayment.amount
+              : editingPayment
+                ? balanceDue + editingPayment.amount
+                : paymentContext?.totalPending ?? balanceDue
           }
           initialData={editingPayment}
+          promiseId={promiseId ?? undefined}
           onSuccess={handleSuccess}
         />
       )}

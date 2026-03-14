@@ -28,6 +28,10 @@ interface PaymentFormData {
 interface PaymentFormProps {
   studioSlug: string;
   montoPendiente?: number;
+  /** Monto por defecto al crear (ej. saldo pendiente de la cotización). */
+  defaultAmount?: number;
+  /** Si true, no se muestra "Pendiente: $X" junto al label Monto (evita redundancia con Deuda global/selector). */
+  hidePendienteLabel?: boolean;
   initialData?: {
     id: string;
     amount: number;
@@ -44,12 +48,16 @@ interface PaymentFormProps {
 export function PaymentForm({
   studioSlug,
   montoPendiente,
+  defaultAmount,
+  hidePendienteLabel = false,
   initialData,
   onSubmit,
   onCancel,
   loading = false,
 }: PaymentFormProps) {
-  const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
+  const [amount, setAmount] = useState<string>(
+    initialData?.amount.toString() || (defaultAmount != null && defaultAmount > 0 ? defaultAmount.toString() : '')
+  );
   const [metodoPago, setMetodoPago] = useState<string>(initialData?.payment_method || '');
   const [concept, setConcept] = useState<string>(initialData?.concept || '');
   const [description, setDescription] = useState<string>(initialData?.description || '');
@@ -106,24 +114,8 @@ export function PaymentForm({
       newErrors.amount = 'El monto debe ser mayor a 0';
     }
 
-    // Validar contra monto pendiente si se proporciona
-    if (montoPendiente !== undefined) {
-      const amountValue = parseFloat(amount);
-      // Si es edición, permitir el monto actual del pago + el monto pendiente
-      const maxAllowed = initialData
-        ? montoPendiente + initialData.amount
-        : montoPendiente;
-
-      if (amountValue > maxAllowed) {
-        const formatCurrency = (value: number) => {
-          return new Intl.NumberFormat('es-MX', {
-            style: 'currency',
-            currency: 'MXN',
-          }).format(value);
-        };
-        newErrors.amount = `El monto no puede ser mayor a ${formatCurrency(maxAllowed)}`;
-      }
-    }
+    // Aviso si supera pendiente (no bloqueante; el usuario decide y el servidor puede validar)
+    // No añadimos newErrors.amount para permitir que el usuario decida
 
     if (!metodoPago) {
       newErrors.metodoPago = 'Selecciona un método de pago';
@@ -155,48 +147,46 @@ export function PaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Monto */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300 flex items-center justify-between">
-          <span className="flex items-center gap-2">
+      <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-4 space-y-4">
+        {/* Monto */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
-            Monto *
-          </span>
-          {montoPendiente !== undefined && (
-            <span className="text-xs text-amber-400 font-medium">
-              {initialData
-                ? `Disponible: ${new Intl.NumberFormat('es-MX', {
-                  style: 'currency',
-                  currency: 'MXN',
-                }).format(montoPendiente)}`
-                : `Pendiente: ${new Intl.NumberFormat('es-MX', {
-                  style: 'currency',
-                  currency: 'MXN',
-                }).format(montoPendiente)}`}
-            </span>
+            Monto <span className="text-red-400">*</span>
+            {!hidePendienteLabel && montoPendiente !== undefined && (
+              <span className="text-xs text-amber-400 font-medium ml-auto">
+                {initialData
+                  ? `Disponible: ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(montoPendiente)}`
+                  : `Pendiente: ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(montoPendiente)}`}
+              </span>
+            )}
+          </label>
+          <ZenInput
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
+            }}
+            placeholder="0.00"
+            error={errors.amount}
+            disabled={loading}
+          />
+          {montoPendiente !== undefined && !initialData && parseFloat(amount) > montoPendiente && (
+            <p className="text-xs text-amber-400">
+              El monto supera el saldo pendiente de esta cotización. Puedes continuar si es intencional; el servidor validará.
+            </p>
           )}
-        </label>
-        <ZenInput
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={amount}
-          onChange={(e) => {
-            setAmount(e.target.value);
-            if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
-          }}
-          placeholder="0.00"
-          error={errors.amount}
-          disabled={loading}
-        />
-      </div>
+        </div>
 
-      {/* Método de pago */}
-      <div className="space-y-2">
+        {/* Método de pago */}
+        <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
-            Método de pago *
+            Método de pago <span className="text-red-400">*</span>
           </label>
           {metodosPago.length === 0 && !loadingMetodos && (
             <ZenButton
@@ -253,13 +243,14 @@ export function PaymentForm({
         {errors.metodoPago && (
           <p className="text-xs text-red-400">{errors.metodoPago}</p>
         )}
+        </div>
       </div>
 
       {/* Fecha de pago */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
           <CalendarIcon className="h-4 w-4" />
-          Fecha de pago *
+          Fecha de pago <span className="text-red-400">*</span>
         </label>
         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
           <PopoverTrigger asChild>
@@ -318,7 +309,7 @@ export function PaymentForm({
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
           <FileText className="h-4 w-4" />
-          Concepto *
+          Concepto <span className="text-red-400">*</span>
         </label>
         <ZenInput
           type="text"

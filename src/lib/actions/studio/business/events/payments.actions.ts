@@ -31,6 +31,8 @@ export interface PaymentItem {
     concept: string;
     description?: string | null;
     created_at: Date;
+    /** ID de la cotización a la que se asocia el pago (pagos contextuales). */
+    cotizacion_id?: string | null;
 }
 
 export interface PaymentResponse {
@@ -79,6 +81,7 @@ export async function obtenerPagoPorId(
                 concept: true,
                 description: true,
                 created_at: true,
+                cotizacion_id: true,
             },
         });
 
@@ -94,6 +97,7 @@ export async function obtenerPagoPorId(
             concept: pago.concept,
             description: pago.description,
             created_at: pago.created_at,
+            cotizacion_id: pago.cotizacion_id ?? null,
         };
 
         return {
@@ -153,6 +157,7 @@ export async function obtenerPagosPorCotizacion(
                 concept: true,
                 description: true,
                 created_at: true,
+                cotizacion_id: true,
             },
             orderBy: {
                 payment_date: 'desc',
@@ -167,6 +172,7 @@ export async function obtenerPagosPorCotizacion(
             concept: pago.concept,
             description: pago.description,
             created_at: pago.created_at,
+            cotizacion_id: pago.cotizacion_id ?? null,
         }));
 
         return {
@@ -280,6 +286,7 @@ export async function crearPago(
                     concept: true,
                     description: true,
                     created_at: true,
+                    cotizacion_id: true,
                 },
             });
             const { incrementBalanceForIngreso } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
@@ -320,6 +327,7 @@ export async function crearPago(
             concept: pago.concept,
             description: pago.description,
             created_at: pago.created_at,
+            cotizacion_id: pago.cotizacion_id ?? null,
         };
 
         return {
@@ -455,6 +463,7 @@ export async function actualizarPago(
                 concept: true,
                 description: true,
                 created_at: true,
+                cotizacion_id: true,
             },
         });
 
@@ -489,6 +498,7 @@ export async function actualizarPago(
             concept: pago.concept,
             description: pago.description,
             created_at: pago.created_at,
+            cotizacion_id: pago.cotizacion_id ?? null,
         };
 
         return {
