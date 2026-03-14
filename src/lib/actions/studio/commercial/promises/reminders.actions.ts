@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { dateToDateOnlyString, toUtcDateOnly } from '@/lib/utils/date-only';
 import { logPromiseAction } from './promise-logs.actions';
+import { syncReminderToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 // ============================================
 // SCHEMAS
@@ -243,6 +244,11 @@ export async function upsertReminder(
       // No fallar si el log falla
     });
 
+    // Dual-Writing: sincronizar con calendario maestro
+    await syncReminderToCalendar(reminder.id).catch((err) =>
+      console.error('[upsertReminder] Error sync calendario:', err)
+    );
+
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${validatedData.promiseId}`);
 
@@ -429,6 +435,11 @@ export async function completeReminder(
       console.error('[REMINDERS] Error registrando log:', error);
     });
 
+    // Dual-Writing: sincronizar con calendario maestro (status = completed)
+    await syncReminderToCalendar(reminder.id).catch((err) =>
+      console.error('[completeReminder] Error sync calendario:', err)
+    );
+
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${existingReminder.promise_id}`);
 
@@ -492,10 +503,14 @@ export async function deleteReminder(
       return { success: false, error: 'Seguimiento no encontrado o no pertenece al studio' };
     }
 
-    // Eliminar reminder
     await prisma.studio_reminders.delete({
       where: { id: reminderId },
     });
+
+    // Dual-Writing: eliminar del calendario maestro
+    await removeFromMasterCalendar(reminderId, 'REMINDER').catch((err) =>
+      console.error('[deleteReminder] Error remove calendario:', err)
+    );
 
     // Registrar log
     await logPromiseAction(

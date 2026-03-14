@@ -9,6 +9,7 @@ import { COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercia
 import { ordenarPorEstructuraCanonica } from '@/lib/logic/event-structure-master';
 import { sanitizarCotizacion } from '@/lib/utils/sanitize-cotizacion-for-client';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
+import { syncSchedulerTaskToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 interface UpdateSchedulerTaskInput {
   start_date: Date;
@@ -124,7 +125,7 @@ export async function actualizarSchedulerTaskFechas(
     // Smart Dates: si el nuevo end_date supera el de la instancia, expandir el rango
     const instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { id: updatedTask.scheduler_instance_id },
-      select: { id: true, end_date: true },
+      select: { id: true, end_date: true, event_id: true, event: { select: { studio_id: true } } },
     });
     if (instance) {
       const taskEndOnly = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
@@ -135,6 +136,10 @@ export async function actualizarSchedulerTaskFechas(
           data: { end_date: taskEndOnly },
         });
       }
+      // Dual-Writing: sincronizar con calendario maestro
+      await syncSchedulerTaskToCalendar(instance.event.studio_id, instance.event_id, taskId).catch((err) =>
+        console.error('[actualizarSchedulerTaskFechas] Error sync calendario:', err)
+      );
     }
 
     // Revalidar la página para reflejar cambios
@@ -176,7 +181,7 @@ export async function actualizarSchedulerTareasBulkFechas(
 
     const instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { event_id: eventId },
-      select: { id: true, start_date: true, end_date: true },
+      select: { id: true, start_date: true, end_date: true, event_id: true, event: { select: { studio_id: true } } },
     });
     if (!instance) {
       return { success: false, error: 'Evento o instancia del scheduler no encontrada' };
@@ -243,6 +248,16 @@ export async function actualizarSchedulerTareasBulkFechas(
         });
       }
     }, { maxWait: 5_000 });
+
+    // Dual-Writing: sincronizar cada tarea con calendario maestro
+    const studioId = instance.event.studio_id;
+    await Promise.all(
+      updates.map((u) =>
+        syncSchedulerTaskToCalendar(studioId, instance.event_id, u.taskId).catch((err) =>
+          console.error('[actualizarSchedulerTareasBulkFechas] Error sync calendario:', err)
+        )
+      )
+    );
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
@@ -1885,6 +1900,11 @@ export async function crearTareaManualScheduler(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
+    // Dual-Writing: sincronizar con calendario maestro
+    await syncSchedulerTaskToCalendar(studio.id, eventId, task.id).catch((err) =>
+      console.error('[crearTareaManualScheduler] Error sync calendario:', err)
+    );
+
     const finalOrder = segmentTasksAfter.findIndex((t) => t.id === task.id);
     const orderToReturn = finalOrder >= 0 ? finalOrder : task.order;
     type TaskWithRelations = typeof task & {
@@ -1997,6 +2017,9 @@ export async function eliminarTareaManual(
     await prisma.studio_scheduler_event_tasks.delete({
       where: { id: taskId },
     });
+    await removeFromMasterCalendar(taskId, 'SCHEDULER_TASK').catch((err) =>
+      console.error('[eliminarTareaManual] Error remove calendario:', err)
+    );
     return { success: true };
   } catch (error) {
     console.error('[eliminarTareaManual] Error:', error);
@@ -2045,6 +2068,13 @@ export async function eliminarTareaManualEnCascada(
     await prisma.$transaction(
       idsToDelete.map((id) =>
         prisma.studio_scheduler_event_tasks.delete({ where: { id } })
+      )
+    );
+    await Promise.all(
+      idsToDelete.map((id) =>
+        removeFromMasterCalendar(id, 'SCHEDULER_TASK').catch((err) =>
+          console.error('[eliminarTareaManualEnCascada] Error remove calendario:', err)
+        )
       )
     );
     return { success: true, deletedCount: idsToDelete.length };

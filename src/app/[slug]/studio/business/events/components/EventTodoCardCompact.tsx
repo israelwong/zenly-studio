@@ -36,7 +36,8 @@ function mapSchedulerTasksToTodoList(
   for (const i of principalItems) {
     if (!i?.id) continue;
     const st = (i as { scheduler_task?: { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null } }).scheduler_task;
-    const cost = (i as { cost?: number }).cost != null ? Number((i as { cost: number }).cost) : (i as { cost_snapshot?: number }).cost_snapshot != null ? Number((i as { cost_snapshot: number }).cost_snapshot) : 0;
+    const costRaw = (i as { cost?: number }).cost ?? (i as { cost_snapshot?: number }).cost_snapshot;
+    const cost = costRaw != null ? Number(costRaw) : 0;
     const itemBilling = (i as { billing_type?: string | null }).billing_type ?? st?.billing_type_snapshot ?? null;
     const catalogBilling = (i as { items?: { billing_type?: string } | null }).items?.billing_type ?? null;
     itemById.set(i.id, {
@@ -51,7 +52,8 @@ function mapSchedulerTasksToTodoList(
     for (const i of cot.cotizacion_items ?? []) {
       if (!i?.id) continue;
       const st = (i as { scheduler_task?: { billing_type_snapshot?: string | null; duration_hours_snapshot?: number | null } }).scheduler_task;
-      const cost = (i as { cost?: number }).cost != null ? Number((i as { cost: number }).cost) : (i as { cost_snapshot?: number }).cost_snapshot != null ? Number((i as { cost_snapshot: number }).cost_snapshot) : 0;
+      const costRaw = (i as { cost?: number }).cost ?? (i as { cost_snapshot?: number }).cost_snapshot;
+    const cost = costRaw != null ? Number(costRaw) : 0;
       const itemBilling = (i as { billing_type?: string | null }).billing_type ?? st?.billing_type_snapshot ?? null;
       const catalogBilling = (i as { items?: { billing_type?: string } | null }).items?.billing_type ?? null;
       itemById.set(i.id, {
@@ -81,6 +83,7 @@ function mapSchedulerTasksToTodoList(
       catalog_section_name_snapshot: (t as { catalog_section_name_snapshot?: string | null }).catalog_section_name_snapshot ?? null,
       catalog_category_name_snapshot: (t as { catalog_category_name_snapshot?: string | null }).catalog_category_name_snapshot ?? null,
       catalog_category: (t as { catalog_category?: { id: string; name: string } | null }).catalog_category ?? null,
+      scheduler_custom_category: (t as { scheduler_custom_category?: { id: string; name: string } | null }).scheduler_custom_category ?? null,
       duration_days: t.duration_days ?? 1,
       duration_hours_snapshot: task.duration_hours_snapshot ?? null,
       start_date: t.start_date,
@@ -151,6 +154,7 @@ export function EventTodoCardCompact({
   );
   const [optimisticCompletedIds, setOptimisticCompletedIds] = useState<Set<string>>(new Set());
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [customCategories, setCustomCategories] = useState<Array<{ id: string; name: string; section_id: string; stage: string; order: number }>>([]);
 
@@ -159,6 +163,14 @@ export function EventTodoCardCompact({
       const next = new Set(prev);
       if (next.has(sectionId)) next.delete(sectionId);
       else next.add(sectionId);
+      return next;
+    });
+  }, []);
+  const togglePhase = useCallback((key: string) => {
+    setCollapsedPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -386,7 +398,7 @@ export function EventTodoCardCompact({
           ) : (
             <div
               className={cn(
-                'flex-1 min-h-0 max-h-[700px] overflow-y-auto overscroll-contain',
+                'flex-1 min-h-0 overflow-y-auto overscroll-contain',
                 syncing && 'pointer-events-none opacity-60'
               )}
               style={{ scrollbarGutter: 'stable' }}
@@ -415,12 +427,25 @@ export function EventTodoCardCompact({
                         </span>
                       </button>
                       {!sectionCollapsed &&
-                        section.phases.map((phase) => (
-                          <div key={`${section.sectionId}-${phase.phaseKey}`} className="border-b border-zinc-800/30 last:border-b-0">
+                        section.phases.map((phase) => {
+                          const phaseKey = `${section.sectionId}-${phase.phaseKey}`;
+                          const phaseCollapsed = collapsedPhases.has(phaseKey);
+                          return (
+                          <div key={phaseKey} className="border-b border-zinc-800/30 last:border-b-0">
                             <div className="px-3 py-1.5 bg-zinc-900/50 flex items-center justify-between gap-2 group/stage">
-                              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">
-                                {getStageLabel(phase.phaseKey)}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => togglePhase(phaseKey)}
+                                className="flex items-center gap-2 min-w-0 flex-1 text-left rounded hover:bg-zinc-800/50 transition-colors -mx-1 px-1 py-0.5"
+                                aria-label={phaseCollapsed ? 'Expandir etapa' : 'Contraer etapa'}
+                              >
+                                <ChevronRight
+                                  className={cn('h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200', phaseCollapsed ? 'rotate-0' : 'rotate-90')}
+                                />
+                                <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">
+                                  {getStageLabel(phase.phaseKey)}
+                                </span>
+                              </button>
                               <AddCategoryPopover
                                 studioSlug={studioSlug}
                                 eventId={eventId}
@@ -431,11 +456,11 @@ export function EventTodoCardCompact({
                                 onSuccess={handleUpdated}
                               />
                             </div>
-                            {phase.categories.map((cat) => {
+                            {!phaseCollapsed && phase.categories.map((cat) => {
                               const catKey = `${section.sectionId}-${phase.phaseKey}-${cat.categoryId}`;
                               const catCollapsed = collapsedCategories.has(catKey);
                               return (
-                                <div key={cat.categoryId} className="pl-4 pr-2 pb-1">
+                                <div key={cat.categoryId} className="pl-4 pr-2 pb-1 last:pb-0">
                                   <div className="flex items-center justify-between gap-2 mb-0.5 pl-1 group/cat">
                                     <button
                                       type="button"
@@ -483,7 +508,8 @@ export function EventTodoCardCompact({
                               );
                             })}
                           </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   );
                 })}

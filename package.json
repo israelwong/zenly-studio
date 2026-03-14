@@ -16,6 +16,7 @@
     "db:seed-demo-users": "tsx prisma/02-seed-demo-users.ts",
     "db:seed-catalogo": "tsx prisma/03-seed-catalogo.ts",
     "db:seed-promise-pipeline": "tsx prisma/04-seed-promise-pipeline.ts",
+    "db:seed-calendar-legacy": "tsx prisma/scripts/seed-studio-calendar-legacy.ts",
     "db:seed-social": "tsx prisma/seed-social-networks.ts",
     "db:verify-seeds": "tsx scripts/verify-seeds.ts",
     "db:check-extensions": "tsx scripts/check-extensions-pre-upgrade.ts",

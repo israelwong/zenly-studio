@@ -12,7 +12,7 @@ import { SubscriptionPopover } from '../ui/SubscriptionPopover';
 import { SubscriptionBadge } from '@/components/shared/subscription/SubscriptionBadge';
 import { GoogleStatusPopover } from '@/components/shared/integrations/GoogleStatusPopover';
 import { useCommercialNameShort } from '@/hooks/usePlatformConfig';
-import { CalendarCheck, ContactRound, Settings, CircleDollarSign } from 'lucide-react';
+import { Calendar, CalendarCheck, ContactRound, Settings, CircleDollarSign } from 'lucide-react';
 import { useAgendaCount } from '@/hooks/useAgendaCount';
 import { useRemindersCount } from '@/hooks/useRemindersCount';
 import { obtenerEstadoConexion } from '@/lib/integrations/google';
@@ -37,6 +37,7 @@ interface AppHeaderProps {
     initialRemindersAlerts?: AlertItem[]; // ✅ Recordatorios promesas + scheduler para AlertsPopover
     onCommandOpen?: () => void;
     onAgendaClick?: () => void;
+    onCalendarClick?: () => void;
     onTareasOperativasClick?: () => void;
     onContactsClick?: () => void;
     onPromisesConfigClick?: () => void;
@@ -56,6 +57,7 @@ export function AppHeader({
     initialRemindersAlerts = [], // ✅ Recordatorios vencidos + hoy
     onCommandOpen,
     onAgendaClick,
+    onCalendarClick,
     onTareasOperativasClick,
     onContactsClick,
     onPromisesConfigClick,
@@ -224,7 +226,21 @@ export function AppHeader({
                     </ZenButton>
                 )}
 
-                {/* Grupo de Alertas (Recordatorios + Agenda) */}
+                {/* Calendario Maestro - destacado al costado */}
+                {onCalendarClick && (
+                    <ZenButton
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                        onClick={onCalendarClick}
+                        title="Mi Agenda / Calendario Maestro"
+                    >
+                        <Calendar className="h-5 w-5" />
+                        <span className="sr-only">Mi Agenda / Calendario Maestro</span>
+                    </ZenButton>
+                )}
+
+                {/* Grupo de Alertas (Recordatorios + Agenda + Tareas) */}
                 {(onRemindersClick || onAgendaClick || onTareasOperativasClick) && (
                     <div className="flex items-center gap-1 rounded-full bg-zinc-950/60 px-1 ">
                         {/* Recordatorios - Popover */}

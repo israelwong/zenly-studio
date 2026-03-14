@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { syncSchedulerDateReminderToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 const createSchema = z.object({
   eventId: z.string().cuid(),
@@ -84,6 +85,10 @@ export async function createSchedulerDateReminder(
         description: v.description?.trim() || null,
       },
     });
+
+    await syncSchedulerDateReminderToCalendar(reminder.id).catch((err) =>
+      console.error('[createSchedulerDateReminder] Error sync calendario:', err)
+    );
 
     revalidatePath(`/${studioSlug}/studio/business/events/${v.eventId}/scheduler`);
 
@@ -231,6 +236,10 @@ export async function completeSchedulerDateReminder(
     });
     if (!updated) return { success: false, error: 'Error al actualizar' };
 
+    await syncSchedulerDateReminderToCalendar(v.reminderId).catch((err) =>
+      console.error('[completeSchedulerDateReminder] Error sync calendario:', err)
+    );
+
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
     return { success: true, data: updated as SchedulerDateReminder };
   } catch (e) {
@@ -258,6 +267,10 @@ export async function updateSchedulerDateReminder(
       where: { id: v.reminderId },
     });
     if (!updated) return { success: false, error: 'Error al actualizar' };
+
+    await syncSchedulerDateReminderToCalendar(v.reminderId).catch((err) =>
+      console.error('[updateSchedulerDateReminder] Error sync calendario:', err)
+    );
 
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
     return { success: true, data: updated as SchedulerDateReminder };
@@ -290,6 +303,10 @@ export async function updateSchedulerDateReminderDate(
       data: { reminder_date: reminderDateNorm },
     });
 
+    await syncSchedulerDateReminderToCalendar(reminderId).catch((err) =>
+      console.error('[updateSchedulerDateReminderDate] Error sync calendario:', err)
+    );
+
     revalidatePath(`/${studioSlug}/studio/business/events/${updated.event_id}/scheduler`);
     return { success: true, data: updated as SchedulerDateReminder };
   } catch (e) {
@@ -313,6 +330,10 @@ export async function deleteSchedulerDateReminder(
       where: { id: reminderId, studio_id: studio.id },
     });
     if (count === 0) return { success: false, error: 'Recordatorio no encontrado' };
+
+    await removeFromMasterCalendar(reminderId, 'SCHEDULER_REMINDER').catch((err) =>
+      console.error('[deleteSchedulerDateReminder] Error remove calendario:', err)
+    );
 
     if (existing?.event_id) revalidatePath(`/${studioSlug}/studio/business/events/${existing.event_id}/scheduler`);
     return { success: true };

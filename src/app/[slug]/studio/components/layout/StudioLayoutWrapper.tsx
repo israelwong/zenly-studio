@@ -10,6 +10,7 @@ import { CommandMenu } from '../tools/CommandMenu';
 import { useZenMagicChat } from '../ZenMagic';
 import { useContactsSheet } from '@/components/shared/contacts/ContactsSheetContext';
 import { AgendaUnifiedSheet } from '@/components/shared/agenda';
+import { CalendarInfiniteVertical } from '@/components/shared/calendar';
 import { ContactsSheet } from '@/components/shared/contacts';
 import { CrewMembersManager } from '@/components/shared/crew-members';
 import { TareasOperativasSheet } from '@/components/shared/tareas-operativas/TareasOperativasSheet';
@@ -87,6 +88,7 @@ function StudioLayoutContent({
   const { isOpen: contactsOpen, openContactsSheet, closeContactsSheet, initialContactId } = useContactsSheet();
   const promisesConfig = usePromisesConfig();
   const [agendaOpen, setAgendaOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [crewSheetOpen, setCrewSheetOpen] = useState(false);
   const [tareasOperativasOpen, setTareasOperativasOpen] = useState(false);
@@ -184,6 +186,10 @@ function StudioLayoutContent({
     setAgendaOpen(true);
   };
 
+  const handleCalendarClick = () => {
+    setCalendarOpen(true);
+  };
+
   const handleContactsClick = () => {
     openContactsSheet();
   };
@@ -208,6 +214,7 @@ function StudioLayoutContent({
   const closeAllOverlays = useCallback(() => {
     setRemindersSheetOpen(false);
     setAgendaOpen(false);
+    setCalendarOpen(false);
     setCrewSheetOpen(false);
     setTareasOperativasOpen(false);
     closeContactsSheet(); // Cierra ContactsSheet (usa contexto, no estado local)
@@ -460,6 +467,7 @@ function StudioLayoutContent({
           initialReminders={headerData.reminders}
           onCommandOpen={() => setCommandOpen(true)}
           onAgendaClick={handleAgendaClick}
+          onCalendarClick={handleCalendarClick}
           onTareasOperativasClick={handleTareasOperativasClick}
           onContactsClick={handleContactsClick}
           onRemindersClick={handleRemindersClick}
@@ -507,6 +515,14 @@ function StudioLayoutContent({
         open={agendaOpen}
         onOpenChange={setAgendaOpen}
         studioSlug={studioSlug}
+      />
+
+      {/* Calendario Maestro - Infinite Vertical */}
+      <CalendarInfiniteVertical
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        studioSlug={studioSlug}
+        userId={headerData.headerUserId}
       />
 
       {/* Sheet de Contactos */}

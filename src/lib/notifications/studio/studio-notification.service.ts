@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { CreateStudioNotificationInput, StudioNotificationScope } from './types';
+import { syncNotificationToCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 /**
  * Crea notificación para todos los usuarios activos del estudio
@@ -48,11 +49,23 @@ async function createStudioScopeNotification(
           contact_id: input.contact_id,
           lead_id: input.lead_id,
           agenda_id: input.agenda_id,
+          scheduled_for: input.scheduled_for ?? null,
+          expires_at: input.expires_at ?? null,
           is_active: true, // Asegurar que se cree como activa
         },
       })
     )
   );
+
+  if (input.scheduled_for) {
+    await Promise.all(
+      notifications.map((n) =>
+        syncNotificationToCalendar(n.id).catch((err) =>
+          console.error('[createStudioScopeNotification] Error sync calendario:', err)
+        )
+      )
+    );
+  }
 
   return notifications;
 }
@@ -88,11 +101,17 @@ async function createUserNotification(
       contact_id: input.contact_id,
       lead_id: input.lead_id,
       agenda_id: input.agenda_id,
+      scheduled_for: input.scheduled_for ?? null,
+      expires_at: input.expires_at ?? null,
       is_active: true, // Asegurar que se cree como activa
     },
   });
 
-  // El trigger de base de datos maneja el broadcast automáticamente
+  if (input.scheduled_for) {
+    await syncNotificationToCalendar(notification.id).catch((err) =>
+      console.error('[createUserNotification] Error sync calendario:', err)
+    );
+  }
 
   return notification;
 }
@@ -158,13 +177,23 @@ async function createRoleNotification(
           contact_id: input.contact_id,
           lead_id: input.lead_id,
           agenda_id: input.agenda_id,
+          scheduled_for: input.scheduled_for ?? null,
+          expires_at: input.expires_at ?? null,
           is_active: true, // Asegurar que se cree como activa
         },
       })
     )
   );
 
-  // El trigger de base de datos maneja el broadcast automáticamente
+  if (input.scheduled_for) {
+    await Promise.all(
+      notifications.map((n) =>
+        syncNotificationToCalendar(n.id).catch((err) =>
+          console.error('[createRoleNotification] Error sync calendario:', err)
+        )
+      )
+    );
+  }
 
   return notifications;
 }

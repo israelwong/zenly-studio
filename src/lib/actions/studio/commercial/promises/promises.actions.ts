@@ -19,6 +19,7 @@ import {
 } from '@/lib/actions/schemas/promises-schemas';
 import { z } from 'zod';
 import { toUtcDateOnly, dateToDateOnlyString } from '@/lib/utils/date-only';
+import { syncToMasterCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 /** Primera letra de cada palabra en mayúscula (Title Case). */
 function toTitleCase(s: string): string {
@@ -817,8 +818,34 @@ export async function createPromise(
             order: true,
           },
         },
+        sales_agent: {
+          select: { name: true },
+        },
       },
     });
+
+    // Dual-Writing: sincronizar con calendario maestro cuando hay event_date
+    if (eventDate) {
+      const startAt = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate(), 0, 0, 0));
+      const endAt = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate(), 23, 59, 59));
+      await syncToMasterCalendar({
+        studio_id: studio.id,
+        source_id: promise.id,
+        type: 'PROMISE',
+        start_at: startAt,
+        end_at: endAt,
+        promise_id: promise.id,
+        metadata: {
+          title: promise.name || `Promesa: ${contact.name}` || 'Promesa sin nombre',
+          contact_name: contact.name,
+          event_type_name: promise.event_type?.name ?? undefined,
+          location: promise.event_location ?? undefined,
+          staffName: promise.sales_agent?.name ?? undefined,
+          icon: 'calendar',
+        },
+        status: promise.pipeline_stage?.slug === 'approved' ? 'active' : 'tentative',
+      }).catch((err) => console.error('[PROMISES] Error sync calendario:', err));
+    }
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
@@ -1050,6 +1077,9 @@ export async function updatePromise(
             order: true,
           },
         },
+        sales_agent: {
+          select: { name: true },
+        },
       },
     });
 
@@ -1174,6 +1204,9 @@ export async function updatePromise(
                 order: true,
               },
             },
+            sales_agent: {
+              select: { name: true },
+            },
           },
         });
       } else {
@@ -1232,23 +1265,38 @@ export async function updatePromise(
           notes: validatedData.notes?.trim() || null,
         },
         include: {
-          event_type: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          pipeline_stage: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              color: true,
-              order: true,
-            },
-          },
+          event_type: { select: { id: true, name: true } },
+          pipeline_stage: { select: { id: true, name: true, slug: true, color: true, order: true } },
+          sales_agent: { select: { name: true } },
         },
       });
+    }
+
+    // Dual-Writing: sincronizar con calendario maestro
+    const eventDateForCalendar = promise.event_date ?? promise.defined_date;
+    if (eventDateForCalendar) {
+      const d = new Date(eventDateForCalendar);
+      const startAt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+      const endAt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59));
+      await syncToMasterCalendar({
+        studio_id: studio.id,
+        source_id: promise.id,
+        type: 'PROMISE',
+        start_at: startAt,
+        end_at: endAt,
+        promise_id: promise.id,
+        metadata: {
+          title: promise.name || `Promesa: ${contact.name}` || 'Promesa sin nombre',
+          contact_name: contact.name,
+          event_type_name: promise.event_type?.name ?? undefined,
+          location: promise.event_location ?? undefined,
+          staffName: promise.sales_agent?.name ?? undefined,
+          icon: 'calendar',
+        },
+        status: promise.pipeline_stage?.slug === 'approved' ? 'active' : 'tentative',
+      }).catch((err) => console.error('[PROMISES] Error sync calendario:', err));
+    } else {
+      await removeFromMasterCalendar(promise.id, 'PROMISE').catch((err) => console.error('[PROMISES] Error remove calendario:', err));
     }
 
     // Registrar log si hubo cambios en los datos del contacto

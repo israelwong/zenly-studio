@@ -1052,6 +1052,12 @@ export async function createStandaloneEvent(
       }
     });
 
+    // Dual-Writing: sincronizar con calendario maestro
+    const { syncEventToCalendar } = await import('@/lib/actions/shared/calendar-sync.logic');
+    await syncEventToCalendar(evento.id).catch((err) =>
+      console.error('[createStandaloneEvent] Error sync calendario:', err)
+    );
+
     // Actualizar contacto de "prospecto" a "cliente" cuando se crea un evento
     if (contact.status === 'prospecto') {
       await prisma.studio_contacts.update({

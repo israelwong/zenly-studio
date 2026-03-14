@@ -45,7 +45,7 @@ function ZenCalendar({
       captionLayout={captionLayout}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString('es-419', { month: 'short' }),
+          date.toLocaleString('es-419', { month: 'long' }),
         ...formatters,
       }}
       classNames={{
@@ -115,10 +115,7 @@ function ZenCalendar({
         range_start: cn('rounded-l-md bg-blue-600/20 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_start),
         range_middle: cn('rounded-none bg-blue-600/10 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_middle),
         range_end: cn('rounded-r-md bg-blue-600/20 h-(--cell-size) min-h-(--cell-size)', defaultClassNames.range_end),
-        today: cn(
-          'bg-zinc-800 text-zinc-200 rounded-md data-[selected=true]:rounded-none',
-          defaultClassNames.today
-        ),
+        today: '',
         outside: cn(
           'text-zinc-500 aria-selected:text-zinc-500',
           defaultClassNames.outside
@@ -189,6 +186,7 @@ function ZenCalendarDayButton({
   }, [modifiers.focused]);
 
   const isSelected = modifiers.selected && !modifiers.range_start && !modifiers.range_end && !modifiers.range_middle;
+  const isToday = modifiers.today ?? false;
 
   return (
     <button
@@ -197,6 +195,7 @@ function ZenCalendarDayButton({
       data-day={day.date.toLocaleDateString()}
       data-selected={modifiers.selected}
       data-selected-single={isSelected}
+      data-today={isToday}
       data-range-start={modifiers.range_start}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
@@ -204,6 +203,9 @@ function ZenCalendarDayButton({
         defaultClassNames.day,
         'data-[selected-single=true]:bg-blue-600 data-[selected-single=true]:text-white data-[selected-single=true]:font-semibold data-[selected-single=true]:opacity-100',
         'data-[selected=true]:bg-blue-600 data-[selected=true]:text-white data-[selected=true]:font-semibold data-[selected=true]:opacity-100',
+        'data-[today=true]:ring-2 data-[today=true]:ring-emerald-500/50',
+        'data-[today=true]:bg-emerald-900/70 data-[today=true]:text-emerald-200',
+        'data-[today=true][data-selected=true]:bg-emerald-600 data-[today=true][data-selected=true]:text-white data-[today=true][data-selected=true]:ring-emerald-400',
         'data-[range-middle=true]:bg-blue-600/20 data-[range-middle=true]:text-zinc-200',
         'data-[range-start=true]:bg-blue-600 data-[range-start=true]:text-white',
         'data-[range-end=true]:bg-blue-600 data-[range-end=true]:text-white',

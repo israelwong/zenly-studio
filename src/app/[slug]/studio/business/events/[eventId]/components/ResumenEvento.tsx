@@ -85,7 +85,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData, initialResumen }
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [showGoogleContactsModal, setShowGoogleContactsModal] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const contactSynced = !!(contact?.google_contact_id ?? eventData.promise?.contact?.google_contact_id);

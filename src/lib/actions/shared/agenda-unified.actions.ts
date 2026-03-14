@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { logPromiseAction } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { incrementAgendaSubjectTemplateUsage } from '@/lib/actions/shared/agenda-subject-templates.actions';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { syncAgendaToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 // =============================================================================
 // SCHEMAS
@@ -1437,6 +1438,11 @@ export async function crearAgendamiento(
             // TODO: Implementar sincronización para citas comerciales (promise + type_scheduling)
         }
 
+        // Dual-Writing: sincronizar con calendario maestro
+        await syncAgendaToCalendar(agenda.id).catch((err) =>
+            console.error('[crearAgendamiento] Error sync calendario:', err)
+        );
+
         return {
             success: true,
             data: item,
@@ -1691,7 +1697,7 @@ export async function actualizarAgendamiento(
                 'user',
                 updateData.user_id || null,
                 {
-                    date: agenda.date.toISOString(),
+                    date: agenda.date?.toISOString(),
                     time: agenda.time,
                     concept: agenda.concept,
                     type_scheduling: agenda.type_scheduling,
@@ -1700,6 +1706,17 @@ export async function actualizarAgendamiento(
             ).catch((error) => {
                 console.error('[AGENDA_UNIFIED] Error creando log:', error);
             });
+        }
+
+        // Dual-Writing: sincronizar o eliminar del calendario maestro
+        if (agenda.date) {
+            await syncAgendaToCalendar(agenda.id).catch((err) =>
+                console.error('[actualizarAgendamiento] Error sync calendario:', err)
+            );
+        } else {
+            await removeFromMasterCalendar(agenda.id, 'AGENDA').catch((err) =>
+                console.error('[actualizarAgendamiento] Error remove calendario:', err)
+            );
         }
 
         return {
@@ -1911,6 +1928,11 @@ export async function eliminarAgendamiento(
         await prisma.studio_agenda.delete({
             where: { id: agendaId },
         });
+
+        // Dual-Writing: eliminar del calendario maestro
+        await removeFromMasterCalendar(agendaId, 'AGENDA').catch((err) =>
+            console.error('[eliminarAgendamiento] Error remove calendario:', err)
+        );
 
         // Log si está asociado a una promesa
         if (existing.promise_id) {

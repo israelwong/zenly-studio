@@ -21,6 +21,7 @@ import { getAnticipoRequeridoCierre } from './cierre-anticipo-requerido';
 import { incrementBalanceForIngreso } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { DELIVERY_POLICY_FALLBACK_DAYS_ENTREGA, DELIVERY_POLICY_FALLBACK_DAYS_SEGURIDAD } from '@/lib/constants/delivery-policy';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { syncEventToCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 import type { CotizacionRenderData, CondicionesComercialesData } from '@/components/shared/contracts/types';
 
 interface CierreResponse {
@@ -3228,6 +3229,11 @@ export async function autorizarYCrearEvento(
     } catch (notificationError) {
       console.error('[autorizarYCrearEvento] Error notificando promesas afectadas (no crítico):', notificationError);
     }
+
+    // Dual-Writing: sincronizar con calendario maestro
+    await syncEventToCalendar(result.evento_id).catch((err) =>
+      console.error('[autorizarYCrearEvento] Error sync calendario:', err)
+    );
 
     // 10. Sincronizar con Google Calendar si está habilitado (fuera de la transacci?n)
     try {

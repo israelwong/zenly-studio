@@ -79,7 +79,18 @@ export function EventPanel({
           )}
         </div>
 
-        {/* Columna 2: Agenda + Entregables */}
+        {/* Columna 2: Tareas (ZENTodoList compacto — altura limitada al viewport, lista con scroll interno) */}
+        <div className="lg:col-span-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-10rem)]">
+          <EventTodoCardCompact
+            studioSlug={studioSlug}
+            eventId={eventId}
+            eventData={eventData}
+            secciones={eventData.secciones}
+            onEventUpdated={onEventUpdated}
+          />
+        </div>
+
+        {/* Columna 3: Agenda + Entregables */}
         <div className="lg:col-span-1 space-y-6">
           <EventAgendamiento
             studioSlug={studioSlug}
@@ -91,17 +102,6 @@ export function EventPanel({
             studioSlug={studioSlug}
             eventId={eventId}
             onUpdated={onEventUpdated}
-          />
-        </div>
-
-        {/* Columna 3: Tareas (ZENTodoList compacto — Top 5 + Drawer) */}
-        <div className="lg:col-span-1 flex flex-col min-h-0">
-          <EventTodoCardCompact
-            studioSlug={studioSlug}
-            eventId={eventId}
-            eventData={eventData}
-            secciones={eventData.secciones}
-            onEventUpdated={onEventUpdated}
           />
         </div>
       </div>

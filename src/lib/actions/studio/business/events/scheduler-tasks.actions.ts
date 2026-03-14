@@ -5,6 +5,7 @@ import { validateStudio } from './helpers/studio-validator';
 import { revalidateSchedulerPaths, revalidateEventPaths } from './helpers/revalidation-utils';
 import { revalidatePath } from 'next/cache';
 import { normalizeDateToUtcDateOnly } from '@/lib/utils/date-only';
+import { syncSchedulerTaskToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 
 /**
  * Respuesta ligera del estado del scheduler (sin cargar árbol de tareas)
@@ -390,6 +391,11 @@ export async function actualizarSchedulerTask(
       where: { id: taskId },
       data: updateData,
     });
+
+    // Dual-Writing: sincronizar con calendario maestro cuando hay cambios (fechas, nombre, asignación)
+    await syncSchedulerTaskToCalendar(studioResult.studioId, eventId, taskId).catch((err) =>
+      console.error('[actualizarSchedulerTask] Error sync calendario:', err)
+    );
 
     // Si se completó la tarea, intentar crear nómina automáticamente (side-effect; no retornar para evitar rehidratación)
     if (data.isCompleted === true && task.cotizacion_item_id && !data.skipPayroll) {
@@ -797,6 +803,10 @@ export async function eliminarSchedulerTask(
       },
     });
 
+    await removeFromMasterCalendar(taskId, 'SCHEDULER_TASK').catch((err) =>
+      console.error('[eliminarSchedulerTask] Error remove calendario:', err)
+    );
+
     await revalidateSchedulerPaths(studioSlug, eventId);
 
     // Sincronizar eliminación con Google Calendar (en background, no bloquea respuesta)
@@ -866,7 +876,7 @@ export async function limpiarEstructuraScheduler(
       const ids = taskIds.map((t) => t.id);
 
       if (ids.length === 0) {
-        return { deletedTasks: 0, deletedCats: 0 };
+        return { deletedTasks: 0, deletedCats: 0, ids: [] as string[] };
       }
 
       // 2. Limpiar TODAS las FKs que apunten a estas tareas
@@ -923,8 +933,19 @@ export async function limpiarEstructuraScheduler(
         where: { scheduler_instance_id: instance.id },
       });
 
-      return { deletedTasks: deletedTasks.count, deletedCats: deletedCats.count };
+      return { deletedTasks: deletedTasks.count, deletedCats: deletedCats.count, ids };
     });
+
+    // Dual-Writing: eliminar del calendario maestro
+    if (result.ids?.length) {
+      await Promise.all(
+        result.ids.map((id) =>
+          removeFromMasterCalendar(id, 'SCHEDULER_TASK').catch((err) =>
+            console.error('[limpiarEstructuraScheduler] Error remove calendario:', err)
+          )
+        )
+      );
+    }
 
     // 7. Resetear JSONB de staging en la instancia (orden de categorías, stages activados, custom por stage).
     // Así al "Volver a sincronizar" la UI parte de orden limpio desde catálogo, sin rebote por JSONB viejo.

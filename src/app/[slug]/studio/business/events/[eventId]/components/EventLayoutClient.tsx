@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, Archive, ArchiveRestore } from 'lucide-react';
+import { Archive, ArchiveRestore } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { CancelationWithFundsModal } from '@/components/shared/cancelation/CancelationWithFundsModal';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
@@ -186,15 +186,6 @@ export function EventLayoutClient({
                     Desarchivar
                   </ZenButton>
                 )}
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setCrewManagerOpen(true)}
-                  className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/80"
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Personal
-                </ZenButton>
               </div>
             }
           />

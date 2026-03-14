@@ -311,8 +311,16 @@ function AgendaEventItem({
             )}
           </div>
           {subtitle && (
-            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
-              {subtitle}
+            <p className="text-xs mt-0.5 line-clamp-1">
+              {event.concept && (
+                <span className="text-amber-400">{event.concept}</span>
+              )}
+              {event.concept && event.event_type_name && (
+                <span className="text-zinc-400"> · </span>
+              )}
+              {event.event_type_name && (
+                <span className="text-zinc-400">{event.event_type_name}</span>
+              )}
             </p>
           )}
           {isMainEventDate && event.event_type_name && !subtitle ? (

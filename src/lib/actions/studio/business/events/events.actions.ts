@@ -15,6 +15,7 @@ import {
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
+import { syncEventToCalendar, removeFromMasterCalendar } from '@/lib/actions/shared/calendar-sync.logic';
 import {
   ordenarCotizacionItemsPorCatalogo,
   COTIZACION_ITEMS_SELECT_STANDARD,
@@ -1759,6 +1760,11 @@ export async function cancelarEvento(
       // No fallar la cancelación si falla la notificación
     }
 
+    // Dual-Writing: eliminar del calendario maestro
+    await removeFromMasterCalendar(eventoId, 'EVENT').catch((err) =>
+      console.error('[cancelarEvento] Error remove calendario:', err)
+    );
+
     // Sincronizar eliminación con Google Calendar en background
     try {
       const { tieneGoogleCalendarHabilitado, eliminarEventoPrincipalEnBackground } =
@@ -2215,6 +2221,11 @@ export async function actualizarFechaEvento(
       } : null,
       stage: eventoActualizado.stage,
     };
+
+    // Dual-Writing: sincronizar con calendario maestro
+    await syncEventToCalendar(event_id).catch((err) =>
+      console.error('[actualizarFechaEvento] Error sync calendario:', err)
+    );
 
     // Sincronizar con Google Calendar en background
     try {
